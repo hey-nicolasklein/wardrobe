@@ -1,4 +1,4 @@
-# GPT Image 2 Garment Catalog Specification
+# GPT Image 2 Shelf Image Specification
 
 Status: accepted V1 direction, 2026-08-02
 
@@ -6,9 +6,9 @@ Supersedes the production direction proposed by `gpt-segformer-prototype-spec.md
 
 ## Decision
 
-FORM will turn a visible garment in a source photo into a clean, laid-flat catalog asset with `gpt-image-2` through the OpenAI Images edit API.
+FORM will turn a visible Wardrobe Item in a private, durable Source Photo into a clean, laid-flat Shelf Image with `gpt-image-2` through the OpenAI Images edit API.
 
-This is a generative reconstruction, not a pixel-exact segmentation or transparent cutout. The product must call it a **catalog image**, never a mask, cutout, or proof of the garment's unseen construction. Every result requires user review before it becomes ready for try-on generation.
+This is a generative reconstruction, not a pixel-exact segmentation or transparent cutout. The product must call it a **Shelf Image**, never a mask, cutout, extraction, or proof of the item's unseen construction. Every result requires user review and an explicit Keep before it becomes the Wardrobe Item's current Shelf Image.
 
 V1 will not load, run, store outputs from, or provide recovery controls for SegFormer. It will not store semantic masks, component scores, mapped segmentation labels, edge-processing versions, or mask correction strokes.
 
@@ -16,10 +16,10 @@ V1 will not load, run, store outputs from, or provide recovery controls for SegF
 
 ### Keep
 
-- GPT vision can propose multiple visible garments with useful short names, strict categories, and normalized bounding boxes.
+- GPT vision can propose multiple visible Wardrobe Items with useful short names, strict categories, colors, and normalized bounding boxes.
 - The image-first selection interaction works best when boxes and a synchronized list are both present. The list is required for overlapping and small proposals.
-- Selection and metadata review must remain separate. A user should be able to correct the target name and category before spending money on an image generation.
-- One source photo may create several independent garment versions without uploading the source repeatedly.
+- Selection and metadata review must remain separate. A user can correct the target name, category, and colors before spending money on image generation; notes remain manual.
+- One Source Photo may create several independent Wardrobe Items without being uploaded repeatedly, and it remains visible as private provenance from every derived item detail page.
 - GPT Image 2 can produce the desired shop-style presentation: the empty garment alone, laid flat, centered, and separated from the source person and surroundings.
 - Low, Medium, and High are useful explicit comparison settings. They must be independent opt-in generations, never three automatic charges.
 - API-returned usage is sufficient to show request-level text-input, image-input, and image-output costs.
@@ -37,21 +37,21 @@ V1 will not load, run, store outputs from, or provide recovery controls for SegF
 ## User flow
 
 ```text
-choose source photo
+choose Source Photo
   → normalize HEIC/HEIF to JPEG when necessary
   → GPT proposes visible garments and normalized boxes
   → user selects proposals
-  → user reviews name and category
-  → user chooses Low, Medium, or High
+  → user reviews name, category, and colors
+  → Low-quality 816 × 816 is selected by default; Medium and High are optional alternatives
   → one explicit action starts one GPT Image 2 edit per selected garment
   → server removes the generated chroma background
-  → user reviews the catalog image
-  → Keep creates an immutable ready garment version
+  → user reviews the Shelf Image
+  → Keep creates an immutable Shelf Image Version and makes it current
 ```
 
-For a source containing one obvious product, the client may offer a direct “use this garment” path that skips proposal selection. Metadata review and the explicit paid-generation action remain required.
+For a Source Photo containing one obvious product, the client may offer a direct “use this item” path that skips proposal selection. Metadata review and the explicit paid-generation action remain required.
 
-The UI may offer a development comparison mode that retains Low, Medium, and High side by side. Production defaults to Medium and does not run the other qualities unless the user explicitly requests another version.
+The UI may offer a development comparison mode that retains Low, Medium, and High side by side. Production defaults to Low at 816 × 816 and does not run Medium or High unless the user explicitly requests another version.
 
 ## Source ingestion
 
@@ -59,7 +59,7 @@ The UI may offer a development comparison mode that retains Low, Medium, and Hig
 - Native clients upload file bytes from local URIs; they do not send base64 request bodies.
 - Convert HEIC and HEIF to orientation-correct JPEG before browser preview, GPT vision, or GPT Image input. The current validated conversion quality is 0.92.
 - Enforce authenticated upload intent, private object storage, declared and decoded file-type validation, pixel limits, and byte limits.
-- Preserve the private source asset while any proposal or garment version depends on it.
+- Preserve the private Source Photo while any proposal or Wardrobe Item depends on it. Show it from each derived item's authenticated detail page.
 - Do not persist a second conversion-only upload when a normalized derivative can be managed as a temporary job input.
 
 ## Detection contract
@@ -83,6 +83,7 @@ type GarmentDetection = {
   id: string;
   name: string;
   category: DetectionCategory;
+  colors: string[];
   boundingBox: {
     x: number;
     y: number;
@@ -94,7 +95,7 @@ type GarmentDetection = {
 
 Coordinates are integers normalized to a 1000 × 1000 space. Validate and clamp them server-side. Unsupported proposals remain visible but cannot start catalog generation in V1.
 
-The detection prompt asks for every distinct visible wearable item, including layered garments and accessories. It must not infer hidden items, merge separate garments, or return brands, materials, arbitrary tags, masks, or polygons.
+The detection prompt asks for every distinct visible wearable item, including layered garments and accessories, and proposes a concise color list supported by visible pixels. It must not infer hidden items, merge separate garments, or return brands, materials, arbitrary tags, notes, masks, or polygons.
 
 ## Reference preparation
 
@@ -104,7 +105,7 @@ For each reviewed proposal:
 2. Convert the reviewed normalized box to source pixels.
 3. Crop the target with approximately 18% context padding, clamped to the source bounds.
 4. Keep enough context for GPT Image 2 to understand the garment, but do not include the full outfit when a useful target crop is available.
-5. Send the cropped reference and the reviewed name/category to the image worker.
+5. Send the cropped reference and the reviewed name, category, and colors to the image worker.
 
 The crop identifies the target; it is not an extraction result and must not be displayed as if it were one.
 
@@ -114,20 +115,20 @@ The crop identifies the target; it is not an extraction result and must not be d
 - Model: `gpt-image-2`.
 - Output format: PNG.
 - Size: 816 × 816.
-- Quality: Low, Medium, or High; Medium is the production default.
+- Quality: Low, Medium, or High; Low is the production default.
 - Moderation: provider-supported application setting, with moderation failures treated as user-actionable and never automatically retried.
 
 816 × 816 is the smallest practical square near the original 500 × 500 product target while satisfying GPT Image 2's minimum pixel count and 16-pixel edge alignment. Do not request 2K or 4K for garment catalog assets in V1.
 
 ### Prompt template
 
-Use this prompt as the V1 baseline. Substitute only the reviewed item name and category. Prompt changes require a version bump and replay evaluation against the garment fixture set.
+Use this prompt as the V1 baseline. Substitute only the reviewed item name, category, and colors. Prompt changes require a version bump and replay evaluation against the garment fixture set.
 
 ```text
 Create a faithful e-commerce catalog presentation from the source image.
 
 SUBJECT
-- Show only the complete empty garment: {reviewed item name} ({reviewed category}).
+- Show only the complete empty garment: {reviewed item name} ({reviewed category}; reviewed colors: {reviewed colors}).
 - Remove every person, body part, mannequin, hanger, tag string, prop, and surrounding object.
 - Present the garment laid flat, viewed straight from above, centered, with generous even padding.
 - Preserve the source-supported silhouette, proportions, color, pattern, seams, panels, hems, cuffs, collar, closures, pockets, trim, wear, and fabric behavior exactly.
@@ -145,31 +146,31 @@ OUTPUT
 - One square shop-style product image. Garment only. No styling, text, border, watermark, or extra view.
 ```
 
-## Chroma removal and catalog asset
+## Chroma removal and Shelf Image asset
 
 1. Infer the key from padded corner pixels in the returned image.
 2. Verify that the border is sufficiently uniform. If it is not, fail the post-processing step rather than silently removing arbitrary garment colors.
 3. Make pixels close to the inferred key transparent and feather only the narrow antialiased boundary.
 4. Preserve the full square canvas and generous padding.
-5. Display the transparent result on the app's neutral shop background.
+5. Display the transparent Shelf Image on the app's neutral background.
 
-Never remove a hard-coded green or magenta value without first resolving the key for that result. Record the resolved key with the garment version.
+Never remove a hard-coded green or magenta value without first resolving the key for that result. Record the resolved key with the Shelf Image Version.
 
-The worker should retain the raw keyed provider output until the transparent derivative has passed validation and the user has made a review decision. Kept versions retain both the raw keyed asset and the transparent catalog asset so post-processing can be improved without paying for another generation. Rejected temporary assets follow the normal cleanup policy.
+The worker retains the raw keyed provider output until the transparent derivative has passed validation and the user has made a review decision. Kept Shelf Image Versions retain both the raw keyed asset and the transparent derivative so post-processing can be improved without paying for another generation. Rejected temporary assets follow the normal cleanup policy.
 
 ## Review and readiness
 
-A completed provider request enters `needs_review`; it does not automatically become a ready wardrobe item.
+A completed provider request enters `needs_review`; it does not automatically become the current Shelf Image.
 
 The detail panel shows:
 
-- source proposal and reviewed metadata;
-- catalog image on a clean neutral background;
+- Source Photo proposal and reviewed name, category, and colors;
+- Shelf Image on a clean neutral background;
 - model, quality, requested size, prompt version, and resolved chroma key;
 - actual token usage and cost breakdown;
 - Keep, generate another quality, or choose another source.
 
-Keep creates an immutable ready garment version. Another generation creates another version and never overwrites or hides the previous charge or result.
+Keep creates an immutable Shelf Image Version and makes it current. Another generation creates another version and never overwrites or hides an earlier kept version, charge, or result. A person may restore any kept version as current without another provider request.
 
 The UI must describe the output as AI-generated when that distinction is material. It must not imply that occluded construction, exact material, branding, or reverse-side details were observed in the source.
 
@@ -197,27 +198,27 @@ Use one durable remote-image job queue. There is no local segmentation queue.
 Each garment generation attempt stores:
 
 - owner and source asset ID;
-- reviewed detection ID, name, category, and bounding box;
+- reviewed detection ID, name, category, colors, and bounding box;
 - cropped reference asset ID or deterministic crop parameters;
 - model, quality, size, prompt version, and request ID;
 - queued, processing, needs-review, kept, rejected, or failed state;
 - actual usage, captured rates, and cost components;
-- raw keyed output asset ID, transparent catalog asset ID, and resolved chroma key;
+- raw keyed output asset ID, transparent Shelf Image asset ID, and resolved chroma key;
 - attempt count, timestamps, and structured failure category.
 
 Retry one transient connection, timeout, rate-limit, or provider-server failure with backoff. Do not automatically retry validation, conversion, moderation, authentication, quota, accounting, or chroma-validation failures. An explicit user retry creates a separately costed attempt.
 
 ## Module boundary
 
-The garment-catalog module exposes operations equivalent to:
+The Shelf Image module exposes operations equivalent to:
 
 - detect source garments;
 - review proposals;
-- enqueue catalog generation;
+- enqueue Shelf Image generation;
 - read attempt status and cost;
 - keep or reject a result;
 - create another quality/version;
-- resolve a ready garment reference for try-on generation.
+- keep, restore, and resolve the current Shelf Image Version.
 
 It hides provider prompts, image cropping, HEIC conversion, OpenAI transport, cost arithmetic, chroma removal, private asset writing, and cleanup policy.
 
@@ -246,14 +247,15 @@ Primary assertions:
 
 1. HEIC/HEIF becomes a decodable, orientation-correct JPEG before preview and processing.
 2. Selection and metadata review do not spend image-generation money.
-3. One explicit quality action creates one charged attempt.
+3. One explicit action creates one Low-quality 816 × 816 charged attempt by default.
 4. Low, Medium, and High attempts remain independently visible and their costs sum correctly.
 5. A missing usage ledger cannot create a ready version.
 6. Chroma selection never removes a color present in the garment fixture.
 7. Non-uniform chroma output fails visibly.
-8. Rejected outputs never become eligible try-on inputs.
-9. Keeping a result creates an immutable ready version with exact provenance.
-10. Cross-account job, cost, source, and media access is denied.
+8. Rejected outputs never become current Shelf Images.
+9. Keeping a result creates an immutable Shelf Image Version with exact Source Photo and reviewed-metadata provenance.
+10. Restoring an older kept version changes the current pointer without mutating history or invoking the provider.
+11. Cross-account job, cost, Source Photo, and media access is denied.
 
 ## Out of scope
 

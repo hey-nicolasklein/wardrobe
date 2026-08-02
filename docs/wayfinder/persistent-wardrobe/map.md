@@ -28,6 +28,8 @@ Deliver a working Expo application and NAS-hosted backend that can be used as a 
 
 ## Decisions so far
 
+- [Reconcile the V1 contract with the usable wardrobe destination](https://github.com/hey-nicolasklein/wardrobe/issues/9) — The accepted specs now make the persistent, recoverable wardrobe loop the first release and defer fitting profiles and Looks.
+
 ## Not yet specified
 
 - Tune the grid's final density, spacing, empty states, haptics, and delight after it contains a representative real wardrobe rather than fixture-only data.

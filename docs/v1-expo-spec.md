@@ -1,280 +1,183 @@
 # FORM V1 Expo App — Product and Architecture Specification
 
-Status: agreed V1 direction, updated after garment-catalog evaluation on 2026-08-02
+Status: agreed V1 direction, reconciled with the persistent-wardrobe destination on 2026-08-02
 
 ## Problem Statement
 
-FORM currently exists as a throwaway, mobile-first web prototype. It proves several important interaction and image-processing ideas, but its session-oriented client state, temporary generated files, prototype persistence, and synchronous AI requests are not a suitable foundation for a private multi-user application.
+FORM currently exists as a throwaway, mobile-first web prototype. It proves useful interaction and image-generation ideas, but its session-oriented client state, temporary generated files, prototype persistence, and synchronous AI requests are not a suitable foundation for a real personal wardrobe.
 
-The real application needs to let a person build a reusable fitting profile, turn clothing photos into clean wardrobe items, and generate convincing static try-on images. It must preserve the exact inputs behind historical results, keep personal media private, survive app closure and unreliable connectivity, and remain easy to test without repeatedly uploading personal photos or paying for image generation.
+The first usable release must let a person build and keep a private wardrobe: add one durable Source Photo, identify one or more Wardrobe Items, review GPT-proposed metadata, generate and approve versioned Shelf Images, and organize each item in Wanting or Owning. The wardrobe must survive app, API, worker, and NAS restarts; remain useful through temporary loss of connectivity; and be recoverable from backups.
 
-The first release will be hosted on one local development machine and accessed from browsers and physical devices over Tailscale. Its architecture must nevertheless enforce real account isolation and use durable, replaceable service boundaries so it can later be deployed publicly without rebuilding the product model.
+Fitting profiles and generated Looks are intentionally deferred until the persistent wardrobe loop has been proven with representative personal data.
 
 ## Solution
 
-Build a new Expo application for iOS and Android, with Expo Web retained as a fast browser-testing target. The new application will not reuse source code from the Vite prototype; the prototype remains only a behavioral and visual reference until it is removed.
+Build a new Expo application for iPhone and web, with Android supported by the universal codebase. The application does not import source from the disposable Vite prototype; the prototype remains behavioral and visual evidence only.
 
-The application has three primary tabs: Looks, Wanting, and Owning. A private Settings area contains fitting-profile management. Users create invite-only accounts, upload personal reference photos, create and refine versioned fitting profiles, add clothing from camera or gallery, review generated garment catalog images, and generate immutable try-on Looks from one fitting-profile version and up to three approved garment versions.
+Owning and Wanting are the two bottom tabs. Add is a top-toolbar action that opens a guided, native multi-item flow. Each Wardrobe Item has a native detail screen with its private Source Photo, editable metadata, lifecycle controls, generation history, and Shelf Image versions. Image transitions use native navigation affordances, and image previews can open fullscreen with pinch-to-zoom.
 
-The Expo client communicates with a standalone Hono API. PostgreSQL is the authoritative store for users, domain records, ownership, versions, usage costs, and durable jobs. Private S3-compatible object storage holds media. A remote-image worker consumes PostgreSQL-backed jobs for fitting profiles, garment catalog images, and try-ons. The local stack runs PostgreSQL and object storage through Docker Compose while the Expo client, API, and worker run as hot-reloading application processes.
+The Expo client communicates with a standalone Hono API. PostgreSQL is authoritative for accounts, sessions, domain records, generation attempts, costs, and durable jobs. Private S3-compatible object storage holds Source Photos and generated media. A PostgreSQL-backed worker performs detection and Shelf Image generation. The API, worker, PostgreSQL, and object storage run on the NAS through Docker Compose and are reachable only through Tailscale HTTPS.
 
-The server calls `gpt-image-2` directly for fitting profiles, garment catalog images, and try-ons. Garment sources use GPT vision for proposal boxes and GPT Image 2 for reviewed, laid-flat catalog reconstructions. The server removes a collision-avoiding generated chroma background to create the transparent shop asset. SegFormer and other mandatory semantic-segmentation steps are excluded from V1. Provider calls, prompts, chroma processing, and cost accounting sit behind narrow module boundaries.
+The server uses GPT vision to propose item names, strict categories, colors, and normalized bounding boxes. After review, it uses the OpenAI Images edit API with `gpt-image-2` to generate a laid-flat Shelf Image. The default request is Low quality at 816 × 816. Provider calls, prompts, chroma processing, cost accounting, and asset writes remain behind narrow server-side module boundaries.
 
-The client supports cached offline browsing and queued basic mutations. Uploads, garment catalog generation, fitting-profile creation, and try-on generation require connectivity. Jobs survive app closure; V1 discovers completion through polling and refresh-on-focus rather than push notifications.
+The client supports cached offline browsing and a durable outbox for lightweight edits. Uploads, detection, and image generation require connectivity. Jobs survive client closure and service restarts; completion is discovered through polling and refresh-on-focus rather than push notifications.
 
 ## User Stories
 
-1. As an invited tester, I want to sign in with email and password, so that my private wardrobe is isolated from every other account.
-2. As a tester, I want seeded account credentials, so that I can enter known scenarios without completing onboarding repeatedly.
-3. As a user, I want to use the same account from a phone and browser, so that I see the same wardrobe and Looks everywhere.
-4. As a user, I want my cached wardrobe and Looks to remain browsable without connectivity, so that temporary network loss does not make the app empty.
-5. As a user, I want basic offline changes to synchronize after reconnecting, so that I do not lose ordinary organization work.
-6. As a user, I want private media to require authorization, so that knowing or guessing an asset path never reveals my photos.
-7. As a user, I want to add two to five clear photos to a fitting profile, so that generated try-ons resemble me from useful angles.
-8. As a user, I want uploaded fitting-profile source photos deleted after a profile is successfully derived, so that unnecessary identifiable originals are not retained.
-9. As a user, I want to create a new fitting profile from fresh photos, so that I can replace an inaccurate or outdated representation.
-10. As a user, I want to refine a new fitting profile from an existing profile plus new guidance or photos, so that I can improve it without always starting over.
-11. As a user, I want older derived fitting-profile versions retained, so that existing Looks remain historically accurate.
-12. As a user, I want one fitting-profile version marked active, so that new try-ons consistently use my current choice.
-13. As a user, I want to add a clothing source from the camera or gallery, so that I can build my wardrobe without shop-link import.
-14. As a user, I want a newly uploaded garment source to appear immediately as a draft, so that I can select, name, and categorize proposals before catalog generation.
-15. As a user, I want to manually name and categorize clothing, so that V1 does not depend on unreliable metadata inference.
-16. As a user, I want the app to turn a visible garment into a clean laid-flat catalog image, so that the wardrobe represents the garment rather than its original person and surroundings.
-17. As a user, I want to choose and review the proposed garment name and category, so that one source photo can be interpreted intentionally before a paid generation.
-18. As a user, I want to create several garment catalog versions from one source photo, so that I do not have to upload the same outfit repeatedly.
-19. As a user, I want to review every generated catalog image before approving it, so that invented or inaccurate construction never becomes a try-on input automatically.
-20. As a user, I want to choose Low, Medium, or High or use another source photo, so that I can trade cost for fidelity without editing a mask.
-21. As a user, I want approved garment catalog versions to become selectable in Owning or Wanting, so that drafts never accidentally reach try-on generation.
-22. As a user, I want a wanted item to become the same owned item after purchase, so that its history and linked Looks remain intact.
-23. As a user, I want wardrobe items to transition through wanting, owning, and archived states, so that normal organization is reversible.
-24. As a user, I want corrected or reprocessed garment versions preserved immutably, so that older Looks continue to identify their exact inputs.
-25. As a user, I want to select up to three approved items from Owning and Wanting for a try-on, so that I can evaluate both existing and prospective clothing.
-26. As a user, I want every try-on to use my active fitting profile unless I deliberately choose otherwise, so that results use my current representation.
-27. As a user, I want fitting-profile and try-on generation to use high image quality, so that fidelity is evaluated before cost optimization.
-28. As a user, I want generation to continue if I leave or close the app, so that a long request does not depend on keeping one screen alive.
-29. As a user, I want to see whether a job is queued, processing, complete, or failed, so that background work is understandable.
-30. As a user, I want completed generation shown as a preview, so that I decide whether it belongs in Looks.
-31. As a user, I want tapping Keep to create one immutable generated Look, so that saved history is intentional and stable.
-32. As a user, I want generating again to create another independent Look, so that previous results are never overwritten or hidden in a version tree.
-33. As a user, I want to recreate an old Look using current profile and garment versions, so that upgrades create a new result while preserving the original.
-34. As a user, I want to add a real outfit snap, so that Looks remains useful without AI generation.
-35. As a user, I want to link any reasonable number of owned items to a real snap, so that the three-input AI limit does not constrain manual records.
-36. As a user, I want generated Looks to record the exact fitting-profile and garment versions used, so that historical provenance is truthful.
-37. As a user, I want transient generation failures retried once, so that brief provider failures do not require immediate manual action.
-38. As a user, I want validation, moderation, or account-limit failures to wait for my explicit retry, so that the system does not consume model usage invisibly.
-39. As a tester, I want to select prepared personas and data states, so that I can inspect app variants without uploading personal media.
-40. As a tester, I want recorded detection and image-generation results, so that routine E2E tests never invoke paid or slow AI work.
-41. As a tester, I want to switch UI variants while keeping identical fixture data, so that visual comparisons isolate the interface decision.
-42. As a tester, I want failed, pending, empty, and complete scenarios, so that important states are exercised deliberately.
-43. As an operator, I want per-user worker concurrency to be configurable, so that local capacity can be tuned without code changes.
-44. As an operator, I want account and asset ownership enforced centrally, so that later public deployment does not require a multi-tenancy migration.
+1. As a user with an administrator-created account, I want to sign in on iPhone or web and see the same private wardrobe.
+2. As a user, I want cached Owning, Wanting, Archive, and item details to remain browsable without connectivity.
+3. As a user, I want lightweight metadata and lifecycle edits queued offline and synchronized after reconnecting.
+4. As a user, I want private media to require authorization so guessing an asset path cannot reveal it.
+5. As a user, I want to add a Source Photo from camera or gallery and see a durable draft immediately.
+6. As a user, I want one Source Photo to produce several Wardrobe Items without uploading it repeatedly.
+7. As a user, I want GPT to propose a short name, strict category, and colors for each visible item, with me remaining authoritative over every field.
+8. As a user, I want unsupported proposals identified before a paid generation starts.
+9. As a user, I want Low-quality 816 × 816 Shelf Image generation by default, with one explicit action creating one paid attempt.
+10. As a user, I want generation to continue if I navigate away or close the app.
+11. As a user, I want every generated Shelf Image presented for review before it becomes current.
+12. As a user, I want Keep to preserve an immutable Shelf Image Version and make it current.
+13. As a user, I want another attempt to create a new version without overwriting earlier kept versions or their costs.
+14. As a user, I want to restore an older kept Shelf Image Version without paying for another generation.
+15. As a user, I want the Source Photo visible from every derived item's detail page as durable provenance.
+16. As a user, I want Wanting, Owning, and Archive to be reversible states of the same Wardrobe Item.
+17. As a user, I want buying a wanted item to preserve its identity, Source Photo, metadata, and Shelf Image history.
+18. As an operator, I want accounts created manually without public signup, email delivery, or password-recovery infrastructure.
+19. As an operator, I want the stack to restart safely on the NAS and expose only its Tailscale HTTPS boundary.
+20. As an operator, I want database, object media, and deployment configuration backed up together and periodically restored in a drill.
 
 ## Implementation Decisions
 
 ### V1 product boundary
 
-- The daily navigation consists of Looks, Wanting, and Owning.
-- Fitting profiles live in Settings and are setup infrastructure rather than a primary tab.
-- V1 includes fitting-profile generation, GPT Image garment catalog generation, wardrobe lifecycle management, static try-on generation, real snaps, offline-aware client behavior, and fixture-backed testing.
-- Generated Looks are immutable and contain exactly one result image. V1 has no iteration stack, branching history, or mutable cover image.
-- One generated Look references one fitting-profile version and no more than three approved garment catalog versions.
-- A second attempt or an upgrade creates another independent Look. An optional provenance reference may identify the source Look without introducing iteration behavior.
-- Real snaps use the same top-level Look collection but are not constrained by the three-garment AI input limit.
-- A completed generated preview is not a saved Look until the user explicitly keeps it.
-- Unkept preview assets may be removed after a short cleanup period.
+- The release destination is the usable persistent wardrobe loop: authenticate, add Source Photos, review proposed Wardrobe Items, generate and Keep Shelf Images, browse, edit, and move items between Wanting, Owning, and Archive.
+- Owning and Wanting are bottom tabs. Archive is reachable from wardrobe controls rather than occupying a primary tab.
+- Add is a top-toolbar action, not a third tab.
+- One Source Photo may create multiple Wardrobe Items and remains private, durable provenance visible from each derived item detail page.
+- Item Metadata consists of an editable short name, strict category, colors, and optional manual notes. GPT proposes name, category, and colors; notes are never inferred.
+- A Shelf Image is an AI-generated display reconstruction, not a cutout, extraction, or proof of unseen construction.
+- Every generation creates a Shelf Image Version. Keep is explicit, kept versions are immutable and restorable, and a later attempt never overwrites history.
+- Fitting-profile creation, generated or photographed Looks, and try-on generation are outside this release and will be planned as a separate Wayfinder effort.
 
-### Client application
+### Client application and native navigation
 
-- Build a clean Expo application with no source-code dependency on the existing Vite prototype.
-- Use Expo Router with native tab navigation and nested native stacks.
-- Use native modal or form-sheet routes for creation and editing flows rather than custom web-style overlays.
-- Support iOS and Android from one codebase. Expo Web remains a supported development and E2E surface, not a separate full desktop product.
-- Use native camera/gallery selection and local file URIs. Do not convert media to base64 request bodies.
-- Treat server records as authoritative remote state. Use a persisted query cache for reads and a small SQLite-backed outbox for permitted offline mutations.
+- Build a clean Expo application with no source-code dependency on the Vite prototype.
+- Use Expo Router with native bottom tabs and nested native stacks.
+- Use native toolbar items, menus, modal routes, and form sheets for Add, editing, and lifecycle actions rather than custom web-style overlays.
+- Use native image transitions from Shelf Image and Source Photo thumbnails into detail views.
+- Provide fullscreen, pinch-to-zoom previews for Source Photos and Shelf Images.
+- Treat iPhone as the design authority. Expo Web supports the same core flows without forced pixel parity, and Android remains supported by the universal codebase.
+- Use native camera/gallery selection and local file URIs; never convert media to base64 request bodies.
 - Store native session credentials in secure device storage. Browser sessions use secure HTTP-only cookies.
-- Refresh remote state on app focus and network reconnect. Poll active jobs while the relevant app surface is open.
-- Do not implement push notifications in V1.
+- Refresh remote state on app focus and network reconnect. Poll active jobs while relevant surfaces are open.
 
 ### API and contract boundary
 
-- Keep the Hono API independent from the Expo runtime so native, web, workers, and future clients share one server boundary.
-- Define request, response, and error contracts with runtime validation. Contract definitions belong to the new system and are not shared with the disposable prototype.
-- Commands that can be replayed by the offline outbox or network retries must accept idempotency keys.
-- Every owned record and job is resolved through the authenticated account. Ownership checks occur before returning metadata or media access.
-- Use opaque stable IDs in domain records. Never store expiring signed URLs as canonical data.
+- Keep the Hono API independent from Expo so native, web, worker, and future clients share one server boundary.
+- Define request, response, event, and error contracts with runtime validation in a shared package owned by the production workspace.
+- Commands replayed by the offline outbox or network retries accept idempotency keys.
+- Resolve every record, job, and asset through the authenticated account before returning metadata or media access.
+- Use opaque stable IDs and server asset IDs as canonical data; never store expiring signed URLs as canonical values.
 - Return typed, user-actionable error categories for validation, offline state, authorization, transient provider failure, moderation, and capacity limits.
 
 ### Authentication and tenancy
 
-- Implement real multi-user isolation in V1 even though early testing is primarily single-user.
-- Start with invite/seed-only email and password accounts. Public registration, external OAuth, and complex onboarding are deferred.
-- Use one server-side session model with platform-specific transport: HTTP-only cookies for web and opaque tokens for native.
-- Include at least two fixture accounts so cross-account authorization is continuously testable.
+- Implement real multi-user isolation even though initial use may be by one person.
+- Administrators create accounts directly. V1 has no public registration, invitations by email, OAuth, email delivery, or self-service password recovery.
+- Use email and password credentials with one server-side session model: HTTP-only cookies on web and opaque tokens on native.
+- Include at least two fixture accounts so cross-account record and media denial is continuously testable.
 - Scope database queries, object ownership, queued jobs, and fixture resets by account.
 
-### Persistence and local deployment
+### Persistence, NAS deployment, and recovery
 
-- PostgreSQL is the source of truth for accounts, sessions, items, item states, assets, fitting-profile versions, garment catalog versions, generation attempts and costs, Looks, jobs, and test scenarios.
-- Use a PostgreSQL-backed durable job queue and no Redis in V1.
-- Run PostgreSQL and private S3-compatible object storage through Docker Compose.
-- Run the Expo development server, Hono API, and remote-image worker as separate hot-reloading processes.
-- Browser clients use localhost. Physical devices use the machine's private Tailscale HTTPS hostname.
-- Do not expose the API, database, or object storage directly to the public internet during the local phase.
+- PostgreSQL is the source of truth for accounts, sessions, Wardrobe Items, item states, metadata, Source Photos, Shelf Image Versions, generation attempts and costs, jobs, and test scenarios.
+- Use a PostgreSQL-backed durable job queue; do not add Redis in V1.
+- Run the Hono API, worker, PostgreSQL, and private S3-compatible object storage through Docker Compose on the NAS with restart policies and persistent volumes.
+- Expose the application boundary only through the NAS's Tailscale HTTPS hostname. Do not expose the API, database, or object storage to the public internet.
+- Keep local development hot-reloading commands for Expo, API, and worker, backed by disposable local service containers and the same validated contracts.
+- Back up PostgreSQL, object-storage data, and the non-secret deployment configuration as one recoverable system. Store credentials separately in the operator's secret store.
+- Document backup schedule, retention, target, integrity checks, and restore steps. Prove recovery with a restore drill before calling the release usable.
 
-### Media security and transfer
+### Media security and lifecycle
 
 - Keep every object-storage bucket private.
-- Upload media through short-lived signed upload URLs issued after authentication and intent validation.
+- Upload media through short-lived signed upload URLs issued after authenticated intent and file validation.
 - Read media through short-lived signed download URLs issued after ownership checks.
-- Let the client cache rendered assets locally, while treating the server asset ID as canonical.
-- Validate file type and size before issuing or confirming an upload.
-- Record asset purpose and ownership so fitting references, garment sources, normalized derivatives, keyed provider outputs, transparent catalog assets, generated previews, saved Looks, and fixtures have explicit lifecycles.
+- Validate declared and decoded file type, byte size, and pixel dimensions before accepting an upload.
+- Record asset purpose and owner so Source Photos, normalized derivatives, raw keyed outputs, transparent derivatives, and fixtures have explicit lifecycles.
+- Retain a Source Photo while any Wardrobe Item depends on it. Permanent deletion requires all derived items to be permanently deleted and must remove or expire every dependent asset according to policy.
 
-### Fitting-profile module
+### Wardrobe domain
 
-- An account has one active fitting profile and may retain multiple historical fitting-profile versions.
-- A new version may be built fresh from new reference photos or derived from an older profile with new reference material and guidance.
-- New generations use the active fitting-profile version.
-- Historical Looks retain the exact fitting-profile version used to generate them.
-- Delete newly uploaded personal reference photos after the fitting-profile version is successfully derived. Failed jobs retain recoverable inputs only long enough to retry or let the user resolve the failure.
-- Derived historical fitting profiles remain available for history and deliberate reuse.
-- Recreating a Look with a newer profile creates a new immutable Look; it never mutates the old image.
+- A Wardrobe Item is one durable entity with a reversible state of `wanting`, `owning`, or `archived`.
+- Moving Wanting to Owning or restoring an archived item updates the same record and preserves provenance and version history.
+- A Source Photo is uploaded once and may have multiple detection proposals, generation attempts, and derived Wardrobe Items.
+- A draft item is visible immediately and moves through detecting, reviewing-metadata, queued, generating, needs-review, and ready statuses without changing identity.
+- The wardrobe module owns lifecycle transitions and readiness invariants so screens and workers cannot create illegal states directly.
 
-The fitting-profile module should expose a small interface around creating versions, activating a version, resolving the active generation reference, and cleaning up temporary source assets. Provider prompts and storage details remain internal.
-
-### Wardrobe and garment-source module
-
-- A wardrobe item is one durable entity with a lifecycle state of wanting, owning, or archived.
-- Moving Wanting to Owning updates the existing item and preserves provenance, source, catalog versions, costs, and linked Looks.
-- GPT may propose short names and strict categories, but the user reviews both before catalog generation. Brand and material inference remain out of scope.
-- A clothing source is uploaded once and may have multiple detected proposals, catalog-generation attempts, and items.
-- Retain a clothing source while any proposal or catalog version depends on it. Permanently delete it only after all dependents are permanently deleted.
-- A draft item is visible immediately after upload and moves through detecting, reviewing-metadata, queued, generating, needs-review, and ready states.
-- Only ready, user-approved garment catalog versions are eligible for try-on generation.
-
-The wardrobe module should encapsulate lifecycle transitions and readiness invariants so screens and workers cannot create illegal item states directly.
-
-### Garment-catalog module
+### Detection and Shelf Image generation
 
 - Follow `gpt-image-garment-catalog-spec.md` as the detailed provider and prompt contract.
-- Normalize HEIC and HEIF sources to orientation-correct quality-92 JPEG before preview or provider input.
-- Use GPT vision proposals with normalized bounding boxes, then require explicit user selection and metadata review.
-- Use the reviewed box to create a padded target reference. The crop identifies the target but is never represented as an extraction result.
-- Use the OpenAI Images edit API with `gpt-image-2`, an 816 × 816 PNG output, and the versioned laid-flat chroma prompt.
-- Offer Low, Medium, and High as independent opt-in attempts. Medium is the production default; never generate all three automatically.
-- Infer and validate the generated chroma key, then derive a transparent catalog PNG for display on a neutral shop background.
-- Persist each kept catalog version immutably with source/proposal provenance, reviewed metadata, prompt version, model, quality, size, resolved key, raw keyed output, transparent derivative, request ID, actual token usage, captured rates, and exact computed cost.
-- Treat a catalog image as a generative reconstruction, not a pixel-exact cutout or evidence of unseen construction.
-- Require user review. V1 recovery actions are Keep, generate another explicit quality/version, edit reviewed metadata, or use another source photo.
-- Do not use SegFormer, semantic masks, connected components, correction strokes, or on-device segmentation in V1.
+- Normalize HEIC and HEIF to orientation-correct quality-92 JPEG before preview or provider input.
+- Use GPT vision proposals with normalized bounding boxes, short name, strict category, and colors. The user can edit all proposed metadata before generation.
+- Use the reviewed box to prepare a padded target reference. The crop identifies the target but is never represented as an extraction.
+- Use the OpenAI Images edit API with `gpt-image-2`, a versioned laid-flat chroma prompt, Low quality by default, and 816 × 816 PNG output.
+- Medium and High are explicit alternative attempts, never automatic companion generations.
+- Infer and validate the generated chroma key, then derive a transparent Shelf Image for display on a neutral background.
+- Persist every attempt with Source Photo and proposal provenance, reviewed metadata, model, quality, size, prompt version, resolved key, raw and transparent assets, request ID, token usage, captured rates, exact cost, state, and failure category.
+- Require review. Keep makes a version current; generate again, edit metadata, or use another Source Photo create distinct attempts without overwriting prior versions.
+- Do not use SegFormer, semantic masks, connected components, correction strokes, or on-device segmentation.
 
-The garment-catalog module should expose detection, proposal review, enqueue, status, cost detail, keep, reject, version creation, and ready-reference resolution while hiding prompts, provider transport, crop preparation, chroma processing, cost arithmetic, and asset writing.
+### Durable jobs and retries
 
-### Look-generation module
+- Use one PostgreSQL-backed remote-image queue with job kinds for detection and Shelf Image generation.
+- Claim jobs with database-safe locking and recover abandoned leases after worker or NAS restart.
+- Retry one transient connection, timeout, rate-limit, or provider-server failure with bounded backoff.
+- Do not automatically retry validation, conversion, moderation, authentication, quota, accounting, or chroma-validation failures.
+- Make global and per-account concurrency limits environment-configurable.
 
-- Use the OpenAI Images edit API with `gpt-image-2` at high quality for all V1 fitting-profile and try-on outputs.
-- Keep provider credentials exclusively in the server/worker environment.
-- A generation request resolves exactly one fitting-profile version and up to three approved garment catalog versions before enqueueing.
-- Once enqueued, the resolved versions are immutable even if the user later activates or approves newer versions.
-- Job completion creates a private review preview. Keeping the preview creates an immutable generated Look; rejecting it schedules preview cleanup.
-- Recreating or upgrading from a saved Look copies its intent with currently selected versions and produces a new preview and, if kept, a new independent Look.
-- Retry a transient timeout, connection failure, or provider server error once with backoff.
-- Do not automatically retry validation, moderation, authentication, or account-limit failures.
+### Offline boundary
 
-The generation module should expose enqueue, status, retry, reject-preview, and keep-preview operations. Prompt construction, OpenAI request details, and provider error translation remain internal.
+- Persist a query cache for Owning, Wanting, Archive, item details, Source Photo metadata, Shelf Image history, and job status.
+- Queue only lightweight, idempotent edits such as name, category, colors, notes, lifecycle state, and current-version selection.
+- Uploads, detection, Shelf Image generation, destructive deletion, account operations, and signed-media renewal require connectivity.
+- Show pending edits and blocked online-only actions explicitly. Replay the outbox after reconnecting without duplicating commands.
+- Detect stale writes with record versions. Surface a conflict instead of silently overwriting a newer server value.
 
-### Job orchestration
+### Testing and fixtures
 
-- Store jobs durably in PostgreSQL with ownership, kind, input references, state, progress, attempt count, timestamps, and structured failure information.
-- Use one PostgreSQL-backed remote-image queue with job kinds for fitting profiles, garment catalog images, and try-ons.
-- Permit up to three concurrent remote-image jobs per user in the local phase.
-- Make concurrency limits environment-configurable. Global capacity limits and fair multi-user scheduling may be added before public deployment.
-- Recover queued work after process restart. Reconcile jobs left in processing when a worker dies.
-- The job row is the source of truth; client polling and any future push message are only delivery mechanisms.
-
-### Offline synchronization
-
-- Allow cached browsing of Looks, Wanting, Owning, item details, and fitting-profile history while offline.
-- Queue reversible basic metadata and lifecycle mutations locally with idempotency keys.
-- Pause uploads, detection, garment catalog generation, and try-on generation while offline and explain why the action cannot start.
-- Replay queued mutations after connectivity returns and refresh affected server queries.
-- Use server record versions and timestamps to detect stale mutations. Prefer explicit conflict handling for destructive changes; ordinary scalar edits may use the latest accepted server command.
-- Do not attempt a fully local replica of private media or server job execution.
-
-### Scenario and provider-replay module
-
-- Maintain development-only scenarios for at least: empty account, wardrobe ready, fitting profile ready, catalog generation queued, catalog result needs review, generation processing, generation failed, several saved Looks, offline mutations pending, and cross-account access denial.
-- Store fixture users, database records, and non-private media assets so a scenario can be reset deterministically.
-- Provide replay detection and image-generation providers that return recorded results, token usage, and costs without invoking OpenAI.
-- Add a development-only scenario and UI-variant selector. Variants must operate against identical fixture data.
-- Support direct navigation or launch configuration into a named scenario so E2E flows do not depend on previous test order.
-- Never include real personal fitting-profile source photos in committed fixtures.
-
-## Testing Decisions
-
-- Favor end-to-end tests that exercise user-visible behavior across the Expo client, API, database, object storage, and replay workers.
-- Use Maestro for the highest-value native journeys and browser automation for fast universal-flow coverage.
-- Run routine E2E tests against deterministic fixture scenarios and replay providers. Real OpenAI detection and image-generation smoke tests are deliberate, separate, and never prerequisites for ordinary UI testing.
-- Tests assert outcomes and security boundaries rather than component structure, styling implementation, queue internals, or model-library calls.
-- Keep unit and integration tests focused on deep modules where a small test surface protects important invariants.
-
-Modules receiving focused non-E2E tests:
-
-- Authentication and ownership authorization, especially cross-account asset and record denial.
-- Wardrobe lifecycle transitions and garment-catalog readiness invariants.
-- Signed upload confirmation and private signed-read authorization.
-- Fitting-profile source cleanup and historical-version preservation.
-- HEIC normalization, proposal crop geometry, chroma validation/removal, provider-usage validation, and exact integer cost arithmetic.
-- Immutable generation-input resolution and preview-to-Look promotion.
-- Job retry classification, concurrency enforcement, restart recovery, and idempotency.
-- Offline outbox replay and duplicate-command handling.
+- Use unit tests for domain transitions, authorization, provider parsing, cost accounting, chroma validation, idempotency, job recovery, and backup/restore scripts.
+- Use integration tests against real PostgreSQL and S3-compatible storage for account isolation, private media, source/version lifecycle, job restart recovery, and offline replay.
+- Use replay providers and private-safe recorded fixtures for routine detection and image-generation tests. Paid OpenAI calls are deliberate smoke tests only.
+- Use browser automation for fast universal-flow coverage and Maestro for the highest-value native journeys.
+- Maintain scenarios for empty, populated, offline, queued, failed, needs-review, multiple-version, and cross-account-denial states.
 
 Primary E2E journeys:
 
-1. Sign in with a seeded account and restore its persisted session.
-2. Create a fitting profile and verify successful source-photo cleanup.
-3. Create a newer fitting profile from fresh inputs and retain the older derived version.
-4. Upload one clothing photo, review a proposal, generate a catalog image, inspect exact cost, and approve it.
-5. Generate two different garment catalog versions from the same source photo without duplicating the source asset.
-6. Add a wanted item and transition it to owning without losing identity or history.
-7. Generate a high-quality Look from a profile and up to three mixed Owning/Wanting items.
-8. Close or navigate away during generation, reopen the app, and recover the job result.
-9. Reject a generated preview and keep another, verifying that only the kept preview appears in Looks.
-10. Recreate an old Look using current profile or garment versions and verify that the original remains unchanged.
-11. Add a real snap and link more than three owned items.
-12. Browse cached data offline, queue a permitted mutation, reconnect, and observe one synchronized result.
-13. Attempt cross-account record and media access and receive no private data.
-14. Switch UI variants while preserving the same selected fixture scenario.
-15. Exercise queued, transiently failed, permanently failed, and recovered-after-restart jobs.
-
-The current prototype provides prior art for fitting-profile creation, direct OpenAI image editing, GPT proposal selection, source-supported laid-flat prompting, chroma-derived transparency, actual-usage cost accounting, HEIC conversion, garment quality comparisons, and mobile-first navigation. The SegFormer experiment is negative evidence and is not part of V1. Prototype implementation remains behavioral evidence only and will not be imported into the new client.
+1. Sign in with an administrator-created fixture account and restore its session.
+2. Upload one Source Photo, receive several proposals, edit GPT-proposed name, category, and colors, and create multiple durable drafts.
+3. Generate a Low-quality 816 × 816 Shelf Image, navigate away, and recover the result after worker and app restart.
+4. Keep one version, generate another, and restore the earlier kept version without losing either attempt or cost ledger.
+5. Open an item detail page, inspect its Source Photo, and use fullscreen pinch-to-zoom for source and shelf media.
+6. Move one item Wanting → Owning → Archive → Owning without changing its identity or history.
+7. Browse cached data offline, queue an allowed metadata edit, reconnect, and observe exactly one synchronized command.
+8. Verify uploads and generation are blocked clearly while offline.
+9. Attempt cross-account record and media access and receive no private data.
+10. Restore PostgreSQL, object media, and deployment configuration into a clean stack and verify representative wardrobe records and assets.
 
 ## Out of Scope
 
-- Public account registration and email verification.
-- Apple, Google, or other external OAuth providers.
-- Public release infrastructure and internet-facing deployment.
-- Push notifications.
-- Public or friend sharing of generated Looks or real snaps.
-- Followers, social feeds, comments, or collaborative wardrobes.
-- Arbitrary shop URLs, scraping, and product-page import.
-- AI-generated clothing recommendations and suggestion voting.
-- AI inference of item name, category, brand, color, or material.
-- SegFormer or another mandatory semantic-segmentation pre-step.
-- Manual mask painting, correction strokes, connected-component controls, or on-device segmentation.
-- Look iteration stacks, parent trees, branches, or mutable cover selection.
-- Automatic regeneration of historical Looks after profile or garment updates.
-- More than three garment references in a single generated Look.
-- General-purpose realtime sockets.
-- A full desktop-specific authenticated interface.
-- Automatic generation of all three garment quality settings.
-- Global fair scheduling and public-scale abuse controls.
+- Fitting profiles, generated try-on Looks, photographed Looks, and Look history.
+- Public registration, invitation email, email verification, external OAuth, and self-service password recovery.
+- App Store or TestFlight distribution before an Apple Developer Program membership exists.
+- Public internet exposure, public sharing, social features, or collaborative wardrobes.
+- Shop URL import, scraping, recommendations, and inferred brand or material.
+- SegFormer, pixel masks, mask editing, or claims that a Shelf Image is a pixel-exact extraction.
+- Push notifications, general-purpose realtime sockets, and a desktop-specific authenticated interface.
+- Automatic generation of multiple quality levels or 2K/4K Shelf Images.
 
 ## Further Notes
 
-- The local deployment is production-shaped but not production-exposed. Real tenancy, durable jobs, private storage, and server-authoritative state are required now; public ingress, elastic capacity, and open registration are later operational changes.
-- Tailscale is the only remote access path during local development. Device API and storage URLs must resolve through the private HTTPS hostname rather than localhost.
-- Browser and native clients use the same API, fixture accounts, database, and object storage so behavior is comparable across surfaces.
-- The accepted garment direction is specified in `gpt-image-garment-catalog-spec.md`; the older SegFormer prototype documents why semantic segmentation was rejected.
-- The existing direct OpenAI integration is the behavioral starting point for fitting-profile, garment catalog, and try-on generation. The older Codex recommendation bridge is not part of the V1 generation architecture.
-- Before external distribution, revisit global worker capacity, registration abuse prevention, email delivery, push notifications, account-deletion recovery periods, observability, backups, provider data-retention terms, and public deployment topology.
+- The NAS deployment is the first production environment, not a temporary local phase. Public ingress and elastic capacity remain later operational changes.
+- Browser and native clients use the same API, accounts, database, and object storage.
+- The accepted Shelf Image direction is detailed in `gpt-image-garment-catalog-spec.md`; the older SegFormer prototype remains negative evidence only.
+- Never commit provider credentials, account secrets, Tailscale credentials, backup credentials, or personal media.
