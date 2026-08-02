@@ -1,6 +1,8 @@
 # GPT Detection → SegFormer Extraction Prototype
 
-Status: ready for a fresh implementation chat
+Status: historical prototype plan; production direction superseded by `gpt-image-garment-catalog-spec.md`
+
+Decision after evaluation: do not use SegFormer in V1. This document remains only as the experiment contract that produced the evidence behind the replacement specification.
 
 ## Fresh-chat instruction
 
