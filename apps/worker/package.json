@@ -1,0 +1,21 @@
+{
+  "name": "@form/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck"
+  },
+  "dependencies": {
+    "@form/contracts": "*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.23.5",
+    "typescript": "~6.0.3"
+  }
+}
