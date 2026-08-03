@@ -4,7 +4,7 @@ Status: agreed V1 direction, reconciled with the persistent-wardrobe destination
 
 ## Problem Statement
 
-FORM currently exists as a throwaway, mobile-first web prototype. It proves useful interaction and image-generation ideas, but its session-oriented client state, temporary generated files, prototype persistence, and synchronous AI requests are not a suitable foundation for a real personal wardrobe.
+FORM previously existed as a throwaway, mobile-first web prototype. It proved useful interaction and image-generation ideas, but its session-oriented client state, temporary generated files, prototype persistence, and synchronous AI requests were not a suitable foundation for a real personal wardrobe.
 
 The first usable release must let a person build and keep a private wardrobe: add one durable Source Photo, identify one or more Wardrobe Items, review GPT-proposed metadata, generate and approve versioned Shelf Images, and organize each item in Wanting or Owning. The wardrobe must survive app, API, worker, and NAS restarts; remain useful through temporary loss of connectivity; and be recoverable from backups.
 

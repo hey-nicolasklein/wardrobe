@@ -1,5 +1,5 @@
 {
-  "name": "wardrobe-studio-poc",
+  "name": "wardrobe-studio",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,34 +8,13 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently -n ai,web -c magenta,cyan \"npm:dev:server\" \"npm:dev:web\"",
     "dev:production": "concurrently -n api,worker,mobile -c blue,magenta,cyan \"npm:dev:api\" \"npm:dev:worker\" \"npm:dev:mobile\"",
     "dev:api": "npm run dev --workspace=@form/api",
     "dev:worker": "npm run dev --workspace=@form/worker",
     "dev:mobile": "npm run start --workspace=@form/mobile",
-    "dev:server": "tsx watch server/index.ts",
-    "dev:web": "vite",
-    "build": "vite build",
-    "typecheck": "tsc --noEmit",
-    "verify": "npm run typecheck && npm run verify --workspaces --if-present"
-  },
-  "dependencies": {
-    "@hono/node-server": "^2.0.11",
-    "@huggingface/transformers": "^3.8.1",
-    "hono": "^4.7.0",
-    "lucide-react": "^0.468.0",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "sharp": "^0.35.3"
+    "verify": "npm run verify --workspaces --if-present"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "@types/react": "~19.2.2",
-    "@types/react-dom": "~19.2.2",
-    "@vitejs/plugin-react": "^4.4.0",
-    "concurrently": "^9.1.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.8.0",
-    "vite": "^6.3.0"
+    "concurrently": "^9.1.0"
   }
 }
