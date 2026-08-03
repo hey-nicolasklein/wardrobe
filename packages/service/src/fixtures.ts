@@ -7,6 +7,7 @@ import {
 import type { Database } from './database.js';
 import { withTransaction } from './database.js';
 import type { PrivateObjectStorage } from './storage.js';
+import { hashPassword } from './auth.js';
 
 export const fixtureIds = {
   populatedAccount: '10000000-0000-4000-8000-000000000001',
@@ -30,6 +31,11 @@ export const fixtureIds = {
   failedJob: '70000000-0000-4000-8000-000000000002',
 } as const;
 
+export const fixtureCredentials = {
+  populated: { email: 'owner@example.test', password: 'owner-fixture-password' },
+  empty: { email: 'empty@example.test', password: 'empty-fixture-password' },
+} as const;
+
 const fixturePng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64',
@@ -41,7 +47,7 @@ const fixtureObjects = [
   'fixtures/populated/shelf-transparent-1.png',
   'fixtures/populated/shelf-keyed-2.png',
   'fixtures/populated/shelf-transparent-2.png',
-];
+] as const;
 
 async function clearFixtureObjects(storage: PrivateObjectStorage): Promise<void> {
   let keyMarker: string | undefined;
@@ -77,20 +83,28 @@ export async function resetFixtures(
   storage: PrivateObjectStorage,
 ): Promise<void> {
   await clearFixtureObjects(storage);
-  await Promise.all(
-    fixtureObjects.map((key) =>
-      storage.client.send(
-        new PutObjectCommand({
-          Bucket: storage.bucket,
-          Key: key,
-          Body: fixturePng,
-          ContentType: 'image/png',
-        }),
-      ),
+  const fixtureObjectVersions = new Map(
+    await Promise.all(
+      fixtureObjects.map(async (key) => {
+        const result = await storage.client.send(
+          new PutObjectCommand({
+            Bucket: storage.bucket,
+            Key: key,
+            Body: fixturePng,
+            ContentType: 'image/png',
+          }),
+        );
+        if (!result.VersionId) throw new Error(`Fixture object ${key} has no version ID.`);
+        return [key, result.VersionId] as const;
+      }),
     ),
   );
 
   const timestamp = new Date('2026-01-15T12:00:00.000Z');
+  const [populatedPasswordHash, emptyPasswordHash] = await Promise.all([
+    hashPassword(fixtureCredentials.populated.password),
+    hashPassword(fixtureCredentials.empty.password),
+  ]);
   await withTransaction(database, async (client) => {
     await client.query(`
       TRUNCATE TABLE
@@ -102,9 +116,17 @@ export async function resetFixtures(
 
     await client.query(
       `INSERT INTO accounts (id, email, password_hash, created_at) VALUES
-        ($1, 'owner@example.test', 'fixture-password-reset-by-auth-ticket', $3),
-        ($2, 'empty@example.test', 'fixture-password-reset-by-auth-ticket', $3)`,
-      [fixtureIds.populatedAccount, fixtureIds.emptyAccount, timestamp],
+        ($1, $3, $4, $7),
+        ($2, $5, $6, $7)`,
+      [
+        fixtureIds.populatedAccount,
+        fixtureIds.emptyAccount,
+        fixtureCredentials.populated.email,
+        populatedPasswordHash,
+        fixtureCredentials.empty.email,
+        emptyPasswordHash,
+        timestamp,
+      ],
     );
 
     const assetRows = [
@@ -113,14 +135,22 @@ export async function resetFixtures(
       [fixtureIds.transparentAssetOne, 'shelf-image-transparent', fixtureObjects[2]],
       [fixtureIds.keyedAssetTwo, 'shelf-image-keyed', fixtureObjects[3]],
       [fixtureIds.transparentAssetTwo, 'shelf-image-transparent', fixtureObjects[4]],
-    ];
+    ] as const;
     for (const [id, purpose, objectKey] of assetRows) {
       await client.query(
         `INSERT INTO private_assets (
-          id, account_id, purpose, object_key, content_type, byte_size,
+          id, account_id, purpose, object_key, object_version_id, content_type, byte_size,
           pixel_width, pixel_height, state, created_at, ready_at
-        ) VALUES ($1, $2, $3, $4, 'image/png', $5, 1, 1, 'ready', $6, $6)`,
-        [id, fixtureIds.populatedAccount, purpose, objectKey, fixturePng.byteLength, timestamp],
+        ) VALUES ($1, $2, $3, $4, $5, 'image/png', $6, 1, 1, 'ready', $7, $7)`,
+        [
+          id,
+          fixtureIds.populatedAccount,
+          purpose,
+          objectKey,
+          fixtureObjectVersions.get(objectKey)!,
+          fixturePng.byteLength,
+          timestamp,
+        ],
       );
     }
 
