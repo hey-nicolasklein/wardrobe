@@ -7,4 +7,5 @@ dist/
 .env.*
 !.env.example
 !**/.env.example
+!.env.services.example
 *.tsbuildinfo

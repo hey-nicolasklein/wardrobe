@@ -30,6 +30,7 @@ Deliver a working Expo application and NAS-hosted backend that can be used as a 
 
 - [Reconcile the V1 contract with the usable wardrobe destination](https://github.com/hey-nicolasklein/wardrobe/issues/9) — The accepted specs now make the persistent, recoverable wardrobe loop the first release and defer fitting profiles and Looks.
 - [Establish the production workspace and contracts](https://github.com/hey-nicolasklein/wardrobe/issues/11) — Production now has explicit mobile, API, worker, and runtime-validated contract boundaries with one install and verification baseline; the Vite prototype remains isolated evidence.
+- [Build the durable service foundation](https://github.com/hey-nicolasklein/wardrobe/issues/12) — PostgreSQL migrations, database-enforced ownership, private versioned object storage, leased durable jobs, dependency health, and deterministic local scenarios now form one tested server boundary.
 
 ## Not yet specified
 
