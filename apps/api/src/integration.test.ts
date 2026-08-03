@@ -48,6 +48,7 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       storage,
       sessionSecret,
       secureCookies: false,
+      detectionModel: 'fixture-vision-model',
     });
 
     async function signIn(credentials: { email: string; password: string }): Promise<string> {
@@ -317,6 +318,11 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     assert.equal(queuedDetection.status, 202);
     const queuedDetectionBody = await queuedDetection.json();
     assert.deepEqual(await (await detectionRequest(ownerHeaders)).json(), queuedDetectionBody);
+    const queuedDetectionRecord = await database.query<{ model: string }>(
+      `SELECT model FROM detection_attempts WHERE id = $1`,
+      [(queuedDetectionBody as { detectionAttemptId: string }).detectionAttemptId],
+    );
+    assert.equal(queuedDetectionRecord.rows[0]?.model, 'fixture-vision-model');
 
     const overwrite = await fetch(intent.uploadUrl, {
       method: 'PUT',

@@ -627,13 +627,39 @@ export async function startGenerationAttempt(
   });
 }
 
-export type CompleteGenerationAttemptInput = {
+export async function attachGenerationAsset(
+  database: Database,
+  input: {
+    accountId: string;
+    generationAttemptId: string;
+    kind: 'reference' | 'keyed' | 'transparent';
+    assetId: string;
+  },
+): Promise<string | null> {
+  const column = {
+    reference: 'reference_asset_id',
+    keyed: 'keyed_asset_id',
+    transparent: 'transparent_asset_id',
+  }[input.kind];
+  return withTransaction(database, async (client) => {
+    await client.query(
+      `UPDATE generation_attempts SET ${column} = $3
+       WHERE id = $1 AND account_id = $2 AND state = 'processing'
+         AND ${column} IS NULL`,
+      [input.generationAttemptId, input.accountId, input.assetId],
+    );
+    const attached = await client.query<{ asset_id: string | null }>(
+      `SELECT ${column} AS asset_id FROM generation_attempts
+       WHERE id = $1 AND account_id = $2 AND state = 'processing'`,
+      [input.generationAttemptId, input.accountId],
+    );
+    return attached.rows[0]?.asset_id ?? null;
+  });
+}
+
+export type RecordGenerationProviderUsageInput = {
   accountId: string;
   generationAttemptId: string;
-  referenceAssetId: string;
-  keyedAssetId: string;
-  transparentAssetId: string;
-  resolvedChromaKey: string;
   providerRequestId: string;
   inputTokens: number;
   textInputTokens: number;
@@ -649,44 +675,53 @@ export type CompleteGenerationAttemptInput = {
   providerUsage: unknown;
 };
 
+export async function recordGenerationProviderUsage(
+  database: Database,
+  input: RecordGenerationProviderUsageInput,
+): Promise<boolean> {
+  const attempt = await database.query(
+    `UPDATE generation_attempts SET
+       provider_request_id = $3, input_tokens = $4, text_input_tokens = $5,
+       image_input_tokens = $6, output_tokens = $7, captured_rates = $8,
+       cost_microunits = $9, service_tier = $10, pricing_effective_date = $11,
+       provider_usage = $12, text_input_cost_microunits = $13,
+       image_input_cost_microunits = $14, image_output_cost_microunits = $15
+     WHERE id = $1 AND account_id = $2 AND state = 'processing'
+       AND provider_request_id IS NULL`,
+    [
+      input.generationAttemptId,
+      input.accountId,
+      input.providerRequestId,
+      input.inputTokens,
+      input.textInputTokens,
+      input.imageInputTokens,
+      input.outputTokens,
+      JSON.stringify(input.capturedRates),
+      input.costMicrounits,
+      input.serviceTier,
+      input.pricingEffectiveDate,
+      JSON.stringify(input.providerUsage),
+      input.textInputCostMicrounits,
+      input.imageInputCostMicrounits,
+      input.imageOutputCostMicrounits,
+    ],
+  );
+  return attempt.rowCount === 1;
+}
+
 export async function completeGenerationAttempt(
   database: Database,
-  input: CompleteGenerationAttemptInput,
+  input: { accountId: string; generationAttemptId: string; resolvedChromaKey: string },
 ): Promise<boolean> {
   return withTransaction(database, async (client) => {
     const attempt = await client.query<{ wardrobe_item_id: string }>(
-      `UPDATE generation_attempts SET
-         state = 'needs-review', reference_asset_id = $3, keyed_asset_id = $4,
-         transparent_asset_id = $5, resolved_chroma_key = $6, provider_request_id = $7,
-         input_tokens = $8, text_input_tokens = $9, image_input_tokens = $10,
-         output_tokens = $11, captured_rates = $12, cost_microunits = $13,
-         service_tier = $14, pricing_effective_date = $15, provider_usage = $16,
-         text_input_cost_microunits = $17, image_input_cost_microunits = $18,
-         image_output_cost_microunits = $19,
+      `UPDATE generation_attempts SET state = 'needs-review', resolved_chroma_key = $3,
          finished_at = now()
        WHERE id = $1 AND account_id = $2 AND state = 'processing'
+         AND reference_asset_id IS NOT NULL AND keyed_asset_id IS NOT NULL
+         AND transparent_asset_id IS NOT NULL AND provider_request_id IS NOT NULL
        RETURNING wardrobe_item_id`,
-      [
-        input.generationAttemptId,
-        input.accountId,
-        input.referenceAssetId,
-        input.keyedAssetId,
-        input.transparentAssetId,
-        input.resolvedChromaKey,
-        input.providerRequestId,
-        input.inputTokens,
-        input.textInputTokens,
-        input.imageInputTokens,
-        input.outputTokens,
-        JSON.stringify(input.capturedRates),
-        input.costMicrounits,
-        input.serviceTier,
-        input.pricingEffectiveDate,
-        JSON.stringify(input.providerUsage),
-        input.textInputCostMicrounits,
-        input.imageInputCostMicrounits,
-        input.imageOutputCostMicrounits,
-      ],
+      [input.generationAttemptId, input.accountId, input.resolvedChromaKey],
     );
     const row = attempt.rows[0];
     if (!row) return false;

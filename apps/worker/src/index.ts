@@ -20,6 +20,7 @@ import {
 } from '@form/service';
 
 import { readWorkerConfig } from './config.js';
+import { SerialPoller } from './polling.js';
 
 const config = readWorkerConfig();
 const database = createDatabase(config);
@@ -27,7 +28,6 @@ const storage = createPrivateObjectStorage(config);
 const workerId = `worker-${randomUUID()}`;
 const provider = new OpenAICatalogProvider(config.OPENAI_API_KEY, config.OPENAI_API_BASE_URL);
 const executionConfig = {
-  detectionModel: config.OPENAI_DETECTION_MODEL,
   requestTimeoutMs: config.OPENAI_REQUEST_TIMEOUT_MS,
   pricing: {
     effectiveDate: config.OPENAI_PRICING_EFFECTIVE_DATE,
@@ -92,39 +92,29 @@ async function processJob(job: RemoteImageJob): Promise<void> {
   }
 }
 
-let polling = false;
-let currentPoll: Promise<void> | null = null;
 async function poll(): Promise<void> {
-  if (polling || stopping) return;
-  polling = true;
-  try {
-    const jobs = await claimJobs(database, {
-      workerId,
-      limit: config.REMOTE_IMAGE_GLOBAL_CONCURRENCY,
-      perAccountLimit: config.REMOTE_IMAGE_ACCOUNT_CONCURRENCY,
-      leaseSeconds: config.REMOTE_IMAGE_LEASE_SECONDS,
-    });
-    await Promise.all(jobs.map(processJob));
-  } finally {
-    polling = false;
-  }
+  const jobs = await claimJobs(database, {
+    workerId,
+    limit: config.REMOTE_IMAGE_GLOBAL_CONCURRENCY,
+    perAccountLimit: config.REMOTE_IMAGE_ACCOUNT_CONCURRENCY,
+    leaseSeconds: config.REMOTE_IMAGE_LEASE_SECONDS,
+  });
+  await Promise.all(jobs.map(processJob));
 }
 
-const pollTimer = setInterval(() => {
-  currentPoll = poll().catch((error: unknown) => {
-    console.error('Catalog worker poll failed.', error);
-  });
-}, config.REMOTE_IMAGE_POLL_INTERVAL_MS);
-currentPoll = poll().catch((error: unknown) => {
-  console.error('Initial catalog worker poll failed.', error);
+const poller = new SerialPoller(poll, (error: unknown) => {
+  console.error('Catalog worker poll failed.', error);
 });
+
+const pollTimer = setInterval(() => poller.start(), config.REMOTE_IMAGE_POLL_INTERVAL_MS);
+poller.start();
 
 async function stop(): Promise<void> {
   if (stopping) return;
   stopping = true;
   clearInterval(recoveryTimer);
   clearInterval(pollTimer);
-  await currentPoll;
+  await poller.stop();
   storage.client.destroy();
   await database.end();
 }

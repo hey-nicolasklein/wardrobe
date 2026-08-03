@@ -17,9 +17,11 @@ import { enqueueJob, type RemoteImageJob } from './jobs.js';
 import { IdempotencyConflictError, OwnedResourceNotFoundError } from './media.js';
 import type { PrivateObjectStorage } from './storage.js';
 import {
+  attachGenerationAsset,
   completeGenerationAttempt,
   failGenerationAttempt,
   recordDetectionProposals,
+  recordGenerationProviderUsage,
   startGenerationAttempt,
 } from './wardrobe.js';
 
@@ -31,7 +33,6 @@ export type CatalogPricing = {
 };
 
 export type CatalogExecutionConfig = {
-  detectionModel: string;
   pricing: CatalogPricing;
   requestTimeoutMs: number;
 };
@@ -265,6 +266,10 @@ type GenerationInputRow = {
   output_size: '816x816';
   prompt_version: string;
   bounding_box: NormalizedBoundingBox | null;
+  reference_asset_id: string | null;
+  keyed_asset_id: string | null;
+  transparent_asset_id: string | null;
+  provider_request_id: string | null;
 };
 
 function componentCost(tokens: number, rate: number): number {
@@ -335,6 +340,8 @@ async function executeGeneration(
   const attempt = await database.query<GenerationInputRow>(
     `SELECT attempts.source_photo_id, attempts.reviewed_metadata, attempts.model,
        attempts.quality, attempts.output_size, attempts.prompt_version,
+       attempts.reference_asset_id, attempts.keyed_asset_id,
+       attempts.transparent_asset_id, attempts.provider_request_id,
        proposals.bounding_box
      FROM generation_attempts attempts
      LEFT JOIN detection_proposals proposals ON proposals.id = attempts.detection_proposal_id
@@ -343,59 +350,77 @@ async function executeGeneration(
   );
   const input = attempt.rows[0];
   if (!input) throw new OwnedResourceNotFoundError();
-  const assetId = await sourceAssetId(database, job.accountId, input.source_photo_id);
-  const sourceBytes = await readAsset(database, storage, job.accountId, assetId);
-  const normalized = await normalizeSourceForProvider(sourceBytes);
-  const reference = await cropGenerationReference(
-    normalized,
-    input.bounding_box ?? { x: 0, y: 0, width: 1_000, height: 1_000 },
-  );
-  const referenceMetadata = await sharp(reference).metadata();
-  const referenceAssetId = await writeAsset(database, storage, {
-    accountId: job.accountId,
-    purpose: 'generation-reference',
-    bytes: reference,
-    contentType: 'image/jpeg',
-    width: referenceMetadata.width ?? 1,
-    height: referenceMetadata.height ?? 1,
-  });
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), config.requestTimeoutMs);
-  try {
-    const result = await provider.generate({
-      referenceJpeg: reference,
-      metadata: input.reviewed_metadata,
-      model: input.model,
-      quality: input.quality,
-      size: input.output_size,
-      promptVersion: input.prompt_version,
-      signal: controller.signal,
-    });
-    const processed = await removeValidatedChromaBackground(result.pngBytes);
-    const keyedAssetId = await writeAsset(database, storage, {
+  let reference: Buffer;
+  if (input.reference_asset_id) {
+    reference = await readAsset(
+      database,
+      storage,
+      job.accountId,
+      input.reference_asset_id,
+    );
+  } else {
+    const assetId = await sourceAssetId(database, job.accountId, input.source_photo_id);
+    const sourceBytes = await readAsset(database, storage, job.accountId, assetId);
+    const normalized = await normalizeSourceForProvider(sourceBytes);
+    reference = await cropGenerationReference(
+      normalized,
+      input.bounding_box ?? { x: 0, y: 0, width: 1_000, height: 1_000 },
+    );
+    const referenceMetadata = await sharp(reference).metadata();
+    const createdReferenceAssetId = await writeAsset(database, storage, {
       accountId: job.accountId,
-      purpose: 'shelf-image-keyed',
-      bytes: result.pngBytes,
-      contentType: 'image/png',
-      width: 816,
-      height: 816,
+      purpose: 'generation-reference',
+      bytes: reference,
+      contentType: 'image/jpeg',
+      width: referenceMetadata.width ?? 1,
+      height: referenceMetadata.height ?? 1,
     });
-    const transparentAssetId = await writeAsset(database, storage, {
-      accountId: job.accountId,
-      purpose: 'shelf-image-transparent',
-      bytes: processed.transparentPng,
-      contentType: 'image/png',
-      width: 816,
-      height: 816,
-    });
-    const cost = calculateCostLedger(result.usage, config.pricing);
-    const completed = await completeGenerationAttempt(database, {
+    const attachedReferenceAssetId = await attachGenerationAsset(database, {
       accountId: job.accountId,
       generationAttemptId: payload.generationAttemptId,
-      referenceAssetId,
-      keyedAssetId,
-      transparentAssetId,
-      resolvedChromaKey: processed.resolvedChromaKey,
+      kind: 'reference',
+      assetId: createdReferenceAssetId,
+    });
+    if (!attachedReferenceAssetId) {
+      throw new CatalogJobError('internal', 'The generation reference could not be attached.', false);
+    }
+    if (attachedReferenceAssetId !== createdReferenceAssetId) {
+      reference = await readAsset(database, storage, job.accountId, attachedReferenceAssetId);
+    }
+  }
+
+  let keyedBytes: Buffer;
+  let keyedAssetId = input.keyed_asset_id;
+  if (input.provider_request_id) {
+    if (!keyedAssetId) {
+      throw new CatalogJobError(
+        'internal',
+        'The billed provider response was recorded but its keyed output is unavailable.',
+        false,
+      );
+    }
+    keyedBytes = await readAsset(database, storage, job.accountId, keyedAssetId);
+  } else {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), config.requestTimeoutMs);
+    let result;
+    try {
+      result = await provider.generate({
+        referenceJpeg: reference,
+        metadata: input.reviewed_metadata,
+        model: input.model,
+        quality: input.quality,
+        size: input.output_size,
+        promptVersion: input.prompt_version,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+    const cost = calculateCostLedger(result.usage, config.pricing);
+    const usageRecorded = await recordGenerationProviderUsage(database, {
+      accountId: job.accountId,
+      generationAttemptId: payload.generationAttemptId,
       providerRequestId: result.requestId,
       inputTokens: result.usage.textInputTokens + result.usage.imageInputTokens,
       textInputTokens: result.usage.textInputTokens,
@@ -410,11 +435,63 @@ async function executeGeneration(
       pricingEffectiveDate: config.pricing.effectiveDate,
       providerUsage: result.usage.raw,
     });
-    if (!completed) {
-      throw new CatalogJobError('internal', 'The generation result could not be persisted.', false);
+    if (!usageRecorded) {
+      throw new CatalogJobError('internal', 'The billed provider usage could not be persisted.', false);
     }
-  } finally {
-    clearTimeout(timer);
+    keyedBytes = result.pngBytes;
+    const createdKeyedAssetId = await writeAsset(database, storage, {
+      accountId: job.accountId,
+      purpose: 'shelf-image-keyed',
+      bytes: keyedBytes,
+      contentType: 'image/png',
+      width: 816,
+      height: 816,
+    });
+    keyedAssetId = await attachGenerationAsset(database, {
+      accountId: job.accountId,
+      generationAttemptId: payload.generationAttemptId,
+      kind: 'keyed',
+      assetId: createdKeyedAssetId,
+    });
+    if (!keyedAssetId) {
+      throw new CatalogJobError('internal', 'The keyed Shelf Image could not be attached.', false);
+    }
+    if (keyedAssetId !== createdKeyedAssetId) {
+      keyedBytes = await readAsset(database, storage, job.accountId, keyedAssetId);
+    }
+  }
+
+  const processed = await removeValidatedChromaBackground(keyedBytes);
+  if (!input.transparent_asset_id) {
+    const createdTransparentAssetId = await writeAsset(database, storage, {
+      accountId: job.accountId,
+      purpose: 'shelf-image-transparent',
+      bytes: processed.transparentPng,
+      contentType: 'image/png',
+      width: 816,
+      height: 816,
+    });
+    const transparentAssetId = await attachGenerationAsset(database, {
+      accountId: job.accountId,
+      generationAttemptId: payload.generationAttemptId,
+      kind: 'transparent',
+      assetId: createdTransparentAssetId,
+    });
+    if (!transparentAssetId) {
+      throw new CatalogJobError(
+        'internal',
+        'The transparent Shelf Image could not be attached.',
+        false,
+      );
+    }
+  }
+  const completed = await completeGenerationAttempt(database, {
+    accountId: job.accountId,
+    generationAttemptId: payload.generationAttemptId,
+    resolvedChromaKey: processed.resolvedChromaKey,
+  });
+  if (!completed) {
+    throw new CatalogJobError('internal', 'The generation result could not be persisted.', false);
   }
 }
 

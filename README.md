@@ -73,3 +73,11 @@ npm run test:integration
 ```
 
 The first command typechecks every production workspace and runs unit/contract tests. The integration command requires the local services and validates migrations, repeatable fixture reset, database-enforced account ownership, idempotent enqueuing, concurrency limits, abandoned-lease recovery, and the replay catalog pipeline against real PostgreSQL and MinIO.
+
+A deliberate paid smoke test is available separately and is never part of routine verification:
+
+```sh
+OPENAI_API_KEY=... npm run test:openai-smoke
+```
+
+It calls both the live strict vision and `gpt-image-2` edit endpoints, checks returned usage, and validates the generated chroma output.

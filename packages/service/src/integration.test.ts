@@ -219,7 +219,6 @@ test('replay pipeline detects, crops, accounts, and stores review assets', { ski
       },
     ]);
     const executionConfig = {
-      detectionModel: 'gpt-5.4-mini',
       requestTimeoutMs: 10_000,
       pricing: {
         effectiveDate: '2026-08-03',
@@ -307,6 +306,86 @@ test('replay pipeline detects, crops, accounts, and stores review assets', { ski
       resolved_chroma_key: '#00ff00',
       assets: 3,
     });
+
+    const nonUniformOutput = await sharp({
+      create: { width: 816, height: 816, channels: 3, background: '#00ff00' },
+    })
+      .composite([
+        {
+          input: await sharp({
+            create: { width: 408, height: 816, channels: 3, background: '#0066ff' },
+          })
+            .png()
+            .toBuffer(),
+          left: 408,
+          top: 0,
+        },
+      ])
+      .png()
+      .toBuffer();
+    const failingProvider = new ReplayCatalogProvider([
+      {
+        key: 'generate:gpt-image-2:low',
+        generation: {
+          requestId: 'replay-billed-chroma-failure',
+          pngBytes: nonUniformOutput,
+          usage: {
+            textInputTokens: 11,
+            imageInputTokens: 22,
+            outputTokens: 33,
+            serviceTier: 'default',
+            raw: { fixture: 'billed-chroma-failure' },
+          },
+        },
+      },
+    ]);
+    const failedGeneration = await enqueueShelfImageGeneration(database, {
+      accountId: fixtureIds.populatedAccount,
+      wardrobeItemId: item.id,
+      quality: 'low',
+      size: '816x816',
+      idempotencyKey: 'pipeline-generation-command-0002',
+    });
+    await assert.rejects(
+      executeCatalogJob(
+        database,
+        storage,
+        failingProvider,
+        {
+          id: failedGeneration.jobId,
+          accountId: fixtureIds.populatedAccount,
+          wardrobeItemId: item.id,
+          generationAttemptId: failedGeneration.generationAttemptId,
+          kind: 'generate-shelf-image',
+          payload: { generationAttemptId: failedGeneration.generationAttemptId },
+          attempts: 1,
+          maxAttempts: 2,
+          leaseExpiresAt: new Date(Date.now() + 60_000),
+        },
+        executionConfig,
+      ),
+      (error: unknown) =>
+        (error as { category?: string }).category === 'chroma-validation',
+    );
+    const billedFailure = await database.query<{
+      provider_request_id: string;
+      text_input_tokens: number;
+      cost_microunits: string;
+      reference_asset_id: string;
+      keyed_asset_id: string;
+      transparent_asset_id: string | null;
+    }>(
+      `SELECT provider_request_id, text_input_tokens, cost_microunits,
+         reference_asset_id, keyed_asset_id, transparent_asset_id
+       FROM generation_attempts WHERE id = $1`,
+      [failedGeneration.generationAttemptId],
+    );
+    assert.equal(billedFailure.rows[0]?.provider_request_id, 'replay-billed-chroma-failure');
+    assert.equal(billedFailure.rows[0]?.text_input_tokens, 11);
+    assert.equal(billedFailure.rows[0]?.cost_microunits, '154');
+    assert.ok(billedFailure.rows[0]?.reference_asset_id);
+    assert.ok(billedFailure.rows[0]?.keyed_asset_id);
+    assert.equal(billedFailure.rows[0]?.transparent_asset_id, null);
   } finally {
     storage.client.destroy();
     await database.end();
