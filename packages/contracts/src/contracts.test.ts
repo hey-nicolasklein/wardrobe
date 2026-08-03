@@ -4,10 +4,12 @@ import test from 'node:test';
 import {
   apiErrorSchema,
   accountCredentialsSchema,
+  createWardrobeItemRequestSchema,
   enqueueGenerationRequestSchema,
   garmentDetectionSchema,
   signInRequestSchema,
   updateWardrobeItemRequestSchema,
+  wardrobeItemDetailResponseSchema,
 } from './index.js';
 
 const id = 'opaque-id-0123456789abcdef';
@@ -98,4 +100,24 @@ test('shares administrator and sign-in credential limits', () => {
     }).success,
     false,
   );
+});
+
+test('does not create an already archived Wardrobe Item from a detection', () => {
+  const result = createWardrobeItemRequestSchema.safeParse({
+    detectionProposalId: id,
+    state: 'archived',
+    idempotencyKey: 'command-0123456789abcdef',
+  });
+
+  assert.equal(result.success, false);
+});
+
+test('requires immutable generation history in item detail responses', () => {
+  const result = wardrobeItemDetailResponseSchema.safeParse({
+    wardrobeItem: {},
+    sourcePhoto: {},
+    shelfImageVersions: [],
+  });
+
+  assert.equal(result.success, false);
 });

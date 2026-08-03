@@ -1,4 +1,7 @@
 export * from './auth.js';
+export * from './catalog-images.js';
+export * from './catalog-provider.js';
+export * from './catalog.js';
 export * from './config.js';
 export * from './database.js';
 export * from './fixtures.js';
@@ -7,3 +10,4 @@ export * from './jobs.js';
 export * from './media.js';
 export * from './ownership.js';
 export * from './storage.js';
+export * from './wardrobe.js';

@@ -145,6 +145,21 @@ export async function completeJob(
   return result.rowCount === 1;
 }
 
+export async function renewJobLease(
+  database: Database,
+  jobId: string,
+  workerId: string,
+  leaseSeconds: number,
+): Promise<boolean> {
+  const result = await database.query(
+    `UPDATE remote_image_jobs
+     SET lease_expires_at = now() + ($3 * interval '1 second'), updated_at = now()
+     WHERE id = $1 AND state = 'leased' AND lease_owner = $2`,
+    [jobId, workerId, leaseSeconds],
+  );
+  return result.rowCount === 1;
+}
+
 export type FailJobOptions = {
   retryable: boolean;
   category: string;

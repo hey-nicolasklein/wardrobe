@@ -25,6 +25,7 @@ const app = createApp({
   sessionLifetimeSeconds: config.SESSION_LIFETIME_SECONDS,
   secureCookies: config.SESSION_COOKIE_SECURE,
   webOrigin: config.WEB_ORIGIN,
+  detectionModel: config.OPENAI_DETECTION_MODEL,
 });
 const server = serve({
   fetch: app.fetch,

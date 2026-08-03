@@ -7,6 +7,8 @@ This server-only package owns the persistence boundary shared by the API and rem
 - Authentication uses salted scrypt password hashes and one server-side session model with HMAC-hashed opaque tokens.
 - The private object-store adapter creates a versioned bucket and issues short-lived upload and download URLs. It never makes the bucket or an object public.
 - Source Photo completion verifies byte count, decoded image type, and pixel dimensions before marking an account-owned asset ready.
+- The wardrobe module owns account-scoped reads, immutable detection and generation history, optimistic/idempotent edits, reversible Wanting/Owning/Archive state, explicit Keep/restore, and permanent deletion. Shared Source Photos survive until their final derived item is deleted.
+- The catalog module normalizes orientation, creates reviewed target crops, calls replaceable OpenAI/replay providers, validates and removes inferred chroma backgrounds, writes versioned private assets, and persists an immutable token/rate/cost ledger.
 - Queue claims use row locks, transaction-scoped account locks, global/per-account limits, leases, bounded retries, and abandoned-lease recovery.
 - Health checks distinguish process liveness from PostgreSQL and object-storage readiness.
 
