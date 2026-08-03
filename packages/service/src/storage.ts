@@ -73,11 +73,16 @@ export async function createSignedUploadUrl(
 export async function createSignedDownloadUrl(
   storage: PrivateObjectStorage,
   objectKey: string,
+  objectVersionId: string,
   expiresInSeconds = 300,
 ): Promise<string> {
   return getSignedUrl(
     storage.client,
-    new GetObjectCommand({ Bucket: storage.bucket, Key: objectKey }),
+    new GetObjectCommand({
+      Bucket: storage.bucket,
+      Key: objectKey,
+      VersionId: objectVersionId,
+    }),
     { expiresIn: expiresInSeconds },
   );
 }

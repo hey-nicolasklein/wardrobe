@@ -180,7 +180,10 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       return context.json({ ...intent, expiresAt: intent.expiresAt.toISOString() }, 201);
     } catch (error) {
       if (error instanceof MediaValidationError) {
-        return context.json(errorPayload('validation', error.code, error.message), 400);
+        return context.json(
+          errorPayload('validation', error.code, error.message),
+          error.code === 'upload-missing' ? 409 : 400,
+        );
       }
       throw error;
     }
@@ -227,7 +230,10 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
         return context.json(errorPayload('conflict', 'idempotency-key-reused', error.message), 409);
       }
       if (error instanceof MediaValidationError) {
-        return context.json(errorPayload('validation', error.code, error.message), 400);
+        return context.json(
+          errorPayload('validation', error.code, error.message),
+          error.code === 'upload-missing' ? 409 : 400,
+        );
       }
       if (error instanceof OwnedResourceNotFoundError) {
         return context.json(errorPayload('not-found', 'asset-not-found', 'Asset not found.'), 404);

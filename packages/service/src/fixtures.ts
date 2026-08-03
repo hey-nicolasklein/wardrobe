@@ -47,7 +47,7 @@ const fixtureObjects = [
   'fixtures/populated/shelf-transparent-1.png',
   'fixtures/populated/shelf-keyed-2.png',
   'fixtures/populated/shelf-transparent-2.png',
-];
+] as const;
 
 async function clearFixtureObjects(storage: PrivateObjectStorage): Promise<void> {
   let keyMarker: string | undefined;
@@ -83,16 +83,20 @@ export async function resetFixtures(
   storage: PrivateObjectStorage,
 ): Promise<void> {
   await clearFixtureObjects(storage);
-  await Promise.all(
-    fixtureObjects.map((key) =>
-      storage.client.send(
-        new PutObjectCommand({
-          Bucket: storage.bucket,
-          Key: key,
-          Body: fixturePng,
-          ContentType: 'image/png',
-        }),
-      ),
+  const fixtureObjectVersions = new Map(
+    await Promise.all(
+      fixtureObjects.map(async (key) => {
+        const result = await storage.client.send(
+          new PutObjectCommand({
+            Bucket: storage.bucket,
+            Key: key,
+            Body: fixturePng,
+            ContentType: 'image/png',
+          }),
+        );
+        if (!result.VersionId) throw new Error(`Fixture object ${key} has no version ID.`);
+        return [key, result.VersionId] as const;
+      }),
     ),
   );
 
@@ -131,14 +135,22 @@ export async function resetFixtures(
       [fixtureIds.transparentAssetOne, 'shelf-image-transparent', fixtureObjects[2]],
       [fixtureIds.keyedAssetTwo, 'shelf-image-keyed', fixtureObjects[3]],
       [fixtureIds.transparentAssetTwo, 'shelf-image-transparent', fixtureObjects[4]],
-    ];
+    ] as const;
     for (const [id, purpose, objectKey] of assetRows) {
       await client.query(
         `INSERT INTO private_assets (
-          id, account_id, purpose, object_key, content_type, byte_size,
+          id, account_id, purpose, object_key, object_version_id, content_type, byte_size,
           pixel_width, pixel_height, state, created_at, ready_at
-        ) VALUES ($1, $2, $3, $4, 'image/png', $5, 1, 1, 'ready', $6, $6)`,
-        [id, fixtureIds.populatedAccount, purpose, objectKey, fixturePng.byteLength, timestamp],
+        ) VALUES ($1, $2, $3, $4, $5, 'image/png', $6, 1, 1, 'ready', $7, $7)`,
+        [
+          id,
+          fixtureIds.populatedAccount,
+          purpose,
+          objectKey,
+          fixtureObjectVersions.get(objectKey)!,
+          fixturePng.byteLength,
+          timestamp,
+        ],
       );
     }
 

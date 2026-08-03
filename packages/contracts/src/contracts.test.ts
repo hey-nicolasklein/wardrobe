@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   apiErrorSchema,
+  accountCredentialsSchema,
   enqueueGenerationRequestSchema,
   garmentDetectionSchema,
   signInRequestSchema,
@@ -79,6 +80,21 @@ test('makes the browser cookie and native token transports explicit', () => {
     signInRequestSchema.safeParse({
       email: 'owner@example.test',
       password: 'secret',
+    }).success,
+    false,
+  );
+});
+
+test('shares administrator and sign-in credential limits', () => {
+  assert.equal(
+    accountCredentialsSchema.safeParse({ email: 'not-an-email', password: 'long-enough-password' })
+      .success,
+    false,
+  );
+  assert.equal(
+    accountCredentialsSchema.safeParse({
+      email: 'owner@example.test',
+      password: 'x'.repeat(257),
     }).success,
     false,
   );

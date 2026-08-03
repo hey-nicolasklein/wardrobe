@@ -7,6 +7,7 @@ export type OwnedPrivateAsset = {
   accountId: string;
   purpose: string;
   objectKey: string;
+  objectVersionId: string | null;
   contentType: string;
   byteSize: number;
   pixelWidth: number | null;
@@ -25,6 +26,7 @@ export async function findOwnedPrivateAsset(
     account_id: string;
     purpose: string;
     object_key: string;
+    object_version_id: string | null;
     content_type: string;
     byte_size: string;
     pixel_width: number | null;
@@ -32,7 +34,7 @@ export async function findOwnedPrivateAsset(
     state: OwnedPrivateAsset['state'];
     created_at: Date;
   }>(
-    `SELECT id, account_id, purpose, object_key, content_type, byte_size,
+    `SELECT id, account_id, purpose, object_key, object_version_id, content_type, byte_size,
             pixel_width, pixel_height, state, created_at
      FROM private_assets
      WHERE id = $1 AND account_id = $2 AND state <> 'deleted'`,
@@ -45,6 +47,7 @@ export async function findOwnedPrivateAsset(
         accountId: asset.account_id,
         purpose: asset.purpose,
         objectKey: asset.object_key,
+        objectVersionId: asset.object_version_id,
         contentType: asset.content_type,
         byteSize: Number(asset.byte_size),
         pixelWidth: asset.pixel_width,

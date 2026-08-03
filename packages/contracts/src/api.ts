@@ -41,12 +41,15 @@ export const apiErrorSchema = z
 
 export const errorResponseSchema = z.object({ error: apiErrorSchema }).strict();
 
-export const signInRequestSchema = z
+export const accountCredentialsSchema = z
   .object({
     email: z.email(),
     password: z.string().min(1).max(256),
-    transport: z.enum(['cookie', 'token']),
   })
+  .strict();
+
+export const signInRequestSchema = accountCredentialsSchema
+  .extend({ transport: z.enum(['cookie', 'token']) })
   .strict();
 
 export const sessionSchema = z

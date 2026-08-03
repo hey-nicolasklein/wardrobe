@@ -17,8 +17,20 @@ import { createApp } from './app.js';
 
 const enabled = process.env.FORM_RUN_SERVICE_INTEGRATION === 'true';
 const sessionSecret = 'integration-session-secret-at-least-32-characters';
-const onePixelPng = Buffer.from(
+const fixturePng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+);
+const sourcePng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNgYGD4DwABBAEAfbLI3wAAAABJRU5ErkJggg==',
+  'base64',
+);
+const replacementPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWP4////fwAJ+wP9CNHoHgAAAABJRU5ErkJggg==',
+  'base64',
+);
+const corruptPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlKZQAAAABJRU5ErkJggg==',
   'base64',
 );
 
@@ -62,7 +74,7 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     const ownerDownloadBody = (await ownerDownload.json()) as { downloadUrl: string };
     const downloaded = await fetch(ownerDownloadBody.downloadUrl);
     assert.equal(downloaded.status, 200);
-    assert.equal((await downloaded.arrayBuffer()).byteLength, onePixelPng.byteLength);
+    assert.equal((await downloaded.arrayBuffer()).byteLength, fixturePng.byteLength);
 
     const deniedDownload = await app.request(
       `/v1/assets/${fixtureIds.sourceAsset}/download`,
@@ -76,7 +88,7 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       body: JSON.stringify({
         fileName: 'source.png',
         contentType: 'image/png',
-        byteSize: onePixelPng.byteLength,
+        byteSize: sourcePng.byteLength,
       }),
     });
     assert.equal(intentResponse.status, 201);
@@ -88,7 +100,7 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     const upload = await fetch(intent.uploadUrl, {
       method: 'PUT',
       headers: intent.headers,
-      body: onePixelPng,
+      body: sourcePng,
     });
     assert.equal(upload.status, 200);
 
@@ -103,18 +115,84 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     });
     assert.equal(deniedCompletion.status, 404);
 
-    const completion = await app.request('/v1/source-photos/complete', {
-      method: 'POST',
-      headers: { ...ownerHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify(completionBody),
-    });
+    const completionRequest = () =>
+      app.request('/v1/source-photos/complete', {
+        method: 'POST',
+        headers: { ...ownerHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(completionBody),
+      });
+    const [completion, replay] = await Promise.all([completionRequest(), completionRequest()]);
     assert.equal(completion.status, 200);
-    const replay = await app.request('/v1/source-photos/complete', {
+    assert.equal(replay.status, 200);
+    const completionResponse = (await completion.json()) as { asset: { id: string } };
+    assert.deepEqual(await replay.json(), completionResponse);
+
+    const overwrite = await fetch(intent.uploadUrl, {
+      method: 'PUT',
+      headers: intent.headers,
+      body: replacementPng,
+    });
+    assert.equal(overwrite.status, 200);
+    const immutableDownload = await app.request(
+      `/v1/assets/${completionResponse.asset.id}/download`,
+      { headers: ownerHeaders },
+    );
+    assert.equal(immutableDownload.status, 200);
+    const immutableDownloadBody = (await immutableDownload.json()) as { downloadUrl: string };
+    const immutableBytes = Buffer.from(await (await fetch(immutableDownloadBody.downloadUrl)).arrayBuffer());
+    assert.deepEqual(immutableBytes, sourcePng);
+
+    async function createIntent(bytes: Buffer): Promise<{ assetId: string; uploadUrl: string; headers: Record<string, string> }> {
+      const response = await app.request('/v1/source-photos/upload-intents', {
+        method: 'POST',
+        headers: { ...ownerHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: 'source.png',
+          contentType: 'image/png',
+          byteSize: bytes.byteLength,
+        }),
+      });
+      assert.equal(response.status, 201);
+      return response.json() as Promise<{
+        assetId: string;
+        uploadUrl: string;
+        headers: Record<string, string>;
+      }>;
+    }
+
+    const missingIntent = await createIntent(sourcePng);
+    const missingCompletion = await app.request('/v1/source-photos/complete', {
       method: 'POST',
       headers: { ...ownerHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify(completionBody),
+      body: JSON.stringify({
+        assetId: missingIntent.assetId,
+        idempotencyKey: 'integration-missing-upload-0001',
+      }),
     });
-    assert.deepEqual(await replay.json(), await completion.json());
+    assert.equal(missingCompletion.status, 409);
+    assert.equal(((await missingCompletion.json()) as { error: { code: string } }).error.code, 'upload-missing');
+
+    const corruptIntent = await createIntent(corruptPng);
+    assert.equal(
+      (
+        await fetch(corruptIntent.uploadUrl, {
+          method: 'PUT',
+          headers: corruptIntent.headers,
+          body: corruptPng,
+        })
+      ).status,
+      200,
+    );
+    const corruptCompletion = await app.request('/v1/source-photos/complete', {
+      method: 'POST',
+      headers: { ...ownerHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assetId: corruptIntent.assetId,
+        idempotencyKey: 'integration-corrupt-upload-0001',
+      }),
+    });
+    assert.equal(corruptCompletion.status, 400);
+    assert.equal(((await corruptCompletion.json()) as { error: { code: string } }).error.code, 'invalid-image');
 
     const cookieSignIn = await app.request('/v1/auth/sign-in', {
       method: 'POST',
