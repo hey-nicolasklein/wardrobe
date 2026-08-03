@@ -8,6 +8,11 @@
     "packages/*"
   ],
   "scripts": {
+    "services:up": "docker compose -f compose.dev.yaml up -d --wait",
+    "services:down": "docker compose -f compose.dev.yaml down",
+    "db:migrate": "npm run migrate --workspace=@form/service",
+    "fixtures:reset": "npm run fixtures:reset --workspace=@form/service",
+    "test:service-integration": "npm run test:integration --workspace=@form/service",
     "dev:production": "concurrently -n api,worker,mobile -c blue,magenta,cyan \"npm:dev:api\" \"npm:dev:worker\" \"npm:dev:mobile\"",
     "dev:api": "npm run dev --workspace=@form/api",
     "dev:worker": "npm run dev --workspace=@form/worker",

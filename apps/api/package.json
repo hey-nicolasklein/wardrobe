@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@form/contracts": "*",
+    "@form/service": "*",
     "@hono/node-server": "^2.0.11",
     "hono": "^4.7.0",
     "zod": "^4.4.3"

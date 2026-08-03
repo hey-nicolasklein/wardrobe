@@ -1,0 +1,29 @@
+{
+  "name": "@form/service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "migrate": "tsx src/cli/migrate.ts",
+    "fixtures:reset": "tsx src/cli/reset-fixtures.ts",
+    "test": "tsx --test src/*.test.ts",
+    "test:integration": "RUN_SERVICE_INTEGRATION=true tsx --test src/service.integration.test.ts",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1101.0",
+    "@aws-sdk/s3-request-presigner": "^3.1101.0",
+    "pg": "^8.22.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.5",
+    "tsx": "^4.23.5",
+    "typescript": "~6.0.3"
+  }
+}

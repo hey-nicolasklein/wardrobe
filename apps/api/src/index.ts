@@ -1,29 +1,35 @@
 import { serve } from '@hono/node-server';
-import { contractVersion } from '@form/contracts';
-import { Hono } from 'hono';
+import {
+  createDatabase,
+  loadLocalEnvironment,
+  PrivateAssetStore,
+  runMigrations,
+} from '@form/service';
 
-import { apiConfigSchema } from './config.js';
+import { createApp } from './app.js';
+import { readApiConfig } from './config.js';
 
-const bootstrapConfigSchema = apiConfigSchema.pick({
-  API_HOST: true,
-  API_PORT: true,
-});
+loadLocalEnvironment();
+const config = readApiConfig();
+const database = createDatabase(config.DATABASE_URL);
+const assets = new PrivateAssetStore(database, config);
 
-const config = bootstrapConfigSchema.parse(process.env);
-const app = new Hono();
+await runMigrations(database);
+await assets.ensurePrivateBucket();
+const app = createApp({ database, assets, bucket: config.S3_BUCKET });
 
-app.get('/', (context) =>
-  context.json({
-    service: 'form-api',
-    status: 'workspace-ready',
-    contractVersion,
-  }),
-);
-
-serve({
+const server = serve({
   fetch: app.fetch,
   hostname: config.API_HOST,
   port: config.API_PORT,
 });
 
 console.log(`FORM API workspace listening on http://${config.API_HOST}:${config.API_PORT}`);
+
+async function shutdown(): Promise<void> {
+  server.close();
+  await database.end();
+}
+
+process.once('SIGINT', () => void shutdown());
+process.once('SIGTERM', () => void shutdown());

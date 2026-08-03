@@ -21,7 +21,17 @@ Use Node.js 24 and install once from the repository root:
 npm install
 ```
 
-Copy the relevant `.env.example` in each app to `.env.local`. Only `EXPO_PUBLIC_API_URL` enters the mobile bundle; never put credentials in an `EXPO_PUBLIC_*` variable.
+Copy the relevant `.env.example` in each app and `packages/service` to `.env.local`. Only `EXPO_PUBLIC_API_URL` enters the mobile bundle; never put credentials in an `EXPO_PUBLIC_*` variable.
+
+Start disposable PostgreSQL and private S3-compatible storage, apply migrations, and load the two deterministic fixture accounts:
+
+```sh
+npm run services:up
+npm run db:migrate
+npm run fixtures:reset
+```
+
+The development containers keep data in named volumes. `npm run services:down` stops them without deleting data.
 
 ## Development
 
@@ -37,7 +47,14 @@ Or start all three production boundaries together:
 npm run dev:production
 ```
 
-The mobile app should be exercised in Expo Go first. The API currently exposes only a workspace marker at `http://localhost:4143/`, and the worker intentionally has no queue consumer until the durable service-foundation ticket.
+The mobile app should be exercised in Expo Go first. The API exposes liveness at `/health/live` and checks PostgreSQL plus object storage at `/health/ready`. The worker owns database-safe job claiming and abandoned-lease recovery; provider handlers arrive with the GPT catalog ticket.
+
+The normal verification suite is infrastructure-free. To also prove the real PostgreSQL and S3-compatible boundary:
+
+```sh
+npm run services:up
+npm run test:service-integration
+```
 
 ## Verification
 

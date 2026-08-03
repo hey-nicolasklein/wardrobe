@@ -1,13 +1,8 @@
 import { z } from 'zod';
+import { serviceConfigSchema } from '@form/service';
 
-export const workerConfigSchema = z.object({
-  DATABASE_URL: z.url(),
-  S3_ENDPOINT: z.url(),
-  S3_REGION: z.string().min(1),
-  S3_BUCKET: z.string().min(3),
-  S3_ACCESS_KEY_ID: z.string().min(1),
-  S3_SECRET_ACCESS_KEY: z.string().min(1),
-  OPENAI_API_KEY: z.string().min(1),
+export const workerConfigSchema = serviceConfigSchema.extend({
+  WORKER_ID: z.string().min(1).default('form-worker'),
   REMOTE_IMAGE_GLOBAL_CONCURRENCY: z.coerce.number().int().positive().default(2),
   REMOTE_IMAGE_ACCOUNT_CONCURRENCY: z.coerce.number().int().positive().default(1),
 });
