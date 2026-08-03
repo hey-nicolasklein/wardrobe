@@ -29,6 +29,7 @@ Deliver a working Expo application and NAS-hosted backend that can be used as a 
 ## Decisions so far
 
 - [Reconcile the V1 contract with the usable wardrobe destination](https://github.com/hey-nicolasklein/wardrobe/issues/9) — The accepted specs now make the persistent, recoverable wardrobe loop the first release and defer fitting profiles and Looks.
+- [Establish the production workspace and contracts](https://github.com/hey-nicolasklein/wardrobe/issues/11) — Production now has explicit mobile, API, worker, and runtime-validated contract boundaries with one install and verification baseline; the Vite prototype remains isolated evidence.
 
 ## Not yet specified
 
