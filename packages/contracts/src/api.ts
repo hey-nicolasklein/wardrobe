@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import {
+  detectionProposalSchema,
+  generationAttemptSchema,
   generationQualitySchema,
   generationSizeSchema,
   itemMetadataSchema,
@@ -130,6 +132,40 @@ export const wardrobeItemResponseSchema = z
   .object({ wardrobeItem: wardrobeItemSchema })
   .strict();
 
+export const wardrobeItemsResponseSchema = z
+  .object({ wardrobeItems: z.array(wardrobeItemSchema) })
+  .strict();
+
+export const wardrobeItemDetailResponseSchema = z
+  .object({
+    wardrobeItem: wardrobeItemSchema,
+    sourcePhoto: sourcePhotoSchema,
+    shelfImageVersions: z.array(shelfImageVersionSchema),
+    generationAttempts: z.array(generationAttemptSchema),
+  })
+  .strict();
+
+export const detectionProposalsResponseSchema = z
+  .object({ detections: z.array(detectionProposalSchema) })
+  .strict();
+
+export const enqueueDetectionRequestSchema = z
+  .object({ idempotencyKey: idempotencyKeySchema })
+  .strict();
+
+export const enqueueDetectionResponseSchema = z
+  .object({ jobId: opaqueIdSchema, detectionAttemptId: opaqueIdSchema })
+  .strict();
+
+export const createWardrobeItemRequestSchema = z
+  .object({
+    detectionProposalId: opaqueIdSchema,
+    state: itemStateSchema.exclude(['archived']),
+    metadata: itemMetadataSchema.optional(),
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+
 export const enqueueGenerationRequestSchema = z
   .object({
     wardrobeItemId: opaqueIdSchema,
@@ -155,6 +191,21 @@ export const keepShelfImageResponseSchema = z
   .object({
     wardrobeItem: wardrobeItemSchema,
     shelfImageVersion: shelfImageVersionSchema,
+  })
+  .strict();
+
+export const permanentlyDeleteWardrobeItemRequestSchema = z
+  .object({
+    expectedRecordVersion: recordVersionSchema,
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+
+export const permanentlyDeleteWardrobeItemResponseSchema = z
+  .object({
+    wardrobeItemId: opaqueIdSchema,
+    sourcePhotoDeleted: z.boolean(),
+    deletedAssetIds: z.array(opaqueIdSchema),
   })
   .strict();
 

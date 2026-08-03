@@ -1,7 +1,14 @@
 import {
   completeSourceUploadRequestSchema,
+  createWardrobeItemRequestSchema,
   createUploadIntentRequestSchema,
+  enqueueDetectionRequestSchema,
+  enqueueGenerationRequestSchema,
+  itemStateSchema,
+  keepShelfImageRequestSchema,
+  permanentlyDeleteWardrobeItemRequestSchema,
   signInRequestSchema,
+  updateWardrobeItemRequestSchema,
   contractVersion,
   type ApiError,
 } from '@form/contracts';
@@ -11,15 +18,26 @@ import {
   createOwnedAssetDownload,
   createSession,
   createSourceUploadIntent,
+  createWardrobeItemFromDetection,
+  enqueueSourcePhotoDetection,
+  enqueueShelfImageGeneration,
+  getWardrobeItemDetail,
   IdempotencyConflictError,
+  InvalidWardrobeTransitionError,
+  keepShelfImage,
+  listDetectionProposals,
+  listWardrobeItems,
   MediaValidationError,
   OwnedResourceNotFoundError,
+  permanentlyDeleteWardrobeItem,
   revokeSession,
   verifyCredentials,
   type Database,
   type DependencyHealth,
   type PrivateObjectStorage,
   type SessionRecord,
+  StaleRecordVersionError,
+  updateWardrobeItem,
 } from '@form/service';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { cors } from 'hono/cors';
@@ -35,6 +53,7 @@ export type AppDependencies = {
   sessionLifetimeSeconds?: number;
   secureCookies?: boolean;
   webOrigin?: string;
+  detectionModel?: string;
 };
 
 const sessionCookie = 'form_session';
@@ -51,6 +70,37 @@ function errorPayload(
 function bearerToken(authorization: string | undefined): string | null {
   const match = authorization?.match(/^Bearer ([A-Za-z0-9_-]+)$/);
   return match?.[1] ?? null;
+}
+
+function wardrobeError(error: unknown): {
+  status: 404 | 409;
+  payload: { error: ApiError };
+} | null {
+  if (error instanceof OwnedResourceNotFoundError) {
+    return {
+      status: 404,
+      payload: errorPayload('not-found', 'wardrobe-item-not-found', 'Wardrobe Item not found.'),
+    };
+  }
+  if (error instanceof IdempotencyConflictError) {
+    return {
+      status: 409,
+      payload: errorPayload('conflict', 'idempotency-key-reused', error.message),
+    };
+  }
+  if (error instanceof StaleRecordVersionError) {
+    return {
+      status: 409,
+      payload: errorPayload('conflict', 'stale-record-version', error.message),
+    };
+  }
+  if (error instanceof InvalidWardrobeTransitionError) {
+    return {
+      status: 409,
+      payload: errorPayload('conflict', 'invalid-wardrobe-transition', error.message),
+    };
+  }
+  return null;
 }
 
 export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono {
@@ -84,6 +134,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
   const secret = resolved.sessionSecret;
   const lifetimeSeconds = resolved.sessionLifetimeSeconds ?? 60 * 60 * 24 * 30;
   const secureCookies = resolved.secureCookies ?? true;
+  const detectionModel = resolved.detectionModel ?? 'gpt-5.4-mini';
 
   async function currentSession(context: Parameters<typeof getCookie>[0]): Promise<{
     session: SessionRecord;
@@ -262,6 +313,251 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       downloadUrl: download.downloadUrl,
       expiresAt: download.expiresAt.toISOString(),
     });
+  });
+
+  app.get('/v1/wardrobe-items', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) {
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Sign in to view your wardrobe.'),
+        401,
+      );
+    }
+    const stateValue = context.req.query('state');
+    const state = stateValue === undefined ? undefined : itemStateSchema.safeParse(stateValue);
+    if (state && !state.success) {
+      return context.json(
+        errorPayload('validation', 'invalid-item-state', 'Choose Wanting, Owning, or Archive.'),
+        400,
+      );
+    }
+    return context.json({
+      wardrobeItems: await listWardrobeItems(database, {
+        accountId: authenticated.session.id,
+        state: state?.data,
+      }),
+    });
+  });
+
+  app.get('/v1/wardrobe-items/:wardrobeItemId', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) {
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Sign in to view this item.'),
+        401,
+      );
+    }
+    const detail = await getWardrobeItemDetail(database, {
+      accountId: authenticated.session.id,
+      wardrobeItemId: context.req.param('wardrobeItemId'),
+    });
+    return detail
+      ? context.json(detail)
+      : context.json(errorPayload('not-found', 'wardrobe-item-not-found', 'Wardrobe Item not found.'), 404);
+  });
+
+  app.get('/v1/source-photos/:sourcePhotoId/detections', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) {
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Sign in to view detections.'),
+        401,
+      );
+    }
+    const detections = await listDetectionProposals(database, {
+      accountId: authenticated.session.id,
+      sourcePhotoId: context.req.param('sourcePhotoId'),
+    });
+    return detections
+      ? context.json({ detections })
+      : context.json(errorPayload('not-found', 'source-photo-not-found', 'Source Photo not found.'), 404);
+  });
+
+  app.post('/v1/source-photos/:sourcePhotoId/detections', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) {
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Sign in to analyze a photo.'),
+        401,
+      );
+    }
+    const parsed = enqueueDetectionRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      return context.json(
+        errorPayload('validation', 'invalid-detection-request', 'The analysis request is invalid.'),
+        400,
+      );
+    }
+    try {
+      const queued = await enqueueSourcePhotoDetection(database, {
+        accountId: authenticated.session.id,
+        sourcePhotoId: context.req.param('sourcePhotoId'),
+        model: detectionModel,
+        idempotencyKey: parsed.data.idempotencyKey,
+      });
+      return context.json(queued, 202);
+    } catch (error) {
+      if (error instanceof OwnedResourceNotFoundError) {
+        return context.json(
+          errorPayload('not-found', 'source-photo-not-found', 'Source Photo not found.'),
+          404,
+        );
+      }
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.post('/v1/wardrobe-items', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) {
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Sign in to add an item.'),
+        401,
+      );
+    }
+    const parsed = createWardrobeItemRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) {
+      return context.json(
+        errorPayload('validation', 'invalid-wardrobe-item', 'Review the proposed item details.'),
+        400,
+      );
+    }
+    try {
+      const wardrobeItem = await createWardrobeItemFromDetection(database, {
+        accountId: authenticated.session.id,
+        ...parsed.data,
+      });
+      return context.json({ wardrobeItem }, 201);
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.patch('/v1/wardrobe-items/:wardrobeItemId', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) {
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Sign in to edit this item.'),
+        401,
+      );
+    }
+    const parsed = updateWardrobeItemRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) {
+      return context.json(
+        errorPayload('validation', 'invalid-wardrobe-edit', 'Review the item changes.'),
+        400,
+      );
+    }
+    try {
+      const wardrobeItem = await updateWardrobeItem(database, {
+        accountId: authenticated.session.id,
+        wardrobeItemId: context.req.param('wardrobeItemId'),
+        ...parsed.data,
+      });
+      return context.json({ wardrobeItem });
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.post('/v1/generations', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) {
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Sign in to generate an image.'),
+        401,
+      );
+    }
+    const parsed = enqueueGenerationRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) {
+      return context.json(
+        errorPayload('validation', 'invalid-generation-request', 'Review the generation settings.'),
+        400,
+      );
+    }
+    try {
+      return context.json(
+        await enqueueShelfImageGeneration(database, {
+          accountId: authenticated.session.id,
+          ...parsed.data,
+        }),
+        202,
+      );
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.post('/v1/wardrobe-items/:wardrobeItemId/shelf-image-versions/keep', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) {
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Sign in to keep this image.'),
+        401,
+      );
+    }
+    const parsed = keepShelfImageRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) {
+      return context.json(
+        errorPayload('validation', 'invalid-keep-request', 'Refresh the item and try again.'),
+        400,
+      );
+    }
+    try {
+      return context.json(
+        await keepShelfImage(database, {
+          accountId: authenticated.session.id,
+          wardrobeItemId: context.req.param('wardrobeItemId'),
+          ...parsed.data,
+        }),
+      );
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.delete('/v1/wardrobe-items/:wardrobeItemId', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) {
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Sign in to delete this item.'),
+        401,
+      );
+    }
+    const parsed = permanentlyDeleteWardrobeItemRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!parsed.success) {
+      return context.json(
+        errorPayload('validation', 'invalid-permanent-deletion', 'Refresh the item and try again.'),
+        400,
+      );
+    }
+    try {
+      return context.json(
+        await permanentlyDeleteWardrobeItem(database, storage, {
+          accountId: authenticated.session.id,
+          wardrobeItemId: context.req.param('wardrobeItemId'),
+          ...parsed.data,
+        }),
+      );
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
   });
 
   return app;

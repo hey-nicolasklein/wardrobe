@@ -62,7 +62,7 @@ Or start all three production boundaries together:
 npm run dev:production
 ```
 
-The mobile app should be exercised in Expo Go first. The API exposes liveness at `/health/live` and dependency readiness at `/health/ready`. API and worker startup apply pending migrations, ensure the private versioned bucket exists, and fail startup when their required service configuration is invalid. For local cookie sessions, keep `SESSION_COOKIE_SECURE=false`; deployed HTTPS environments must use the default `true`. The worker recovers expired leases; provider-specific handlers arrive with the catalog-worker ticket.
+The mobile app should be exercised in Expo Go first. The API exposes liveness at `/health/live` and dependency readiness at `/health/ready`. API and worker startup apply pending migrations, ensure the private versioned bucket exists, and fail startup when their required service configuration is invalid. For local cookie sessions, keep `SESSION_COOKIE_SECURE=false`; deployed HTTPS environments must use the default `true`. The worker recovers expired leases, renews active leases, and runs detection and Shelf Image jobs. Configure an OpenAI key plus an explicit dated standard-rate snapshot before worker startup; routine verification uses replay providers and never makes paid calls.
 
 ## Verification
 
@@ -72,4 +72,4 @@ npm exec --workspace=@form/mobile -- expo install --check
 npm run test:integration
 ```
 
-The first command typechecks every production workspace and runs unit/contract tests. The integration command requires the local services and validates migrations, repeatable fixture reset, database-enforced account ownership, idempotent enqueuing, concurrency limits, and abandoned-lease recovery against real PostgreSQL and MinIO.
+The first command typechecks every production workspace and runs unit/contract tests. The integration command requires the local services and validates migrations, repeatable fixture reset, database-enforced account ownership, idempotent enqueuing, concurrency limits, abandoned-lease recovery, and the replay catalog pipeline against real PostgreSQL and MinIO.

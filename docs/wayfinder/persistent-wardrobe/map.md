@@ -32,6 +32,8 @@ Deliver a working Expo application and NAS-hosted backend that can be used as a 
 - [Establish the production workspace and contracts](https://github.com/hey-nicolasklein/wardrobe/issues/11) — Production now has explicit mobile, API, worker, and runtime-validated contract boundaries with one install and verification baseline; the Vite prototype remains isolated evidence.
 - [Build the durable service foundation](https://github.com/hey-nicolasklein/wardrobe/issues/12) — PostgreSQL migrations, database-enforced ownership, private versioned object storage, leased durable jobs, dependency health, and deterministic local scenarios now form one tested server boundary.
 - [Enforce lightweight accounts and private media](https://github.com/hey-nicolasklein/wardrobe/issues/6) — Administrator-created scrypt credentials, revocable cookie/token sessions, secure native storage, validated signed media flows, and cross-account denial now form one tested authorization boundary.
+- [Model the persistent wardrobe and its lifecycle](https://github.com/hey-nicolasklein/wardrobe/issues/2) — Account-scoped items now preserve immutable detection and generation provenance through idempotent edits, reversible collection state, explicit version approval, and source-aware permanent deletion.
+- [Build the durable GPT wardrobe-ingestion pipeline](https://github.com/hey-nicolasklein/wardrobe/issues/3) — Leased replayable workers now turn private Source Photos into strict proposals and reviewable Shelf Images with validated chroma removal, immutable usage/cost ledgers, and classified recovery.
 
 ## Not yet specified
 
