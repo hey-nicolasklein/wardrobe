@@ -45,6 +45,7 @@ export const signInRequestSchema = z
   .object({
     email: z.email(),
     password: z.string().min(1).max(256),
+    transport: z.enum(['cookie', 'token']),
   })
   .strict();
 
@@ -58,11 +59,18 @@ export const sessionSchema = z
   .strict();
 
 export const signInResponseSchema = z.object({ session: sessionSchema }).strict();
+export const currentSessionResponseSchema = z.object({ session: sessionSchema }).strict();
 
 export const createUploadIntentRequestSchema = z
   .object({
     fileName: z.string().trim().min(1).max(255),
-    contentType: z.enum(['image/jpeg', 'image/png', 'image/heic', 'image/heif']),
+    contentType: z.enum([
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+      'image/heif',
+    ]),
     byteSize: z.number().int().positive(),
   })
   .strict();
@@ -87,6 +95,14 @@ export const completeSourceUploadResponseSchema = z
   .object({
     sourcePhoto: sourcePhotoSchema,
     asset: privateAssetSchema,
+  })
+  .strict();
+
+export const createDownloadUrlResponseSchema = z
+  .object({
+    assetId: opaqueIdSchema,
+    downloadUrl: z.url(),
+    expiresAt: z.iso.datetime({ offset: true }),
   })
   .strict();
 

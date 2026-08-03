@@ -5,6 +5,7 @@ import {
   apiErrorSchema,
   enqueueGenerationRequestSchema,
   garmentDetectionSchema,
+  signInRequestSchema,
   updateWardrobeItemRequestSchema,
 } from './index.js';
 
@@ -63,4 +64,22 @@ test('keeps error categories actionable and payloads strict', () => {
   });
 
   assert.equal(result.success, false);
+});
+
+test('makes the browser cookie and native token transports explicit', () => {
+  assert.equal(
+    signInRequestSchema.safeParse({
+      email: 'owner@example.test',
+      password: 'secret',
+      transport: 'cookie',
+    }).success,
+    true,
+  );
+  assert.equal(
+    signInRequestSchema.safeParse({
+      email: 'owner@example.test',
+      password: 'secret',
+    }).success,
+    false,
+  );
 });

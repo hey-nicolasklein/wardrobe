@@ -17,7 +17,15 @@ const storage = createPrivateObjectStorage(config);
 await migrateDatabase(database);
 await ensurePrivateBucket(storage);
 
-const app = createApp(() => checkDependencies(database, storage));
+const app = createApp({
+  checkReadiness: () => checkDependencies(database, storage),
+  database,
+  storage,
+  sessionSecret: config.SESSION_SECRET,
+  sessionLifetimeSeconds: config.SESSION_LIFETIME_SECONDS,
+  secureCookies: config.SESSION_COOKIE_SECURE,
+  webOrigin: config.WEB_ORIGIN,
+});
 const server = serve({
   fetch: app.fetch,
   hostname: config.API_HOST,

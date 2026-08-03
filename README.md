@@ -35,6 +35,19 @@ npm run fixtures:reset
 
 PostgreSQL binds only to `127.0.0.1:55432`; the private MinIO API and console bind only to `127.0.0.1:9100` and `127.0.0.1:9101`. The non-production credentials in `compose.yaml` match `.env.services.example`. The fixture reset is destructive to application rows and is hard-limited to local hosts.
 
+Administrators create accounts directly. Set `ADMIN_ACCOUNT_EMAIL` and
+`ADMIN_ACCOUNT_PASSWORD` in the ignored `.env.services.local`, then run:
+
+```sh
+npm run accounts:create
+```
+
+Passwords must contain at least 12 characters. The API stores only salted scrypt
+hashes and one-way hashes of opaque session tokens. Browser sessions use secure,
+HTTP-only cookies; native session tokens are stored by the app in Expo SecureStore.
+All private-media uploads and reads use short-lived signed URLs issued only after
+an account ownership check.
+
 ## Development
 
 ```sh
@@ -49,7 +62,7 @@ Or start all three production boundaries together:
 npm run dev:production
 ```
 
-The mobile app should be exercised in Expo Go first. The API exposes liveness at `/health/live` and dependency readiness at `/health/ready`. API and worker startup apply pending migrations, ensure the private versioned bucket exists, and fail startup when their required service configuration is invalid. The worker recovers expired leases; provider-specific handlers arrive with the catalog-worker ticket.
+The mobile app should be exercised in Expo Go first. The API exposes liveness at `/health/live` and dependency readiness at `/health/ready`. API and worker startup apply pending migrations, ensure the private versioned bucket exists, and fail startup when their required service configuration is invalid. For local cookie sessions, keep `SESSION_COOKIE_SECURE=false`; deployed HTTPS environments must use the default `true`. The worker recovers expired leases; provider-specific handlers arrive with the catalog-worker ticket.
 
 ## Verification
 

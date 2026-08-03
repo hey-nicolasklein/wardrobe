@@ -7,6 +7,9 @@ export const apiConfigSchema = z.object({
   API_HOST: z.string().min(1).default('0.0.0.0'),
   API_PORT: z.coerce.number().int().min(1).max(65535).default(4143),
   SESSION_SECRET: z.string().min(32),
+  SESSION_LIFETIME_SECONDS: z.coerce.number().int().min(300).default(2_592_000),
+  SESSION_COOKIE_SECURE: z.stringbool().default(true),
+  WEB_ORIGIN: z.url().optional(),
 });
 
 export type ApiConfig = z.infer<typeof apiConfigSchema>;
