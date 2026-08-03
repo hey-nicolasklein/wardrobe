@@ -1,24 +1,27 @@
 {
-  "name": "@form/api",
+  "name": "@form/service",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "tsx src/index.ts",
+    "migrate": "tsx src/cli/migrate.ts",
+    "fixtures:reset": "tsx src/cli/reset-fixtures.ts",
     "test": "tsx --test src/*.test.ts",
     "typecheck": "tsc --noEmit",
     "verify": "npm run typecheck && npm test"
   },
   "dependencies": {
-    "@form/contracts": "*",
-    "@form/service": "*",
-    "@hono/node-server": "^2.0.11",
-    "hono": "^4.7.0",
+    "@aws-sdk/client-s3": "^3.1101.0",
+    "@aws-sdk/s3-request-presigner": "^3.1101.0",
+    "pg": "^8.22.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/pg": "^8.20.0",
     "tsx": "^4.23.5",
     "typescript": "~6.0.3"
   }

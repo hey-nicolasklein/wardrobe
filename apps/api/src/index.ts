@@ -1,29 +1,39 @@
 import { serve } from '@hono/node-server';
-import { contractVersion } from '@form/contracts';
-import { Hono } from 'hono';
+import {
+  checkDependencies,
+  createDatabase,
+  createPrivateObjectStorage,
+  ensurePrivateBucket,
+  migrateDatabase,
+} from '@form/service';
 
-import { apiConfigSchema } from './config.js';
+import { createApp } from './app.js';
+import { readApiConfig } from './config.js';
 
-const bootstrapConfigSchema = apiConfigSchema.pick({
-  API_HOST: true,
-  API_PORT: true,
-});
+const config = readApiConfig();
+const database = createDatabase(config);
+const storage = createPrivateObjectStorage(config);
 
-const config = bootstrapConfigSchema.parse(process.env);
-const app = new Hono();
+await migrateDatabase(database);
+await ensurePrivateBucket(storage);
 
-app.get('/', (context) =>
-  context.json({
-    service: 'form-api',
-    status: 'workspace-ready',
-    contractVersion,
-  }),
-);
-
-serve({
+const app = createApp(() => checkDependencies(database, storage));
+const server = serve({
   fetch: app.fetch,
   hostname: config.API_HOST,
   port: config.API_PORT,
 });
 
-console.log(`FORM API workspace listening on http://${config.API_HOST}:${config.API_PORT}`);
+console.log(`FORM API listening on http://${config.API_HOST}:${config.API_PORT}`);
+
+let stopping = false;
+async function stop(): Promise<void> {
+  if (stopping) return;
+  stopping = true;
+  server.close();
+  storage.client.destroy();
+  await database.end();
+}
+
+process.once('SIGINT', () => void stop());
+process.once('SIGTERM', () => void stop());
