@@ -45,8 +45,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const signOut = useCallback(async () => {
     try {
       await apiClient.signOut();
-    } finally {
       dispatch({ type: 'signed-out' });
+    } catch {
+      dispatch({
+        type: 'sign-out-failed',
+        message: 'Couldn’t sign out. Your session is still active. Check your connection and try again.',
+      });
     }
   }, []);
 

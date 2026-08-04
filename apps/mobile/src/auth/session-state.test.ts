@@ -14,6 +14,7 @@ test('restored credentials enter the authenticated shell', () => {
   assert.deepEqual(sessionReducer(initialSessionState, { type: 'signed-in', session }), {
     status: 'signed-in',
     session,
+    signOutError: null,
   });
 });
 
@@ -29,4 +30,20 @@ test('a failed restoration is distinct from an unauthenticated session', () => {
     status: 'restore-error',
     session: null,
   });
+});
+
+test('a failed browser sign-out keeps the active session and exposes an error', () => {
+  const signedIn = sessionReducer(initialSessionState, { type: 'signed-in', session });
+
+  assert.deepEqual(
+    sessionReducer(signedIn, {
+      type: 'sign-out-failed',
+      message: 'Your session is still active.',
+    }),
+    {
+      status: 'signed-in',
+      session,
+      signOutError: 'Your session is still active.',
+    },
+  );
 });

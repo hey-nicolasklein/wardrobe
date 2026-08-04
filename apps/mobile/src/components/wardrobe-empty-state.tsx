@@ -6,7 +6,10 @@ import { useAppColors } from '@/theme/colors';
 
 export function WardrobeEmptyState({ kind }: { kind: 'Owning' | 'Wanting' }) {
   const colors = useAppColors();
-  const { session, signOut } = useSession();
+  const sessionContext = useSession();
+  const { session, signOut } = sessionContext;
+  const signOutError =
+    sessionContext.status === 'signed-in' ? sessionContext.signOutError : null;
 
   return (
     <>
@@ -40,6 +43,14 @@ export function WardrobeEmptyState({ kind }: { kind: 'Owning' | 'Wanting' }) {
             }}>
             Add a Source Photo to begin building your private wardrobe.
           </Text>
+          {signOutError ? (
+            <Text
+              accessibilityRole="alert"
+              selectable
+              style={{ color: colors.error, lineHeight: 21, textAlign: 'center' }}>
+              {signOutError}
+            </Text>
+          ) : null}
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push('/add')}

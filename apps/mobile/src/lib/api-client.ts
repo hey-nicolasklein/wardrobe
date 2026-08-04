@@ -10,6 +10,7 @@ import { fetch } from 'expo/fetch';
 import {
   clearSessionToken,
   readSessionToken,
+  requiresServerSignOut,
   sessionTransport,
   writeSessionToken,
 } from './session-storage';
@@ -99,6 +100,8 @@ export const apiClient = {
   async signOut(): Promise<void> {
     try {
       await request('/v1/auth/sign-out', { method: 'POST' });
+    } catch (error) {
+      if (requiresServerSignOut) throw error;
     } finally {
       await clearSessionToken();
     }
