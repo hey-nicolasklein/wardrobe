@@ -1,9 +1,16 @@
 import {
   apiErrorSchema,
+  createDownloadUrlResponseSchema,
   currentSessionResponseSchema,
   signInResponseSchema,
+  wardrobeItemDetailResponseSchema,
+  wardrobeItemResponseSchema,
+  wardrobeItemsResponseSchema,
   type ApiError as ApiErrorPayload,
   type SignInResponse,
+  type UpdateWardrobeItemRequest,
+  type WardrobeItem,
+  type WardrobeItemDetailResponse,
 } from '@form/contracts';
 import { fetch } from 'expo/fetch';
 
@@ -105,6 +112,39 @@ export const apiClient = {
     } finally {
       await clearSessionToken();
     }
+  },
+
+  async listWardrobeItems(
+    state: WardrobeItem['state'],
+    signal?: AbortSignal,
+  ): Promise<WardrobeItem[]> {
+    const response = await request(`/v1/wardrobe-items?state=${state}`, { signal });
+    return wardrobeItemsResponseSchema.parse(await response.json()).wardrobeItems;
+  },
+
+  async getWardrobeItem(
+    wardrobeItemId: string,
+    signal?: AbortSignal,
+  ): Promise<WardrobeItemDetailResponse> {
+    const response = await request(`/v1/wardrobe-items/${wardrobeItemId}`, { signal });
+    return wardrobeItemDetailResponseSchema.parse(await response.json());
+  },
+
+  async updateWardrobeItem(
+    wardrobeItemId: string,
+    update: UpdateWardrobeItemRequest,
+  ): Promise<WardrobeItem> {
+    const response = await request(`/v1/wardrobe-items/${wardrobeItemId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(update),
+    });
+    return wardrobeItemResponseSchema.parse(await response.json()).wardrobeItem;
+  },
+
+  async createDownloadUrl(assetId: string): Promise<string> {
+    const response = await request(`/v1/assets/${assetId}/download`);
+    return createDownloadUrlResponseSchema.parse(await response.json()).downloadUrl;
   },
 
   request,

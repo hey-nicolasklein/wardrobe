@@ -5,6 +5,7 @@ export type AppColors = {
   error: ColorValue;
   label: ColorValue;
   onTint: ColorValue;
+  secondaryBackground: ColorValue;
   secondaryLabel: ColorValue;
   separator: ColorValue;
   systemBackground: ColorValue;
@@ -26,6 +27,11 @@ const nativeColors: AppColors = {
     ios: '#ffffff',
     android: Color.android.dynamic.onPrimary,
     default: '#ffffff',
+  })!,
+  secondaryBackground: Platform.select({
+    ios: Color.ios.secondarySystemBackground,
+    android: Color.android.dynamic.surfaceContainer,
+    default: '#f2f2f7',
   })!,
   secondaryLabel: Platform.select({
     ios: Color.ios.secondaryLabel,
@@ -54,6 +60,7 @@ const webColors: Record<'light' | 'dark', AppColors> = {
     error: '#b3261e',
     label: '#111111',
     onTint: '#ffffff',
+    secondaryBackground: '#f2f2f7',
     secondaryLabel: '#5f6368',
     separator: '#d9d9de',
     systemBackground: '#ffffff',
@@ -63,6 +70,7 @@ const webColors: Record<'light' | 'dark', AppColors> = {
     error: '#ffb4ab',
     label: '#f5f5f7',
     onTint: '#0b326c',
+    secondaryBackground: '#1c1c1e',
     secondaryLabel: '#aeb1b7',
     separator: '#3a3a3f',
     systemBackground: '#111113',

@@ -15,6 +15,7 @@
     "fixtures:reset": "node --env-file=.env.services.local --import tsx packages/service/src/cli/reset-fixtures.ts",
     "test:integration": "FORM_RUN_SERVICE_INTEGRATION=true node --env-file=.env.services.local --import tsx --test --test-concurrency=1 packages/service/src/integration.test.ts apps/api/src/integration.test.ts",
     "test:openai-smoke": "FORM_RUN_OPENAI_SMOKE=true node --import tsx --test packages/service/src/openai-smoke.test.ts",
+    "test:browser-smoke": "playwright test",
     "dev:production": "concurrently -n api,worker,mobile -c blue,magenta,cyan \"npm:dev:api\" \"npm:dev:worker\" \"npm:dev:mobile\"",
     "dev:api": "npm run dev --workspace=@form/api",
     "dev:worker": "npm run dev --workspace=@form/worker",
@@ -22,6 +23,7 @@
     "verify": "npm run verify --workspaces --if-present"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "concurrently": "^9.1.0"
   }
 }

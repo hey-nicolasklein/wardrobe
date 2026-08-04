@@ -35,6 +35,7 @@ Deliver a working Expo application and NAS-hosted backend that can be used as a 
 - [Model the persistent wardrobe and its lifecycle](https://github.com/hey-nicolasklein/wardrobe/issues/2) — Account-scoped items now preserve immutable detection and generation provenance through idempotent edits, reversible collection state, explicit version approval, and source-aware permanent deletion.
 - [Build the durable GPT wardrobe-ingestion pipeline](https://github.com/hey-nicolasklein/wardrobe/issues/3) — Leased replayable workers now turn private Source Photos into strict proposals and reviewable Shelf Images with validated chroma removal, immutable usage/cost ledgers, and classified recovery.
 - [Build the native app shell and authenticated session](https://github.com/hey-nicolasklein/wardrobe/issues/5) — Protected SDK 57 routes now restore cookie or SecureStore sessions into native Owning and Wanting stacks with semantic system styling, platform-appropriate Add and account actions, and a verified web adaptation.
+- [Build wardrobe browsing, details, and offline state](https://github.com/hey-nicolasklein/wardrobe/issues/8) — Responsive searchable wardrobe grids now lead to editable provenance-rich item details and zoomable private media, backed by an account-scoped SQLite cache and a reconnecting idempotent edit outbox.
 
 ## Not yet specified
 

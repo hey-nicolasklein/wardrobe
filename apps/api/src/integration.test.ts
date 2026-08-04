@@ -18,10 +18,6 @@ import { createApp } from './app.js';
 
 const enabled = process.env.FORM_RUN_SERVICE_INTEGRATION === 'true';
 const sessionSecret = 'integration-session-secret-at-least-32-characters';
-const fixturePng = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64',
-);
 const sourcePng = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNgYGD4DwABBAEAfbLI3wAAAABJRU5ErkJggg==',
   'base64',
@@ -250,7 +246,10 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     const ownerDownloadBody = (await ownerDownload.json()) as { downloadUrl: string };
     const downloaded = await fetch(ownerDownloadBody.downloadUrl);
     assert.equal(downloaded.status, 200);
-    assert.equal((await downloaded.arrayBuffer()).byteLength, fixturePng.byteLength);
+    assert.ok(
+      (await downloaded.arrayBuffer()).byteLength > 1_000,
+      'The signed download should return the realistic Source Photo fixture.',
+    );
 
     const deniedDownload = await app.request(
       `/v1/assets/${fixtureIds.sourceAsset}/download`,
@@ -419,6 +418,8 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       fixtureIds.sourceAsset,
       fixtureIds.keyedAssetOne,
       fixtureIds.transparentAssetOne,
+      fixtureIds.keyedAssetTwo,
+      fixtureIds.transparentAssetTwo,
     ]);
     assert.equal(
       (

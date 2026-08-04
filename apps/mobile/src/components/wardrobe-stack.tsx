@@ -23,6 +23,8 @@ export function WardrobeStack({ title }: { title: string }) {
           title,
         }}
       />
+      <Stack.Screen name="[id]" options={{ headerLargeTitle: false }} />
+      <Stack.Screen name="media" options={{ headerLargeTitle: false }} />
     </Stack>
   );
 }

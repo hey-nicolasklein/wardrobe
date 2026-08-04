@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, useColorScheme, View } 
 
 import { SessionProvider, useSession } from '@/auth/session-context';
 import { useAppColors } from '@/theme/colors';
+import { WardrobeDataProvider } from '@/wardrobe/wardrobe-data';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -60,8 +61,7 @@ function RootNavigator() {
     );
   }
 
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+  const navigator = (
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={!session}>
           <Stack.Screen name="sign-in" />
@@ -81,6 +81,15 @@ function RootNavigator() {
           />
         </Stack.Protected>
       </Stack>
+  );
+
+  return (
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      {session ? (
+        <WardrobeDataProvider accountId={session.accountId}>{navigator}</WardrobeDataProvider>
+      ) : (
+        navigator
+      )}
     </ThemeProvider>
   );
 }
