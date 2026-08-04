@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 const sessionTokenKey = 'form.native-session-token';
 
 export const sessionTransport = 'token' as const;
+export const requiresServerSignOut: boolean = false;
 
 export function readSessionToken(): Promise<string | null> {
   return SecureStore.getItemAsync(sessionTokenKey);

@@ -10,6 +10,7 @@ import { fetch } from 'expo/fetch';
 import {
   clearSessionToken,
   readSessionToken,
+  requiresServerSignOut,
   sessionTransport,
   writeSessionToken,
 } from './session-storage';
@@ -31,11 +32,25 @@ async function request(path: string, options: RequestInit = {}): Promise<Respons
   const headers = new Headers(options.headers);
   const token = await readSessionToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  const response = await fetch(apiUrl(path), {
-    ...options,
-    credentials: 'include',
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(path), {
+      ...options,
+      credentials: 'include',
+      headers,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    throw new ApiClientError(
+      {
+        category: 'offline',
+        code: 'service-unreachable',
+        message: 'The wardrobe service is unreachable. Check your connection and try again.',
+        retryable: true,
+      },
+      0,
+    );
+  }
   if (response.ok) return response;
 
   const candidate = await response.json().catch(() => null);
@@ -66,12 +81,12 @@ export const apiClient = {
     });
     const result = signInResponseSchema.parse(await response.json());
     if (result.session.nativeToken) await writeSessionToken(result.session.nativeToken);
-    return result.session;
+    return { ...result.session, nativeToken: null };
   },
 
-  async restoreSession(): Promise<SignInResponse['session'] | null> {
+  async restoreSession(signal?: AbortSignal): Promise<SignInResponse['session'] | null> {
     try {
-      const response = await request('/v1/auth/session');
+      const response = await request('/v1/auth/session', { signal });
       return currentSessionResponseSchema.parse(await response.json()).session;
     } catch (error) {
       if (error instanceof ApiClientError && error.status === 401) {
@@ -85,6 +100,8 @@ export const apiClient = {
   async signOut(): Promise<void> {
     try {
       await request('/v1/auth/sign-out', { method: 'POST' });
+    } catch (error) {
+      if (requiresServerSignOut) throw error;
     } finally {
       await clearSessionToken();
     }

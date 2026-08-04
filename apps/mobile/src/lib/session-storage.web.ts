@@ -1,4 +1,5 @@
 export const sessionTransport = 'cookie' as const;
+export const requiresServerSignOut: boolean = true;
 
 export async function readSessionToken(): Promise<null> {
   return null;
