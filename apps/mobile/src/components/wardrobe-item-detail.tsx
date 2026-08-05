@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 
 
 import { useAppColors } from '@/theme/colors';
 import { useWardrobeData } from '@/wardrobe/wardrobe-data';
+import { selectWardrobeHeroMedia } from '@/wardrobe/wardrobe-hero-media';
 
 import { WardrobeAssetImage } from './wardrobe-asset-image';
 
@@ -94,12 +95,6 @@ function MediaLink({
   );
 }
 
-function currentAssetId(detail: WardrobeItemDetailResponse): string | null {
-  return detail.shelfImageVersions.find(
-    ({ id }) => id === detail.wardrobeItem.currentShelfImageVersionId,
-  )?.transparentAssetId ?? null;
-}
-
 export function WardrobeItemDetail({
   wardrobeItemId,
   collection,
@@ -153,7 +148,11 @@ export function WardrobeItemDetail({
     );
   }
 
-  const currentAsset = currentAssetId(detail);
+  const heroMedia = selectWardrobeHeroMedia({
+    currentShelfImageVersionId: item.currentShelfImageVersionId,
+    shelfImageVersions: detail.shelfImageVersions,
+    generationAttempts: detail.generationAttempts,
+  });
   const save = async () => {
     if (!metadata) {
       setFormError('Enter a name and one to six comma-separated colors.');
@@ -189,12 +188,16 @@ export function WardrobeItemDetail({
       keyboardShouldPersistTaps="handled">
       <Stack.Title>{item.metadata.name}</Stack.Title>
       <View style={{ gap: 8 }}>
-        {currentAsset ? (
+        {heroMedia ? (
           <MediaLink
-            assetId={currentAsset}
+            assetId={heroMedia.assetId}
             fallback={item.metadata.name}
-            href={mediaHref(currentAsset, item.metadata.name)}
-            title="Current Shelf Image · AI-generated"
+            href={mediaHref(heroMedia.assetId, item.metadata.name)}
+            title={
+              heroMedia.pendingReview
+                ? 'Generated Shelf Image · pending review'
+                : 'Current Shelf Image · AI-generated'
+            }
           />
         ) : (
           <WardrobeAssetImage
