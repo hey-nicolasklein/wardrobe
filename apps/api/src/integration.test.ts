@@ -64,6 +64,29 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     const ownerHeaders = { Authorization: `Bearer ${ownerToken}` };
     const emptyHeaders = { Authorization: `Bearer ${emptyToken}` };
 
+    await database.query(
+      `UPDATE generation_attempts SET pricing_effective_date = DATE '2026-08-05',
+         text_input_cost_microunits = 1685, image_input_cost_microunits = 6144,
+         image_output_cost_microunits = 5130, cost_microunits = 12959
+       WHERE id = $1`,
+      [fixtureIds.reviewAttempt],
+    );
+    const billedDetail = await app.request(
+      `/v1/wardrobe-items/${fixtureIds.needsReviewItem}`,
+      { headers: ownerHeaders },
+    );
+    assert.equal(billedDetail.status, 200);
+    assert.equal(
+      (
+        (await billedDetail.json()) as {
+          generationAttempts: Array<{
+            costBreakdown: { pricingEffectiveDate: string } | null;
+          }>;
+        }
+      ).generationAttempts[0]?.costBreakdown?.pricingEffectiveDate,
+      '2026-08-05',
+    );
+
     const owning = await app.request('/v1/wardrobe-items?state=owning', {
       headers: ownerHeaders,
     });
