@@ -3,6 +3,7 @@ import {
   ListObjectVersionsCommand,
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
+import sharp from 'sharp';
 
 import type { Database } from './database.js';
 import { withTransaction } from './database.js';
@@ -36,11 +37,6 @@ export const fixtureCredentials = {
   empty: { email: 'empty@example.test', password: 'empty-fixture-password' },
 } as const;
 
-const fixturePng = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-  'base64',
-);
-
 const fixtureObjects = [
   'fixtures/populated/source.png',
   'fixtures/populated/shelf-keyed-1.png',
@@ -48,6 +44,28 @@ const fixtureObjects = [
   'fixtures/populated/shelf-keyed-2.png',
   'fixtures/populated/shelf-transparent-2.png',
 ] as const;
+
+function fixtureSvg(key: (typeof fixtureObjects)[number]): string {
+  const chroma = key.includes('keyed') ? '#00ff00' : 'transparent';
+  if (key.endsWith('source.png')) {
+    return `<svg width="960" height="720" xmlns="http://www.w3.org/2000/svg">
+      <rect width="960" height="720" fill="#e8e2d8"/>
+      <rect x="40" y="40" width="880" height="640" rx="32" fill="#f8f5ef"/>
+      <path d="M230 190 L335 130 L455 130 L560 190 L675 320 L585 375 L525 290 L525 590 L265 590 L265 290 L205 375 L115 320 Z" fill="#24385f"/>
+      <path d="M335 130 Q395 235 455 130" fill="none" stroke="#d9d5ca" stroke-width="18"/>
+      <path d="M665 290 Q775 205 865 305 L835 535 Q750 585 650 535 Z" fill="#d7c5a4"/>
+      <path d="M690 305 Q755 200 825 305" fill="none" stroke="#9a7b55" stroke-width="18"/>
+    </svg>`;
+  }
+  const older = key.endsWith('-2.png');
+  return `<svg width="816" height="816" xmlns="http://www.w3.org/2000/svg">
+    <rect width="816" height="816" fill="${chroma}"/>
+    <path d="M190 200 L310 128 L506 128 L626 200 L748 340 L650 410 L570 302 L570 694 L246 694 L246 302 L166 410 L68 340 Z" fill="${older ? '#304873' : '#24385f'}" stroke="#18243e" stroke-width="8"/>
+    <path d="M310 128 Q408 290 506 128" fill="none" stroke="#ddd8cc" stroke-width="24"/>
+    <path d="M408 286 L408 694" stroke="#c7c2b8" stroke-width="8"/>
+    <circle cx="385" cy="355" r="8" fill="#d8d3c8"/><circle cx="385" cy="420" r="8" fill="#d8d3c8"/><circle cx="385" cy="485" r="8" fill="#d8d3c8"/>
+  </svg>`;
+}
 
 async function clearFixtureObjects(storage: PrivateObjectStorage): Promise<void> {
   let keyMarker: string | undefined;
@@ -83,9 +101,18 @@ export async function resetFixtures(
   storage: PrivateObjectStorage,
 ): Promise<void> {
   await clearFixtureObjects(storage);
+  const fixturePngs = new Map(
+    await Promise.all(
+      fixtureObjects.map(async (key) => [
+        key,
+        await sharp(Buffer.from(fixtureSvg(key))).png().toBuffer(),
+      ] as const),
+    ),
+  );
   const fixtureObjectVersions = new Map(
     await Promise.all(
       fixtureObjects.map(async (key) => {
+        const fixturePng = fixturePngs.get(key)!;
         const result = await storage.client.send(
           new PutObjectCommand({
             Bucket: storage.bucket,
@@ -137,11 +164,12 @@ export async function resetFixtures(
       [fixtureIds.transparentAssetTwo, 'shelf-image-transparent', fixtureObjects[4]],
     ] as const;
     for (const [id, purpose, objectKey] of assetRows) {
+      const fixturePng = fixturePngs.get(objectKey)!;
       await client.query(
         `INSERT INTO private_assets (
           id, account_id, purpose, object_key, object_version_id, content_type, byte_size,
           pixel_width, pixel_height, state, created_at, ready_at
-        ) VALUES ($1, $2, $3, $4, $5, 'image/png', $6, 1, 1, 'ready', $7, $7)`,
+        ) VALUES ($1, $2, $3, $4, $5, 'image/png', $6, $7, $8, 'ready', $9, $9)`,
         [
           id,
           fixtureIds.populatedAccount,
@@ -149,6 +177,8 @@ export async function resetFixtures(
           objectKey,
           fixtureObjectVersions.get(objectKey)!,
           fixturePng.byteLength,
+          objectKey === fixtureObjects[0] ? 960 : 816,
+          objectKey === fixtureObjects[0] ? 720 : 816,
           timestamp,
         ],
       );
@@ -188,9 +218,9 @@ export async function resetFixtures(
         transparent_asset_id, state, reviewed_metadata, model, quality,
         output_size, prompt_version, cost_microunits, created_at, finished_at
       ) VALUES
-        ($1, $4, $5, $6, $7, $8, 'kept', $10, 'gpt-image-2', 'low', '816x816', 'laid-flat-v1', 12000, $11, $11),
-        ($2, $4, $5, $6, $8, $7, 'kept', $10, 'gpt-image-2', 'low', '816x816', 'laid-flat-v1', 12000, $11 - interval '1 day', $11 - interval '1 day'),
-        ($3, $4, $9, $6, $7, $8, 'needs-review', $10, 'gpt-image-2', 'low', '816x816', 'laid-flat-v1', 12000, $11, $11)`,
+        ($1, $4, $5, $6, $7, $8, 'kept', $12, 'gpt-image-2', 'low', '816x816', 'laid-flat-v1', 12000, $13, $13),
+        ($2, $4, $5, $6, $9, $10, 'kept', $12, 'gpt-image-2', 'low', '816x816', 'laid-flat-v1', 12000, $13 - interval '1 day', $13 - interval '1 day'),
+        ($3, $4, $11, $6, $7, $8, 'needs-review', $12, 'gpt-image-2', 'low', '816x816', 'laid-flat-v1', 12000, $13, $13)`,
       [
         fixtureIds.keptAttempt,
         fixtureIds.olderAttempt,
@@ -200,6 +230,8 @@ export async function resetFixtures(
         fixtureIds.sourcePhoto,
         fixtureIds.keyedAssetOne,
         fixtureIds.transparentAssetOne,
+        fixtureIds.keyedAssetTwo,
+        fixtureIds.transparentAssetTwo,
         fixtureIds.needsReviewItem,
         attemptMetadata,
         timestamp,
@@ -212,7 +244,7 @@ export async function resetFixtures(
         transparent_asset_id, quality, output_size, prompt_version, kept_at, created_at
       ) VALUES
         ($1, $3, $4, $5, $6, $7, 'low', '816x816', 'laid-flat-v1', $8, $8),
-        ($2, $3, $4, $9, $7, $6, 'low', '816x816', 'laid-flat-v1', $8 - interval '1 day', $8 - interval '1 day')`,
+        ($2, $3, $4, $9, $10, $11, 'low', '816x816', 'laid-flat-v1', $8 - interval '1 day', $8 - interval '1 day')`,
       [
         fixtureIds.currentVersion,
         fixtureIds.olderVersion,
@@ -223,6 +255,8 @@ export async function resetFixtures(
         fixtureIds.transparentAssetOne,
         timestamp,
         fixtureIds.olderAttempt,
+        fixtureIds.keyedAssetTwo,
+        fixtureIds.transparentAssetTwo,
       ],
     );
     await client.query(

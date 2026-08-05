@@ -213,6 +213,14 @@ export type ApiErrorCategory = z.infer<typeof apiErrorCategorySchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
 export type SignInRequest = z.infer<typeof signInRequestSchema>;
 export type SignInResponse = z.infer<typeof signInResponseSchema>;
+export type WardrobeItemResponse = z.infer<typeof wardrobeItemResponseSchema>;
+export type WardrobeItemsResponse = z.infer<typeof wardrobeItemsResponseSchema>;
+export type WardrobeItemDetailResponse = z.infer<
+  typeof wardrobeItemDetailResponseSchema
+>;
+export type CreateDownloadUrlResponse = z.infer<
+  typeof createDownloadUrlResponseSchema
+>;
 export type UpdateWardrobeItemRequest = z.infer<
   typeof updateWardrobeItemRequestSchema
 >;

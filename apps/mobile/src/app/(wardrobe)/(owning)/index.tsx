@@ -1,5 +1,5 @@
-import { WardrobeEmptyState } from '@/components/wardrobe-empty-state';
+import { WardrobeGrid } from '@/components/wardrobe-grid';
 
 export default function OwningScreen() {
-  return <WardrobeEmptyState kind="Owning" />;
+  return <WardrobeGrid state="owning" />;
 }
