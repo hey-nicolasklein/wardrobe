@@ -340,6 +340,15 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     assert.equal(queuedDetection.status, 202);
     const queuedDetectionBody = await queuedDetection.json();
     assert.deepEqual(await (await detectionRequest(ownerHeaders)).json(), queuedDetectionBody);
+    const queuedDetectionStatus = await app.request(
+      `/v1/source-photos/${completionResponse.sourcePhoto.id}/detections`,
+      { headers: ownerHeaders },
+    );
+    assert.equal(queuedDetectionStatus.status, 200);
+    assert.equal(
+      ((await queuedDetectionStatus.json()) as { attempt: { state: string } }).attempt.state,
+      'queued',
+    );
     const queuedDetectionRecord = await database.query<{ model: string }>(
       `SELECT model FROM detection_attempts WHERE id = $1`,
       [(queuedDetectionBody as { detectionAttemptId: string }).detectionAttemptId],

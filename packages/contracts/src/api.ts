@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   detectionProposalSchema,
+  detectionAttemptSchema,
   generationAttemptSchema,
   generationQualitySchema,
   generationSizeSchema,
@@ -146,7 +147,10 @@ export const wardrobeItemDetailResponseSchema = z
   .strict();
 
 export const detectionProposalsResponseSchema = z
-  .object({ detections: z.array(detectionProposalSchema) })
+  .object({
+    detections: z.array(detectionProposalSchema),
+    attempt: detectionAttemptSchema.nullable(),
+  })
   .strict();
 
 export const enqueueDetectionRequestSchema = z
@@ -223,4 +227,19 @@ export type CreateDownloadUrlResponse = z.infer<
 >;
 export type UpdateWardrobeItemRequest = z.infer<
   typeof updateWardrobeItemRequestSchema
+>;
+export type DetectionProposalsResponse = z.infer<
+  typeof detectionProposalsResponseSchema
+>;
+export type CreateUploadIntentRequest = z.infer<
+  typeof createUploadIntentRequestSchema
+>;
+export type CreateUploadIntentResponse = z.infer<
+  typeof createUploadIntentResponseSchema
+>;
+export type CompleteSourceUploadResponse = z.infer<
+  typeof completeSourceUploadResponseSchema
+>;
+export type CreateWardrobeItemRequest = z.infer<
+  typeof createWardrobeItemRequestSchema
 >;

@@ -334,6 +334,47 @@ export async function listDetectionProposals(
   return result.rows.map(mapDetection);
 }
 
+export async function getLatestDetectionAttempt(
+  database: Queryable,
+  input: { accountId: string; sourcePhotoId: string },
+): Promise<{
+  id: string;
+  sourcePhotoId: string;
+  state: 'queued' | 'processing' | 'succeeded' | 'failed';
+  model: string;
+  failureCategory: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+} | null> {
+  const result = await database.query<{
+    id: string;
+    source_photo_id: string;
+    state: 'queued' | 'processing' | 'succeeded' | 'failed';
+    model: string;
+    failure_category: string | null;
+    created_at: Date;
+    finished_at: Date | null;
+  }>(
+    `SELECT id, source_photo_id, state, model, failure_category, created_at, finished_at
+     FROM detection_attempts
+     WHERE source_photo_id = $1 AND account_id = $2
+     ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [input.sourcePhotoId, input.accountId],
+  );
+  const row = result.rows[0];
+  return row
+    ? {
+        id: row.id,
+        sourcePhotoId: row.source_photo_id,
+        state: row.state,
+        model: row.model,
+        failureCategory: row.failure_category,
+        createdAt: row.created_at.toISOString(),
+        finishedAt: row.finished_at?.toISOString() ?? null,
+      }
+    : null;
+}
+
 export async function recordDetectionProposals(
   database: Database,
   input: { accountId: string; sourcePhotoId: string; detections: GarmentDetection[] },

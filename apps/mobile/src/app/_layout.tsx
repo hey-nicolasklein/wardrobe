@@ -74,9 +74,9 @@ function RootNavigator() {
               contentStyle: { backgroundColor: colors.systemBackground },
               headerShown: true,
               presentation: process.env.EXPO_OS === 'ios' ? 'formSheet' : 'modal',
-              sheetAllowedDetents: [0.55, 1],
+              sheetAllowedDetents: [1],
               sheetGrabberVisible: true,
-              title: 'Add Item',
+              title: 'Add Items',
             }}
           />
         </Stack.Protected>

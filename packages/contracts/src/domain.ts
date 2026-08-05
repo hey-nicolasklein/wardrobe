@@ -79,6 +79,18 @@ export const detectionProposalSchema = garmentDetectionSchema
   })
   .strict();
 
+export const detectionAttemptSchema = z
+  .object({
+    id: opaqueIdSchema,
+    sourcePhotoId: opaqueIdSchema,
+    state: z.enum(['queued', 'processing', 'succeeded', 'failed']),
+    model: z.string().min(1).max(64),
+    failureCategory: z.string().min(1).max(80).nullable(),
+    createdAt: timestampSchema,
+    finishedAt: timestampSchema.nullable(),
+  })
+  .strict();
+
 export const assetPurposeSchema = z.enum([
   'source-photo',
   'generation-reference',
@@ -195,6 +207,7 @@ export type ItemMetadata = z.infer<typeof itemMetadataSchema>;
 export type NormalizedBoundingBox = z.infer<typeof normalizedBoundingBoxSchema>;
 export type GarmentDetection = z.infer<typeof garmentDetectionSchema>;
 export type DetectionProposal = z.infer<typeof detectionProposalSchema>;
+export type DetectionAttempt = z.infer<typeof detectionAttemptSchema>;
 export type PrivateAsset = z.infer<typeof privateAssetSchema>;
 export type SourcePhoto = z.infer<typeof sourcePhotoSchema>;
 export type GenerationQuality = z.infer<typeof generationQualitySchema>;

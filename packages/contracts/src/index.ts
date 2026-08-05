@@ -1,4 +1,4 @@
-export const contractVersion = 2;
+export const contractVersion = 3;
 
 export * from './api.js';
 export * from './domain.js';
