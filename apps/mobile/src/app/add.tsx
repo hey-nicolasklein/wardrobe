@@ -15,6 +15,7 @@ import {
 
 import {
   draftsFromDetections,
+  matchingDetectionAttempt,
   type ProposalDraft,
   supportedCategories,
   validateDraft,
@@ -80,6 +81,7 @@ export default function AddItemScreen() {
   const [stage, setStage] = useState<Stage>('photo');
   const [photo, setPhoto] = useState<SelectedPhoto | null>(null);
   const [sourcePhotoId, setSourcePhotoId] = useState<string | null>(null);
+  const [detectionAttemptId, setDetectionAttemptId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<ProposalDraft[]>([]);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
@@ -108,6 +110,7 @@ export default function AddItemScreen() {
       const normalized = await normalizedPhoto(result.assets[0]);
       setPhoto(normalized);
       setSourcePhotoId(null);
+      setDetectionAttemptId(null);
       setDrafts([]);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The photo could not be prepared.');
@@ -119,6 +122,7 @@ export default function AddItemScreen() {
   const analyze = async () => {
     if (!photo || !isOnline) return;
     setError(null);
+    setDetectionAttemptId(null);
     setStage('analyzing');
     try {
       let durableSourcePhotoId = sourcePhotoId;
@@ -131,7 +135,8 @@ export default function AddItemScreen() {
         durableSourcePhotoId = uploaded.sourcePhoto.id;
         setSourcePhotoId(durableSourcePhotoId);
       }
-      await apiClient.enqueueDetection(durableSourcePhotoId);
+      const queued = await apiClient.enqueueDetection(durableSourcePhotoId);
+      setDetectionAttemptId(queued.detectionAttemptId);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'The photo could not be analyzed.');
       setStage('photo');
@@ -139,23 +144,28 @@ export default function AddItemScreen() {
   };
 
   useEffect(() => {
-    if (stage !== 'analyzing' || !sourcePhotoId) return;
+    if (stage !== 'analyzing' || !sourcePhotoId || !detectionAttemptId) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
       try {
         const result = await apiClient.getDetections(sourcePhotoId);
         if (!active) return;
-        if (result.attempt?.state === 'failed') {
+        const attempt = matchingDetectionAttempt(detectionAttemptId, result.attempt);
+        if (!attempt) {
+          timer = setTimeout(poll, 1_500);
+          return;
+        }
+        if (attempt.state === 'failed') {
           setError(
-            result.attempt.failureCategory
-              ? `Analysis failed (${result.attempt.failureCategory}). You can try again.`
+            attempt.failureCategory
+              ? `Analysis failed (${attempt.failureCategory}). You can try again.`
               : 'Analysis failed. You can try again.',
           );
           setStage('photo');
           return;
         }
-        if (result.attempt?.state === 'succeeded') {
+        if (attempt.state === 'succeeded') {
           if (!result.detections.length) {
             setError('No wearable items were found. Try a clearer Source Photo.');
             setStage('photo');
@@ -179,7 +189,7 @@ export default function AddItemScreen() {
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [sourcePhotoId, stage]);
+  }, [detectionAttemptId, sourcePhotoId, stage]);
 
   const continueToMetadata = () => {
     if (!selectedDrafts.length) {

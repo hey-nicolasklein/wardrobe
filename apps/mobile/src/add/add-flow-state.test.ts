@@ -3,7 +3,11 @@ import test from 'node:test';
 
 import type { DetectionProposal } from '@form/contracts';
 
-import { draftsFromDetections, validateDraft } from './add-flow-state';
+import {
+  draftsFromDetections,
+  matchingDetectionAttempt,
+  validateDraft,
+} from './add-flow-state';
 
 const detection = (category: DetectionProposal['category']): DetectionProposal => ({
   id: `proposal-${category}-000000000000`,
@@ -33,5 +37,23 @@ test('a selected proposal requires complete reviewed metadata', () => {
   assert.equal(
     validateDraft({ ...draft, metadata: { ...draft.metadata!, colors: [] } }),
     'Enter at least one color.',
+  );
+});
+
+test('a retry ignores the previous terminal detection attempt', () => {
+  const previousAttempt = {
+    id: 'detection-attempt-previous',
+    sourcePhotoId: 'source-photo-000000000000',
+    state: 'failed' as const,
+    model: 'gpt-5.4-mini',
+    failureCategory: 'provider',
+    createdAt: '2026-08-05T08:00:00.000Z',
+    finishedAt: '2026-08-05T08:00:01.000Z',
+  };
+
+  assert.equal(matchingDetectionAttempt('detection-attempt-retry', previousAttempt), null);
+  assert.equal(
+    matchingDetectionAttempt('detection-attempt-previous', previousAttempt),
+    previousAttempt,
   );
 });

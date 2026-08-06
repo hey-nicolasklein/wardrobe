@@ -1,4 +1,10 @@
-import type { DetectionProposal, ItemMetadata, ItemState, SupportedCategory } from '@form/contracts';
+import type {
+  DetectionAttempt,
+  DetectionProposal,
+  ItemMetadata,
+  ItemState,
+  SupportedCategory,
+} from '@form/contracts';
 
 export const supportedCategories: SupportedCategory[] = [
   'top',
@@ -18,6 +24,13 @@ export type ProposalDraft = {
   state: Exclude<ItemState, 'archived'>;
   metadata: ItemMetadata | null;
 };
+
+export function matchingDetectionAttempt(
+  expectedAttemptId: string,
+  attempt: DetectionAttempt | null,
+): DetectionAttempt | null {
+  return attempt?.id === expectedAttemptId ? attempt : null;
+}
 
 export function draftsFromDetections(detections: DetectionProposal[]): ProposalDraft[] {
   return detections.map((proposal) => ({
