@@ -22,6 +22,7 @@ import {
   enqueueSourcePhotoDetection,
   enqueueShelfImageGeneration,
   getWardrobeItemDetail,
+  getLatestDetectionAttempt,
   IdempotencyConflictError,
   InvalidWardrobeTransitionError,
   keepShelfImage,
@@ -369,7 +370,13 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       sourcePhotoId: context.req.param('sourcePhotoId'),
     });
     return detections
-      ? context.json({ detections })
+      ? context.json({
+          detections,
+          attempt: await getLatestDetectionAttempt(database, {
+            accountId: authenticated.session.id,
+            sourcePhotoId: context.req.param('sourcePhotoId'),
+          }),
+        })
       : context.json(errorPayload('not-found', 'source-photo-not-found', 'Source Photo not found.'), 404);
   });
 

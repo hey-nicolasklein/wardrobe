@@ -1,6 +1,11 @@
 import {
   apiErrorSchema,
   createDownloadUrlResponseSchema,
+  createUploadIntentResponseSchema,
+  completeSourceUploadResponseSchema,
+  detectionProposalsResponseSchema,
+  enqueueDetectionResponseSchema,
+  enqueueGenerationResponseSchema,
   currentSessionResponseSchema,
   signInResponseSchema,
   wardrobeItemDetailResponseSchema,
@@ -8,6 +13,10 @@ import {
   wardrobeItemsResponseSchema,
   type ApiError as ApiErrorPayload,
   type SignInResponse,
+  type CreateUploadIntentRequest,
+  type DetectionProposalsResponse,
+  type ItemMetadata,
+  type ItemState,
   type UpdateWardrobeItemRequest,
   type WardrobeItem,
   type WardrobeItemDetailResponse,
@@ -147,5 +156,91 @@ export const apiClient = {
     return createDownloadUrlResponseSchema.parse(await response.json()).downloadUrl;
   },
 
+  async uploadSourcePhoto(input: Omit<CreateUploadIntentRequest, 'byteSize'> & { uri: string }) {
+    const source = await fetch(input.uri);
+    if (!source.ok) throw new Error('The selected photo could not be opened.');
+    const blob = await source.blob();
+    const intentResponse = await request('/v1/source-photos/upload-intents', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: input.fileName,
+        contentType: input.contentType,
+        byteSize: blob.size,
+      }),
+    });
+    const intent = createUploadIntentResponseSchema.parse(await intentResponse.json());
+    let upload: Response;
+    try {
+      upload = await fetch(intent.uploadUrl, {
+        method: 'PUT',
+        headers: intent.headers,
+        body: blob,
+      });
+    } catch {
+      throw new ApiClientError(
+        {
+          category: 'offline',
+          code: 'upload-unreachable',
+          message: 'The photo upload was interrupted. Check your connection and try again.',
+          retryable: true,
+        },
+        0,
+      );
+    }
+    if (!upload.ok) throw new Error('The private photo upload could not be completed.');
+    const completion = await request('/v1/source-photos/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assetId: intent.assetId, idempotencyKey: idempotencyKey('source') }),
+    });
+    return completeSourceUploadResponseSchema.parse(await completion.json());
+  },
+
+  async enqueueDetection(sourcePhotoId: string) {
+    const response = await request(`/v1/source-photos/${sourcePhotoId}/detections`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idempotencyKey: idempotencyKey('detection') }),
+    });
+    return enqueueDetectionResponseSchema.parse(await response.json());
+  },
+
+  async getDetections(sourcePhotoId: string): Promise<DetectionProposalsResponse> {
+    const response = await request(`/v1/source-photos/${sourcePhotoId}/detections`);
+    return detectionProposalsResponseSchema.parse(await response.json());
+  },
+
+  async createWardrobeItem(input: {
+    detectionProposalId: string;
+    state: Exclude<ItemState, 'archived'>;
+    metadata: ItemMetadata;
+  }): Promise<WardrobeItem> {
+    const response = await request('/v1/wardrobe-items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...input, idempotencyKey: idempotencyKey('item') }),
+    });
+    return wardrobeItemResponseSchema.parse(await response.json()).wardrobeItem;
+  },
+
+  async enqueueGeneration(wardrobeItemId: string) {
+    const response = await request('/v1/generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        wardrobeItemId,
+        quality: 'low',
+        size: '816x816',
+        idempotencyKey: idempotencyKey('generation'),
+      }),
+    });
+    return enqueueGenerationResponseSchema.parse(await response.json());
+  },
+
   request,
 };
+
+function idempotencyKey(kind: string): string {
+  return `mobile-${kind}-${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}

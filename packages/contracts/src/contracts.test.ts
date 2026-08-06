@@ -5,6 +5,7 @@ import {
   apiErrorSchema,
   accountCredentialsSchema,
   createWardrobeItemRequestSchema,
+  detectionProposalsResponseSchema,
   enqueueGenerationRequestSchema,
   garmentDetectionSchema,
   signInRequestSchema,
@@ -23,6 +24,22 @@ test('accepts a normalized detection inside the source frame', () => {
     boundingBox: { x: 120, y: 80, width: 700, height: 850 },
   });
 
+  assert.equal(result.success, true);
+});
+
+test('reports durable detection progress beside proposals', () => {
+  const result = detectionProposalsResponseSchema.safeParse({
+    detections: [],
+    attempt: {
+      id,
+      sourcePhotoId: id,
+      state: 'processing',
+      model: 'gpt-5.4-mini',
+      failureCategory: null,
+      createdAt: '2026-08-05T08:00:00.000Z',
+      finishedAt: null,
+    },
+  });
   assert.equal(result.success, true);
 });
 
