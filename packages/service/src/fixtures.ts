@@ -33,7 +33,7 @@ export const fixtureIds = {
 } as const;
 
 export const fixtureCredentials = {
-  populated: { email: 'owner@example.test', password: 'owner-fixture-password' },
+  populated: { email: 'test@example.test', password: 'test' },
   empty: { email: 'empty@example.test', password: 'empty-fixture-password' },
 } as const;
 

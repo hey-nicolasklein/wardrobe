@@ -1,4 +1,4 @@
-import type { WardrobeItem, WardrobeItemDetailResponse } from '@form/contracts';
+import type { WardrobeItem } from '@form/contracts';
 import { Link, type Href, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -17,6 +17,7 @@ import { useAppColors } from '@/theme/colors';
 import { selectWardrobeItems } from '@/wardrobe/wardrobe-state';
 import type { WardrobeSort } from '@/wardrobe/wardrobe-types';
 import { useWardrobeData } from '@/wardrobe/wardrobe-data';
+import { selectWardrobeHeroMedia } from '@/wardrobe/wardrobe-hero-media';
 
 import { WardrobeAssetImage } from './wardrobe-asset-image';
 
@@ -25,13 +26,6 @@ const sortLabels: Record<WardrobeSort, string> = {
   name: 'Name',
   category: 'Category',
 };
-
-function currentAssetId(detail: WardrobeItemDetailResponse | undefined): string | null {
-  if (!detail?.wardrobeItem.currentShelfImageVersionId) return null;
-  return detail.shelfImageVersions.find(
-    ({ id }) => id === detail.wardrobeItem.currentShelfImageVersionId,
-  )?.transparentAssetId ?? null;
-}
 
 function FilterChip({
   label,
@@ -110,6 +104,11 @@ export function WardrobeGrid({ state }: { state: 'owning' | 'wanting' }) {
   const renderItem = useCallback(
     ({ item }: { item: WardrobeItem }) => {
       const detail = cache.details[item.id];
+      const heroMedia = detail ? selectWardrobeHeroMedia({
+        currentShelfImageVersionId: detail.wardrobeItem.currentShelfImageVersionId,
+        shelfImageVersions: detail.shelfImageVersions,
+        generationAttempts: detail.generationAttempts,
+      }) : null;
       const href = `/(wardrobe)/(${state})/${item.id}` as Href;
       return (
         <View style={{ flex: 1 / columns, padding: 5 }}>
@@ -118,7 +117,7 @@ export function WardrobeGrid({ state }: { state: 'owning' | 'wanting' }) {
               accessibilityLabel={`${item.metadata.name}, ${item.metadata.category}`}
               style={({ pressed }) => ({ gap: 7, opacity: pressed ? 0.65 : 1 })}>
               <WardrobeAssetImage
-                assetId={currentAssetId(detail)}
+                assetId={heroMedia?.assetId ?? null}
                 fallback={item.metadata.name}
                 style={{ aspectRatio: 1, borderRadius: 16, width: '100%' }}
               />

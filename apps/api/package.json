@@ -11,6 +11,7 @@
     "verify": "npm run typecheck && npm test"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1104.0",
     "@form/contracts": "*",
     "@form/service": "*",
     "@hono/node-server": "^2.0.11",

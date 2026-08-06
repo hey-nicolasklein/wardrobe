@@ -903,6 +903,81 @@ export async function keepShelfImage(
   });
 }
 
+export async function rejectShelfImage(
+  database: Database,
+  input: {
+    accountId: string;
+    wardrobeItemId: string;
+    generationAttemptId: string;
+    expectedRecordVersion: number;
+    idempotencyKey: string;
+  },
+): Promise<{ wardrobeItem: WardrobeItem }> {
+  const request = { wardrobeItemId: input.wardrobeItemId, generationAttemptId: input.generationAttemptId, expectedRecordVersion: input.expectedRecordVersion };
+  return withTransaction(database, async (client) => {
+    const replay = await beginCommand<{ wardrobeItem: WardrobeItem }>(client, {
+      accountId: input.accountId, key: input.idempotencyKey, kind: 'reject-shelf-image', request,
+    });
+    if (replay.replayed) return replay.body;
+    const item = await client.query<WardrobeItemRow>(
+      `SELECT ${itemColumns} FROM wardrobe_items WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL FOR UPDATE`,
+      [input.wardrobeItemId, input.accountId],
+    );
+    const itemRow = item.rows[0];
+    if (!itemRow) throw new OwnedResourceNotFoundError();
+    if (itemRow.record_version !== input.expectedRecordVersion) throw new StaleRecordVersionError();
+    const rejected = await client.query(
+      `UPDATE generation_attempts SET state = 'rejected', finished_at = COALESCE(finished_at, now())
+       WHERE id = $1 AND wardrobe_item_id = $2 AND account_id = $3 AND state = 'needs-review'`,
+      [input.generationAttemptId, input.wardrobeItemId, input.accountId],
+    );
+    if (rejected.rowCount !== 1) throw new InvalidWardrobeTransitionError('Only a completed Shelf Image awaiting review can be rejected.');
+    const updated = await client.query<WardrobeItemRow>(
+      `UPDATE wardrobe_items SET status = CASE WHEN current_shelf_image_version_id IS NULL THEN 'draft' ELSE 'ready' END,
+         record_version = record_version + 1, updated_at = now()
+       WHERE id = $1 AND account_id = $2 RETURNING ${itemColumns}`,
+      [input.wardrobeItemId, input.accountId],
+    );
+    const body = { wardrobeItem: mapWardrobeItem(updated.rows[0]!) };
+    await finishCommand(client, { accountId: input.accountId, key: input.idempotencyKey, kind: 'reject-shelf-image', request, body });
+    return body;
+  });
+}
+
+export async function restoreShelfImageVersion(
+  database: Database,
+  input: { accountId: string; wardrobeItemId: string; shelfImageVersionId: string; expectedRecordVersion: number; idempotencyKey: string },
+): Promise<{ wardrobeItem: WardrobeItem }> {
+  const request = { wardrobeItemId: input.wardrobeItemId, shelfImageVersionId: input.shelfImageVersionId, expectedRecordVersion: input.expectedRecordVersion };
+  return withTransaction(database, async (client) => {
+    const replay = await beginCommand<{ wardrobeItem: WardrobeItem }>(client, {
+      accountId: input.accountId, key: input.idempotencyKey, kind: 'restore-shelf-image-version', request,
+    });
+    if (replay.replayed) return replay.body;
+    const item = await client.query<WardrobeItemRow>(
+      `SELECT ${itemColumns} FROM wardrobe_items WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL FOR UPDATE`,
+      [input.wardrobeItemId, input.accountId],
+    );
+    const itemRow = item.rows[0];
+    if (!itemRow) throw new OwnedResourceNotFoundError();
+    if (itemRow.record_version !== input.expectedRecordVersion) throw new StaleRecordVersionError();
+    const version = await client.query(
+      `SELECT id FROM shelf_image_versions WHERE id = $1 AND wardrobe_item_id = $2 AND account_id = $3`,
+      [input.shelfImageVersionId, input.wardrobeItemId, input.accountId],
+    );
+    if (!version.rows[0]) throw new InvalidWardrobeTransitionError('That Shelf Image version is not available for this item.');
+    const updated = await client.query<WardrobeItemRow>(
+      `UPDATE wardrobe_items SET current_shelf_image_version_id = $3, status = 'ready',
+         record_version = record_version + 1, updated_at = now()
+       WHERE id = $1 AND account_id = $2 RETURNING ${itemColumns}`,
+      [input.wardrobeItemId, input.accountId, input.shelfImageVersionId],
+    );
+    const body = { wardrobeItem: mapWardrobeItem(updated.rows[0]!) };
+    await finishCommand(client, { accountId: input.accountId, key: input.idempotencyKey, kind: 'restore-shelf-image-version', request, body });
+    return body;
+  });
+}
+
 type DeletionResponse = {
   wardrobeItemId: string;
   sourcePhotoDeleted: boolean;

@@ -20,7 +20,7 @@ Migration files are immutable after release. `migrateDatabase` records each appl
 
 The reset is repeatable and creates:
 
-- `owner@example.test` / `owner-fixture-password`: ready, needs-review, queued, failed, archived, and multiple-version records;
+- `test` / `test` (stored as `test@example.test`): ready, needs-review, queued, failed, archived, and multiple-version records;
 - `empty@example.test` / `empty-fixture-password`: a second empty account for empty-state and cross-account-denial checks;
 - private one-pixel fixture media under account-owned asset records;
 - queued and terminal-failure durable jobs.

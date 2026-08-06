@@ -32,7 +32,8 @@ export default function SignInScreen() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await signIn(email.trim(), password);
+      const login = email.trim().toLowerCase() === 'test' ? 'test@example.test' : email.trim();
+      await signIn(login, password);
     } catch (caught) {
       setError(signInErrorMessage(caught));
     } finally {
@@ -72,14 +73,14 @@ export default function SignInScreen() {
 
         <View style={{ gap: 12 }}>
           <TextInput
-            accessibilityLabel="Email"
+            accessibilityLabel="Email or test login"
             autoCapitalize="none"
             autoComplete="email"
             autoCorrect={false}
             keyboardType="email-address"
             onChangeText={setEmail}
             onSubmitEditing={() => undefined}
-            placeholder="Email"
+            placeholder="Email or test"
             placeholderTextColor={colors.secondaryLabel}
             returnKeyType="next"
             textContentType="username"
