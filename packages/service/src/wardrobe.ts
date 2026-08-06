@@ -933,7 +933,14 @@ export async function rejectShelfImage(
     );
     if (rejected.rowCount !== 1) throw new InvalidWardrobeTransitionError('Only a completed Shelf Image awaiting review can be rejected.');
     const updated = await client.query<WardrobeItemRow>(
-      `UPDATE wardrobe_items SET status = CASE WHEN current_shelf_image_version_id IS NULL THEN 'draft' ELSE 'ready' END,
+      `UPDATE wardrobe_items SET status = CASE
+           WHEN EXISTS (
+             SELECT 1 FROM generation_attempts
+             WHERE wardrobe_item_id = $1 AND account_id = $2 AND state = 'needs-review'
+           ) THEN 'needs-review'
+           WHEN current_shelf_image_version_id IS NULL THEN 'draft'
+           ELSE 'ready'
+         END,
          record_version = record_version + 1, updated_at = now()
        WHERE id = $1 AND account_id = $2 RETURNING ${itemColumns}`,
       [input.wardrobeItemId, input.accountId],
@@ -1062,6 +1069,20 @@ export async function permanentlyDeleteWardrobeItem(
     const itemRow = item.rows[0];
     if (!itemRow) throw new OwnedResourceNotFoundError();
     if (itemRow.record_version !== input.expectedRecordVersion) throw new StaleRecordVersionError();
+    const activeGeneration = await client.query(
+      `SELECT 1 FROM generation_attempts
+       WHERE wardrobe_item_id = $1 AND account_id = $2 AND state IN ('queued', 'processing')
+       UNION ALL
+       SELECT 1 FROM remote_image_jobs
+       WHERE wardrobe_item_id = $1 AND account_id = $2 AND state IN ('queued', 'leased')
+       LIMIT 1`,
+      [input.wardrobeItemId, input.accountId],
+    );
+    if (activeGeneration.rows[0]) {
+      throw new InvalidWardrobeTransitionError(
+        'Wait for the active Shelf Image generation to finish before permanently deleting this item.',
+      );
+    }
 
     const assetCandidates = await client.query<{ id: string }>(
       `SELECT DISTINCT id FROM private_assets WHERE account_id = $1 AND id IN (

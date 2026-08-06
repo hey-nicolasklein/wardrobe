@@ -155,6 +155,9 @@ export function WardrobeItemDetail({
     shelfImageVersions: detail.shelfImageVersions,
     generationAttempts: detail.generationAttempts,
   });
+  const hasActiveGeneration = detail.generationAttempts.some(
+    ({ state }) => state === 'queued' || state === 'processing',
+  );
   const save = async () => {
     if (!metadata) {
       setFormError('Enter a name and one to six comma-separated colors.');
@@ -353,8 +356,12 @@ export function WardrobeItemDetail({
 
       <View style={{ gap: 12 }}>
         <Text selectable style={{ color: colors.error, fontSize: 20, fontWeight: '700' }}>Permanent deletion</Text>
-        <Text selectable style={{ color: colors.secondaryLabel }}>Deletes this item, its generation history, and private media that no other item uses.</Text>
-        <ActionButton disabled={!isOnline || activeAction !== null} onPress={confirmDelete} title={activeAction === 'delete' ? 'Deleting…' : 'Permanently Delete'} />
+        <Text selectable style={{ color: colors.secondaryLabel }}>
+          {hasActiveGeneration
+            ? 'Wait for the active Shelf Image generation to finish before deleting this item.'
+            : 'Deletes this item, its generation history, and private media that no other item uses.'}
+        </Text>
+        <ActionButton disabled={!isOnline || activeAction !== null || hasActiveGeneration} onPress={confirmDelete} title={activeAction === 'delete' ? 'Deleting…' : 'Permanently Delete'} />
       </View>
     </ScrollView>
   );

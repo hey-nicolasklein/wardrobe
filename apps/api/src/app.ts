@@ -393,7 +393,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       return context.json(errorPayload('authentication', 'invalid-media-token', 'This upload link is invalid or expired.'), 401);
     }
     const asset = await findOwnedPrivateAsset(database, verified.accountId, verified.assetId);
-    if (!asset || asset.state !== 'pending' || asset.purpose !== 'source-photo') {
+    if (!asset || asset.state === 'deleted' || asset.purpose !== 'source-photo') {
       return context.json(errorPayload('not-found', 'upload-intent-not-found', 'Upload intent not found.'), 404);
     }
     if (context.req.header('Content-Type') !== asset.contentType) {
