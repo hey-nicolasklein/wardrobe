@@ -903,6 +903,71 @@ export async function keepShelfImage(
   });
 }
 
+export async function rejectShelfImage(
+  database: Database,
+  input: {
+    accountId: string;
+    wardrobeItemId: string;
+    generationAttemptId: string;
+    expectedRecordVersion: number;
+    idempotencyKey: string;
+  },
+): Promise<WardrobeItem> {
+  const request = {
+    wardrobeItemId: input.wardrobeItemId,
+    generationAttemptId: input.generationAttemptId,
+    expectedRecordVersion: input.expectedRecordVersion,
+  };
+  return withTransaction(database, async (client) => {
+    const replay = await beginCommand<WardrobeItem>(client, {
+      accountId: input.accountId,
+      key: input.idempotencyKey,
+      kind: 'reject-shelf-image',
+      request,
+    });
+    if (replay.replayed) return replay.body;
+    const item = await client.query<WardrobeItemRow>(
+      `SELECT ${itemColumns} FROM wardrobe_items
+       WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL FOR UPDATE`,
+      [input.wardrobeItemId, input.accountId],
+    );
+    const itemRow = item.rows[0];
+    if (!itemRow) throw new OwnedResourceNotFoundError();
+    if (itemRow.record_version !== input.expectedRecordVersion) throw new StaleRecordVersionError();
+    const rejected = await client.query(
+      `UPDATE generation_attempts SET state = 'rejected'
+       WHERE id = $1 AND wardrobe_item_id = $2 AND account_id = $3
+         AND state = 'needs-review'
+       RETURNING id`,
+      [input.generationAttemptId, input.wardrobeItemId, input.accountId],
+    );
+    if (!rejected.rows[0]) {
+      throw new InvalidWardrobeTransitionError(
+        'Only a completed Shelf Image awaiting review can be rejected.',
+      );
+    }
+    const updated = await client.query<WardrobeItemRow>(
+      `UPDATE wardrobe_items SET status = $3, record_version = record_version + 1,
+         updated_at = now()
+       WHERE id = $1 AND account_id = $2 RETURNING ${itemColumns}`,
+      [
+        input.wardrobeItemId,
+        input.accountId,
+        itemRow.current_shelf_image_version_id ? 'ready' : 'reviewing-metadata',
+      ],
+    );
+    const body = mapWardrobeItem(updated.rows[0]!);
+    await finishCommand(client, {
+      accountId: input.accountId,
+      key: input.idempotencyKey,
+      kind: 'reject-shelf-image',
+      request,
+      body,
+    });
+    return body;
+  });
+}
+
 type DeletionResponse = {
   wardrobeItemId: string;
   sourcePhotoDeleted: boolean;

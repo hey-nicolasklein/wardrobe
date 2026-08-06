@@ -7,6 +7,7 @@ import {
   itemStateSchema,
   keepShelfImageRequestSchema,
   permanentlyDeleteWardrobeItemRequestSchema,
+  rejectShelfImageRequestSchema,
   signInRequestSchema,
   updateWardrobeItemRequestSchema,
   contractVersion,
@@ -31,6 +32,7 @@ import {
   MediaValidationError,
   OwnedResourceNotFoundError,
   permanentlyDeleteWardrobeItem,
+  rejectShelfImage,
   revokeSession,
   verifyCredentials,
   type Database,
@@ -528,6 +530,35 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
           ...parsed.data,
         }),
       );
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.post('/v1/wardrobe-items/:wardrobeItemId/shelf-image-versions/reject', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) {
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Sign in to reject this image.'),
+        401,
+      );
+    }
+    const parsed = rejectShelfImageRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) {
+      return context.json(
+        errorPayload('validation', 'invalid-reject-request', 'Refresh the item and try again.'),
+        400,
+      );
+    }
+    try {
+      const wardrobeItem = await rejectShelfImage(database, {
+        accountId: authenticated.session.id,
+        wardrobeItemId: context.req.param('wardrobeItemId'),
+        ...parsed.data,
+      });
+      return context.json({ wardrobeItem });
     } catch (error) {
       const mapped = wardrobeError(error);
       if (mapped) return context.json(mapped.payload, mapped.status);

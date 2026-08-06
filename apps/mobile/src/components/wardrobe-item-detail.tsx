@@ -1,5 +1,5 @@
-import type { ItemMetadata, SupportedCategory, WardrobeItemDetailResponse } from '@form/contracts';
-import { Link, type Href, Stack } from 'expo-router';
+import type { GenerationAttempt, ItemMetadata, SupportedCategory } from '@form/contracts';
+import { Link, type Href, Stack, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
@@ -25,11 +25,13 @@ function ActionButton({
   title,
   selected = false,
   disabled = false,
+  destructive = false,
   onPress,
 }: {
   title: string;
   selected?: boolean;
   disabled?: boolean;
+  destructive?: boolean;
   onPress: () => void;
 }) {
   const colors = useAppColors();
@@ -40,17 +42,74 @@ function ActionButton({
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => ({
-        backgroundColor: selected ? colors.tint : colors.secondaryBackground,
+        backgroundColor: selected ? (destructive ? colors.error : colors.tint) : colors.secondaryBackground,
         borderCurve: 'continuous',
         borderRadius: 12,
         opacity: disabled ? 0.4 : pressed ? 0.6 : 1,
         paddingHorizontal: 13,
         paddingVertical: 10,
       })}>
-      <Text style={{ color: selected ? colors.onTint : colors.label, fontSize: 15, fontWeight: '600' }}>
+      <Text style={{ color: selected ? colors.onTint : destructive ? colors.error : colors.label, fontSize: 15, fontWeight: '600' }}>
         {title}
       </Text>
     </Pressable>
+  );
+}
+
+function formatCost(microunits: number): string {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 4,
+  }).format(microunits / 1_000_000);
+}
+
+function AttemptProvenance({ attempt }: { attempt: GenerationAttempt }) {
+  const colors = useAppColors();
+  return (
+    <View
+      style={{
+        backgroundColor: colors.secondaryBackground,
+        borderCurve: 'continuous',
+        borderRadius: 14,
+        gap: 5,
+        padding: 12,
+      }}>
+      <Text selectable style={{ color: colors.label, fontSize: 15, fontWeight: '600' }}>
+        {attempt.state.replaceAll('-', ' ')} · {new Date(attempt.createdAt).toLocaleString()}
+      </Text>
+      <Text selectable style={{ color: colors.secondaryLabel, fontSize: 13 }}>
+        {attempt.model} · {attempt.quality} · {attempt.size} · prompt {attempt.promptVersion}
+      </Text>
+      <Text selectable style={{ color: colors.secondaryLabel, fontSize: 13 }}>
+        Input: {attempt.reviewedMetadata.name} · {attempt.reviewedMetadata.category} · {attempt.reviewedMetadata.colors.join(', ')}
+      </Text>
+      {attempt.usage ? (
+        <Text selectable style={{ color: colors.secondaryLabel, fontSize: 13, fontVariant: ['tabular-nums'] }}>
+          {attempt.usage.textInputTokens.toLocaleString()} text + {attempt.usage.imageInputTokens.toLocaleString()} image input tokens · {attempt.usage.outputTokens.toLocaleString()} output
+        </Text>
+      ) : null}
+      {attempt.costBreakdown ? (
+        <Text selectable style={{ color: colors.secondaryLabel, fontSize: 13, fontVariant: ['tabular-nums'] }}>
+          {formatCost(attempt.costBreakdown.textInputMicrounits)} text · {formatCost(attempt.costBreakdown.imageInputMicrounits)} image input · {formatCost(attempt.costBreakdown.imageOutputMicrounits)} output · {formatCost(attempt.costBreakdown.totalMicrounits)} total · rates from {attempt.costBreakdown.pricingEffectiveDate}
+        </Text>
+      ) : attempt.costMicrounits !== null ? (
+        <Text selectable style={{ color: colors.secondaryLabel, fontSize: 13, fontVariant: ['tabular-nums'] }}>
+          {formatCost(attempt.costMicrounits)} total
+        </Text>
+      ) : null}
+      {attempt.providerRequestId ? (
+        <Text selectable style={{ color: colors.secondaryLabel, fontSize: 12 }}>
+          Provider request {attempt.providerRequestId}
+        </Text>
+      ) : null}
+      {attempt.failureCategory ? (
+        <Text selectable style={{ color: colors.error, fontSize: 13 }}>
+          Failed: {attempt.failureCategory.replaceAll('-', ' ')}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -103,7 +162,18 @@ export function WardrobeItemDetail({
   collection: 'owning' | 'wanting';
 }) {
   const colors = useAppColors();
-  const { cache, pendingEdits, isOnline, loadDetail, updateItem } = useWardrobeData();
+  const router = useRouter();
+  const {
+    cache,
+    pendingEdits,
+    isOnline,
+    loadDetail,
+    updateItem,
+    generateShelfImage,
+    keepShelfImage,
+    rejectShelfImage,
+    permanentlyDeleteItem,
+  } = useWardrobeData();
   const detail = cache.details[wardrobeItemId];
   const item = detail?.wardrobeItem;
   const pending = pendingEdits.find((edit) => edit.wardrobeItemId === wardrobeItemId);
@@ -113,6 +183,9 @@ export function WardrobeItemDetail({
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [showPermanentDeletion, setShowPermanentDeletion] = useState(false);
 
   useEffect(() => {
     void loadDetail(wardrobeItemId);
@@ -153,6 +226,9 @@ export function WardrobeItemDetail({
     shelfImageVersions: detail.shelfImageVersions,
     generationAttempts: detail.generationAttempts,
   });
+  const pendingReview = detail.generationAttempts.find((attempt) => attempt.state === 'needs-review');
+  const failedAttempt = detail.generationAttempts.find((attempt) => attempt.state === 'failed');
+  const transientFailure = failedAttempt && ['connection', 'timeout', 'rate-limit', 'provider-server'].includes(failedAttempt.failureCategory ?? '');
   const save = async () => {
     if (!metadata) {
       setFormError('Enter a name and one to six comma-separated colors.');
@@ -179,6 +255,31 @@ export function WardrobeItemDetail({
     } finally {
       setSaving(false);
     }
+  };
+
+  const runReviewAction = async (action: () => Promise<void>) => {
+    setReviewing(true);
+    setFormError(null);
+    try {
+      await action();
+    } catch (caught) {
+      setFormError(caught instanceof Error ? caught.message : 'The Shelf Image action failed.');
+    } finally {
+      setReviewing(false);
+    }
+  };
+
+  const regenerate = async () => {
+    if (pendingReview) await rejectShelfImage(wardrobeItemId, pendingReview.id);
+    await generateShelfImage(wardrobeItemId);
+  };
+
+  const deletePermanently = async () => {
+    if (deleteConfirmation !== item.metadata.name) return;
+    await runReviewAction(async () => {
+      await permanentlyDeleteItem(wardrobeItemId);
+      router.back();
+    });
   };
 
   return (
@@ -218,6 +319,43 @@ export function WardrobeItemDetail({
         </View>
         {pending?.error ? <Text selectable style={{ color: colors.error }}>{pending.error}</Text> : null}
       </View>
+
+      {pendingReview ? (
+        <View style={{ gap: 12 }}>
+          <Text selectable style={{ color: colors.label, fontSize: 20, fontWeight: '700' }}>Review Shelf Image</Text>
+          <Text selectable style={{ color: colors.secondaryLabel }}>
+            Keep makes this version current. Regenerate rejects it and creates a new paid attempt.
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            <ActionButton disabled={reviewing || !isOnline} onPress={() => void runReviewAction(() => keepShelfImage(wardrobeItemId, pendingReview.id))} selected title="Keep" />
+            <ActionButton destructive disabled={reviewing || !isOnline} onPress={() => void runReviewAction(() => rejectShelfImage(wardrobeItemId, pendingReview.id))} title="Reject" />
+            <ActionButton disabled={reviewing || !isOnline} onPress={() => void runReviewAction(regenerate)} title="Regenerate" />
+          </View>
+          {!isOnline ? <Text selectable style={{ color: colors.secondaryLabel }}>Reconnect to review or regenerate.</Text> : null}
+          <AttemptProvenance attempt={pendingReview} />
+        </View>
+      ) : null}
+
+      {failedAttempt ? (
+        <View style={{ gap: 12 }}>
+          <Text selectable style={{ color: colors.label, fontSize: 20, fontWeight: '700' }}>Generation Failed</Text>
+          <Text selectable style={{ color: colors.secondaryLabel }}>
+            {transientFailure
+              ? 'The provider failure was temporary. You can safely try a new attempt.'
+              : 'Review the item details before starting another paid attempt.'}
+          </Text>
+          {transientFailure ? <ActionButton disabled={reviewing || !isOnline} onPress={() => void runReviewAction(regenerate)} selected title="Try Again" /> : null}
+          <AttemptProvenance attempt={failedAttempt} />
+        </View>
+      ) : null}
+
+      {!pendingReview && !failedAttempt && item.status === 'ready' ? (
+        <View style={{ gap: 12 }}>
+          <Text selectable style={{ color: colors.label, fontSize: 20, fontWeight: '700' }}>Shelf Image</Text>
+          <Text selectable style={{ color: colors.secondaryLabel }}>Create another version while keeping the current image visible.</Text>
+          <ActionButton disabled={reviewing || !isOnline} onPress={() => void runReviewAction(regenerate)} title="Regenerate" />
+        </View>
+      ) : null}
 
       <View style={{ gap: 12 }}>
         <Text selectable style={{ color: colors.label, fontSize: 20, fontWeight: '700' }}>Details</Text>
@@ -282,23 +420,58 @@ export function WardrobeItemDetail({
         ) : (
           <ScrollView horizontal contentContainerStyle={{ gap: 12 }} showsHorizontalScrollIndicator={false}>
             {detail.shelfImageVersions.map((version) => (
-              <MediaLink
-                key={version.id}
-                assetId={version.transparentAssetId}
-                compact
-                fallback={item.metadata.name}
-                href={mediaHref(version.transparentAssetId, 'Shelf Image')}
-                title={`${version.quality} · ${new Date(version.keptAt).toLocaleDateString()}`}
-              />
+              <View key={version.id} style={{ gap: 8 }}>
+                <MediaLink
+                  assetId={version.transparentAssetId}
+                  compact
+                  fallback={item.metadata.name}
+                  href={mediaHref(version.transparentAssetId, 'Shelf Image')}
+                  title={`${version.quality} · ${new Date(version.keptAt).toLocaleDateString()}`}
+                />
+                <ActionButton
+                  disabled={reviewing || version.id === item.currentShelfImageVersionId}
+                  onPress={() => void runReviewAction(() => updateItem(wardrobeItemId, { currentShelfImageVersionId: version.id }))}
+                  selected={version.id === item.currentShelfImageVersionId}
+                  title={version.id === item.currentShelfImageVersionId ? 'Current' : 'Restore'}
+                />
+              </View>
             ))}
           </ScrollView>
         )}
-        {detail.generationAttempts.map((attempt) => (
-          <Text key={attempt.id} selectable style={{ color: colors.secondaryLabel, fontSize: 14 }}>
-            {attempt.state.replaceAll('-', ' ')} · {attempt.model} · {attempt.quality} · {new Date(attempt.createdAt).toLocaleDateString()}
-          </Text>
-        ))}
+        <View style={{ gap: 8 }}>
+          {detail.generationAttempts.map((attempt) => <AttemptProvenance attempt={attempt} key={attempt.id} />)}
+        </View>
       </View>
+
+      {item.state === 'archived' ? (
+        <View style={{ borderTopColor: colors.separator, borderTopWidth: 1, gap: 12, paddingTop: 20 }}>
+          <Text selectable style={{ color: colors.error, fontSize: 20, fontWeight: '700' }}>Permanent Deletion</Text>
+          {!showPermanentDeletion ? (
+            <ActionButton destructive onPress={() => setShowPermanentDeletion(true)} title="Delete Permanently…" />
+          ) : (
+            <>
+              <Text selectable style={{ color: colors.secondaryLabel }}>
+                This removes the item, every generated version, and unshared private media. Type “{item.metadata.name}” to confirm.
+              </Text>
+              <TextInput
+                accessibilityLabel="Confirm permanent deletion"
+                onChangeText={setDeleteConfirmation}
+                placeholder={item.metadata.name}
+                placeholderTextColor={colors.secondaryLabel}
+                style={{ backgroundColor: colors.secondaryBackground, borderCurve: 'continuous', borderRadius: 12, color: colors.label, fontSize: 17, padding: 12 }}
+                value={deleteConfirmation}
+              />
+              <ActionButton
+                destructive
+                disabled={reviewing || !isOnline || deleteConfirmation !== item.metadata.name}
+                onPress={() => void deletePermanently()}
+                selected
+                title="Delete Permanently"
+              />
+            </>
+          )}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }

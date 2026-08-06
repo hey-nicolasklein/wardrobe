@@ -198,6 +198,14 @@ export const keepShelfImageResponseSchema = z
   })
   .strict();
 
+export const rejectShelfImageRequestSchema = z
+  .object({
+    generationAttemptId: opaqueIdSchema,
+    expectedRecordVersion: recordVersionSchema,
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+
 export const permanentlyDeleteWardrobeItemRequestSchema = z
   .object({
     expectedRecordVersion: recordVersionSchema,

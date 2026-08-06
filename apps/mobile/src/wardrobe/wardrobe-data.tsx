@@ -43,6 +43,10 @@ type WardrobeDataContextValue = {
   refresh: (state?: WardrobeItem['state']) => Promise<void>;
   loadDetail: (wardrobeItemId: string) => Promise<WardrobeItemDetailResponse | null>;
   updateItem: (wardrobeItemId: string, patch: EditableWardrobePatch) => Promise<void>;
+  generateShelfImage: (wardrobeItemId: string) => Promise<void>;
+  keepShelfImage: (wardrobeItemId: string, generationAttemptId: string) => Promise<void>;
+  rejectShelfImage: (wardrobeItemId: string, generationAttemptId: string) => Promise<void>;
+  permanentlyDeleteItem: (wardrobeItemId: string) => Promise<void>;
   mediaUrl: (assetId: string) => Promise<string | null>;
 };
 
@@ -278,6 +282,49 @@ export function WardrobeDataProvider({
     [commitCache],
   );
 
+  const requireOnlineItem = useCallback((wardrobeItemId: string): WardrobeItem => {
+    if (!onlineRef.current) throw new Error('This action requires a connection.');
+    const item = itemFromCache(cacheRef.current, wardrobeItemId);
+    if (!item) throw new Error('Refresh this item and try again.');
+    return item;
+  }, []);
+
+  const generateShelfImage = useCallback(async (wardrobeItemId: string) => {
+    requireOnlineItem(wardrobeItemId);
+    await apiClient.enqueueGeneration(wardrobeItemId);
+    await loadDetail(wardrobeItemId);
+  }, [loadDetail, requireOnlineItem]);
+
+  const keepShelfImage = useCallback(async (wardrobeItemId: string, generationAttemptId: string) => {
+    const item = requireOnlineItem(wardrobeItemId);
+    await apiClient.keepShelfImage(wardrobeItemId, generationAttemptId, item.recordVersion);
+    await loadDetail(wardrobeItemId);
+  }, [loadDetail, requireOnlineItem]);
+
+  const rejectShelfImage = useCallback(async (wardrobeItemId: string, generationAttemptId: string) => {
+    const item = requireOnlineItem(wardrobeItemId);
+    await apiClient.rejectShelfImage(wardrobeItemId, generationAttemptId, item.recordVersion);
+    await loadDetail(wardrobeItemId);
+  }, [loadDetail, requireOnlineItem]);
+
+  const permanentlyDeleteItem = useCallback(async (wardrobeItemId: string) => {
+    const item = requireOnlineItem(wardrobeItemId);
+    await apiClient.permanentlyDeleteWardrobeItem(wardrobeItemId, item.recordVersion);
+    commitCache((current) => ({
+      ...current,
+      lists: Object.fromEntries(
+        Object.entries(current.lists).map(([state, items]) => [
+          state,
+          items?.filter((candidate) => candidate.id !== wardrobeItemId),
+        ]),
+      ),
+      details: Object.fromEntries(
+        Object.entries(current.details).filter(([id]) => id !== wardrobeItemId),
+      ),
+      updatedAt: new Date().toISOString(),
+    }));
+  }, [commitCache, requireOnlineItem]);
+
   useEffect(() => {
     accountRef.current = accountId;
     let active = true;
@@ -325,9 +372,13 @@ export function WardrobeDataProvider({
       refresh,
       loadDetail,
       updateItem,
+      generateShelfImage,
+      keepShelfImage,
+      rejectShelfImage,
+      permanentlyDeleteItem,
       mediaUrl,
     }),
-    [cache, error, isLoading, isOnline, isRefreshing, loadDetail, mediaUrl, pendingEdits, refresh, updateItem],
+    [cache, error, generateShelfImage, isLoading, isOnline, isRefreshing, keepShelfImage, loadDetail, mediaUrl, pendingEdits, permanentlyDeleteItem, refresh, rejectShelfImage, updateItem],
   );
 
   return <WardrobeDataContext.Provider value={value}>{children}</WardrobeDataContext.Provider>;

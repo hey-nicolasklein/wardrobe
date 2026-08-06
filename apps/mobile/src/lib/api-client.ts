@@ -6,6 +6,8 @@ import {
   detectionProposalsResponseSchema,
   enqueueDetectionResponseSchema,
   enqueueGenerationResponseSchema,
+  keepShelfImageResponseSchema,
+  permanentlyDeleteWardrobeItemResponseSchema,
   currentSessionResponseSchema,
   signInResponseSchema,
   wardrobeItemDetailResponseSchema,
@@ -236,6 +238,61 @@ export const apiClient = {
       }),
     });
     return enqueueGenerationResponseSchema.parse(await response.json());
+  },
+
+  async keepShelfImage(
+    wardrobeItemId: string,
+    generationAttemptId: string,
+    expectedRecordVersion: number,
+  ) {
+    const response = await request(
+      `/v1/wardrobe-items/${wardrobeItemId}/shelf-image-versions/keep`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          generationAttemptId,
+          expectedRecordVersion,
+          idempotencyKey: idempotencyKey('keep'),
+        }),
+      },
+    );
+    return keepShelfImageResponseSchema.parse(await response.json());
+  },
+
+  async rejectShelfImage(
+    wardrobeItemId: string,
+    generationAttemptId: string,
+    expectedRecordVersion: number,
+  ): Promise<WardrobeItem> {
+    const response = await request(
+      `/v1/wardrobe-items/${wardrobeItemId}/shelf-image-versions/reject`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          generationAttemptId,
+          expectedRecordVersion,
+          idempotencyKey: idempotencyKey('reject'),
+        }),
+      },
+    );
+    return wardrobeItemResponseSchema.parse(await response.json()).wardrobeItem;
+  },
+
+  async permanentlyDeleteWardrobeItem(
+    wardrobeItemId: string,
+    expectedRecordVersion: number,
+  ) {
+    const response = await request(`/v1/wardrobe-items/${wardrobeItemId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        expectedRecordVersion,
+        idempotencyKey: idempotencyKey('delete'),
+      }),
+    });
+    return permanentlyDeleteWardrobeItemResponseSchema.parse(await response.json());
   },
 
   request,

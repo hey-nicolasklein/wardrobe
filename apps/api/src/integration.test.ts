@@ -149,6 +149,58 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       'stale-record-version',
     );
 
+    const rejectedAttemptId = '50000000-0000-4000-8000-000000000099';
+    await database.query(
+      `INSERT INTO generation_attempts (
+         id, account_id, wardrobe_item_id, source_photo_id, state, reviewed_metadata,
+         model, quality, output_size, prompt_version, created_at, finished_at
+       ) VALUES ($1, $2, $3, $4, 'needs-review', $5, 'gpt-image-2', 'low',
+         '816x816', 'laid-flat-v1', now(), now())`,
+      [
+        rejectedAttemptId,
+        fixtureIds.populatedAccount,
+        fixtureIds.readyItem,
+        fixtureIds.sourcePhoto,
+        JSON.stringify({
+          name: 'Navy overshirt',
+          category: 'jacket',
+          colors: ['navy'],
+          notes: null,
+        }),
+      ],
+    );
+    await database.query(
+      `UPDATE wardrobe_items SET status = 'needs-review' WHERE id = $1`,
+      [fixtureIds.readyItem],
+    );
+    const rejectBody = {
+      generationAttemptId: rejectedAttemptId,
+      expectedRecordVersion: 3,
+      idempotencyKey: 'integration-reject-shelf-image-0001',
+    };
+    const rejectRequest = () =>
+      app.request(
+        `/v1/wardrobe-items/${fixtureIds.readyItem}/shelf-image-versions/reject`,
+        {
+          method: 'POST',
+          headers: { ...ownerHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify(rejectBody),
+        },
+      );
+    const rejected = await rejectRequest();
+    assert.equal(rejected.status, 200);
+    const rejectedResponse = (await rejected.json()) as {
+      wardrobeItem: {
+        status: string;
+        recordVersion: number;
+        currentShelfImageVersionId: string | null;
+      };
+    };
+    assert.equal(rejectedResponse.wardrobeItem.status, 'ready');
+    assert.equal(rejectedResponse.wardrobeItem.recordVersion, 4);
+    assert.equal(rejectedResponse.wardrobeItem.currentShelfImageVersionId, fixtureIds.currentVersion);
+    assert.deepEqual(await (await rejectRequest()).json(), rejectedResponse);
+
     const keepBody = {
       generationAttemptId: fixtureIds.reviewAttempt,
       expectedRecordVersion: 0,
@@ -426,7 +478,7 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       { id: createdItemResponse.wardrobeItem.id, version: 0 },
       { id: fixtureIds.queuedItem, version: 0 },
       { id: fixtureIds.needsReviewItem, version: 2 },
-      { id: fixtureIds.readyItem, version: 3 },
+      { id: fixtureIds.readyItem, version: 4 },
     ];
     type DeletionBody = {
       sourcePhotoDeleted: boolean;
