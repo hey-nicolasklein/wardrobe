@@ -13,20 +13,23 @@ import type { ObjectStorageConfig } from './config.js';
 export type PrivateObjectStorage = {
   bucket: string;
   client: S3Client;
+  signingClient: S3Client;
 };
 
 export function createPrivateObjectStorage(config: ObjectStorageConfig): PrivateObjectStorage {
+  const clientOptions = {
+    endpoint: config.S3_ENDPOINT,
+    region: config.S3_REGION,
+    forcePathStyle: config.S3_FORCE_PATH_STYLE,
+    credentials: {
+      accessKeyId: config.S3_ACCESS_KEY_ID,
+      secretAccessKey: config.S3_SECRET_ACCESS_KEY,
+    },
+  };
   return {
     bucket: config.S3_BUCKET,
-    client: new S3Client({
-      endpoint: config.S3_ENDPOINT,
-      region: config.S3_REGION,
-      forcePathStyle: config.S3_FORCE_PATH_STYLE,
-      credentials: {
-        accessKeyId: config.S3_ACCESS_KEY_ID,
-        secretAccessKey: config.S3_SECRET_ACCESS_KEY,
-      },
-    }),
+    client: new S3Client(clientOptions),
+    signingClient: new S3Client({ ...clientOptions, endpoint: config.S3_PUBLIC_ENDPOINT ?? config.S3_ENDPOINT }),
   };
 }
 
@@ -59,7 +62,7 @@ export async function createSignedUploadUrl(
   expiresInSeconds = 300,
 ): Promise<string> {
   return getSignedUrl(
-    storage.client,
+    storage.signingClient,
     new PutObjectCommand({
       Bucket: storage.bucket,
       Key: objectKey,
@@ -77,7 +80,7 @@ export async function createSignedDownloadUrl(
   expiresInSeconds = 300,
 ): Promise<string> {
   return getSignedUrl(
-    storage.client,
+    storage.signingClient,
     new GetObjectCommand({
       Bucket: storage.bucket,
       Key: objectKey,
