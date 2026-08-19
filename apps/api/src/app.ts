@@ -1,3 +1,6 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import {
   completeSourceUploadRequestSchema,
   createWardrobeItemRequestSchema,
@@ -7,6 +10,8 @@ import {
   itemStateSchema,
   keepShelfImageRequestSchema,
   permanentlyDeleteWardrobeItemRequestSchema,
+  rejectShelfImageRequestSchema,
+  restoreShelfImageVersionRequestSchema,
   signInRequestSchema,
   updateWardrobeItemRequestSchema,
   contractVersion,
@@ -15,7 +20,6 @@ import {
 import {
   authenticateSession,
   completeSourceUpload,
-  createOwnedAssetDownload,
   createSession,
   createSourceUploadIntent,
   createWardrobeItemFromDetection,
@@ -31,6 +35,8 @@ import {
   MediaValidationError,
   OwnedResourceNotFoundError,
   permanentlyDeleteWardrobeItem,
+  rejectShelfImage,
+  restoreShelfImageVersion,
   revokeSession,
   verifyCredentials,
   type Database,
@@ -39,6 +45,7 @@ import {
   type SessionRecord,
   StaleRecordVersionError,
   updateWardrobeItem,
+  findOwnedPrivateAsset,
 } from '@form/service';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { cors } from 'hono/cors';
@@ -58,6 +65,36 @@ export type AppDependencies = {
 };
 
 const sessionCookie = 'form_session';
+const mediaTokenLifetimeSeconds = 300;
+
+function mediaToken(secret: string, accountId: string, assetId: string, expiresAt: number): string {
+  const payload = `${accountId}.${assetId}.${expiresAt}`;
+  const signature = createHmac('sha256', secret).update(payload).digest('base64url');
+  return `${Buffer.from(payload).toString('base64url')}.${signature}`;
+}
+
+function verifyMediaToken(secret: string, token: string): { accountId: string; assetId: string } | null {
+  const [encodedPayload, signature] = token.split('.');
+  if (!encodedPayload || !signature) return null;
+  let payload: string;
+  try {
+    payload = Buffer.from(encodedPayload, 'base64url').toString('utf8');
+  } catch {
+    return null;
+  }
+  const [accountId, assetId, expiresAtText] = payload.split('.');
+  const expiresAt = Number(expiresAtText);
+  if (!accountId || !assetId || !Number.isSafeInteger(expiresAt) || expiresAt < Math.floor(Date.now() / 1000)) return null;
+  const expected = createHmac('sha256', secret).update(payload).digest();
+  let actual: Buffer;
+  try {
+    actual = Buffer.from(signature, 'base64url');
+  } catch {
+    return null;
+  }
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
+  return { accountId, assetId };
+}
 
 function errorPayload(
   category: ApiError['category'],
@@ -229,7 +266,15 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
         contentType: parsed.data.contentType,
         byteSize: parsed.data.byteSize,
       });
-      return context.json({ ...intent, expiresAt: intent.expiresAt.toISOString() }, 201);
+      const expiresAt = Math.floor(intent.expiresAt.getTime() / 1_000);
+      const token = mediaToken(secret, authenticated.session.id, intent.assetId, expiresAt);
+      const uploadUrl = new URL(`/v1/assets/${intent.assetId}/content`, context.req.url);
+      uploadUrl.searchParams.set('token', token);
+      return context.json({
+        ...intent,
+        uploadUrl: uploadUrl.toString(),
+        expiresAt: intent.expiresAt.toISOString(),
+      }, 201);
     } catch (error) {
       if (error instanceof MediaValidationError) {
         return context.json(
@@ -302,18 +347,70 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
         401,
       );
     }
-    const download = await createOwnedAssetDownload(database, storage, {
-      accountId: authenticated.session.id,
-      assetId: context.req.param('assetId'),
-    });
-    if (!download) {
+    const asset = await findOwnedPrivateAsset(database, authenticated.session.id, context.req.param('assetId'));
+    if (!asset || asset.state !== 'ready' || !asset.objectVersionId) {
       return context.json(errorPayload('not-found', 'asset-not-found', 'Asset not found.'), 404);
     }
+    const expiresAt = Math.floor(Date.now() / 1000) + mediaTokenLifetimeSeconds;
+    const token = mediaToken(secret, authenticated.session.id, asset.id, expiresAt);
+    const downloadUrl = new URL(`/v1/assets/${asset.id}/content`, context.req.url);
+    downloadUrl.searchParams.set('token', token);
     return context.json({
-      assetId: context.req.param('assetId'),
-      downloadUrl: download.downloadUrl,
-      expiresAt: download.expiresAt.toISOString(),
+      assetId: asset.id,
+      downloadUrl: downloadUrl.toString(),
+      expiresAt: new Date(expiresAt * 1_000).toISOString(),
     });
+  });
+
+  app.get('/v1/assets/:assetId/content', async (context) => {
+    const verified = verifyMediaToken(secret, context.req.query('token') ?? '');
+    if (!verified || verified.assetId !== context.req.param('assetId')) {
+      return context.json(errorPayload('authentication', 'invalid-media-token', 'This media link is invalid or expired.'), 401);
+    }
+    const asset = await findOwnedPrivateAsset(database, verified.accountId, verified.assetId);
+    if (!asset || asset.state !== 'ready' || !asset.objectVersionId) {
+      return context.json(errorPayload('not-found', 'asset-not-found', 'Asset not found.'), 404);
+    }
+    const object = await storage.client.send(new GetObjectCommand({
+      Bucket: storage.bucket,
+      Key: asset.objectKey,
+      VersionId: asset.objectVersionId,
+    }));
+    if (!object.Body) {
+      return context.json(errorPayload('not-found', 'asset-content-missing', 'Asset content not found.'), 404);
+    }
+    return new Response(object.Body.transformToWebStream(), {
+      headers: {
+        'Cache-Control': `private, max-age=${mediaTokenLifetimeSeconds}`,
+        'Content-Type': asset.contentType,
+      },
+    });
+  });
+
+  app.put('/v1/assets/:assetId/content', async (context) => {
+    const verified = verifyMediaToken(secret, context.req.query('token') ?? '');
+    if (!verified || verified.assetId !== context.req.param('assetId')) {
+      return context.json(errorPayload('authentication', 'invalid-media-token', 'This upload link is invalid or expired.'), 401);
+    }
+    const asset = await findOwnedPrivateAsset(database, verified.accountId, verified.assetId);
+    if (!asset || asset.state === 'deleted' || asset.purpose !== 'source-photo') {
+      return context.json(errorPayload('not-found', 'upload-intent-not-found', 'Upload intent not found.'), 404);
+    }
+    if (context.req.header('Content-Type') !== asset.contentType) {
+      return context.json(errorPayload('validation', 'upload-content-type-mismatch', 'The uploaded photo type does not match the upload intent.'), 400);
+    }
+    const bytes = new Uint8Array(await context.req.arrayBuffer());
+    if (bytes.byteLength !== asset.byteSize) {
+      return context.json(errorPayload('validation', 'upload-size-mismatch', 'The uploaded photo size does not match the upload intent.'), 400);
+    }
+    await storage.client.send(new PutObjectCommand({
+      Bucket: storage.bucket,
+      Key: asset.objectKey,
+      Body: bytes,
+      ContentType: asset.contentType,
+      ContentLength: bytes.byteLength,
+    }));
+    return context.body(null, 200);
   });
 
   app.get('/v1/wardrobe-items', async (context) => {
@@ -528,6 +625,34 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
           ...parsed.data,
         }),
       );
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.post('/v1/wardrobe-items/:wardrobeItemId/generations/reject', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) return context.json(errorPayload('authentication', 'authentication-required', 'Sign in to reject this image.'), 401);
+    const parsed = rejectShelfImageRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json(errorPayload('validation', 'invalid-reject-request', 'Refresh the item and try again.'), 400);
+    try {
+      return context.json(await rejectShelfImage(database, { accountId: authenticated.session.id, wardrobeItemId: context.req.param('wardrobeItemId'), ...parsed.data }));
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.post('/v1/wardrobe-items/:wardrobeItemId/shelf-image-versions/:versionId/restore', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) return context.json(errorPayload('authentication', 'authentication-required', 'Sign in to restore this image.'), 401);
+    const parsed = restoreShelfImageVersionRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json(errorPayload('validation', 'invalid-restore-request', 'Refresh the item and try again.'), 400);
+    try {
+      return context.json(await restoreShelfImageVersion(database, { accountId: authenticated.session.id, wardrobeItemId: context.req.param('wardrobeItemId'), shelfImageVersionId: context.req.param('versionId'), ...parsed.data }));
     } catch (error) {
       const mapped = wardrobeError(error);
       if (mapped) return context.json(mapped.payload, mapped.status);

@@ -12,7 +12,7 @@ FORM is becoming a private, persistent personal wardrobe for iPhone and web. The
 | `packages/contracts` | Runtime-validated domain, request, response, event, and error contracts |
 | `packages/service` | PostgreSQL migrations, private object storage, durable jobs, health, and fixtures |
 
-The production destination and execution order live in [`docs/wayfinder/persistent-wardrobe/map.md`](docs/wayfinder/persistent-wardrobe/map.md). The service foundation, authenticated app shell, persistent wardrobe model, catalog pipeline, offline-capable browsing, and guided multi-item intake are implemented; generation review workflows, deployment, and release proof remain in subsequent Wayfinder tickets.
+The production destination and execution order live in [`docs/wayfinder/persistent-wardrobe/map.md`](docs/wayfinder/persistent-wardrobe/map.md). The service foundation, authenticated app shell, persistent wardrobe model, catalog pipeline, offline-capable browsing, guided multi-item intake, and generation review/version workflows are implemented; deployment and release proof remain in subsequent Wayfinder tickets.
 
 ## Set up
 

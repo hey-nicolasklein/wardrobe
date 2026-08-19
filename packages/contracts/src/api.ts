@@ -198,6 +198,21 @@ export const keepShelfImageResponseSchema = z
   })
   .strict();
 
+export const rejectShelfImageRequestSchema = z
+  .object({
+    generationAttemptId: opaqueIdSchema,
+    expectedRecordVersion: recordVersionSchema,
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+
+export const restoreShelfImageVersionRequestSchema = z
+  .object({
+    expectedRecordVersion: recordVersionSchema,
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+
 export const permanentlyDeleteWardrobeItemRequestSchema = z
   .object({
     expectedRecordVersion: recordVersionSchema,
@@ -227,6 +242,10 @@ export type CreateDownloadUrlResponse = z.infer<
 >;
 export type UpdateWardrobeItemRequest = z.infer<
   typeof updateWardrobeItemRequestSchema
+>;
+export type RejectShelfImageRequest = z.infer<typeof rejectShelfImageRequestSchema>;
+export type RestoreShelfImageVersionRequest = z.infer<
+  typeof restoreShelfImageVersionRequestSchema
 >;
 export type DetectionProposalsResponse = z.infer<
   typeof detectionProposalsResponseSchema

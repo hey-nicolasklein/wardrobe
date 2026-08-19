@@ -47,6 +47,11 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       detectionModel: 'fixture-vision-model',
     });
 
+    const appFetch = async (url: string, init?: RequestInit): Promise<Response> => {
+      const parsed = new URL(url);
+      return app.request(`${parsed.pathname}${parsed.search}`, init);
+    };
+
     async function signIn(credentials: { email: string; password: string }): Promise<string> {
       const response = await app.request('/v1/auth/sign-in', {
         method: 'POST',
@@ -149,9 +154,49 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       'stale-record-version',
     );
 
+    const additionalReviewAttempt = '50000000-0000-4000-8000-000000000099';
+    await database.query(
+      `INSERT INTO generation_attempts (
+         id, account_id, wardrobe_item_id, source_photo_id, detection_proposal_id,
+         state, reviewed_metadata, model, quality, output_size, prompt_version,
+         reference_asset_id, keyed_asset_id, transparent_asset_id, provider_request_id,
+         input_tokens, output_tokens, cost_microunits, failure_category,
+         created_at, started_at, finished_at, resolved_chroma_key, provider_usage,
+         text_input_tokens, image_input_tokens, service_tier, pricing_effective_date,
+         text_input_cost_microunits, image_input_cost_microunits, image_output_cost_microunits
+       )
+       SELECT $1, account_id, wardrobe_item_id, source_photo_id, detection_proposal_id,
+         state, reviewed_metadata, model, quality, output_size, prompt_version,
+         reference_asset_id, keyed_asset_id, transparent_asset_id, provider_request_id,
+         input_tokens, output_tokens, cost_microunits, failure_category,
+         created_at + interval '1 second', started_at, finished_at, resolved_chroma_key, provider_usage,
+         text_input_tokens, image_input_tokens, service_tier, pricing_effective_date,
+         text_input_cost_microunits, image_input_cost_microunits, image_output_cost_microunits
+       FROM generation_attempts WHERE id = $2`,
+      [additionalReviewAttempt, fixtureIds.reviewAttempt],
+    );
+    const rejectedWithReviewRemaining = await app.request(
+      `/v1/wardrobe-items/${fixtureIds.needsReviewItem}/generations/reject`,
+      {
+        method: 'POST',
+        headers: { ...ownerHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          generationAttemptId: additionalReviewAttempt,
+          expectedRecordVersion: 0,
+          idempotencyKey: 'integration-reject-with-review-remaining-0001',
+        }),
+      },
+    );
+    assert.equal(rejectedWithReviewRemaining.status, 200);
+    const rejectedWithReviewRemainingBody = (await rejectedWithReviewRemaining.json()) as {
+      wardrobeItem: { status: string; recordVersion: number };
+    };
+    assert.equal(rejectedWithReviewRemainingBody.wardrobeItem.status, 'needs-review');
+    assert.equal(rejectedWithReviewRemainingBody.wardrobeItem.recordVersion, 1);
+
     const keepBody = {
       generationAttemptId: fixtureIds.reviewAttempt,
-      expectedRecordVersion: 0,
+      expectedRecordVersion: 1,
       idempotencyKey: 'integration-keep-shelf-image-0001',
     };
     const keepRequest = () =>
@@ -170,7 +215,7 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       shelfImageVersion: { generationAttemptId: string };
     };
     assert.equal(keptResponse.wardrobeItem.status, 'ready');
-    assert.equal(keptResponse.wardrobeItem.recordVersion, 1);
+    assert.equal(keptResponse.wardrobeItem.recordVersion, 2);
     assert.equal(keptResponse.shelfImageVersion.generationAttemptId, fixtureIds.reviewAttempt);
     assert.deepEqual(await (await keepRequest()).json(), keptResponse);
 
@@ -188,6 +233,23 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     assert.equal(generation.status, 202);
     const generationResponse = await generation.json();
     assert.deepEqual(await (await generationRequest()).json(), generationResponse);
+
+    const activeGenerationDeletion = await app.request(
+      `/v1/wardrobe-items/${fixtureIds.queuedItem}`,
+      {
+        method: 'DELETE',
+        headers: { ...ownerHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expectedRecordVersion: 0,
+          idempotencyKey: 'integration-delete-active-generation-0001',
+        }),
+      },
+    );
+    assert.equal(activeGenerationDeletion.status, 409);
+    assert.equal(
+      ((await activeGenerationDeletion.json()) as { error: { code: string } }).error.code,
+      'invalid-wardrobe-transition',
+    );
 
     await recordDetectionProposals(database, {
       accountId: fixtureIds.populatedAccount,
@@ -267,7 +329,7 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     );
     assert.equal(ownerDownload.status, 200);
     const ownerDownloadBody = (await ownerDownload.json()) as { downloadUrl: string };
-    const downloaded = await fetch(ownerDownloadBody.downloadUrl);
+    const downloaded = await appFetch(ownerDownloadBody.downloadUrl);
     assert.equal(downloaded.status, 200);
     assert.ok(
       (await downloaded.arrayBuffer()).byteLength > 1_000,
@@ -295,7 +357,7 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       uploadUrl: string;
       headers: Record<string, string>;
     };
-    const upload = await fetch(intent.uploadUrl, {
+    const upload = await appFetch(intent.uploadUrl, {
       method: 'PUT',
       headers: intent.headers,
       body: sourcePng,
@@ -355,7 +417,7 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     );
     assert.equal(queuedDetectionRecord.rows[0]?.model, 'fixture-vision-model');
 
-    const overwrite = await fetch(intent.uploadUrl, {
+    const overwrite = await appFetch(intent.uploadUrl, {
       method: 'PUT',
       headers: intent.headers,
       body: replacementPng,
@@ -367,7 +429,7 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     );
     assert.equal(immutableDownload.status, 200);
     const immutableDownloadBody = (await immutableDownload.json()) as { downloadUrl: string };
-    const immutableBytes = Buffer.from(await (await fetch(immutableDownloadBody.downloadUrl)).arrayBuffer());
+    const immutableBytes = Buffer.from(await (await appFetch(immutableDownloadBody.downloadUrl)).arrayBuffer());
     assert.deepEqual(immutableBytes, sourcePng);
 
     async function createIntent(bytes: Buffer): Promise<{ assetId: string; uploadUrl: string; headers: Record<string, string> }> {
@@ -403,7 +465,7 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     const corruptIntent = await createIntent(corruptPng);
     assert.equal(
       (
-        await fetch(corruptIntent.uploadUrl, {
+        await appFetch(corruptIntent.uploadUrl, {
           method: 'PUT',
           headers: corruptIntent.headers,
           body: corruptPng,
@@ -422,10 +484,22 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     assert.equal(corruptCompletion.status, 400);
     assert.equal(((await corruptCompletion.json()) as { error: { code: string } }).error.code, 'invalid-image');
 
+    await database.query(
+      `UPDATE generation_attempts SET state = 'failed', failure_category = 'integration-cleanup'
+       WHERE account_id = $1 AND state IN ('queued', 'processing')`,
+      [fixtureIds.populatedAccount],
+    );
+    await database.query(
+      `UPDATE remote_image_jobs SET state = 'failed', finished_at = now(),
+         lease_owner = NULL, lease_expires_at = NULL
+       WHERE account_id = $1 AND state IN ('queued', 'leased')`,
+      [fixtureIds.populatedAccount],
+    );
+
     const remainingItems = [
       { id: createdItemResponse.wardrobeItem.id, version: 0 },
       { id: fixtureIds.queuedItem, version: 0 },
-      { id: fixtureIds.needsReviewItem, version: 2 },
+      { id: fixtureIds.needsReviewItem, version: 3 },
       { id: fixtureIds.readyItem, version: 3 },
     ];
     type DeletionBody = {

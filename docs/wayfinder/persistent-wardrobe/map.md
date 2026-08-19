@@ -37,6 +37,7 @@ Deliver a working Expo application and NAS-hosted backend that can be used as a 
 - [Build the native app shell and authenticated session](https://github.com/hey-nicolasklein/wardrobe/issues/5) — Protected SDK 57 routes now restore cookie or SecureStore sessions into native Owning and Wanting stacks with semantic system styling, platform-appropriate Add and account actions, and a verified web adaptation.
 - [Build wardrobe browsing, details, and offline state](https://github.com/hey-nicolasklein/wardrobe/issues/8) — Responsive searchable wardrobe grids now lead to editable provenance-rich item details and zoomable private media, backed by an account-scoped SQLite cache and a reconnecting idempotent edit outbox.
 - [Build the guided multi-item Add flow](https://github.com/hey-nicolasklein/wardrobe/issues/4) — Camera and library photos now normalize before private upload, durable detection drives synchronized multi-item selection and separate metadata review, and one confirmation persists each draft before queueing its default Shelf Image generation.
+- [Complete review, version, and lifecycle workflows](https://github.com/hey-nicolasklein/wardrobe/issues/7) — Item details now support explicit Keep/Reject decisions, regeneration and failed-attempt retry, cost and provider provenance, immutable version restore, reversible collection/archive moves, and confirmed permanent deletion across native and web.
 
 ## Not yet specified
 

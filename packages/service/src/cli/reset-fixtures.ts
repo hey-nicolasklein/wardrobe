@@ -25,7 +25,7 @@ try {
   await migrateDatabase(database);
   await ensurePrivateBucket(storage);
   await resetFixtures(database, storage);
-  console.log('Reset deterministic fixtures for owner@example.test and empty@example.test.');
+  console.log('Reset deterministic fixtures for test / test and empty@example.test.');
 } finally {
   storage.client.destroy();
   await database.end();
