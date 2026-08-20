@@ -20,7 +20,14 @@ if [[ ! -f "$postgres_dump" || ! -f "$object_archive" ]]; then
   exit 1
 fi
 
-tar -tzf "$object_archive" >/dev/null
+archive_entries="$(tar -tzf "$object_archive")"
+if [[ -z "$archive_entries" ]] \
+  || ! grep --extended-regexp --quiet '^object-storage(/|$)' <<< "$archive_entries" \
+  || grep --extended-regexp --quiet '(^|/)\.\.(/|$)' <<< "$archive_entries" \
+  || grep --extended-regexp --invert-match --quiet '^object-storage(/|$)' <<< "$archive_entries"; then
+  printf 'Media archive must contain only the object-storage directory.\n' >&2
+  exit 1
+fi
 docker run --rm -v "$backup_dir:/backup:ro" postgres:17-alpine \
   pg_restore --file=/dev/null /backup/postgres.dump
 
@@ -65,6 +72,21 @@ docker run --rm \
   '
 
 "${compose[@]}" up -d --wait postgres object-storage
+postgres_ready=false
+for _ in $(seq 1 60); do
+  # The command expands inside the container, where PostgreSQL runs as PID 1.
+  # shellcheck disable=SC2016
+  if "${compose[@]}" exec -T postgres sh -c \
+    'test "$(cat /proc/1/comm)" = postgres && psql --dbname="$POSTGRES_DB" --username="$POSTGRES_USER" --command="SELECT 1" >/dev/null 2>&1'; then
+    postgres_ready=true
+    break
+  fi
+  sleep 2
+done
+if [[ "$postgres_ready" != "true" ]]; then
+  printf 'PostgreSQL did not finish initialization within 120 seconds.\n' >&2
+  exit 1
+fi
 "${compose[@]}" exec -T postgres pg_restore \
   --no-owner --clean --if-exists \
   --dbname="${POSTGRES_DB:-form}" --username="${POSTGRES_USER:-form}" \

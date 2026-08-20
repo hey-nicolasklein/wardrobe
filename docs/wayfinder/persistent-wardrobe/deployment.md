@@ -57,13 +57,13 @@ For a restore drill, use a maintenance window. The restore command stops the sta
 
 ```sh
 FORM_RESTORE_CONFIRMED=true ./deploy/restore.sh /volume1/backups/form/<timestamp>
-./deploy/verify.sh
+FORM_VERIFY_EMAIL=<account-email> FORM_VERIFY_PASSWORD=<account-password> ./deploy/verify.sh
 ```
 
-Before Tailscale Serve is configured, source `.env.production` as shown above and target the loopback boundary with `FORM_VERIFY_ORIGIN=http://127.0.0.1:${FORM_WEB_PORT:-8081} ./deploy/verify.sh`.
+Before Tailscale Serve is configured, source `.env.production` as shown above and target the loopback boundary with `FORM_VERIFY_ORIGIN=http://127.0.0.1:${FORM_WEB_PORT:-8081} FORM_VERIFY_EMAIL=<account-email> FORM_VERIFY_PASSWORD=<account-password> ./deploy/verify.sh`.
 
 If the NAS itself does not use MagicDNS, pass its current Tailscale address without changing the public origin: `FORM_VERIFY_RESOLVE=<hostname>:443:<tailscale-ip> ./deploy/verify.sh`.
 
-The confirmation variable prevents accidental restores. The previous data remains recoverable next to `FORM_DATA_DIR`; remove it only after verification succeeds. The verification checks account, Source Photo, and Wardrobe Item counts and asks MinIO to read metadata for every ready private object referenced by PostgreSQL. Record the drill timestamp, backup location, recovery location, counts, and verification result.
+The confirmation variable prevents accidental restores. The previous data remains recoverable next to `FORM_DATA_DIR`; remove it only after verification succeeds. Pass verification credentials at runtime rather than storing them in a tracked file. Verification performs a credentialed browser sign-in and session restore, checks account, Source Photo, and Wardrobe Item counts, and reads every exact private-object version referenced by PostgreSQL. Record the drill timestamp, backup location, recovery location, counts, and verification result.
 
 Backups contain private wardrobe media and customer data. Encrypt them at rest, restrict access, and never commit them to Git.

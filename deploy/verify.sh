@@ -36,7 +36,11 @@ if [[ "${WEB_ORIGIN:?WEB_ORIGIN must be set}" != "${PUBLIC_WEB_ORIGIN:?PUBLIC_WE
   exit 1
 fi
 cors_headers="$(mktemp)"
-trap 'rm -f "$cors_headers"' EXIT
+sign_in_headers="$(mktemp)"
+sign_in_body="$(mktemp)"
+session_body="$(mktemp)"
+cookie_jar="$(mktemp)"
+trap 'rm -f "$cors_headers" "$sign_in_headers" "$sign_in_body" "$session_body" "$cookie_jar"' EXIT
 curl "${curl_args[@]}" --request OPTIONS --dump-header "$cors_headers" --output /dev/null \
   --header "Origin: $PUBLIC_WEB_ORIGIN" \
   --header 'Access-Control-Request-Method: POST' \
@@ -45,6 +49,30 @@ curl "${curl_args[@]}" --request OPTIONS --dump-header "$cors_headers" --output 
 if ! grep --fixed-strings --ignore-case --quiet "access-control-allow-origin: $PUBLIC_WEB_ORIGIN" "$cors_headers" \
   || ! grep --fixed-strings --ignore-case --quiet 'access-control-allow-credentials: true' "$cors_headers"; then
   printf 'Browser credential CORS is not configured for %s.\n' "$PUBLIC_WEB_ORIGIN" >&2
+  exit 1
+fi
+
+verify_email="${FORM_VERIFY_EMAIL:?Set FORM_VERIFY_EMAIL for the administrator login check}"
+verify_password="${FORM_VERIFY_PASSWORD:?Set FORM_VERIFY_PASSWORD for the administrator login check}"
+sign_in_request="$("${compose[@]}" exec -T api node -e '
+  process.stdout.write(JSON.stringify({ email: process.argv[1], password: process.argv[2], transport: "cookie" }))
+' "$verify_email" "$verify_password")"
+curl "${curl_args[@]}" --dump-header "$sign_in_headers" --output "$sign_in_body" \
+  --cookie-jar "$cookie_jar" \
+  --header "Origin: $PUBLIC_WEB_ORIGIN" \
+  --header 'Content-Type: application/json' \
+  --data "$sign_in_request" \
+  "$verify_origin/v1/auth/sign-in"
+if ! grep --fixed-strings --ignore-case --quiet 'set-cookie: form_session=' "$sign_in_headers"; then
+  printf 'Administrator sign-in did not create a browser session.\n' >&2
+  exit 1
+fi
+curl "${curl_args[@]}" --output "$session_body" \
+  --cookie "$cookie_jar" \
+  --header "Origin: $PUBLIC_WEB_ORIGIN" \
+  "$verify_origin/v1/auth/session"
+if ! grep --fixed-strings --quiet "\"email\":\"$verify_email\"" "$session_body"; then
+  printf 'The restored browser session does not match %s.\n' "$verify_email" >&2
   exit 1
 fi
 
