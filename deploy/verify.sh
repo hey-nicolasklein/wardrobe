@@ -62,10 +62,14 @@ wardrobe_item_count="$("${compose[@]}" exec -T postgres psql \
   --dbname="${POSTGRES_DB:-form}" --username="${POSTGRES_USER:-form}" \
   --tuples-only --no-align --command='SELECT count(*) FROM wardrobe_items')"
 
-mapfile -t object_records < <("${compose[@]}" exec -T postgres psql \
+object_rows="$("${compose[@]}" exec -T postgres psql \
   --dbname="${POSTGRES_DB:-form}" --username="${POSTGRES_USER:-form}" \
   --tuples-only --no-align --field-separator=$'\t' \
-  --command="SELECT object_key, object_version_id, byte_size FROM private_assets WHERE state = 'ready' ORDER BY object_key")
+  --command="SELECT object_key, object_version_id, byte_size FROM private_assets WHERE state = 'ready' ORDER BY object_key")"
+object_records=()
+if [[ -n "$object_rows" ]]; then
+  mapfile -t object_records <<< "$object_rows"
+fi
 for object_record in "${object_records[@]}"; do
   IFS=$'\t' read -r object_key object_version_id expected_size <<< "$object_record"
   # These variables expand inside the storage container.
