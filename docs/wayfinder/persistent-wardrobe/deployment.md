@@ -23,8 +23,11 @@ The production stack runs API, worker, PostgreSQL, private MinIO storage, and th
 5. Verify the local boundaries:
 
    ```sh
+   set -a
+   source .env.production
+   set +a
    curl http://127.0.0.1:4143/health/ready
-   curl http://127.0.0.1:8081/
+   curl http://127.0.0.1:${FORM_WEB_PORT:-8081}/
    ```
 
 The API and worker apply pending migrations at startup. The worker waits for healthy dependencies and restarts after failures. The API readiness check remains unhealthy until PostgreSQL and object storage are available.
