@@ -91,7 +91,7 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8081:8080"
+      - "127.0.0.1:${FORM_WEB_PORT:-8081}:8080"
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:8080/"]
       interval: 10s

@@ -23,8 +23,11 @@ The production stack runs API, worker, PostgreSQL, private MinIO storage, and th
 5. Verify the local boundaries:
 
    ```sh
+   set -a
+   source .env.production
+   set +a
    curl http://127.0.0.1:4143/health/ready
-   curl http://127.0.0.1:8081/
+   curl http://127.0.0.1:${FORM_WEB_PORT:-8081}/
    ```
 
 The API and worker apply pending migrations at startup. The worker waits for healthy dependencies and restarts after failures. The API readiness check remains unhealthy until PostgreSQL and object storage are available.
@@ -34,10 +37,13 @@ The API and worker apply pending migrations at startup. The worker waits for hea
 Use the NAS host's Tailscale identity and publish only the loopback web port:
 
 ```sh
-sudo tailscale serve --https=443 http://127.0.0.1:8081
+set -a
+source .env.production
+set +a
+sudo tailscale serve --https=443 http://127.0.0.1:${FORM_WEB_PORT:-8081}
 ```
 
-Set `PUBLIC_WEB_ORIGIN`, `WEB_ORIGIN`, and `S3_PUBLIC_ENDPOINT` to the resulting HTTPS URL, rebuild the `web`, `api`, and `worker` services, and use that same URL for browser and mobile-web access. The web container proxies `/v1/` to the API and the bucket path to private MinIO so signed URLs remain usable without exposing Docker-internal hostnames. Do not expose ports 4143, 5432, or 9000 through the router or Tailscale Funnel.
+Set `PUBLIC_WEB_ORIGIN`, `WEB_ORIGIN`, and `S3_PUBLIC_ENDPOINT` to the resulting HTTPS URL, rebuild the `web`, `api`, and `worker` services, and use that same URL for browser and mobile-web access. `FORM_WEB_PORT` may select another loopback port when `8081` is occupied. The web container proxies `/v1/` to the API and the bucket path to private MinIO so signed URLs remain usable without exposing Docker-internal hostnames. Do not expose ports 4143, 5432, or 9000 through the router or Tailscale Funnel.
 
 ## Backup and restore drill
 
@@ -47,6 +53,17 @@ Run the backup script while the stack is healthy and copy its output to separate
 ./deploy/backup.sh /volume1/backups/form
 ```
 
-For a restore drill, use a disposable stack or a maintenance window. Restore `postgres.dump` with `pg_restore` into the PostgreSQL volume, extract `object-storage.tar.gz` into the configured `FORM_DATA_DIR`, start the stack, and run the integration/release checks from the release ticket. Record the timestamp, backup location, restored account, source-photo count, wardrobe-item count, and whether private media downloads successfully.
+For a restore drill, use a maintenance window. The restore command stops the stack, moves the current PostgreSQL and object-storage directories to a timestamped recovery directory, restores both backup artifacts, and waits for every service to become healthy:
+
+```sh
+FORM_RESTORE_CONFIRMED=true ./deploy/restore.sh /volume1/backups/form/<timestamp>
+FORM_VERIFY_EMAIL=<account-email> FORM_VERIFY_PASSWORD=<account-password> ./deploy/verify.sh
+```
+
+Before Tailscale Serve is configured, source `.env.production` as shown above and target the loopback boundary with `FORM_VERIFY_ORIGIN=http://127.0.0.1:${FORM_WEB_PORT:-8081} FORM_VERIFY_EMAIL=<account-email> FORM_VERIFY_PASSWORD=<account-password> ./deploy/verify.sh`.
+
+If the NAS itself does not use MagicDNS, pass its current Tailscale address without changing the public origin: `FORM_VERIFY_RESOLVE=<hostname>:<https-port>:<tailscale-ip> FORM_VERIFY_EMAIL=<account-email> FORM_VERIFY_PASSWORD=<account-password> ./deploy/verify.sh`. The resolve port must match the port in `FORM_VERIFY_ORIGIN` or `PUBLIC_WEB_ORIGIN`, such as `8443` for the example above.
+
+The confirmation variable prevents accidental restores. The previous data remains recoverable next to `FORM_DATA_DIR`; remove it only after verification succeeds. Pass verification credentials at runtime rather than storing them in a tracked file. Verification performs a credentialed browser sign-in and session restore, checks account, Source Photo, and Wardrobe Item counts, and reads every exact private-object version referenced by PostgreSQL. Record the drill timestamp, backup location, recovery location, counts, and verification result.
 
 Backups contain private wardrobe media and customer data. Encrypt them at rest, restrict access, and never commit them to Git.
