@@ -31,9 +31,30 @@ curl "${curl_args[@]}" "$verify_origin/health/ready" \
   | grep --quiet '"status":"ready"'
 curl "${curl_args[@]}" --head "$verify_origin" >/dev/null
 
+if [[ "${WEB_ORIGIN:?WEB_ORIGIN must be set}" != "${PUBLIC_WEB_ORIGIN:?PUBLIC_WEB_ORIGIN must be set}" ]]; then
+  printf 'WEB_ORIGIN and PUBLIC_WEB_ORIGIN must match for browser CORS.\n' >&2
+  exit 1
+fi
+cors_headers="$(mktemp)"
+trap 'rm -f "$cors_headers"' EXIT
+curl "${curl_args[@]}" --request OPTIONS --dump-header "$cors_headers" --output /dev/null \
+  --header "Origin: $PUBLIC_WEB_ORIGIN" \
+  --header 'Access-Control-Request-Method: POST' \
+  --header 'Access-Control-Request-Headers: content-type' \
+  "$verify_origin/v1/auth/sign-in"
+if ! grep --fixed-strings --ignore-case --quiet "access-control-allow-origin: $PUBLIC_WEB_ORIGIN" "$cors_headers" \
+  || ! grep --fixed-strings --ignore-case --quiet 'access-control-allow-credentials: true' "$cors_headers"; then
+  printf 'Browser credential CORS is not configured for %s.\n' "$PUBLIC_WEB_ORIGIN" >&2
+  exit 1
+fi
+
 account_count="$("${compose[@]}" exec -T postgres psql \
   --dbname="${POSTGRES_DB:-form}" --username="${POSTGRES_USER:-form}" \
   --tuples-only --no-align --command='SELECT count(*) FROM accounts')"
+if (( account_count < 1 )); then
+  printf 'Production verification requires at least one administrator account.\n' >&2
+  exit 1
+fi
 source_photo_count="$("${compose[@]}" exec -T postgres psql \
   --dbname="${POSTGRES_DB:-form}" --username="${POSTGRES_USER:-form}" \
   --tuples-only --no-align --command='SELECT count(*) FROM source_photos')"
