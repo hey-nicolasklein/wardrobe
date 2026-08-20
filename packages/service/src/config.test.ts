@@ -27,3 +27,16 @@ test('explicit false path-style configuration is parsed as a boolean', () => {
 
   assert.equal(config.S3_FORCE_PATH_STYLE, false);
 });
+
+test('production configuration can sign browser URLs through a public endpoint', () => {
+  const config = objectStorageConfigSchema.parse({
+    S3_ENDPOINT: 'http://object-storage:9000',
+    S3_PUBLIC_ENDPOINT: 'https://wardrobe.example.ts.net',
+    S3_REGION: 'us-east-1',
+    S3_BUCKET: 'form-private-media',
+    S3_ACCESS_KEY_ID: 'form',
+    S3_SECRET_ACCESS_KEY: 'secret',
+  });
+
+  assert.equal(config.S3_PUBLIC_ENDPOINT, 'https://wardrobe.example.ts.net');
+});

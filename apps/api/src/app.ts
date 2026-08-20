@@ -61,6 +61,7 @@ export type AppDependencies = {
   sessionLifetimeSeconds?: number;
   secureCookies?: boolean;
   webOrigin?: string;
+  publicOrigin?: string;
   detectionModel?: string;
 };
 
@@ -172,7 +173,12 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
   const secret = resolved.sessionSecret;
   const lifetimeSeconds = resolved.sessionLifetimeSeconds ?? 60 * 60 * 24 * 30;
   const secureCookies = resolved.secureCookies ?? true;
+  const publicOrigin = resolved.publicOrigin;
   const detectionModel = resolved.detectionModel ?? 'gpt-5.4-mini';
+
+  function publicUrl(path: string, requestUrl: string): URL {
+    return new URL(path, publicOrigin ?? requestUrl);
+  }
 
   async function currentSession(context: Parameters<typeof getCookie>[0]): Promise<{
     session: SessionRecord;
@@ -268,7 +274,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       });
       const expiresAt = Math.floor(intent.expiresAt.getTime() / 1_000);
       const token = mediaToken(secret, authenticated.session.id, intent.assetId, expiresAt);
-      const uploadUrl = new URL(`/v1/assets/${intent.assetId}/content`, context.req.url);
+      const uploadUrl = publicUrl(`/v1/assets/${intent.assetId}/content`, context.req.url);
       uploadUrl.searchParams.set('token', token);
       return context.json({
         ...intent,
@@ -353,7 +359,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     }
     const expiresAt = Math.floor(Date.now() / 1000) + mediaTokenLifetimeSeconds;
     const token = mediaToken(secret, authenticated.session.id, asset.id, expiresAt);
-    const downloadUrl = new URL(`/v1/assets/${asset.id}/content`, context.req.url);
+    const downloadUrl = publicUrl(`/v1/assets/${asset.id}/content`, context.req.url);
     downloadUrl.searchParams.set('token', token);
     return context.json({
       assetId: asset.id,
