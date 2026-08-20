@@ -62,7 +62,7 @@ FORM_VERIFY_EMAIL=<account-email> FORM_VERIFY_PASSWORD=<account-password> ./depl
 
 Before Tailscale Serve is configured, source `.env.production` as shown above and target the loopback boundary with `FORM_VERIFY_ORIGIN=http://127.0.0.1:${FORM_WEB_PORT:-8081} FORM_VERIFY_EMAIL=<account-email> FORM_VERIFY_PASSWORD=<account-password> ./deploy/verify.sh`.
 
-If the NAS itself does not use MagicDNS, pass its current Tailscale address without changing the public origin: `FORM_VERIFY_RESOLVE=<hostname>:443:<tailscale-ip> FORM_VERIFY_EMAIL=<account-email> FORM_VERIFY_PASSWORD=<account-password> ./deploy/verify.sh`.
+If the NAS itself does not use MagicDNS, pass its current Tailscale address without changing the public origin: `FORM_VERIFY_RESOLVE=<hostname>:<https-port>:<tailscale-ip> FORM_VERIFY_EMAIL=<account-email> FORM_VERIFY_PASSWORD=<account-password> ./deploy/verify.sh`. The resolve port must match the port in `FORM_VERIFY_ORIGIN` or `PUBLIC_WEB_ORIGIN`, such as `8443` for the example above.
 
 The confirmation variable prevents accidental restores. The previous data remains recoverable next to `FORM_DATA_DIR`; remove it only after verification succeeds. Pass verification credentials at runtime rather than storing them in a tracked file. Verification performs a credentialed browser sign-in and session restore, checks account, Source Photo, and Wardrobe Item counts, and reads every exact private-object version referenced by PostgreSQL. Record the drill timestamp, backup location, recovery location, counts, and verification result.
 

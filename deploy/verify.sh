@@ -54,9 +54,13 @@ fi
 
 verify_email="${FORM_VERIFY_EMAIL:?Set FORM_VERIFY_EMAIL for the administrator login check}"
 verify_password="${FORM_VERIFY_PASSWORD:?Set FORM_VERIFY_PASSWORD for the administrator login check}"
+verify_email_normalized="$(
+  "${compose[@]}" exec -T api node -e \
+    'process.stdout.write(process.argv[1].trim().toLowerCase())' "$verify_email"
+)"
 sign_in_request="$("${compose[@]}" exec -T api node -e '
   process.stdout.write(JSON.stringify({ email: process.argv[1], password: process.argv[2], transport: "cookie" }))
-' "$verify_email" "$verify_password")"
+' "$verify_email_normalized" "$verify_password")"
 curl "${curl_args[@]}" --dump-header "$sign_in_headers" --output "$sign_in_body" \
   --cookie-jar "$cookie_jar" \
   --header "Origin: $PUBLIC_WEB_ORIGIN" \
@@ -71,7 +75,7 @@ curl "${curl_args[@]}" --output "$session_body" \
   --cookie "$cookie_jar" \
   --header "Origin: $PUBLIC_WEB_ORIGIN" \
   "$verify_origin/v1/auth/session"
-if ! grep --fixed-strings --quiet "\"email\":\"$verify_email\"" "$session_body"; then
+if ! grep --fixed-strings --quiet "\"email\":\"$verify_email_normalized\"" "$session_body"; then
   printf 'The restored browser session does not match %s.\n' "$verify_email" >&2
   exit 1
 fi
