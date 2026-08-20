@@ -48,11 +48,11 @@ if ! grep --fixed-strings --ignore-case --quiet "access-control-allow-origin: $P
   exit 1
 fi
 
-account_count="$("${compose[@]}" exec -T postgres psql \
+active_account_count="$("${compose[@]}" exec -T postgres psql \
   --dbname="${POSTGRES_DB:-form}" --username="${POSTGRES_USER:-form}" \
-  --tuples-only --no-align --command='SELECT count(*) FROM accounts')"
-if (( account_count < 1 )); then
-  printf 'Production verification requires at least one administrator account.\n' >&2
+  --tuples-only --no-align --command='SELECT count(*) FROM accounts WHERE disabled_at IS NULL')"
+if (( active_account_count < 1 )); then
+  printf 'Production verification requires at least one active administrator account.\n' >&2
   exit 1
 fi
 source_photo_count="$("${compose[@]}" exec -T postgres psql \
@@ -86,4 +86,4 @@ for object_record in "${object_records[@]}"; do
 done
 
 printf 'Production deployment is ready at %s with %s account(s), %s source photo(s), %s wardrobe item(s), and %s verified private object(s).\n' \
-  "$verify_origin" "$account_count" "$source_photo_count" "$wardrobe_item_count" "${#object_records[@]}"
+  "$verify_origin" "$active_account_count" "$source_photo_count" "$wardrobe_item_count" "${#object_records[@]}"

@@ -22,7 +22,7 @@ fi
 
 tar -tzf "$object_archive" >/dev/null
 docker run --rm -v "$backup_dir:/backup:ro" postgres:17-alpine \
-  pg_restore --list /backup/postgres.dump >/dev/null
+  pg_restore --file=/dev/null /backup/postgres.dump
 
 set -a
 # shellcheck disable=SC1091
