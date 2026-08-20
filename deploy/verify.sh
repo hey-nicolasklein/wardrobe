@@ -65,15 +65,15 @@ wardrobe_item_count="$("${compose[@]}" exec -T postgres psql \
 mapfile -t object_records < <("${compose[@]}" exec -T postgres psql \
   --dbname="${POSTGRES_DB:-form}" --username="${POSTGRES_USER:-form}" \
   --tuples-only --no-align --field-separator=$'\t' \
-  --command="SELECT object_key, byte_size FROM private_assets WHERE state = 'ready' ORDER BY object_key")
+  --command="SELECT object_key, object_version_id, byte_size FROM private_assets WHERE state = 'ready' ORDER BY object_key")
 for object_record in "${object_records[@]}"; do
-  IFS=$'\t' read -r object_key expected_size <<< "$object_record"
+  IFS=$'\t' read -r object_key object_version_id expected_size <<< "$object_record"
   # These variables expand inside the storage container.
   # shellcheck disable=SC2016
   actual_size="$("${compose[@]}" exec -T object-storage sh -euc '
     mc alias set verify http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
-    mc cat "verify/$1/$2"
-  ' _ "${S3_BUCKET:?S3_BUCKET must be set}" "$object_key" | wc -c | tr -d ' ')"
+    mc cat --version-id "$3" "verify/$1/$2"
+  ' _ "${S3_BUCKET:?S3_BUCKET must be set}" "$object_key" "$object_version_id" | wc -c | tr -d ' ')"
   if [[ "$actual_size" != "$expected_size" ]]; then
     printf 'Private object size mismatch for %s: expected %s, received %s.\n' \
       "$object_key" "$expected_size" "$actual_size" >&2

@@ -20,6 +20,10 @@ if [[ ! -f "$postgres_dump" || ! -f "$object_archive" ]]; then
   exit 1
 fi
 
+tar -tzf "$object_archive" >/dev/null
+docker run --rm -v "$backup_dir:/backup:ro" postgres:17-alpine \
+  pg_restore --list /backup/postgres.dump >/dev/null
+
 set -a
 # shellcheck disable=SC1091
 source .env.production
