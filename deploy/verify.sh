@@ -47,7 +47,8 @@ mapfile -t object_records < <("${compose[@]}" exec -T postgres psql \
   --command="SELECT object_key, byte_size FROM private_assets WHERE state = 'ready' ORDER BY object_key")
 for object_record in "${object_records[@]}"; do
   IFS=$'\t' read -r object_key expected_size <<< "$object_record"
-  # shellcheck disable=SC2016 -- these variables expand inside the storage container.
+  # These variables expand inside the storage container.
+  # shellcheck disable=SC2016
   actual_size="$("${compose[@]}" exec -T object-storage sh -euc '
     mc alias set verify http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
     mc cat "verify/$1/$2"
