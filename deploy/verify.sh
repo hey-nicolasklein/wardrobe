@@ -13,6 +13,10 @@ set +a
 
 compose=(docker compose --env-file .env.production -f compose.production.yaml)
 verify_origin="${FORM_VERIFY_ORIGIN:-${PUBLIC_WEB_ORIGIN:?PUBLIC_WEB_ORIGIN must be set}}"
+curl_args=(--fail --silent --show-error)
+if [[ -n "${FORM_VERIFY_RESOLVE:-}" ]]; then
+  curl_args+=(--resolve "$FORM_VERIFY_RESOLVE")
+fi
 "${compose[@]}" up -d --wait
 "${compose[@]}" ps --status running --services | sort > "${TMPDIR:-/tmp}/form-running-services"
 
@@ -23,12 +27,37 @@ if [[ "$(<"${TMPDIR:-/tmp}/form-running-services")" != "$expected_services" ]]; 
   exit 1
 fi
 
-curl --fail --silent --show-error "$verify_origin/health/ready" \
+curl "${curl_args[@]}" "$verify_origin/health/ready" \
   | grep --quiet '"status":"ready"'
-curl --fail --silent --show-error --head "$verify_origin" >/dev/null
+curl "${curl_args[@]}" --head "$verify_origin" >/dev/null
 
 account_count="$("${compose[@]}" exec -T postgres psql \
   --dbname="${POSTGRES_DB:-form}" --username="${POSTGRES_USER:-form}" \
   --tuples-only --no-align --command='SELECT count(*) FROM accounts')"
+source_photo_count="$("${compose[@]}" exec -T postgres psql \
+  --dbname="${POSTGRES_DB:-form}" --username="${POSTGRES_USER:-form}" \
+  --tuples-only --no-align --command='SELECT count(*) FROM source_photos')"
+wardrobe_item_count="$("${compose[@]}" exec -T postgres psql \
+  --dbname="${POSTGRES_DB:-form}" --username="${POSTGRES_USER:-form}" \
+  --tuples-only --no-align --command='SELECT count(*) FROM wardrobe_items')"
 
-printf 'Production deployment is ready at %s with %s account(s).\n' "$verify_origin" "$account_count"
+mapfile -t object_records < <("${compose[@]}" exec -T postgres psql \
+  --dbname="${POSTGRES_DB:-form}" --username="${POSTGRES_USER:-form}" \
+  --tuples-only --no-align --field-separator=$'\t' \
+  --command="SELECT object_key, byte_size FROM private_assets WHERE state = 'ready' ORDER BY object_key")
+for object_record in "${object_records[@]}"; do
+  IFS=$'\t' read -r object_key expected_size <<< "$object_record"
+  # shellcheck disable=SC2016 -- these variables expand inside the storage container.
+  actual_size="$("${compose[@]}" exec -T object-storage sh -euc '
+    mc alias set verify http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
+    mc cat "verify/$1/$2"
+  ' _ "${S3_BUCKET:?S3_BUCKET must be set}" "$object_key" | wc -c | tr -d ' ')"
+  if [[ "$actual_size" != "$expected_size" ]]; then
+    printf 'Private object size mismatch for %s: expected %s, received %s.\n' \
+      "$object_key" "$expected_size" "$actual_size" >&2
+    exit 1
+  fi
+done
+
+printf 'Production deployment is ready at %s with %s account(s), %s source photo(s), %s wardrobe item(s), and %s verified private object(s).\n' \
+  "$verify_origin" "$account_count" "$source_photo_count" "$wardrobe_item_count" "${#object_records[@]}"

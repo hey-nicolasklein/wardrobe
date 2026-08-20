@@ -34,6 +34,9 @@ The API and worker apply pending migrations at startup. The worker waits for hea
 Use the NAS host's Tailscale identity and publish only the loopback web port:
 
 ```sh
+set -a
+source .env.production
+set +a
 sudo tailscale serve --https=443 http://127.0.0.1:${FORM_WEB_PORT:-8081}
 ```
 
@@ -54,8 +57,10 @@ FORM_RESTORE_CONFIRMED=true ./deploy/restore.sh /volume1/backups/form/<timestamp
 ./deploy/verify.sh
 ```
 
-Before Tailscale Serve is configured, the same check can target the loopback boundary with `FORM_VERIFY_ORIGIN=http://127.0.0.1:${FORM_WEB_PORT:-8081} ./deploy/verify.sh`.
+Before Tailscale Serve is configured, source `.env.production` as shown above and target the loopback boundary with `FORM_VERIFY_ORIGIN=http://127.0.0.1:${FORM_WEB_PORT:-8081} ./deploy/verify.sh`.
 
-The confirmation variable prevents accidental restores. The previous data remains recoverable next to `FORM_DATA_DIR`; remove it only after checking the restored account, source-photo count, wardrobe-item count, and private media downloads. Record the drill timestamp, backup location, recovery location, counts, and verification result.
+If the NAS itself does not use MagicDNS, pass its current Tailscale address without changing the public origin: `FORM_VERIFY_RESOLVE=<hostname>:443:<tailscale-ip> ./deploy/verify.sh`.
+
+The confirmation variable prevents accidental restores. The previous data remains recoverable next to `FORM_DATA_DIR`; remove it only after verification succeeds. The verification checks account, Source Photo, and Wardrobe Item counts and asks MinIO to read metadata for every ready private object referenced by PostgreSQL. Record the drill timestamp, backup location, recovery location, counts, and verification result.
 
 Backups contain private wardrobe media and customer data. Encrypt them at rest, restrict access, and never commit them to Git.

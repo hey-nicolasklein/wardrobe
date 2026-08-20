@@ -25,13 +25,17 @@ set -a
 source .env.production
 set +a
 
-data_dir="${FORM_DATA_DIR:?FORM_DATA_DIR must be set in .env.production}"
+data_dir="$(realpath -m "${FORM_DATA_DIR:?FORM_DATA_DIR must be set in .env.production}")"
 case "$data_dir" in
   /|/home|/volume1|/volume1/docker)
     printf 'Refusing unsafe FORM_DATA_DIR: %s\n' "$data_dir" >&2
     exit 1
     ;;
 esac
+if [[ "$data_dir" != /* || "$(basename "$data_dir")" == "." ]]; then
+  printf 'FORM_DATA_DIR must resolve to a dedicated absolute directory: %s\n' "$data_dir" >&2
+  exit 1
+fi
 
 compose=(docker compose --env-file .env.production -f compose.production.yaml)
 recovery_dir="${data_dir}.before-restore.$(date -u +%Y%m%dT%H%M%SZ)"
