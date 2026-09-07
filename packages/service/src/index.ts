@@ -11,3 +11,5 @@ export * from './media.js';
 export * from './ownership.js';
 export * from './storage.js';
 export * from './wardrobe.js';
+
+export * from './personal.js';

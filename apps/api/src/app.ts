@@ -1,3 +1,6 @@
+import { z } from 'zod';
+import { itemMetadataSchema } from '@form/contracts';
+import { createPhotoItem, itemPreview, resetPersonalWardrobe } from '@form/service';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -63,6 +66,7 @@ export type AppDependencies = {
   webOrigin?: string;
   publicOrigin?: string;
   detectionModel?: string;
+  personalAccountId?: string;
 };
 
 const sessionCookie = 'form_session';
@@ -180,16 +184,84 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     return new URL(path, publicOrigin ?? requestUrl);
   }
 
+  let resetting = false;
+  let activeWrites = 0;
+  app.use('/v1/*', async (context, next) => {
+    context.header('Cache-Control', 'no-store');
+    if (resetting) return context.json(errorPayload('conflict', 'reset-in-progress', 'Der Kleiderschrank wird gerade geleert.'), 409);
+    const origin = context.req.header('Origin');
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(context.req.method) && ((origin && resolved.webOrigin && origin !== resolved.webOrigin) || context.req.header('Sec-Fetch-Site') === 'cross-site')) {
+      return context.json(errorPayload('authorization', 'origin-not-allowed', 'Request origin not allowed.'), 403);
+    }
+    const isWrite = !["GET", "HEAD", "OPTIONS"].includes(context.req.method);
+    const isReset = context.req.path === "/v1/personal/reset";
+    if (isReset && activeWrites > 0) return context.json(errorPayload("conflict", "write-in-progress", "Bitte warte, bis Speichern und Hochladen abgeschlossen sind."), 409);
+    if (isReset) resetting = true;
+    if (isWrite) activeWrites++;
+    try { await next(); } finally {
+      if (isWrite) activeWrites--;
+      if (isReset) resetting = false;
+    }
+  });
+
   async function currentSession(context: Parameters<typeof getCookie>[0]): Promise<{
     session: SessionRecord;
     token: string;
   } | null> {
+    if (resolved.personalAccountId) {
+      const account = await database.query<{ id: string; email: string }>('SELECT id, email FROM accounts WHERE id = $1 AND disabled_at IS NULL', [resolved.personalAccountId]);
+      if (!account.rows[0]) return null;
+      return { session: { ...account.rows[0], expiresAt: new Date(Date.now() + lifetimeSeconds * 1000) }, token: '' };
+    }
     const token =
       bearerToken(context.req.header('Authorization')) ?? getCookie(context, sessionCookie) ?? null;
     if (!token) return null;
     const session = await authenticateSession(database, token, secret);
     return session ? { session, token } : null;
   }
+
+  app.post('/v1/personal/reset', async context => {
+    const authenticated = await currentSession(context);
+    if (!resolved.personalAccountId || !authenticated) return context.json(errorPayload('authentication', 'authentication-required', 'Private wardrobe required.'), 401);
+    const body = await context.req.json().catch(() => null);
+    if (body?.confirmation !== 'ALLES LÖSCHEN') return context.json(errorPayload('validation', 'confirmation-required', 'Bestätige das Leeren des Kleiderschranks.'), 400);
+    resetting = true;
+    try {
+      await resetPersonalWardrobe(database, storage, authenticated.session.id);
+      return context.body(null, 204);
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    } finally { resetting = false; }
+  });
+
+  app.post('/v1/wardrobe-items/from-photo', async context => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) return context.json(errorPayload('authentication', 'authentication-required', 'Session required.'), 401);
+    const parsed = z.object({ sourcePhotoId: z.uuid(), metadata: itemMetadataSchema, state: z.enum(['owning', 'wanting']), idempotencyKey: z.uuid() }).strict().safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success) return context.json(errorPayload('validation', 'invalid-photo-item', 'Bitte prüfe Name, Kategorie und Farben.'), 400);
+    try {
+      return context.json({ wardrobeItem: await createPhotoItem(database, { accountId: authenticated.session.id, ...parsed.data }) }, 201);
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.get('/v1/wardrobe-items/:wardrobeItemId/preview', async context => {
+    const authenticated = await currentSession(context);
+    if (!authenticated) return context.json(errorPayload('authentication', 'authentication-required', 'Session required.'), 401);
+    try {
+      const bytes = await itemPreview(database, storage, authenticated.session.id, context.req.param('wardrobeItemId'));
+      return new Response(new Uint8Array(bytes), { headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=60' } });
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
 
   app.post('/v1/auth/sign-in', async (context) => {
     const parsed = signInRequestSchema.safeParse(await context.req.json().catch(() => null));
@@ -593,6 +665,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
         400,
       );
     }
+    if (resolved.personalAccountId && parsed.data.quality !== 'low') return context.json(errorPayload('validation', 'quality-limited', 'Im privaten Modus ist nur die sparsame Bildqualität verfügbar.'), 400);
     try {
       return context.json(
         await enqueueShelfImageGeneration(database, {

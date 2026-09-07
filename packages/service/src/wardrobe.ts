@@ -991,7 +991,7 @@ type DeletionResponse = {
   deletedAssetIds: string[];
 };
 
-async function deleteStoredAssets(
+export async function deleteStoredAssets(
   database: Database,
   storage: PrivateObjectStorage,
   accountId: string,

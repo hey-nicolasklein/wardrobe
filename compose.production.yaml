@@ -84,8 +84,6 @@ services:
     build:
       context: .
       target: web
-      args:
-        EXPO_PUBLIC_API_URL: ${PUBLIC_WEB_ORIGIN:?Set PUBLIC_WEB_ORIGIN in .env.production}
     restart: unless-stopped
     depends_on:
       api:
