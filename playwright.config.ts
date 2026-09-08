@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  testDir: './apps/mobile/e2e',
+  testDir: './apps/web/e2e',
   fullyParallel: false,
   reporter: 'line',
   timeout: 60_000,

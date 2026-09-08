@@ -2,7 +2,7 @@
 
 ## Scope
 
-Use the existing wardrobe service through a mobile-first website. Pause Expo and app-store work. Keep the existing account and all wardrobe records. `PERSONAL_ACCOUNT_ID` chooses that account on the server, and Tailscale provides the private access boundary. No login or password screen appears in the web client. The old authenticated API mode remains available when that setting is absent.
+Use the existing wardrobe service through the mobile-first PWA. The legacy Expo and app-store client has been removed. Keep the existing account and all wardrobe records. `PERSONAL_ACCOUNT_ID` chooses that account on the server, and Tailscale provides the private access boundary. No login or password screen appears in the web client. The old authenticated API mode remains available when that setting is absent.
 
 The website provides batch photo intake, editable saved drafts, optional multi-item detection, a searchable category-filtered wardrobe, wishlist and archive, item editing, original photos, optional catalog images, review and version restoration, permanent item deletion and a confirmed wardrobe reset. It uses native document scrolling, safe-area padding, 16px form inputs, accessible dialogs and reduced-motion support. Offline mode can open the shell and explains that the server connection is required. Saved outfit generation is outside this pivot because it was not implemented in the existing service.
 

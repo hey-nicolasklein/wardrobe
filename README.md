@@ -1,6 +1,6 @@
 # FORM wardrobe studio
 
-FORM is a private mobile website for using your own wardrobe. Open it in Safari and add it to the iPhone Home Screen. The deployed web client is `apps/web`; the Expo client in `apps/mobile` is paused and retained for reference.
+FORM is a private mobile website for using your own wardrobe. Open it in Safari or Chrome and add it to the iPhone Home Screen. The PWA client lives in `apps/web`.
 
 The private deployment opens a configured existing account automatically. It must stay behind Tailscale Serve or an equivalent private network boundary. `PERSONAL_ACCOUNT_ID` is a server-only setting in the ignored `.env.production`. Do not expose this mode to the public internet.
 
@@ -30,4 +30,4 @@ npm run verify --workspace=@form/contracts
 npm run verify --workspace=@form/web
 ```
 
-Database integration and browser tests require disposable services. Never run fixture reset against the personal deployment. The original service setup and Expo development instructions are retained in `docs/legacy-expo-setup.md`.
+Database integration and browser tests require disposable services. Never run fixture reset against the personal deployment.

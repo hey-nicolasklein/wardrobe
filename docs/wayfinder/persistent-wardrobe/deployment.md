@@ -1,6 +1,6 @@
 # NAS deployment
 
-The production stack runs API, worker, PostgreSQL, private MinIO storage, and the Expo Web export in Docker Compose. Only the web and API ports bind to loopback. Tailscale is the only intended network entry point.
+The production stack runs the PWA, API, worker, PostgreSQL, and private MinIO storage in Docker Compose. Only the web and API ports bind to loopback. Tailscale is the only intended network entry point.
 
 ## First deployment
 
