@@ -52,7 +52,14 @@ const persistDrafts = () =>
   localStorage.setItem('form-photo-drafts', JSON.stringify(drafts));
 const preview = (item) =>
   `/v1/wardrobe-items/${encodeURIComponent(item.id)}/preview?v=${item.recordVersion}`;
-const key = () => crypto.randomUUID();
+const key = () => {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
 const money = (micros) =>
   new Intl.NumberFormat('de-DE', {
     style: 'currency',
@@ -459,6 +466,30 @@ async function preparePhoto(file) {
     URL.revokeObjectURL(url);
   }
 }
+async function uploadPhoto(uploadUrl, headers, blob) {
+  let failure;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers,
+        body: blob,
+      });
+      if (response.ok) return;
+      const detail = await response
+        .json()
+        .then((body) => body?.error?.message)
+        .catch(() => null);
+      failure = new Error(
+        detail || `Upload fehlgeschlagen (${response.status}).`,
+      );
+    } catch {
+      failure = new Error('Upload-Verbindung unterbrochen.');
+    }
+    if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  throw failure;
+}
 function renderAdd() {
   shell(
     `<p class="eyebrow">Stück für Stück</p><h1>${drafts.length ? 'Deine neuen Stücke.' : 'Mach Platz für<br>deine Lieblinge.'}</h1><p class="muted">Fotografieren. Kurz benennen. Im Schrank haben.</p><div class="upload-area ${drafts.length ? 'compact-upload' : ''}">${drafts.length ? '' : `${icon('camera')}<h2>Ein Foto reicht.</h2><p>Am besten ein Kleidungsstück pro Foto, auf einem ruhigen Hintergrund.</p>`}<div class="stack"><button class="primary" id="camera" ${importBusy ? 'disabled' : ''}>${icon('camera')} Foto aufnehmen</button><button class="secondary" id="library" ${importBusy ? 'disabled' : ''}>${icon('photo')} Fotos auswählen</button></div><input hidden type="file" id="camera-input" accept="image/*" capture="environment"><input hidden type="file" id="library-input" accept="image/*" multiple></div><p class="note">Foto-Import ohne KI-Kosten. Du kannst mehrere Fotos auf einmal auswählen. Katalogbilder erstellst du später nur für die Stücke, bei denen du sie möchtest.</p><div id="import-progress" role="status" aria-live="polite">${importBusy ? '<div class="loading"><span class="spinner"></span> Fotos werden hochgeladen …</div>' : ''}</div><div id="drafts"></div>`,
@@ -474,6 +505,7 @@ async function importPhotos(files) {
   importBusy = true;
   renderAdd();
   let failed = 0;
+  const failures = [];
   for (let n = 0; n < files.length; n++) {
     if ($('#import-progress'))
       $('#import-progress').innerHTML =
@@ -485,15 +517,7 @@ async function importPhotos(files) {
         contentType: 'image/jpeg',
         byteSize: blob.size,
       });
-      const response = await fetch(intent.uploadUrl, {
-        method: 'PUT',
-        headers: intent.headers,
-        body: blob,
-      });
-      if (!response.ok)
-        throw new Error(
-          'Upload fehlgeschlagen. Bitte wähle das Foto noch einmal aus.',
-        );
+      await uploadPhoto(intent.uploadUrl, intent.headers, blob);
       const completed = await api('/source-photos/complete', {
         assetId: intent.assetId,
         idempotencyKey: key(),
@@ -509,14 +533,14 @@ async function importPhotos(files) {
       if ($('#drafts')) renderDrafts();
     } catch (error) {
       failed++;
-      toast(`${files[n].name}: ${error.message}`);
+      failures.push(`${files[n].name}: ${error.message}`);
     }
   }
   importBusy = false;
   if (page === 'add') renderAdd();
   toast(
     failed
-      ? `${files.length - failed} hochgeladen, ${failed} fehlgeschlagen. Fehlende Fotos bitte erneut auswählen.`
+      ? `${files.length - failed} hochgeladen, ${failed} fehlgeschlagen. ${failures.join(' ')}`
       : `${files.length} ${files.length === 1 ? 'Foto bereit' : 'Fotos bereit'}. Ergänze die Namen.`,
   );
 }
