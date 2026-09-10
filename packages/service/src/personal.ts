@@ -41,11 +41,16 @@ export async function createPhotoItem(
   });
 }
 
+// `display` returns the wardrobe tile image: the kept or pending catalog cutout
+// when one exists, otherwise the source photo cropped to the detected garment.
+// `source` always returns the full, uncropped source photo, the image the item
+// was created from (typically the person wearing the piece).
 export async function itemPreview(
   database: Database,
   storage: PrivateObjectStorage,
   accountId: string,
   itemId: string,
+  variant: 'display' | 'source' = 'display',
 ): Promise<Buffer> {
   const result = await database.query<{
     object_key: string;
@@ -58,7 +63,12 @@ export async function itemPreview(
     } | null;
     generated: boolean;
   }>(
-    `SELECT a.object_key, a.object_version_id, d.bounding_box, (v.id IS NOT NULL OR pending.transparent_asset_id IS NOT NULL) AS generated
+    variant === 'source'
+      ? `SELECT a.object_key, a.object_version_id, NULL::jsonb AS bounding_box, true AS generated
+         FROM wardrobe_items i JOIN source_photos s ON s.id = i.source_photo_id
+         JOIN private_assets a ON a.id = s.asset_id
+         WHERE i.id = $1 AND i.account_id = $2 AND i.deleted_at IS NULL AND a.state = 'ready'`
+      : `SELECT a.object_key, a.object_version_id, d.bounding_box, (v.id IS NOT NULL OR pending.transparent_asset_id IS NOT NULL) AS generated
      FROM wardrobe_items i JOIN source_photos s ON s.id = i.source_photo_id
      LEFT JOIN shelf_image_versions v ON v.id = i.current_shelf_image_version_id
      LEFT JOIN LATERAL (

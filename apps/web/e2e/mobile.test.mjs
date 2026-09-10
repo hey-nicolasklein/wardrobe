@@ -73,7 +73,10 @@ try {
   await page.getByRole('button', { name: 'Schrank', exact: true }).click();
   await page.getByRole('button', { name: /Grünes Testhemd/ }).click();
   await page.getByRole('button', { name: 'Änderungen speichern' }).waitFor();
-  await page.locator('.detail-photo img').evaluate((img) => img.decode());
+  await page
+    .locator('.gallery .slide img')
+    .first()
+    .evaluate((img) => img.decode());
   await page.screenshot({
     path: '/tmp/form-pwa-qa/detail.png',
     fullPage: true,

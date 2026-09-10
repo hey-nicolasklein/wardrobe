@@ -254,7 +254,8 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     const authenticated = await currentSession(context);
     if (!authenticated) return context.json(errorPayload('authentication', 'authentication-required', 'Session required.'), 401);
     try {
-      const bytes = await itemPreview(database, storage, authenticated.session.id, context.req.param('wardrobeItemId'));
+      const variant = context.req.query('variant') === 'source' ? 'source' : 'display';
+      const bytes = await itemPreview(database, storage, authenticated.session.id, context.req.param('wardrobeItemId'), variant);
       return new Response(new Uint8Array(bytes), { headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=60' } });
     } catch (error) {
       const mapped = wardrobeError(error);

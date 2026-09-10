@@ -52,6 +52,10 @@ test(
     assert.equal(pendingPreview.status, 200);
     const pendingDimensions = await sharp(Buffer.from(await pendingPreview.arrayBuffer())).metadata();
     assert.equal(pendingDimensions.width, pendingDimensions.height, 'pending catalog image is used instead of the rectangular source photo');
+    const sourceVariant = await app.request(`/v1/wardrobe-items/${fixtureIds.readyItem}/preview?variant=source`);
+    assert.equal(sourceVariant.status, 200);
+    const sourceDimensions = await sharp(Buffer.from(await sourceVariant.arrayBuffer())).metadata();
+    assert.notEqual(sourceDimensions.width, sourceDimensions.height, 'source variant returns the full uncropped upload, not the square catalog image');
     const body = {
         sourcePhotoId: fixtureIds.sourcePhoto,
         metadata: {

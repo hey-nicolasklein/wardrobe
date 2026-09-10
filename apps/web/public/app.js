@@ -24,7 +24,7 @@ const icons = {
   heart:
     '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/>',
   settings:
-    '<circle cx="12" cy="12" r="3"/><path d="m9 3-1 3-3 1-2 3 2 3v4l3 2 3-1 3 1 3-2v-4l2-3-2-3-3-1-1-3Z"/>',
+    '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
   camera: '<path d="M3 7h4l2-3h6l2 3h4v14H3z"/><circle cx="12" cy="13" r="4"/>',
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
@@ -52,6 +52,9 @@ const persistDrafts = () =>
   localStorage.setItem('form-photo-drafts', JSON.stringify(drafts));
 const preview = (item) =>
   `/v1/wardrobe-items/${encodeURIComponent(item.id)}/preview?v=${item.recordVersion}`;
+// The full, uncropped source photo the piece was created from. Returns 404 once
+// the original upload has been cleared, so consumers hide the image on error.
+const sourcePreview = (item) => `${preview(item)}&variant=source`;
 const key = () => {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -187,11 +190,22 @@ function renderResults() {
         .includes(query.toLocaleLowerCase()),
   );
   $('#results').innerHTML = list.length
-    ? `<div class="section-row"><span>${list.length} ${list.length === 1 ? 'Stück' : 'Stücke'}</span><span>Zuletzt hinzugefügt</span></div><div class="grid">${list.map((i) => `<button class="item" data-item="${i.id}"><div class="photo"><img src="${preview(i)}" alt="${esc(i.metadata.name)}" loading="lazy" decoding="async">${['needs-review', 'queued', 'generating', 'failed'].includes(i.status) ? `<span class="badge">${{ 'needs-review': 'Bildentwurf ansehen', queued: 'Bild in Arbeit', generating: 'Bild in Arbeit', failed: 'Bild fehlgeschlagen' }[i.status]}</span>` : ''}</div><span class="item-name">${esc(i.metadata.name)}</span><span class="item-category">${categories[i.metadata.category]} · ${esc(i.metadata.colors.join(', '))}</span></button>`).join('')}</div>`
+    ? `<div class="section-row"><span>${list.length} ${list.length === 1 ? 'Stück' : 'Stücke'}</span><span>Zuletzt hinzugefügt</span></div><div class="grid">${list.map((i) => `<button class="item" data-item="${i.id}"><div class="photo"><img src="${preview(i)}" alt="${esc(i.metadata.name)}" loading="lazy" decoding="async"><img class="photo-source" data-source="${sourcePreview(i)}" alt="" aria-hidden="true" loading="lazy" decoding="async">${['needs-review', 'queued', 'generating', 'failed'].includes(i.status) ? `<span class="badge">${{ 'needs-review': 'Bildentwurf ansehen', queued: 'Bild in Arbeit', generating: 'Bild in Arbeit', failed: 'Bild fehlgeschlagen' }[i.status]}</span>` : ''}</div><span class="item-name">${esc(i.metadata.name)}</span><span class="item-category">${categories[i.metadata.category]} · ${esc(i.metadata.colors.join(', '))}</span></button>`).join('')}</div>`
     : `<div class="empty">${icon('closet')}<h2>${query || category !== 'all' ? 'Noch nicht gefunden.' : 'Platz für deine Stücke.'}</h2><p>${query || category !== 'all' ? 'Versuche einen anderen Suchbegriff oder eine andere Kategorie.' : 'Fang mit ein paar Lieblingsstücken an. Ein Foto reicht, den Rest kannst du später ergänzen.'}</p>${!query && category === 'all' ? '<button class="primary" id="empty-add">Erstes Stück hinzufügen</button>' : ''}</div>`;
-  document
-    .querySelectorAll('[data-item]')
-    .forEach((b) => (b.onclick = () => openDetail(b.dataset.item)));
+  document.querySelectorAll('[data-item]').forEach((b) => {
+    b.onclick = () => openDetail(b.dataset.item);
+    // Fade to the original upload on hover. Load it only on first hover to keep
+    // the grid light, and drop the layer if the source photo is gone.
+    const source = $('.photo-source', b);
+    source.onerror = () => source.remove();
+    b.addEventListener(
+      'mouseenter',
+      () => {
+        if (!source.src) source.src = source.dataset.source;
+      },
+      { once: true },
+    );
+  });
   if ($('#empty-add')) $('#empty-add').onclick = () => navigate('add');
 }
 async function refreshItems() {
@@ -281,11 +295,14 @@ async function openDetail(id) {
     const failed = detail.generationAttempts[0]?.state === 'failed';
     showSheet(
       'Dein Stück',
-      `<div class="detail-photo"><img src="${preview(i)}" alt="${esc(i.metadata.name)}"></div><p class="eyebrow">${categories[i.metadata.category]}</p><h2>${esc(i.metadata.name)}</h2><form id="edit-item">${fields(i.metadata, i.state)}<button class="primary" style="margin-top:20px" type="submit">Änderungen speichern</button></form>
+      `<div class="gallery"><figure class="slide"><img src="${preview(i)}" alt="${esc(i.metadata.name)}"></figure><figure class="slide worn"><img id="worn" src="${sourcePreview(i)}" alt="${esc(i.metadata.name)}, getragen"><figcaption>So getragen</figcaption></figure></div><p class="eyebrow">${categories[i.metadata.category]}</p><h2>${esc(i.metadata.name)}</h2><p class="muted item-colors">${esc(i.metadata.colors.join(' · '))}</p><form id="edit-item">${fields(i.metadata, i.state)}<button class="primary" style="margin-top:20px" type="submit">Änderungen speichern</button></form>
     <div class="rule"></div>${pending ? `<h3>Dein Bildentwurf</h3><p class="muted">Vergleiche den Entwurf mit deinem Foto. Du entscheidest, welches Bild im Schrank erscheint.</p><div class="detail-photo" style="margin-top:15px"><img id="candidate" alt="Neuer Bildentwurf"></div><p class="cost">${pending.costBreakdown && pending.costBreakdown.totalMicrounits > 10 ? `Erfasste Bildkosten: ${money(pending.costMicrounits)}` : 'Alter Kosteneintrag mit ungültigen Tarifen. Kein verlässlicher Preis.'}</p><div class="inline"><button class="secondary" id="reject">Verwerfen</button><button class="primary" id="keep">Bild verwenden</button></div>` : running ? '<div class="note"><span class="spinner"></span> Dein Bild wird erstellt. Du kannst weiter durch deinen Schrank stöbern.<button class="text-button" id="check-generation">Status aktualisieren</button></div>' : `<h3>Ein ruhigeres Katalogbild</h3><p class="muted">${failed ? 'Der letzte Versuch ist fehlgeschlagen. Dein Foto bleibt erhalten. ' : ''}Optional lässt du dein Stück einzeln aufbereiten. Der genaue Preis hängt von den verarbeiteten Bild- und Texttokens ab.</p><button class="secondary" id="generate" style="margin-top:15px">Katalogbild erstellen …</button>`}
     <button class="text-button" id="source">Originalfoto ansehen</button>${detail.shelfImageVersions.length ? `<div class="rule"></div><h3>Gespeicherte Bilder</h3><div class="versions">${detail.shelfImageVersions.map((v) => `<button class="version" data-version="${v.id}" ${v.id === i.currentShelfImageVersionId ? 'disabled' : ''}><img data-asset="${v.transparentAssetId}" alt="Gespeichertes Katalogbild"><span>${v.id === i.currentShelfImageVersionId ? 'Aktuelles Bild' : 'Dieses Bild verwenden'}</span></button>`).join('')}</div><button class="text-button" id="use-original">Originalfoto im Schrank verwenden</button>` : ''}<div class="rule"></div><div class="stack"><button class="secondary" id="archive">${i.state === 'archived' ? 'Zurück in den Schrank' : 'Ins Archiv legen'}</button><button class="text-button" id="delete">Stück endgültig löschen …</button></div>`,
     );
     detailId = id;
+    // Drop the worn photo when the original upload is no longer stored.
+    if ($('#worn'))
+      $('#worn').onerror = () => $('#worn').closest('.slide').remove();
     const command = () => ({
       expectedRecordVersion: i.recordVersion,
       idempotencyKey: key(),
