@@ -91,6 +91,8 @@ test(
         ).status,
         403,
       );
+      // Personal mode no longer caps generation quality; detail fidelity is
+      // worth the higher per-image cost.
       assert.equal(
         (
           await post('/v1/generations', {
@@ -99,7 +101,7 @@ test(
             idempotencyKey: randomUUID(),
           })
         ).status,
-        400,
+        202,
       );
       assert.equal(
         (await post('/v1/personal/reset', { confirmation: 'wrong' })).status,

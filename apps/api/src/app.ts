@@ -666,7 +666,6 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
         400,
       );
     }
-    if (resolved.personalAccountId && parsed.data.quality !== 'low') return context.json(errorPayload('validation', 'quality-limited', 'Im privaten Modus ist nur die sparsame Bildqualität verfügbar.'), 400);
     try {
       return context.json(
         await enqueueShelfImageGeneration(database, {

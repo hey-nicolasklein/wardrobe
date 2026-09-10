@@ -43,12 +43,35 @@ let items = [],
   importBusy = false,
   version = '',
   toastTimer;
+const detectionPolls = new Set();
 let drafts;
 try {
   drafts = JSON.parse(localStorage.getItem('form-photo-drafts') || '[]');
 } catch {
   drafts = [];
 }
+drafts = drafts.map((draft) => {
+  if (draft.phase === 'importing')
+    return { ...draft, phase: draft.detections ? 'ready' : 'manual' };
+  if (draft.phase) return draft;
+  if (draft.detectionProposalId) {
+    return {
+      ...draft,
+      phase: 'ready',
+      detections: [
+        {
+          id: draft.detectionProposalId,
+          ...draft.metadata,
+          boundingBox: { x: 0, y: 0, width: 1000, height: 1000 },
+          selected: true,
+          itemKey: draft.id,
+          generationKey: null,
+        },
+      ],
+    };
+  }
+  return { ...draft, phase: draft.detecting ? 'detecting' : 'uploaded' };
+});
 const persistDrafts = () =>
   localStorage.setItem('form-photo-drafts', JSON.stringify(drafts));
 const preview = (item) =>
@@ -181,6 +204,11 @@ function renderWardrobe() {
   );
   renderResults();
 }
+function renderItemPhoto(item) {
+  if (['queued', 'generating'].includes(item.status))
+    return `<div class="photo"><div class="wardrobe-image-progress" role="status" aria-label="Katalogbild für ${esc(item.metadata.name)} wird erstellt"><span class="spinner"></span><span>Bild wird erstellt</span></div></div>`;
+  return `<div class="photo"><img src="${preview(item)}" alt="${esc(item.metadata.name)}" loading="lazy" decoding="async"><img class="photo-source" data-source="${sourcePreview(item)}" alt="" aria-hidden="true" loading="lazy" decoding="async">${item.status === 'failed' ? '<span class="badge">Bild fehlgeschlagen</span>' : ''}</div>`;
+}
 function renderResults() {
   const list = items.filter(
     (i) =>
@@ -191,13 +219,14 @@ function renderResults() {
         .includes(query.toLocaleLowerCase()),
   );
   $('#results').innerHTML = list.length
-    ? `<div class="section-row"><span>${list.length} ${list.length === 1 ? 'Stück' : 'Stücke'}</span><span>Zuletzt hinzugefügt</span></div><div class="grid">${list.map((i) => `<button class="item" data-item="${i.id}"><div class="photo"><img src="${preview(i)}" alt="${esc(i.metadata.name)}" loading="lazy" decoding="async"><img class="photo-source" data-source="${sourcePreview(i)}" alt="" aria-hidden="true" loading="lazy" decoding="async">${['needs-review', 'queued', 'generating', 'failed'].includes(i.status) ? `<span class="badge">${{ 'needs-review': 'Bildentwurf ansehen', queued: 'Bild in Arbeit', generating: 'Bild in Arbeit', failed: 'Bild fehlgeschlagen' }[i.status]}</span>` : ''}</div><span class="item-name">${esc(i.metadata.name)}</span><span class="item-category">${categories[i.metadata.category]} · ${esc(i.metadata.colors.join(', '))}</span></button>`).join('')}</div>`
+    ? `<div class="section-row"><span>${list.length} ${list.length === 1 ? 'Stück' : 'Stücke'}</span><span>Zuletzt hinzugefügt</span></div><div class="grid">${list.map((i) => `<button class="item" data-item="${i.id}">${renderItemPhoto(i)}<span class="item-name">${esc(i.metadata.name)}</span><span class="item-category">${categories[i.metadata.category]} · ${esc(i.metadata.colors.join(', '))}</span></button>`).join('')}</div>`
     : `<div class="empty">${icon('closet')}<h2>${query || category !== 'all' ? 'Noch nicht gefunden.' : 'Platz für deine Stücke.'}</h2><p>${query || category !== 'all' ? 'Versuche einen anderen Suchbegriff oder eine andere Kategorie.' : 'Fang mit ein paar Lieblingsstücken an. Ein Foto reicht, den Rest kannst du später ergänzen.'}</p>${!query && category === 'all' ? '<button class="primary" id="empty-add">Erstes Stück hinzufügen</button>' : ''}</div>`;
   document.querySelectorAll('[data-item]').forEach((b) => {
     b.onclick = () => openDetail(b.dataset.item);
     // Fade to the original upload on hover. Load it only on first hover to keep
     // the grid light, and drop the layer if the source photo is gone.
     const source = $('.photo-source', b);
+    if (!source) return;
     source.onerror = () => source.remove();
     b.addEventListener(
       'mouseenter',
@@ -254,8 +283,12 @@ function readFields(form) {
     state: String(f.get('state')),
   };
 }
-function showSheet(title, content) {
+// `keepScroll` is for redrawing the sheet that is already on screen, e.g. while
+// polling a running generation. Without it the reader gets thrown back to the
+// top of the sheet on every tick.
+function showSheet(title, content, keepScroll = false) {
   detailId = null;
+  const offset = $('#sheet').scrollTop;
   $('#sheet').innerHTML =
     `<div class="sheet-head"><h2 id="sheet-title">${esc(title)}</h2><button class="close" id="close-sheet" aria-label="Schließen">${icon('close')}</button></div><div class="sheet-body">${content}</div>`;
   $('#close-sheet').onclick = closeSheet;
@@ -263,7 +296,7 @@ function showSheet(title, content) {
     $('#sheet').showModal();
     document.body.style.overflow = 'hidden';
   }
-  $('#sheet').scrollTop = 0;
+  $('#sheet').scrollTop = keepScroll ? offset : 0;
 }
 function closeSheet() {
   $('#sheet').close();
@@ -277,84 +310,95 @@ $('#sheet').addEventListener('close', () => {
 async function assetUrl(id) {
   return (await api(`/assets/${id}/download`)).downloadUrl;
 }
-async function openDetail(id) {
-  showSheet(
-    'Dein Stück',
-    '<div class="loading"><span class="spinner"></span> Wird geladen …</div>',
-  );
+// The sheet has two states: 'view' shows the piece read-only, 'edit' shows only
+// the metadata form. Both need the same detail payload and command handlers.
+async function openDetail(id, mode = 'view', refresh = false) {
+  if (!refresh)
+    showSheet(
+      mode === 'edit' ? 'Stück bearbeiten' : 'Dein Stück',
+      '<div class="loading"><span class="spinner"></span> Wird geladen …</div>',
+    );
   detailId = id;
   try {
     const detail = await api(`/wardrobe-items/${id}`);
     if (detailId !== id || !$('#sheet').open) return;
     const i = detail.wardrobeItem;
-    const pending = detail.generationAttempts.find(
-      (a) => a.state === 'needs-review',
-    );
     const running = detail.generationAttempts.some((a) =>
       ['queued', 'processing'].includes(a.state),
     );
     const failed = detail.generationAttempts[0]?.state === 'failed';
+    const primarySlide = running
+      ? `<figure class="slide"><div class="wardrobe-image-progress" role="status" aria-label="Katalogbild für ${esc(i.metadata.name)} wird erstellt"><span class="spinner"></span><span>Bild wird erstellt</span></div></figure>`
+      : `<figure class="slide"><img src="${preview(i)}" alt="${esc(i.metadata.name)}"></figure>`;
+    const collections = {
+      owning: 'Mein Schrank',
+      wanting: 'Wunschliste',
+      archived: 'Archiv',
+    };
+    // Leftmost is the plus tile, then the image in use, then the older ones
+    // newest first, and the original photo closes the row on the right.
+    const ordered = [...detail.shelfImageVersions].sort(
+      (left, right) =>
+        (right.id === i.currentShelfImageVersionId) -
+        (left.id === i.currentShelfImageVersionId),
+    );
+    const versionTiles = ordered
+      .map((v) => {
+        const current = v.id === i.currentShelfImageVersionId;
+        return `<button class="version${current ? ' current' : ''}" data-version="${v.id}" ${current ? 'disabled' : ''}><span class="version-frame"><img data-asset="${v.transparentAssetId}" alt="Gespeichertes Katalogbild">${v.quality === 'high' ? '<span class="version-tag">HQ</span>' : ''}</span><span>${current ? 'Aktuelles Bild' : 'Dieses Bild verwenden'}</span></button>`;
+      })
+      .join('');
+    const body =
+      mode === 'edit'
+        ? `<form id="edit-item">${fields(i.metadata, i.state)}<button class="primary" style="margin-top:20px" type="submit">Änderungen speichern</button></form><button class="text-button" id="cancel-edit">Abbrechen</button>`
+        : `<dl class="facts"><div><dt>Gehört in</dt><dd>${collections[i.state]}</dd></div>${i.metadata.notes ? `<div><dt>Notizen</dt><dd>${esc(i.metadata.notes)}</dd></div>` : ''}</dl><button class="secondary" id="edit-details">Details bearbeiten</button>
+    <div class="rule"></div>${running ? '<div class="note generating"><p><span class="spinner"></span>Dein Bild wird erstellt. Du kannst weiter durch deinen Schrank stöbern.</p><button class="text-button" id="check-generation">Status aktualisieren</button></div>' : `<h3>Katalogbilder</h3><p class="muted">${failed ? 'Der letzte Versuch ist fehlgeschlagen. ' : ''}Ein neues Bild wird automatisch verwendet, ein älteres kannst du jederzeit wieder auswählen.</p><div class="versions"><button class="version add-version" id="generate" aria-label="Katalogbild erstellen …"><span class="version-frame">${icon('plus')}</span><span>Neues Bild …</span></button>${versionTiles}<button class="version source-version" id="source"><span class="version-frame"><img id="source-tile" src="${sourcePreview(i)}" alt="" aria-hidden="true"></span><span>Originalfoto ansehen</span></button></div>`}
+    <div class="rule"></div><div class="stack"><button class="secondary" id="archive">${i.state === 'archived' ? 'Zurück in den Schrank' : 'Ins Archiv legen'}</button><button class="text-button" id="delete">Stück endgültig löschen …</button></div>`;
     showSheet(
-      'Dein Stück',
-      `<div class="gallery"><figure class="slide"><img src="${preview(i)}" alt="${esc(i.metadata.name)}"></figure><figure class="slide worn"><img id="worn" src="${sourcePreview(i)}" alt="${esc(i.metadata.name)}, getragen"><figcaption>So getragen</figcaption></figure></div><p class="eyebrow">${categories[i.metadata.category]}</p><h2>${esc(i.metadata.name)}</h2><p class="muted item-colors">${esc(i.metadata.colors.join(' · '))}</p><form id="edit-item">${fields(i.metadata, i.state)}<button class="primary" style="margin-top:20px" type="submit">Änderungen speichern</button></form>
-    <div class="rule"></div>${pending ? `<h3>Dein Bildentwurf</h3><p class="muted">Vergleiche den Entwurf mit deinem Foto. Du entscheidest, welches Bild im Schrank erscheint.</p><div class="detail-photo" style="margin-top:15px"><img id="candidate" alt="Neuer Bildentwurf"></div><p class="cost">${pending.costBreakdown && pending.costBreakdown.totalMicrounits > 10 ? `Erfasste Bildkosten: ${money(pending.costMicrounits)}` : 'Alter Kosteneintrag mit ungültigen Tarifen. Kein verlässlicher Preis.'}</p><div class="inline"><button class="secondary" id="reject">Verwerfen</button><button class="primary" id="keep">Bild verwenden</button></div>` : running ? '<div class="note"><span class="spinner"></span> Dein Bild wird erstellt. Du kannst weiter durch deinen Schrank stöbern.<button class="text-button" id="check-generation">Status aktualisieren</button></div>' : `<h3>Ein ruhigeres Katalogbild</h3><p class="muted">${failed ? 'Der letzte Versuch ist fehlgeschlagen. Dein Foto bleibt erhalten. ' : ''}Optional lässt du dein Stück einzeln aufbereiten. Der genaue Preis hängt von den verarbeiteten Bild- und Texttokens ab.</p><button class="secondary" id="generate" style="margin-top:15px">Katalogbild erstellen …</button>`}
-    <button class="text-button" id="source">Originalfoto ansehen</button>${detail.shelfImageVersions.length ? `<div class="rule"></div><h3>Gespeicherte Bilder</h3><div class="versions">${detail.shelfImageVersions.map((v) => `<button class="version" data-version="${v.id}" ${v.id === i.currentShelfImageVersionId ? 'disabled' : ''}><img data-asset="${v.transparentAssetId}" alt="Gespeichertes Katalogbild"><span>${v.id === i.currentShelfImageVersionId ? 'Aktuelles Bild' : 'Dieses Bild verwenden'}</span></button>`).join('')}</div><button class="text-button" id="use-original">Originalfoto im Schrank verwenden</button>` : ''}<div class="rule"></div><div class="stack"><button class="secondary" id="archive">${i.state === 'archived' ? 'Zurück in den Schrank' : 'Ins Archiv legen'}</button><button class="text-button" id="delete">Stück endgültig löschen …</button></div>`,
+      mode === 'edit' ? 'Stück bearbeiten' : 'Dein Stück',
+      `<div class="gallery">${primarySlide}<figure class="slide worn"><img id="worn" src="${sourcePreview(i)}" alt="${esc(i.metadata.name)}, getragen"><figcaption>Originalfoto</figcaption></figure></div><p class="eyebrow">${categories[i.metadata.category]}</p><h2>${esc(i.metadata.name)}</h2><p class="muted item-colors">${esc(i.metadata.colors.join(' · '))}</p>${body}`,
+      refresh,
     );
     detailId = id;
-    // Drop the worn photo when the original upload is no longer stored.
+    // Drop the worn photo and the source tile when the original upload is gone.
     if ($('#worn'))
       $('#worn').onerror = () => $('#worn').closest('.slide').remove();
+    if ($('#source-tile'))
+      $('#source-tile').onerror = () => $('#source').remove();
     const command = () => ({
       expectedRecordVersion: i.recordVersion,
       idempotencyKey: key(),
     });
-    $('#edit-item').onsubmit = async (e) => {
-      e.preventDefault();
-      const form = e.currentTarget;
-      await action($('button[type=submit]', form), async () => {
-        try {
-          await api(
-            `/wardrobe-items/${id}`,
-            { ...readFields(form), ...command() },
-            'PATCH',
-          );
-          await refreshItems();
-          render();
-          closeSheet();
-          toast('Änderungen gespeichert');
-        } catch (error) {
-          formError(form, error);
-        }
-      });
-    };
-    if (pending) {
-      assetUrl(pending.transparentAssetId || pending.keyedAssetId)
-        .then((url) => {
-          if (detailId === id && $('#candidate')) $('#candidate').src = url;
-        })
-        .catch((e) => toast(e.message));
-      for (const [button, endpoint] of [
-        ['keep', 'shelf-image-versions/keep'],
-        ['reject', 'generations/reject'],
-      ])
-        $(`#${button}`).onclick = (e) =>
-          action(e.currentTarget, async () => {
-            await api(`/wardrobe-items/${id}/${endpoint}`, {
-              generationAttemptId: pending.id,
-              ...command(),
-            });
+    if ($('#edit-details'))
+      $('#edit-details').onclick = () => openDetail(id, 'edit');
+    if ($('#cancel-edit')) $('#cancel-edit').onclick = () => openDetail(id);
+    if ($('#edit-item'))
+      $('#edit-item').onsubmit = async (e) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        await action($('button[type=submit]', form), async () => {
+          try {
+            await api(
+              `/wardrobe-items/${id}`,
+              { ...readFields(form), ...command() },
+              'PATCH',
+            );
             await refreshItems();
             render();
-            await openDetail(id);
-          });
-    }
+            closeSheet();
+            toast('Änderungen gespeichert');
+          } catch (error) {
+            formError(form, error);
+          }
+        });
+      };
     if ($('#check-generation'))
       $('#check-generation').onclick = () => openDetail(id);
     if ($('#generate'))
       $('#generate').onclick = () => {
         showSheet(
           'Katalogbild erstellen',
-          `<h2>Nur für dieses Stück.</h2><p>Ein Bild in sparsamer Qualität mit 816 × 816 Pixeln. Es wird erst nach deiner Prüfung verwendet.</p><div class="note">Die Ausgabe kostet zusätzlich zum Eingabebild und Text. Abgerechnet wird nach tatsächlichem Verbrauch. Bisherige Bilder lagen nach aktueller Tarifrechnung bei etwa 1,1–1,9 US-Cent. Das ist eine Orientierung, kein garantierter Festpreis. Dein normales Foto kostet keine KI-Gebühr.</div><p class="muted" style="margin:16px 0">GPT Image 2 · Low · keine automatische Bildserie</p><button class="primary" id="confirm-generate">Ein kostenpflichtiges Bild anfordern</button><button class="text-button" id="cancel-generate">Bei meinem Foto bleiben</button>`,
+          `<h2>Nur für dieses Stück.</h2><p>Das neue Katalogbild wird automatisch verwendet. Ein älteres Bild kannst du jederzeit wieder auswählen.</p><div class="note">Die Ausgabe kostet zusätzlich zum Eingabebild und Text. Abgerechnet wird nach tatsächlichem Verbrauch. In hoher Qualität liegt ein Bild nach aktueller Tarifrechnung bei etwa 12 US-Cent. Das ist eine Orientierung, kein garantierter Festpreis.</div><p class="muted" style="margin:16px 0">GPT Image 2 · High · ein neues Bild</p><button class="primary" id="confirm-generate">Ein kostenpflichtiges Bild anfordern</button><button class="text-button" id="cancel-generate">Abbrechen</button>`,
         );
         $('#cancel-generate').onclick = () => openDetail(id);
         const generationKey = key();
@@ -362,8 +406,9 @@ async function openDetail(id) {
           action(e.currentTarget, async () => {
             await api('/generations', {
               wardrobeItemId: id,
-              quality: 'low',
+              quality: 'high',
               size: '816x816',
+              autoKeep: true,
               idempotencyKey: generationKey,
             });
             await refreshItems();
@@ -372,15 +417,16 @@ async function openDetail(id) {
             toast('Dein Bild wird erstellt');
           });
       };
-    $('#source').onclick = (e) =>
-      action(e.currentTarget, async () => {
-        const url = await assetUrl(detail.sourcePhoto.assetId);
-        showSheet(
-          'Originalfoto',
-          `<div class="detail-photo"><img src="${esc(url)}" alt="Originalfoto"></div><button class="secondary" id="back-detail">Zurück zum Stück</button>`,
-        );
-        $('#back-detail').onclick = () => openDetail(id);
-      });
+    if ($('#source'))
+      $('#source').onclick = (e) =>
+        action(e.currentTarget, async () => {
+          const url = await assetUrl(detail.sourcePhoto.assetId);
+          showSheet(
+            'Originalfoto',
+            `<div class="detail-photo"><img src="${esc(url)}" alt="Originalfoto"></div><button class="secondary" id="back-detail">Zurück zum Stück</button>`,
+          );
+          $('#back-detail').onclick = () => openDetail(id);
+        });
     document.querySelectorAll('[data-asset]').forEach((img) =>
       assetUrl(img.dataset.asset)
         .then((url) => {
@@ -401,50 +447,40 @@ async function openDetail(id) {
             await openDetail(id);
           })),
     );
-    if ($('#use-original'))
-      $('#use-original').onclick = (e) =>
+    if ($('#archive'))
+      $('#archive').onclick = (e) =>
         action(e.currentTarget, async () => {
           await api(
             `/wardrobe-items/${id}`,
-            { currentShelfImageVersionId: null, ...command() },
+            {
+              state: i.state === 'archived' ? 'owning' : 'archived',
+              ...command(),
+            },
             'PATCH',
           );
           await refreshItems();
           render();
-          await openDetail(id);
-        });
-    $('#archive').onclick = (e) =>
-      action(e.currentTarget, async () => {
-        await api(
-          `/wardrobe-items/${id}`,
-          {
-            state: i.state === 'archived' ? 'owning' : 'archived',
-            ...command(),
-          },
-          'PATCH',
-        );
-        await refreshItems();
-        render();
-        closeSheet();
-        toast(
-          i.state === 'archived' ? 'Zurück im Schrank' : 'Im Archiv abgelegt',
-        );
-      });
-    $('#delete').onclick = () => {
-      showSheet(
-        'Stück löschen',
-        `<h2>Endgültig löschen?</h2><p>„${esc(i.metadata.name)}“ und seine Katalogbilder werden gelöscht. Das lässt sich nicht rückgängig machen.</p><button class="danger" id="confirm-delete">Stück endgültig löschen</button><button class="text-button" id="cancel-delete">Behalten</button>`,
-      );
-      $('#cancel-delete').onclick = () => openDetail(id);
-      $('#confirm-delete').onclick = (e) =>
-        action(e.currentTarget, async () => {
-          await api(`/wardrobe-items/${id}`, command(), 'DELETE');
-          await refreshItems();
-          render();
           closeSheet();
-          toast('Stück gelöscht');
+          toast(
+            i.state === 'archived' ? 'Zurück im Schrank' : 'Im Archiv abgelegt',
+          );
         });
-    };
+    if ($('#delete'))
+      $('#delete').onclick = () => {
+        showSheet(
+          'Stück löschen',
+          `<h2>Endgültig löschen?</h2><p>„${esc(i.metadata.name)}“ und seine Katalogbilder werden gelöscht. Das lässt sich nicht rückgängig machen.</p><button class="danger" id="confirm-delete">Stück endgültig löschen</button><button class="text-button" id="cancel-delete">Behalten</button>`,
+        );
+        $('#cancel-delete').onclick = () => openDetail(id);
+        $('#confirm-delete').onclick = (e) =>
+          action(e.currentTarget, async () => {
+            await api(`/wardrobe-items/${id}`, command(), 'DELETE');
+            await refreshItems();
+            render();
+            closeSheet();
+            toast('Stück gelöscht');
+          });
+      };
   } catch (error) {
     if ($('#sheet').open) {
       showSheet(
@@ -463,16 +499,18 @@ async function preparePhoto(file) {
     const image = new Image();
     image.src = url;
     await image.decode();
+    // The generation reference is a crop of this photo, so the long edge has to
+    // carry enough pixels for fabric texture to survive into the model input.
     const scale = Math.min(
       1,
-      1800 / Math.max(image.naturalWidth, image.naturalHeight),
+      2400 / Math.max(image.naturalWidth, image.naturalHeight),
     );
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(image.naturalWidth * scale);
     canvas.height = Math.round(image.naturalHeight * scale);
     canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise((resolve) =>
-      canvas.toBlob(resolve, 'image/jpeg', 0.88),
+      canvas.toBlob(resolve, 'image/jpeg', 0.92),
     );
     if (!blob) throw new Error('Foto konnte nicht vorbereitet werden.');
     return blob;
@@ -510,13 +548,17 @@ async function uploadPhoto(uploadUrl, headers, blob) {
 }
 function renderAdd() {
   shell(
-    `<p class="eyebrow">Stück für Stück</p><h1>${drafts.length ? 'Deine neuen Stücke.' : 'Mach Platz für<br>deine Lieblinge.'}</h1><p class="muted">Fotografieren. Kurz benennen. Im Schrank haben.</p><div class="upload-area ${drafts.length ? 'compact-upload' : ''}">${drafts.length ? '' : `${icon('camera')}<h2>Ein Foto reicht.</h2><p>Am besten ein Kleidungsstück pro Foto, auf einem ruhigen Hintergrund.</p>`}<div class="stack"><button class="primary" id="camera" ${importBusy ? 'disabled' : ''}>${icon('camera')} Foto aufnehmen</button><button class="secondary" id="library" ${importBusy ? 'disabled' : ''}>${icon('photo')} Fotos auswählen</button></div><input hidden type="file" id="camera-input" accept="image/*" capture="environment"><input hidden type="file" id="library-input" accept="image/*" multiple></div><p class="note">Foto-Import ohne KI-Kosten. Du kannst mehrere Fotos auf einmal auswählen. Katalogbilder erstellst du später nur für die Stücke, bei denen du sie möchtest.</p><div id="import-progress" role="status" aria-live="polite">${importBusy ? '<div class="loading"><span class="spinner"></span> Fotos werden hochgeladen …</div>' : ''}</div><div id="drafts"></div>`,
+    `<p class="eyebrow">Stück für Stück</p><h1>${drafts.length ? 'Wähle deine Stücke.' : 'Foto rein.<br>Schrank fertig.'}</h1><p class="muted">Wir erkennen deine Kleidung, du wählst aus, was in den Schrank kommt.</p><div class="upload-area ${drafts.length ? 'compact-upload' : ''}">${drafts.length ? '' : `${icon('camera')}<h2>Alles auf ein Foto.</h2><p>Ein einzelnes Stück oder ein ganzes Outfit. Ein ruhiger Hintergrund hilft bei der Erkennung.</p>`}<div class="stack"><button class="primary" id="camera" ${importBusy ? 'disabled' : ''}>${icon('camera')} Foto aufnehmen</button><button class="secondary" id="library" ${importBusy ? 'disabled' : ''}>${icon('photo')} Fotos auswählen</button></div><input hidden type="file" id="camera-input" accept="image/*" capture="environment"><input hidden type="file" id="library-input" accept="image/*" multiple></div><p class="note">Analyse und Katalogbilder werden automatisch mit OpenAI erstellt und sind kostenpflichtig. Nach deiner Auswahl läuft alles im Hintergrund weiter.</p><div id="import-progress" role="status" aria-live="polite">${importBusy ? '<div class="loading"><span class="spinner"></span> Fotos werden hochgeladen …</div>' : ''}</div><div id="drafts"></div>`,
   );
   $('#camera').onclick = () => $('#camera-input').click();
   $('#library').onclick = () => $('#library-input').click();
   for (const id of ['camera-input', 'library-input'])
     $(`#${id}`).onchange = (e) => importPhotos([...e.target.files]);
   renderDrafts();
+  for (const draft of drafts.filter((item) => item.phase === 'uploaded'))
+    startDetection(draft);
+  for (const draft of drafts.filter((item) => item.phase === 'detecting'))
+    scheduleDetectionCheck(draft);
 }
 async function importPhotos(files) {
   if (importBusy || !files.length) return;
@@ -544,11 +586,11 @@ async function importPhotos(files) {
         id: key(),
         sourcePhotoId: completed.sourcePhoto.id,
         assetId: completed.asset.id,
-        metadata: { name: '', category: 'top', colors: [], notes: null },
-        state: 'owning',
+        phase: 'uploaded',
       });
       persistDrafts();
-      if ($('#drafts')) renderDrafts();
+      const draft = drafts.at(-1);
+      if (draft) await startDetection(draft);
     } catch (error) {
       failed++;
       failures.push(`${files[n].name}: ${error.message}`);
@@ -559,13 +601,13 @@ async function importPhotos(files) {
   toast(
     failed
       ? `${files.length - failed} hochgeladen, ${failed} fehlgeschlagen. ${failures.join(' ')}`
-      : `${files.length} ${files.length === 1 ? 'Foto bereit' : 'Fotos bereit'}. Ergänze die Namen.`,
+      : `${files.length} ${files.length === 1 ? 'Foto wird analysiert' : 'Fotos werden analysiert'}.`,
   );
 }
 function renderDrafts() {
   if (!$('#drafts')) return;
   $('#drafts').innerHTML = drafts.length
-    ? `<div class="section-row"><span>${drafts.length} ${drafts.length === 1 ? 'Foto bereit' : 'Fotos bereit'}</span><span>Entwürfe bleiben hier gespeichert</span></div>${drafts.map((d) => `<article class="draft" data-draft="${d.id}"><div class="draft-head"><h3>${d.detectionProposalId ? 'Erkanntes Stück' : 'Dein neues Stück'}</h3><button class="close" data-discard="${d.id}" aria-label="Entwurf verwerfen">${icon('close')}</button></div><img data-draft-asset="${d.assetId}" alt="Hochgeladenes Foto"><form data-save="${d.id}">${fields(d.metadata, d.state)}<button class="primary" style="margin-top:18px" type="submit">In den Schrank aufnehmen</button></form>${!d.detectionProposalId ? `<button class="text-button" data-detect="${d.id}">${d.detecting ? 'Erkennung prüfen' : 'Name und Farben automatisch erkennen …'}</button>` : ''}</article>`).join('')}`
+    ? `<div class="section-row"><span>${drafts.length} ${drafts.length === 1 ? 'Foto' : 'Fotos'}</span><span>Bleiben auf diesem Gerät gespeichert</span></div>${drafts.map(renderDetectionDraft).join('')}`
     : '';
   document.querySelectorAll('[data-draft-asset]').forEach((img) =>
     assetUrl(img.dataset.draftAsset)
@@ -574,47 +616,44 @@ function renderDrafts() {
       })
       .catch(() => {}),
   );
-  document.querySelectorAll('[data-save]').forEach((form) => {
-    form.oninput = () => {
-      const draft = drafts.find((d) => d.id === form.dataset.save);
-      if (!draft) return;
-      const f = new FormData(form);
-      draft.metadata = {
-        name: String(f.get('name')),
-        category: String(f.get('category')),
-        colors: String(f.get('colors')).split(', '),
-        notes: String(f.get('notes')) || null,
-      };
-      draft.state = String(f.get('state'));
+  document.querySelectorAll('[data-choice-preview]').forEach((canvas) => {
+    const draft = drafts.find((item) => item.id === canvas.dataset.draft);
+    const proposal = draft?.detections?.find(
+      (item) => item.id === canvas.dataset.choicePreview,
+    );
+    if (!draft || !proposal) return;
+    assetUrl(draft.assetId)
+      .then((url) => drawDetectionPreview(canvas, url, proposal.boundingBox))
+      .catch(() => {});
+  });
+  document.querySelectorAll('[data-toggle-piece]').forEach((button) => {
+    button.onclick = () => {
+      const draft = drafts.find((item) => item.id === button.dataset.draft);
+      const proposal = draft?.detections?.find(
+        (item) => item.id === button.dataset.togglePiece,
+      );
+      if (!proposal || draft.phase === 'importing') return;
+      proposal.selected = !proposal.selected;
       persistDrafts();
+      renderDrafts();
     };
-    form.onsubmit = (e) => {
-      e.preventDefault();
-      const d = drafts.find((d) => d.id === form.dataset.save);
-      action($('button[type=submit]', form), async () => {
-        try {
-          const values = readFields(form);
-          await api(
-            d.detectionProposalId
-              ? '/wardrobe-items'
-              : '/wardrobe-items/from-photo',
-            {
-              ...(d.detectionProposalId
-                ? { detectionProposalId: d.detectionProposalId }
-                : { sourcePhotoId: d.sourcePhotoId }),
-              ...values,
-              idempotencyKey: d.id,
-            },
-          );
-          drafts = drafts.filter((x) => x.id !== d.id);
-          persistDrafts();
-          await refreshItems();
-          renderDrafts();
-          toast('Im Schrank gespeichert');
-        } catch (error) {
-          formError(form, error);
-        }
-      });
+  });
+  document.querySelectorAll('[data-import-detected]').forEach((button) => {
+    button.onclick = () => {
+      const draft = drafts.find(
+        (item) => item.id === button.dataset.importDetected,
+      );
+      if (draft) action(button, () => importDetected(draft));
+    };
+  });
+  document.querySelectorAll('[data-manual-save]').forEach((form) => {
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      const draft = drafts.find((item) => item.id === form.dataset.manualSave);
+      if (draft)
+        action($('button[type=submit]', form), () =>
+          importManual(draft, form),
+        );
     };
   });
   document.querySelectorAll('[data-discard]').forEach(
@@ -625,78 +664,205 @@ function renderDrafts() {
         renderDrafts();
       }),
   );
-  document.querySelectorAll('[data-detect]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        const d = drafts.find((x) => x.id === b.dataset.detect);
-        if (d.detecting) return action(b, () => checkDetection(d));
-        showSheet(
-          'Kleidung erkennen',
-          '<h2>Lass dir die Angaben vorschlagen.</h2><p>Die KI schlägt Namen, Kategorien und Farben vor. Du prüfst jedes Stück vor dem Speichern.</p><div class="note">Das Foto wird zur Analyse an OpenAI gesendet. Diese Erkennung ist kostenpflichtig. Es werden keine Katalogbilder erzeugt.</div><button class="primary" id="confirm-detect" style="margin-top:20px">Foto einmal analysieren</button>',
-        );
-        $('#confirm-detect').onclick = (e) =>
-          action(e.currentTarget, async () => {
-            d.detectionKey ||= key();
-            persistDrafts();
-            await api(`/source-photos/${d.sourcePhotoId}/detections`, {
-              idempotencyKey: d.detectionKey,
-            });
-            d.detecting = true;
-            persistDrafts();
-            closeSheet();
-            renderDrafts();
-            toast('Die Erkennung läuft. Du kannst weitere Fotos erfassen.');
-          });
-      }),
+}
+function renderDetectionDraft(draft) {
+  const discard = `<button class="close" data-discard="${draft.id}" aria-label="Foto verwerfen">${icon('close')}</button>`;
+  if (draft.phase === 'manual') {
+    return `<article class="draft" data-draft="${draft.id}"><div class="draft-head"><div><h3>Selbst hinzufügen</h3><p class="draft-status">${esc(draft.failure || 'Auf diesem Foto wurde kein Stück erkannt.')}</p></div>${discard}</div><img data-draft-asset="${draft.assetId}" alt="Hochgeladenes Foto"><form data-manual-save="${draft.id}">${fields(draft.metadata, 'owning')}<button class="primary" style="margin-top:18px" type="submit">Stück hinzufügen</button></form></article>`;
+  }
+  const detections = (draft.detections || []).filter((item) => !item.imported);
+  const selected = detections.filter((item) => item.selected && !item.imported);
+  const overlays = detections
+    .map(
+      (item, index) =>
+        `<button class="detection-box ${item.selected ? 'selected' : ''}" data-draft="${draft.id}" data-toggle-piece="${item.id}" aria-label="${esc(item.name)} ${item.selected ? 'abwählen' : 'auswählen'}" aria-pressed="${item.selected}" style="left:${item.boundingBox.x / 10}%;top:${item.boundingBox.y / 10}%;width:${item.boundingBox.width / 10}%;height:${item.boundingBox.height / 10}%"><span>${index + 1}</span></button>`,
+    )
+    .join('');
+  const choices = detections
+    .map(
+      (item, index) =>
+        `<button class="detection-choice ${item.selected ? 'selected' : ''}" data-draft="${draft.id}" data-toggle-piece="${item.id}" aria-pressed="${item.selected}"><canvas class="choice-preview" data-draft="${draft.id}" data-choice-preview="${item.id}" width="112" height="112" aria-hidden="true"></canvas><span class="choice-copy"><strong>${esc(item.name)}</strong><small>${esc(categories[item.category])} · ${esc(item.colors.join(', '))}</small></span><span class="choice-number">${item.selected ? icon('check') : index + 1}</span></button>`,
+    )
+    .join('');
+  const busy = ['uploaded', 'detecting'].includes(draft.phase);
+  return `<article class="draft scan-card" data-draft="${draft.id}"><div class="draft-head"><div><h3>${busy ? 'Foto wird analysiert' : `${detections.length} ${detections.length === 1 ? 'Stück erkannt' : 'Stücke erkannt'}`}</h3><p class="draft-status">${busy ? 'Du kannst die App dabei geöffnet lassen oder später wiederkommen.' : 'Tippe auf die Rahmen, um deine Auswahl zu ändern.'}</p></div>${discard}</div><div class="detection-stage"><img data-draft-asset="${draft.assetId}" alt="Hochgeladenes Foto">${busy ? '<div class="scan-progress"><span class="spinner"></span><span>Kleidung wird erkannt …</span></div>' : overlays}</div>${busy ? '' : `<div class="detection-choices">${choices}</div><button class="primary" data-import-detected="${draft.id}" ${selected.length || draft.phase === 'importing' ? '' : 'disabled'}>${draft.phase === 'importing' ? '<span class="spinner"></span> Wird hinzugefügt …' : `${selected.length} ${selected.length === 1 ? 'Stück' : 'Stücke'} hinzufügen`}</button>`}</article>`;
+}
+async function drawDetectionPreview(canvas, url, box) {
+  const image = new Image();
+  image.src = url;
+  await image.decode();
+  if (!canvas.isConnected) return;
+  const sourceX = (box.x / 1000) * image.naturalWidth;
+  const sourceY = (box.y / 1000) * image.naturalHeight;
+  const sourceWidth = (box.width / 1000) * image.naturalWidth;
+  const sourceHeight = (box.height / 1000) * image.naturalHeight;
+  const scale = Math.min(
+    canvas.width / sourceWidth,
+    canvas.height / sourceHeight,
+  );
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#eaece5';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(
+    image,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    (canvas.width - width) / 2,
+    (canvas.height - height) / 2,
+    width,
+    height,
   );
 }
-async function checkDetection(d) {
-  const data = await api(`/source-photos/${d.sourcePhotoId}/detections`);
-  if (!drafts.some((x) => x.id === d.id)) return;
-  if (data.attempt?.state === 'failed') {
-    d.detecting = false;
-    delete d.detectionKey;
-    persistDrafts();
-    renderDrafts();
-    throw new Error(
-      'Die Erkennung ist fehlgeschlagen. Du kannst das Stück selbst benennen.',
-    );
-  }
-  if (data.attempt?.state !== 'succeeded') {
-    toast('Die Erkennung läuft noch.');
-    return;
-  }
-  if (!data.detections.length) {
-    d.detecting = false;
-    persistDrafts();
-    renderDrafts();
-    toast('Keine Kleidung erkannt. Du kannst das Foto selbst benennen.');
-    return;
-  }
-  drafts = drafts.filter((x) => x.id !== d.id);
-  drafts.push(
-    ...data.detections.map((proposal) => ({
-      id: key(),
-      sourcePhotoId: d.sourcePhotoId,
-      assetId: d.assetId,
-      detectionProposalId: proposal.id,
-      metadata: {
-        name: proposal.name,
-        category:
-          proposal.category === 'unsupported' ? 'top' : proposal.category,
-        colors: proposal.colors,
-        notes: null,
-      },
-      state: d.state,
-    })),
-  );
+async function startDetection(draft) {
+  if (!drafts.some((item) => item.id === draft.id)) return;
+  draft.phase = 'detecting';
+  draft.detectionKey ||= key();
   persistDrafts();
   renderDrafts();
-  toast(`${data.detections.length} Stücke erkannt. Bitte prüfe die Angaben.`);
+  try {
+    await api(`/source-photos/${draft.sourcePhotoId}/detections`, {
+      idempotencyKey: draft.detectionKey,
+    });
+    scheduleDetectionCheck(draft);
+  } catch (error) {
+    useManualFallback(draft, error.message);
+  }
+}
+function scheduleDetectionCheck(draft) {
+  if (detectionPolls.has(draft.id)) return;
+  detectionPolls.add(draft.id);
+  setTimeout(async () => {
+    detectionPolls.delete(draft.id);
+    if (!drafts.some((item) => item.id === draft.id) || draft.phase !== 'detecting')
+      return;
+    try {
+      await checkDetection(draft);
+      if (draft.phase === 'detecting') scheduleDetectionCheck(draft);
+    } catch (error) {
+      toast(error.message);
+      scheduleDetectionCheck(draft);
+    }
+  }, 2000);
+}
+function useManualFallback(draft, message) {
+  if (!drafts.some((item) => item.id === draft.id)) return;
+  draft.phase = 'manual';
+  draft.failure = message;
+  draft.metadata ||= { name: '', category: 'top', colors: [], notes: null };
+  persistDrafts();
+  renderDrafts();
+}
+async function checkDetection(draft) {
+  const data = await api(`/source-photos/${draft.sourcePhotoId}/detections`);
+  if (!drafts.some((item) => item.id === draft.id)) return;
+  if (data.attempt?.state === 'failed') {
+    return useManualFallback(
+      draft,
+      'Die automatische Erkennung ist fehlgeschlagen. Du kannst das Foto trotzdem verwenden.',
+    );
+  }
+  if (data.attempt?.state !== 'succeeded') return;
+  const supported = data.detections.filter(
+    (proposal) => proposal.category !== 'unsupported',
+  );
+  if (!supported.length)
+    return useManualFallback(
+      draft,
+      'Auf diesem Foto wurde kein unterstütztes Kleidungsstück erkannt.',
+    );
+  draft.phase = 'ready';
+  draft.detections = supported.map((proposal) => ({
+    ...proposal,
+    selected: true,
+    itemKey: key(),
+    generationKey: key(),
+  }));
+  persistDrafts();
+  renderDrafts();
+  toast(
+    `${supported.length} ${supported.length === 1 ? 'Stück erkannt' : 'Stücke erkannt'}.`,
+  );
+}
+async function enqueueAutomaticImage(wardrobeItemId, idempotencyKey) {
+  await api('/generations', {
+    wardrobeItemId,
+    quality: 'high',
+    size: '816x816',
+    autoKeep: true,
+    idempotencyKey,
+  });
+}
+async function importDetected(draft) {
+  const selected = draft.detections.filter(
+    (proposal) => proposal.selected && !proposal.imported,
+  );
+  if (!selected.length) return;
+  draft.phase = 'importing';
+  persistDrafts();
+  renderDrafts();
+  try {
+    for (const proposal of selected) {
+      proposal.itemKey ||= key();
+      proposal.generationKey ||= key();
+      const result = await api('/wardrobe-items', {
+        detectionProposalId: proposal.id,
+        state: 'owning',
+        idempotencyKey: proposal.itemKey,
+      });
+      await enqueueAutomaticImage(
+        result.wardrobeItem.id,
+        proposal.generationKey,
+      );
+      proposal.imported = true;
+      persistDrafts();
+    }
+    drafts = drafts.filter((item) => item.id !== draft.id);
+    persistDrafts();
+    await refreshItems();
+    if (drafts.length) renderAdd();
+    else navigate('owning');
+    toast(
+      `${selected.length} ${selected.length === 1 ? 'Stück wird' : 'Stücke werden'} für deinen Schrank vorbereitet.`,
+    );
+  } catch (error) {
+    draft.phase = 'ready';
+    persistDrafts();
+    renderDrafts();
+    throw error;
+  }
+}
+async function importManual(draft, form) {
+  const values = readFields(form);
+  draft.phase = 'importing';
+  draft.itemKey ||= key();
+  draft.generationKey ||= key();
+  persistDrafts();
+  try {
+    const result = await api('/wardrobe-items/from-photo', {
+      sourcePhotoId: draft.sourcePhotoId,
+      ...values,
+      idempotencyKey: draft.itemKey,
+    });
+    await enqueueAutomaticImage(result.wardrobeItem.id, draft.generationKey);
+    drafts = drafts.filter((item) => item.id !== draft.id);
+    persistDrafts();
+    await refreshItems();
+    if (drafts.length) renderAdd();
+    else navigate('owning');
+    toast('Dein Stück wird für den Schrank vorbereitet.');
+  } catch (error) {
+    draft.phase = 'manual';
+    persistDrafts();
+    formError(form, error);
+  }
 }
 function renderSettings() {
   shell(
-    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><section class="panel"><h3>Du bestimmst die Bildkosten.</h3><p>Fotos hochladen, ordnen und bearbeiten kostet keine KI-Gebühren. Erkennung und Katalogbilder startest du einzeln, wenn du sie brauchst.</p><p>Bildgenerierung läuft in sparsamer Qualität. Verlässliche erfasste Kosten stehen beim jeweiligen neuen Bildentwurf. Alte Einträge hatten falsch konfigurierte Tarife.</p><a class="text-button" href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noreferrer">Aktuelle OpenAI-Preise ↗</a></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos und Bildverläufe werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
+    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><section class="panel"><h3>Automatische Katalogbilder</h3><p>Beim Hinzufügen analysiert OpenAI dein Foto und erstellt für jedes ausgewählte Stück automatisch ein Katalogbild. Beides ist kostenpflichtig. Die Bildgenerierung läuft in sparsamer Qualität.</p><p>Weitere Katalogbilder startest du in der Detailansicht weiterhin einzeln. Dort siehst du auch die erfassten Kosten.</p><a class="text-button" href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noreferrer">Aktuelle OpenAI-Preise ↗</a></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos und Bildverläufe werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
   );
   $('#open-archive').onclick = () => navigate('archived');
   $('#reset').onclick = () => {
@@ -755,15 +921,19 @@ window.addEventListener('offline', () =>
 );
 if ('serviceWorker' in navigator)
   navigator.serviceWorker.register('/sw.js').catch(() => {});
-// Baked into the web image at deploy time, so the masthead shows what's live.
-fetch('/version.json', { cache: 'no-store' })
-  .then((response) => (response.ok ? response.json() : null))
-  .then((data) => {
+// Baked into the web image at deploy time. Reload an open PWA when a new shell arrives.
+async function refreshVersion() {
+  try {
+    const response = await fetch('/version.json', { cache: 'no-store' });
+    const data = response.ok ? await response.json() : null;
     if (!data?.version) return;
+    if (version && version !== data.version) return location.reload();
     version = data.version;
     if ($('#version')) $('#version').textContent = version;
-  })
-  .catch(() => {});
+  } catch {}
+}
+refreshVersion();
+setInterval(refreshVersion, 60_000);
 start();
 
 let checking = false;
@@ -776,11 +946,12 @@ setInterval(async () => {
       await refreshItems();
       if (previous !== JSON.stringify(items)) {
         if (['owning', 'wanting', 'archived'].includes(page)) renderResults();
-        if (detailId && $('#check-generation')) await openDetail(detailId);
+        if (detailId && $('#check-generation'))
+          await openDetail(detailId, 'view', true);
       }
     }
     if (page === 'add')
-      for (const draft of drafts.filter((d) => d.detecting)) {
+      for (const draft of drafts.filter((d) => d.phase === 'detecting')) {
         const result = await api(
           `/source-photos/${draft.sourcePhotoId}/detections`,
         );

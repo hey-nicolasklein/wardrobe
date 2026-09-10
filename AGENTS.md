@@ -11,10 +11,16 @@ When starting the application locally, make it reachable through Tailscale as we
 
 # Live deployment (stargate)
 
-The production instance runs on the `stargate` host at `https://stargate.stork-platy.ts.net:8443` (tailnet only). This is the daily driver — do not rebuild, restart, migrate, or reset it unless explicitly asked.
+The production instance runs on the `stargate` host at `https://stargate.stork-platy.ts.net:8443` (tailnet only).
 
+**Ship every finished change here without asking.** There are no users besides Nico, and the tailnet instance is expected to run the current version at all times. Once a change is implemented and verified, rebuild and recreate the affected services in the same turn, then report the deployed state. Migrating, resetting, or deleting data is *not* covered by this — those still need an explicit request.
+
+- Rebuild only what carries the change: `web` for anything in `apps/web/public`, `api` for `apps/api` or `packages/contracts`, `worker` for `apps/worker` or `packages/service` (prompts and image processing live there). Contracts changes touch `api` and `worker` both. Compose recreates `api` alongside `web` on its own — that is expected, not a mistake.
+- Deploy command (`--env-file` is required, the compose file interpolates from it):
+  `docker compose --env-file .env.production -f compose.production.yaml up -d --build <services>`
+- Confirm afterwards: `ps` shows the rebuilt services healthy, and `curl -s http://127.0.0.1:18081/<asset>` serves the new bytes.
 - It runs as the long-lived `form-production` Docker Compose project from `compose.production.yaml` (`web`, `api`, `worker`, `postgres`, `object-storage`), all `restart: unless-stopped`.
 - Tailscale Serve terminates HTTPS on `:8443` and proxies to `127.0.0.1:${FORM_WEB_PORT}` (default `18081`), the `web` container, which proxies `/v1/` to the API. `tailscale serve status` shows the mapping.
 - Runtime config lives in the git-ignored `.env.production` (`PUBLIC_WEB_ORIGIN`, `WEB_ORIGIN`, `S3_PUBLIC_ENDPOINT`, `PERSONAL_ACCOUNT_ID`). No login screen: `PERSONAL_ACCOUNT_ID` opens that account automatically.
-- Web and API assets are baked into their images (`build.target`), so shipping changes needs a rebuild and recreate, not just a restart: `docker compose -f compose.production.yaml up -d --build web api`. Run `npm run services:migrate` only when the schema changes.
+- Web and API assets are baked into their images (`build.target`), so shipping changes needs a rebuild and recreate, not just a restart. Run `npm run services:migrate` only when the schema changes.
 - Status check (read-only): `docker compose -f compose.production.yaml ps`.

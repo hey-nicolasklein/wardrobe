@@ -228,13 +228,19 @@ h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 22px 13px;
 }
+/* Buttons zentrieren gestreckten Inhalt vertikal – als Flex-Spalte bleibt das
+   Foto oben, damit Kacheln einer Zeile auch bei zweizeiligen Titeln fluchten. */
 .item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   text-align: left;
   padding: 0;
   min-width: 0;
 }
 .photo {
-  aspect-ratio: 4/5;
+  aspect-ratio: 3/4;
+  flex: none;
   background: #eaece5;
   border-radius: 14px;
   overflow: hidden;
@@ -246,7 +252,7 @@ h3 {
 .photo img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 .photo-source {
@@ -254,6 +260,26 @@ h3 {
   inset: 0;
   object-fit: cover;
   opacity: 0;
+}
+/* Fills its tile via absolute insets, not `height: 100%`. Both `.photo` and
+   `.gallery .slide` get their height from `aspect-ratio`, and iOS Safari
+   resolves a percentage height against that to zero — the spinner and the
+   label then vanish and only an empty tile is left. */
+.wardrobe-image-progress {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  background: linear-gradient(145deg, #eef0ea, #e2e6de);
+  font-size: 11px;
+}
+.wardrobe-image-progress .spinner {
+  width: 24px;
+  height: 24px;
 }
 @media (hover: hover) {
   .photo-source {
@@ -350,6 +376,9 @@ h3 {
   color: #a34b3c;
 }
 .text-button {
+  display: block;
+  width: 100%;
+  text-align: center;
   color: var(--green);
   font-size: 14px;
   padding: 12px;
@@ -413,6 +442,18 @@ h3 {
   color: #626e5e;
   font-size: 12px;
   line-height: 1.6;
+}
+/* Keeps the spinner on its own axis instead of sitting inline in wrapping text,
+   where it drifts off the centre line. */
+.generating p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  text-align: left;
+}
+.generating .spinner {
+  flex: none;
 }
 .offline {
   background: #f6e9e5;
@@ -587,6 +628,132 @@ dialog::backdrop {
 .draft form {
   margin-top: 12px;
 }
+.draft-status {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+.draft-head > div {
+  min-width: 0;
+}
+.detection-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #eaece5;
+}
+.detection-stage > img {
+  max-height: none;
+  border-radius: 0;
+  display: block;
+}
+.scan-progress {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  color: white;
+  background: #26332999;
+  backdrop-filter: blur(3px);
+  font-size: 13px;
+}
+.scan-progress .spinner,
+.primary .spinner {
+  border-color: #ffffff66;
+  border-top-color: white;
+}
+.detection-box {
+  position: absolute;
+  min-width: 34px;
+  min-height: 34px;
+  border: 2px solid #ffffffcc;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #26332966, inset 0 0 0 999px #1e2d210d;
+}
+.detection-box.selected {
+  border-color: white;
+  box-shadow: 0 0 0 2px var(--green), inset 0 0 0 999px #344d3f18;
+}
+.detection-box span {
+  position: absolute;
+  top: -13px;
+  right: -13px;
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: white;
+  color: var(--green);
+  box-shadow: 0 2px 10px #0003;
+  font-size: 12px;
+  font-weight: 700;
+}
+.detection-choices {
+  display: grid;
+  gap: 7px;
+  margin: 13px 0;
+}
+.detection-choice {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px;
+  border-radius: 11px;
+  text-align: left;
+  color: var(--muted);
+}
+.detection-choice.selected {
+  background: #eaece5;
+  color: inherit;
+}
+.detection-choice strong,
+.detection-choice small {
+  display: block;
+}
+.detection-choice strong {
+  font-size: 13px;
+}
+.detection-choice small {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 3px;
+}
+.choice-preview {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  border-radius: 9px;
+  background: #e2e6de;
+}
+.choice-copy {
+  min-width: 0;
+  flex: 1;
+}
+.choice-number {
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  flex: 0 0 29px;
+  border: 1px solid #b9beb5;
+  border-radius: 50%;
+  font-size: 11px;
+}
+.selected .choice-number {
+  border-color: var(--green);
+  background: var(--green);
+  color: white;
+}
+.choice-number .icon {
+  width: 15px;
+  height: 15px;
+}
 .cost {
   font-variant-numeric: tabular-nums;
   font-size: 13px;
@@ -602,6 +769,27 @@ dialog::backdrop {
   width: 128px;
   padding: 0;
 }
+.version-frame {
+  display: block;
+  position: relative;
+}
+/* The current version stays fully legible and is marked by a ring, not by the
+   dimmed look every other disabled button gets. */
+.version:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.version.current .version-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--green);
+  border-radius: 10px;
+}
+.version.current > span:last-child {
+  color: var(--green);
+  font-weight: 600;
+}
 .version img {
   width: 128px;
   height: 140px;
@@ -609,10 +797,61 @@ dialog::backdrop {
   background: #eaece5;
   border-radius: 10px;
 }
+/* Cutouts are letterboxed inside the tile, the worn photo fills it. Must stay
+   after `.version img`, which carries the same specificity. */
+.source-version img {
+  object-fit: cover;
+}
 .version span {
   display: block;
   font-size: 12px;
   margin: 9px 0;
+}
+/* Marks versions generated at high quality so the more detailed one is
+   recognisable next to older low-quality attempts. */
+.version-tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  margin: 0;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: #fffc;
+  backdrop-filter: blur(12px);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.add-version .version-frame {
+  width: 128px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--green);
+}
+.add-version .icon {
+  width: 26px;
+  height: 26px;
+  margin: 0;
+}
+.facts {
+  margin: 18px 0 20px;
+  display: grid;
+  gap: 12px;
+}
+.facts dt {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.facts dd {
+  margin: 3px 0 0;
+  font-size: 14px;
+  white-space: pre-wrap;
 }
 .setting-row {
   display: flex;
