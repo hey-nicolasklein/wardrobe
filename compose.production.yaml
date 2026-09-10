@@ -84,6 +84,8 @@ services:
     build:
       context: .
       target: web
+      args:
+        FORM_VERSION: ${FORM_VERSION:-dev}
     restart: unless-stopped
     depends_on:
       api:

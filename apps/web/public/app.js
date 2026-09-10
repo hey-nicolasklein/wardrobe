@@ -41,6 +41,7 @@ let items = [],
   query = '',
   detailId = null,
   importBusy = false,
+  version = '',
   toastTimer;
 let drafts;
 try {
@@ -123,7 +124,7 @@ async function action(button, operation) {
 }
 function shell(content) {
   $('#app').innerHTML =
-    `<main class="shell"><header class="masthead"><span class="wordmark">FORM</span><span class="private"><span class="dot"></span> NUR FÜR DICH</span></header>${!navigator.onLine ? '<p class="offline">Du bist offline. Verbinde dich mit stargate, um deinen Kleiderschrank zu öffnen.</p>' : ''}${content}</main><nav class="nav" aria-label="Hauptnavigation">${[
+    `<main class="shell"><header class="masthead"><span class="wordmark">FORM</span><span class="private"><span class="dot"></span> <span id="version">${esc(version)}</span></span></header>${!navigator.onLine ? '<p class="offline">Du bist offline. Verbinde dich mit stargate, um deinen Kleiderschrank zu öffnen.</p>' : ''}${content}</main><nav class="nav" aria-label="Hauptnavigation">${[
       ['owning', 'closet', 'Schrank'],
       ['wanting', 'heart', 'Wunschliste'],
       ['add', 'plus', 'Hinzufügen'],
@@ -754,6 +755,15 @@ window.addEventListener('offline', () =>
 );
 if ('serviceWorker' in navigator)
   navigator.serviceWorker.register('/sw.js').catch(() => {});
+// Baked into the web image at deploy time, so the masthead shows what's live.
+fetch('/version.json', { cache: 'no-store' })
+  .then((response) => (response.ok ? response.json() : null))
+  .then((data) => {
+    if (!data?.version) return;
+    version = data.version;
+    if ($('#version')) $('#version').textContent = version;
+  })
+  .catch(() => {});
 start();
 
 let checking = false;
