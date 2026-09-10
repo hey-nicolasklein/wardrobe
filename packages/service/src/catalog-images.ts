@@ -7,8 +7,8 @@ const referenceJpegQuality = 92;
 const contextPaddingRatio = 0.18;
 const keyDistanceTransparent = 12;
 const keyDistanceOpaque = 32;
-// How many pixels in from the matte edge to neutralise chroma spill (the halo).
-const spillEdgeRadius = 3;
+// How many pixels in from the matte edge to decontaminate chroma spill (the halo).
+const spillEdgeRadius = 6;
 
 export class CatalogImageError extends Error {
   constructor(
@@ -149,40 +149,51 @@ export async function removeValidatedChromaBackground(
     );
   }
 
-  for (let offset = 0; offset < decoded.data.length; offset += channels) {
+  // Coarse matte by colour distance: garment opaque, background transparent,
+  // with a narrow feather. Snapshot it so the edge pass reads a stable matte.
+  const matte = new Uint8Array(width * height);
+  for (let index = 0; index < matte.length; index += 1) {
+    const offset = index * channels;
     const distance = colorDistance(
       decoded.data[offset]!,
       decoded.data[offset + 1]!,
       decoded.data[offset + 2]!,
       key,
     );
-    if (distance <= keyDistanceTransparent) {
-      decoded.data[offset + 3] = 0;
-    } else if (distance < keyDistanceOpaque) {
-      decoded.data[offset + 3] = Math.round(
-        ((distance - keyDistanceTransparent) /
-          (keyDistanceOpaque - keyDistanceTransparent)) *
-          255,
-      );
-    }
+    matte[index] =
+      distance <= keyDistanceTransparent
+        ? 0
+        : distance < keyDistanceOpaque
+          ? Math.round(
+              ((distance - keyDistanceTransparent) /
+                (keyDistanceOpaque - keyDistanceTransparent)) *
+                255,
+            )
+          : 255;
+    decoded.data[offset + 3] = matte[index]!;
   }
 
-  // Anti-aliased edge pixels blend garment and background, so a ring of opaque
-  // pixels keeps a chroma tint (the green halo). Gate the fix spatially, not by
-  // colour, so a genuinely green garment body is never touched: only despill
-  // pixels within spillEdgeRadius of a removed pixel, capping the key channels
-  // (green for #00ff00, red and blue for the #ff00ff fallback) to the garment
-  // channels. Skip when the key has no clearly darker channel to cap against.
+  // Distance keying alone leaves a tinted ring on soft edges: a blend of garment
+  // and background sits far from the pure key colour, so it stays opaque and
+  // keeps its chroma tint (the halo). Near the matte edge, re-key by how strongly
+  // a pixel leans toward the key colour and un-mix that contribution back out,
+  // recovering the true garment colour so the edge fades cleanly over any
+  // background. Gated spatially, so a garment body is never touched. spillChannels
+  // carry the key (green for #00ff00, red and blue for the #ff00ff fallback);
+  // anchorChannels are the garment-bearing rest.
   const keyMax = Math.max(key[0], key[1], key[2]);
   const spillChannels = [0, 1, 2].filter((channel) => key[channel]! > keyMax / 2);
   const anchorChannels = [0, 1, 2].filter((channel) => key[channel]! <= keyMax / 2);
-  if (anchorChannels.length > 0) {
-    const isRemoved = (x: number, y: number) =>
-      decoded.data[(y * width + x) * channels + 3] === 0;
+  const spillKey =
+    spillChannels.reduce((sum, channel) => sum + key[channel]!, 0) /
+    Math.max(1, spillChannels.length);
+  const anchorKey = Math.max(0, ...anchorChannels.map((channel) => key[channel]!));
+  const keyStrength = spillKey - anchorKey;
+  if (anchorChannels.length > 0 && keyStrength > 0) {
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
-        const offset = (y * width + x) * channels;
-        if (decoded.data[offset + 3] === 0) continue;
+        const index = y * width + x;
+        if (matte[index] === 0) continue;
         let nearEdge = false;
         for (let dy = -spillEdgeRadius; dy <= spillEdgeRadius && !nearEdge; dy += 1) {
           const ny = y + dy;
@@ -190,17 +201,30 @@ export async function removeValidatedChromaBackground(
           for (let dx = -spillEdgeRadius; dx <= spillEdgeRadius; dx += 1) {
             const nx = x + dx;
             if (nx < 0 || nx >= width) continue;
-            if (isRemoved(nx, ny)) {
+            if (matte[ny * width + nx] === 0) {
               nearEdge = true;
               break;
             }
           }
         }
         if (!nearEdge) continue;
-        const cap = Math.max(...anchorChannels.map((channel) => decoded.data[offset + channel]!));
-        for (const channel of spillChannels) {
-          if (decoded.data[offset + channel]! > cap) decoded.data[offset + channel] = cap;
+        const offset = index * channels;
+        const spill =
+          spillChannels.reduce((sum, channel) => sum + decoded.data[offset + channel]!, 0) /
+          spillChannels.length;
+        const anchor = Math.max(0, ...anchorChannels.map((channel) => decoded.data[offset + channel]!));
+        let coverage = 1 - (spill - anchor) / keyStrength;
+        coverage = Math.max(0, Math.min(coverage, matte[index]! / 255));
+        if (coverage <= 0) {
+          decoded.data[offset + 3] = 0;
+          continue;
         }
+        for (const channel of [0, 1, 2]) {
+          const unmixed =
+            (decoded.data[offset + channel]! - (1 - coverage) * key[channel]!) / coverage;
+          decoded.data[offset + channel] = Math.max(0, Math.min(255, Math.round(unmixed)));
+        }
+        decoded.data[offset + 3] = Math.round(coverage * 255);
       }
     }
   }
