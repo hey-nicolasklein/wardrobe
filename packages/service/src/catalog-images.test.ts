@@ -69,6 +69,44 @@ test('infers each fixture chroma key and preserves garment pixels', async () => 
   }
 });
 
+test('neutralises the chroma halo on soft edges without dulling a green garment', async () => {
+  const softShape = (garment: string) =>
+    sharp(
+      Buffer.from(
+        `<svg width="816" height="816" xmlns="http://www.w3.org/2000/svg"><rect width="816" height="816" fill="#00ff00"/><ellipse cx="408" cy="408" rx="300" ry="330" fill="${garment}"/></svg>`,
+      ),
+    )
+      .png()
+      .toBuffer();
+  const greenLead = async (transparentPng: Buffer, edgeOnly: boolean) => {
+    const { data, info } = await sharp(transparentPng)
+      .flatten({ background: '#ffffff' })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    let count = 0;
+    for (let offset = 0; offset < data.length; offset += info.channels) {
+      const [r, g, b] = [data[offset]!, data[offset + 1]!, data[offset + 2]!];
+      if (edgeOnly && !(r > 230 && b > 230)) continue; // only the cream body/edge
+      if (g - Math.max(r, b) > 12) count += 1;
+    }
+    return count;
+  };
+
+  // A cream garment must leave no green fringe once the halo is neutralised.
+  const cream = await removeValidatedChromaBackground(await softShape('#efe9dc'));
+  assert.equal(await greenLead(cream.transparentPng, false), 0);
+
+  // A genuinely green garment body must survive: its interior stays green.
+  const green = await removeValidatedChromaBackground(await softShape('#2f6b3a'));
+  const { data, info } = await sharp(green.transparentPng)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const center = (408 * info.width + 408) * info.channels;
+  assert.equal(data[center + 3], 255);
+  assert.ok(data[center + 1]! > data[center]! && data[center + 1]! > data[center + 2]!);
+});
+
 test('rejects a non-uniform provider border', async () => {
   const fixture = await sharp({
     create: { width: 816, height: 816, channels: 3, background: '#00ff00' },
