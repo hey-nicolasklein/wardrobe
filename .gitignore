@@ -11,3 +11,7 @@ test-results/
 !.env.services.example
 !.env.production.example
 *.tsbuildinfo
+
+# Die Expo-App wird vollständig von der Web-Version in apps/web abgelöst.
+# Lokal liegt hier nur noch der Export (dist/, .expo/), kein Quellcode.
+apps/mobile/
