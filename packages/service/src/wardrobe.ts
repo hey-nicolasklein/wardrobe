@@ -13,6 +13,7 @@ import type {
   WardrobeItem,
 } from '@form/contracts';
 
+import { shelfImageModel, shelfImagePromptVersion } from './catalog-provider.js';
 import type { Database, DatabaseClient } from './database.js';
 import { withTransaction } from './database.js';
 import { enqueueJob } from './jobs.js';
@@ -571,6 +572,7 @@ export async function enqueueShelfImageGeneration(
     wardrobeItemId: string;
     quality: GenerationQuality;
     size: '816x816';
+    autoKeep?: boolean;
     idempotencyKey: string;
   },
 ): Promise<{ jobId: string; generationAttemptId: string }> {
@@ -578,6 +580,7 @@ export async function enqueueShelfImageGeneration(
     wardrobeItemId: input.wardrobeItemId,
     quality: input.quality,
     size: input.size,
+    autoKeep: input.autoKeep ?? true,
   };
   return withTransaction(database, async (client) => {
     const replay = await beginCommand<{ jobId: string; generationAttemptId: string }>(client, {
@@ -604,8 +607,8 @@ export async function enqueueShelfImageGeneration(
     await client.query(
       `INSERT INTO generation_attempts (
          id, account_id, wardrobe_item_id, source_photo_id, detection_proposal_id,
-         state, reviewed_metadata, model, quality, output_size, prompt_version
-       ) VALUES ($1, $2, $3, $4, $5, 'queued', $6, 'gpt-image-2', $7, $8, 'laid-flat-v1')`,
+         state, reviewed_metadata, model, quality, output_size, prompt_version, auto_keep
+       ) VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10, $11)`,
       [
         generationAttemptId,
         input.accountId,
@@ -613,8 +616,11 @@ export async function enqueueShelfImageGeneration(
         row.source_photo_id,
         row.detection_proposal_id,
         JSON.stringify(metadata),
+        shelfImageModel,
         input.quality,
         input.size,
+        shelfImagePromptVersion,
+        input.autoKeep ?? true,
       ],
     );
     const jobId = await enqueueJob(client, {
@@ -756,17 +762,50 @@ export async function completeGenerationAttempt(
   input: { accountId: string; generationAttemptId: string; resolvedChromaKey: string },
 ): Promise<boolean> {
   return withTransaction(database, async (client) => {
-    const attempt = await client.query<{ wardrobe_item_id: string }>(
-      `UPDATE generation_attempts SET state = 'needs-review', resolved_chroma_key = $3,
-         finished_at = now()
+    const attempt = await client.query<{
+      wardrobe_item_id: string;
+      auto_keep: boolean;
+      keyed_asset_id: string;
+      transparent_asset_id: string;
+      quality: ShelfImageVersion['quality'];
+      output_size: ShelfImageVersion['size'];
+      prompt_version: string;
+    }>(
+      `SELECT wardrobe_item_id, auto_keep, keyed_asset_id, transparent_asset_id,
+         quality, output_size, prompt_version
+       FROM generation_attempts
        WHERE id = $1 AND account_id = $2 AND state = 'processing'
          AND reference_asset_id IS NOT NULL AND keyed_asset_id IS NOT NULL
          AND transparent_asset_id IS NOT NULL AND provider_request_id IS NOT NULL
-       RETURNING wardrobe_item_id`,
-      [input.generationAttemptId, input.accountId, input.resolvedChromaKey],
+       FOR UPDATE`,
+      [input.generationAttemptId, input.accountId],
     );
     const row = attempt.rows[0];
     if (!row) return false;
+    await client.query(
+      `UPDATE generation_attempts SET resolved_chroma_key = $3, finished_at = now()
+       WHERE id = $1 AND account_id = $2`,
+      [input.generationAttemptId, input.accountId, input.resolvedChromaKey],
+    );
+    if (row.auto_keep) {
+      // Adopt straight to the Wardrobe Item without a keep/reject review step.
+      await adoptGenerationAsCurrentVersion(client, {
+        accountId: input.accountId,
+        wardrobeItemId: row.wardrobe_item_id,
+        generationAttemptId: input.generationAttemptId,
+        keyedAssetId: row.keyed_asset_id,
+        transparentAssetId: row.transparent_asset_id,
+        quality: row.quality,
+        outputSize: row.output_size,
+        promptVersion: row.prompt_version,
+      });
+      return true;
+    }
+    await client.query(
+      `UPDATE generation_attempts SET state = 'needs-review'
+       WHERE id = $1 AND account_id = $2`,
+      [input.generationAttemptId, input.accountId],
+    );
     await client.query(
       `UPDATE wardrobe_items SET status = 'needs-review',
          record_version = record_version + 1, updated_at = now()
@@ -808,6 +847,53 @@ export async function failGenerationAttempt(
     );
     return true;
   });
+}
+
+// Records a completed generation as a new Shelf Image version, marks the attempt
+// 'kept', and points the Wardrobe Item at it as its ready current image. Shared by
+// the manual keep flow and the auto-adopt path in completeGenerationAttempt.
+async function adoptGenerationAsCurrentVersion(
+  client: DatabaseClient,
+  input: {
+    accountId: string;
+    wardrobeItemId: string;
+    generationAttemptId: string;
+    keyedAssetId: string;
+    transparentAssetId: string;
+    quality: ShelfImageVersion['quality'];
+    outputSize: ShelfImageVersion['size'];
+    promptVersion: string;
+  },
+): Promise<{ item: WardrobeItemRow; version: ShelfImageVersionRow }> {
+  const version = await client.query<ShelfImageVersionRow>(
+    `INSERT INTO shelf_image_versions (
+       id, account_id, wardrobe_item_id, generation_attempt_id, keyed_asset_id,
+       transparent_asset_id, quality, output_size, prompt_version, kept_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+     RETURNING ${versionColumns}`,
+    [
+      randomUUID(),
+      input.accountId,
+      input.wardrobeItemId,
+      input.generationAttemptId,
+      input.keyedAssetId,
+      input.transparentAssetId,
+      input.quality,
+      input.outputSize,
+      input.promptVersion,
+    ],
+  );
+  await client.query(
+    `UPDATE generation_attempts SET state = 'kept' WHERE id = $1 AND account_id = $2`,
+    [input.generationAttemptId, input.accountId],
+  );
+  const updated = await client.query<WardrobeItemRow>(
+    `UPDATE wardrobe_items SET current_shelf_image_version_id = $3, status = 'ready',
+       record_version = record_version + 1, updated_at = now()
+     WHERE id = $1 AND account_id = $2 RETURNING ${itemColumns}`,
+    [input.wardrobeItemId, input.accountId, version.rows[0]!.id],
+  );
+  return { item: updated.rows[0]!, version: version.rows[0]! };
 }
 
 export async function keepShelfImage(
@@ -860,37 +946,19 @@ export async function keepShelfImage(
         'Only a completed Shelf Image awaiting review can be kept.',
       );
     }
-    const version = await client.query<ShelfImageVersionRow>(
-      `INSERT INTO shelf_image_versions (
-         id, account_id, wardrobe_item_id, generation_attempt_id, keyed_asset_id,
-         transparent_asset_id, quality, output_size, prompt_version, kept_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
-       RETURNING ${versionColumns}`,
-      [
-        randomUUID(),
-        input.accountId,
-        input.wardrobeItemId,
-        input.generationAttemptId,
-        attemptRow.keyed_asset_id,
-        attemptRow.transparent_asset_id,
-        attemptRow.quality,
-        attemptRow.output_size,
-        attemptRow.prompt_version,
-      ],
-    );
-    await client.query(
-      `UPDATE generation_attempts SET state = 'kept' WHERE id = $1 AND account_id = $2`,
-      [input.generationAttemptId, input.accountId],
-    );
-    const updated = await client.query<WardrobeItemRow>(
-      `UPDATE wardrobe_items SET current_shelf_image_version_id = $3, status = 'ready',
-         record_version = record_version + 1, updated_at = now()
-       WHERE id = $1 AND account_id = $2 RETURNING ${itemColumns}`,
-      [input.wardrobeItemId, input.accountId, version.rows[0]!.id],
-    );
+    const { item: updatedItem, version } = await adoptGenerationAsCurrentVersion(client, {
+      accountId: input.accountId,
+      wardrobeItemId: input.wardrobeItemId,
+      generationAttemptId: input.generationAttemptId,
+      keyedAssetId: attemptRow.keyed_asset_id,
+      transparentAssetId: attemptRow.transparent_asset_id,
+      quality: attemptRow.quality,
+      outputSize: attemptRow.output_size,
+      promptVersion: attemptRow.prompt_version,
+    });
     const body = {
-      wardrobeItem: mapWardrobeItem(updated.rows[0]!),
-      shelfImageVersion: mapShelfImageVersion(version.rows[0]!),
+      wardrobeItem: mapWardrobeItem(updatedItem),
+      shelfImageVersion: mapShelfImageVersion(version),
     };
     await finishCommand(client, {
       accountId: input.accountId,
@@ -991,7 +1059,7 @@ type DeletionResponse = {
   deletedAssetIds: string[];
 };
 
-async function deleteStoredAssets(
+export async function deleteStoredAssets(
   database: Database,
   storage: PrivateObjectStorage,
   accountId: string,

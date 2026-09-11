@@ -27,6 +27,7 @@ const app = createApp({
   webOrigin: config.WEB_ORIGIN,
   publicOrigin: config.WEB_ORIGIN,
   detectionModel: config.OPENAI_DETECTION_MODEL,
+  personalAccountId: config.PERSONAL_ACCOUNT_ID,
 });
 const server = serve({
   fetch: app.fetch,

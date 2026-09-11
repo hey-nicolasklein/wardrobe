@@ -173,8 +173,11 @@ export const createWardrobeItemRequestSchema = z
 export const enqueueGenerationRequestSchema = z
   .object({
     wardrobeItemId: opaqueIdSchema,
-    quality: generationQualitySchema.default('low'),
+    quality: generationQualitySchema.default('high'),
     size: generationSizeSchema.default('816x816'),
+    // When true the completed image is adopted as the Wardrobe Item's current
+    // Shelf Image without a keep/reject review step.
+    autoKeep: z.boolean().default(true),
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();

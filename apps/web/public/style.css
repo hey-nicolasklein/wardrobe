@@ -1,0 +1,1134 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #242923;
+  background: #f6f5f1;
+  /* Ohne diese Angabe malt Safari Flächen, die es selbst beisteuert – etwa den
+     Streifen hinter der Statusleiste – in seinem eigenen Weiß statt in Papier. */
+  color-scheme: light;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  --green: #344d3f;
+  --muted: #777b72;
+  --line: #e2e4dc;
+  --paper: #fff;
+  --serif: ui-serif, Georgia, serif;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #f6f5f1;
+  min-height: 100dvh;
+  transition: background-color 0.34s ease;
+}
+/* Der Streifen hinter der Statusleiste wird von iOS aus der Seitenfarbe
+   gefüllt, nicht aus Overlays – weder der ::backdrop des Dialogs noch #scrim
+   erreichen ihn. Beim geöffneten Blatt bekommt die Seite deshalb direkt die
+   Farbe, die der Schleier sonst erzeugt: #1d281c bei 40 % über dem Papier. */
+body.sheet-open {
+  background: #9fa39c;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  cursor: pointer;
+}
+button {
+  border: 0;
+  background: none;
+  color: inherit;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #869b7e;
+  outline-offset: 3px;
+}
+input,
+select,
+textarea {
+  font-size: 16px;
+  max-width: 100%;
+}
+input,
+textarea {
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 12px;
+  padding: 13px;
+  width: 100%;
+  color: inherit;
+}
+select {
+  border: 1px solid var(--line);
+  background: white;
+  padding: 13px;
+  border-radius: 12px;
+  width: 100%;
+  color: inherit;
+}
+textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 16px 0 7px;
+}
+p {
+  line-height: 1.55;
+}
+.shell {
+  max-width: 600px;
+  margin: auto;
+  padding: calc(22px + env(safe-area-inset-top)) 22px
+    calc(112px + env(safe-area-inset-bottom));
+}
+.masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 34px;
+}
+.wordmark {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: 5px;
+}
+.private {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dot {
+  width: 5px;
+  height: 5px;
+  background: #738a63;
+  border-radius: 50%;
+}
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 2px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+h1 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 43px;
+  line-height: 1.08;
+  letter-spacing: -1.8px;
+  margin: 0 0 13px;
+}
+h2 {
+  font-family: var(--serif);
+  font-size: 29px;
+  font-weight: 400;
+  letter-spacing: -0.5px;
+  margin: 0 0 12px;
+}
+h3 {
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+.muted {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 25px;
+  gap: 15px;
+}
+.round {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--green);
+  color: white;
+}
+.icon {
+  width: 23px;
+  height: 23px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: inline-block;
+  vertical-align: middle;
+}
+.search {
+  position: relative;
+  margin-bottom: 18px;
+}
+.search .icon {
+  position: absolute;
+  left: 14px;
+  top: 13px;
+  color: var(--muted);
+  width: 19px;
+}
+.search input {
+  padding-left: 42px;
+  border: 0;
+  background: #eaece5;
+}
+.filters {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 0 12px;
+  margin: 0 -22px 10px;
+  padding-left: 22px;
+  padding-right: 22px;
+}
+.filters::-webkit-scrollbar {
+  display: none;
+}
+.chip {
+  white-space: nowrap;
+  padding: 10px 15px;
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  font-size: 13px;
+  min-height: 42px;
+}
+.chip.active {
+  background: var(--green);
+  color: white;
+  border-color: var(--green);
+}
+.section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 12px 0 17px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 13px;
+}
+/* Buttons zentrieren gestreckten Inhalt vertikal – als Flex-Spalte bleibt das
+   Foto oben, damit Kacheln einer Zeile auch bei zweizeiligen Titeln fluchten. */
+.item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  padding: 0;
+  min-width: 0;
+}
+.photo {
+  aspect-ratio: 3/4;
+  flex: none;
+  background: #eaece5;
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.photo-source {
+  position: absolute;
+  inset: 0;
+  object-fit: cover;
+  opacity: 0;
+}
+/* Fills its tile via absolute insets, not `height: 100%`. Both `.photo` and
+   `.gallery .slide` get their height from `aspect-ratio`, and iOS Safari
+   resolves a percentage height against that to zero — the spinner and the
+   label then vanish and only an empty tile is left. */
+.wardrobe-image-progress {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  background: linear-gradient(145deg, #eef0ea, #e2e6de);
+  font-size: 11px;
+}
+.wardrobe-image-progress .spinner {
+  width: 24px;
+  height: 24px;
+}
+@media (hover: hover) {
+  .photo-source {
+    transition: opacity 0.4s ease;
+  }
+  .item:hover .photo-source {
+    opacity: 1;
+  }
+}
+/* Der Farbton hängt am Stück, nicht an seiner Position: `nth-child` zählt auch
+   ausgeblendete Kacheln mit, die Töne sprängen beim Filtern also umher. */
+.item.tint-1 .photo {
+  background: #ebe7e0;
+}
+.item.tint-2 .photo {
+  background: #e5e9e6;
+}
+.item-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 1.35;
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+.item-category {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.badge {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  background: #fffc;
+  padding: 5px 8px;
+  font-size: 10px;
+  border-radius: 6px;
+  backdrop-filter: blur(12px);
+}
+.nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 600px;
+  margin: auto;
+  /* Deckend wie die Blatt-Kopfzeile: helle Kacheln, die darunter wegscrollen,
+     drückten durch den Halbton als weißer Schleier durch. */
+  background: #f6f5f1;
+  border-top: 1px solid var(--line);
+  padding: 9px 12px calc(8px + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: space-around;
+  z-index: 3;
+}
+.nav button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #858b82;
+  min-height: 49px;
+  padding: 4px;
+}
+.nav button.active {
+  color: var(--green);
+  font-weight: 650;
+}
+.primary,
+.secondary,
+.danger {
+  padding: 15px 20px;
+  border-radius: 14px;
+  min-height: 50px;
+  font-size: 15px;
+  font-weight: 550;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.primary {
+  background: var(--green);
+  color: white;
+}
+.secondary {
+  background: #eaece5;
+  color: var(--green);
+}
+.danger {
+  background: #f6e9e5;
+  color: #a34b3c;
+}
+.text-button {
+  display: block;
+  width: 100%;
+  text-align: center;
+  color: var(--green);
+  font-size: 14px;
+  padding: 12px;
+  min-height: 44px;
+}
+.stack {
+  display: grid;
+  gap: 10px;
+}
+.panel {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 21px;
+  margin: 20px 0;
+}
+.panel p {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 8px 0 16px;
+}
+.upload-area {
+  border: 1px dashed #a7b39f;
+  border-radius: 20px;
+  padding: 35px 20px;
+  text-align: center;
+  margin: 25px 0;
+  background: #ebeee6;
+}
+.upload-area .icon {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 16px;
+  color: var(--green);
+}
+.upload-area p {
+  font-size: 14px;
+  color: var(--muted);
+  max-width: 270px;
+  margin: 12px auto 23px;
+}
+.empty {
+  padding: 48px 12px;
+  text-align: center;
+}
+.empty .icon {
+  width: 45px;
+  height: 45px;
+  color: #9ba694;
+  margin-bottom: 20px;
+}
+.empty p {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+.note {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #eaece5;
+  color: #626e5e;
+  font-size: 12px;
+  line-height: 1.6;
+}
+/* Keeps the spinner on its own axis instead of sitting inline in wrapping text,
+   where it drifts off the centre line. */
+.generating p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  text-align: left;
+}
+.generating .spinner {
+  flex: none;
+}
+.offline {
+  background: #f6e9e5;
+  color: #884735;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+.loading {
+  padding: 70px 25px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #acb5a5;
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Das Blatt fährt von unten herein und beim Schließen wieder hinaus. `display`
+   und `overlay` müssen mit `allow-discrete` mitlaufen, sonst verschwindet der
+   Dialog sofort und die Ausblende-Animation wäre nie zu sehen. */
+dialog {
+  border: 0;
+  padding: 0;
+  width: min(100%, 600px);
+  max-width: 600px;
+  max-height: 94dvh;
+  margin: auto auto 0;
+  border-radius: 25px 25px 0 0;
+  background: #f6f5f1;
+  color: inherit;
+  box-shadow: 0 -10px 70px #0002;
+  /* `none`, nicht `contain`: das Blatt ist selbst der Scroll-Container, und iOS
+     würde den Inhalt am oberen Rand federn lassen. Diese Feder liefe zusätzlich
+     zur Zieh-Geste, der Inhalt wanderte also schneller als das Blatt. */
+  overscroll-behavior: none;
+  translate: 0 100%;
+  transition:
+    translate 0.34s cubic-bezier(0.32, 0.72, 0, 1),
+    display 0.34s allow-discrete,
+    overlay 0.34s allow-discrete;
+}
+dialog[open] {
+  translate: 0 0;
+}
+@starting-style {
+  dialog[open] {
+    translate: 0 100%;
+  }
+}
+/* Während der Finger zieht, folgt das Blatt direkt statt zu animieren. */
+dialog.dragging {
+  transition: none;
+}
+/* Der ::backdrop eines Dialogs endet auf iOS an `safe-area-inset-top`, der
+   Streifen hinter der Statusleiste bliebe also hell stehen. Dieser Schleier ist
+   ein normales fixiertes Element und deckt mit `viewport-fit=cover` wirklich die
+   ganze Fläche ab. Der ::backdrop selbst bleibt deshalb unsichtbar. */
+#scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  opacity: 0;
+  pointer-events: none;
+  background: #1d281c66;
+  backdrop-filter: blur(3px);
+  transition: opacity 0.34s ease;
+}
+#scrim.show {
+  opacity: 1;
+}
+dialog::backdrop {
+  background: transparent;
+}
+/* Greifbarer Hinweis, dass sich das Blatt nach unten wegziehen lässt. Als
+   einziges Element bleibt er beim Scrollen oben stehen. */
+.sheet-grip {
+  position: sticky;
+  top: 8px;
+  z-index: 3;
+  width: 38px;
+  height: 5px;
+  border-radius: 3px;
+  background: #1d281c26;
+  margin: 8px auto 0;
+}
+/* Titel und Schließen scrollen mit dem Inhalt weg. */
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 14px 20px 8px;
+}
+/* Bekommt beim Öffnen den Fokus, damit nicht der Schließen-Knopf ihn zieht und
+   seinen Fokusring zeigt. Vorlesen des Titels ist obendrein das bessere Ziel. */
+#sheet-title:focus {
+  outline: none;
+}
+.sheet-head h2 {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  margin: 0;
+}
+.close {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #eaece5;
+  display: grid;
+  place-items: center;
+}
+.sheet-body {
+  padding: 8px 22px calc(25px + env(safe-area-inset-bottom));
+}
+.detail-photo {
+  aspect-ratio: 1;
+  background: #eaece5;
+  border-radius: 16px;
+  overflow: hidden;
+  margin: 5px 0 20px;
+}
+.detail-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.gallery {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  margin: 5px -22px 16px;
+  padding: 0 22px;
+}
+.gallery::-webkit-scrollbar {
+  display: none;
+}
+.gallery .slide {
+  position: relative;
+  flex: 0 0 82%;
+  scroll-snap-align: center;
+  aspect-ratio: 4/5;
+  margin: 0;
+  background: #eaece5;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.gallery .slide.worn {
+  background: #ebe7e0;
+}
+.gallery .slide:only-child {
+  flex-basis: 100%;
+}
+.gallery .slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.gallery .slide.worn img {
+  object-fit: cover;
+}
+.gallery figcaption {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 5px 11px;
+  border-radius: 20px;
+  background: #ffffffd9;
+  backdrop-filter: blur(12px);
+  font-size: 11px;
+  font-weight: 550;
+  letter-spacing: 0.3px;
+}
+.item-colors {
+  margin: 6px 0 0;
+  text-transform: capitalize;
+}
+.inline {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.rule {
+  height: 1px;
+  background: var(--line);
+  margin: 25px 0;
+}
+.draft {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  margin: 17px 0;
+}
+.draft img {
+  width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #eaece5;
+}
+.draft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 5px 0 12px;
+}
+.draft form {
+  margin-top: 12px;
+}
+.draft-status {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 4px 0 0;
+}
+.draft-head > div {
+  min-width: 0;
+}
+.detection-stage {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #eaece5;
+}
+.detection-stage > img {
+  max-height: none;
+  border-radius: 0;
+  display: block;
+}
+.scan-progress {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  color: white;
+  background: #26332999;
+  backdrop-filter: blur(3px);
+  font-size: 13px;
+}
+.scan-progress .spinner,
+.primary .spinner {
+  border-color: #ffffff66;
+  border-top-color: white;
+}
+.detection-box {
+  position: absolute;
+  min-width: 34px;
+  min-height: 34px;
+  border: 2px solid #ffffffcc;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #26332966, inset 0 0 0 999px #1e2d210d;
+}
+.detection-box.selected {
+  border-color: white;
+  box-shadow: 0 0 0 2px var(--green), inset 0 0 0 999px #344d3f18;
+}
+.detection-box span {
+  position: absolute;
+  top: -13px;
+  right: -13px;
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: white;
+  color: var(--green);
+  box-shadow: 0 2px 10px #0003;
+  font-size: 12px;
+  font-weight: 700;
+}
+.detection-choices {
+  display: grid;
+  gap: 7px;
+  margin: 13px 0;
+}
+.detection-choice {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px;
+  border-radius: 11px;
+  text-align: left;
+  color: var(--muted);
+}
+.detection-choice.selected {
+  background: #eaece5;
+  color: inherit;
+}
+.detection-choice strong,
+.detection-choice small {
+  display: block;
+}
+.detection-choice strong {
+  font-size: 13px;
+}
+.detection-choice small {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 3px;
+}
+.choice-preview {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  border-radius: 9px;
+  background: #e2e6de;
+}
+.choice-copy {
+  min-width: 0;
+  flex: 1;
+}
+.choice-number {
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  flex: 0 0 29px;
+  border: 1px solid #b9beb5;
+  border-radius: 50%;
+  font-size: 11px;
+}
+.selected .choice-number {
+  border-color: var(--green);
+  background: var(--green);
+  color: white;
+}
+.choice-number .icon {
+  width: 15px;
+  height: 15px;
+}
+.cost {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--muted);
+}
+/* Läuft wie die Galerie über die volle Blattbreite. Das Padding hält die erste
+   Kachel in der Textspalte; beim Wischen laufen die Kacheln bis an den
+   Bildschirmrand und blenden dort aus. */
+.versions {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  margin: 0 -22px;
+  padding: 0 22px;
+  scrollbar-width: none;
+}
+.versions::-webkit-scrollbar {
+  display: none;
+}
+.version {
+  min-width: 128px;
+  width: 128px;
+  padding: 0;
+}
+.version-frame {
+  display: block;
+  position: relative;
+}
+/* The current version stays fully legible and is marked by a ring, not by the
+   dimmed look every other disabled button gets. */
+.version:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.version.current .version-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--green);
+  border-radius: 10px;
+}
+.version.current > span:last-child {
+  color: var(--green);
+  font-weight: 600;
+}
+.version img {
+  width: 128px;
+  height: 140px;
+  object-fit: contain;
+  background: #eaece5;
+  border-radius: 10px;
+}
+/* Cutouts are letterboxed inside the tile, the worn photo fills it. Must stay
+   after `.version img`, which carries the same specificity. */
+.source-version img {
+  object-fit: cover;
+}
+.version span {
+  display: block;
+  font-size: 12px;
+  margin: 9px 0;
+}
+/* Marks versions generated at high quality so the more detailed one is
+   recognisable next to older low-quality attempts. */
+.version-tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  margin: 0;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: #fffc;
+  backdrop-filter: blur(12px);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.add-version .version-frame {
+  width: 128px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--green);
+}
+.add-version .icon {
+  width: 26px;
+  height: 26px;
+  margin: 0;
+}
+.facts {
+  margin: 18px 0 20px;
+  display: grid;
+  gap: 12px;
+}
+.facts dt {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.facts dd {
+  margin: 3px 0 0;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 17px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.setting-row:last-child {
+  border: 0;
+}
+.setting-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+#toast {
+  position: fixed;
+  z-index: 10;
+  bottom: calc(90px + env(safe-area-inset-bottom));
+  left: 20px;
+  right: 20px;
+  margin: auto;
+  width: fit-content;
+  max-width: calc(100% - 40px);
+  padding: 13px 20px;
+  border-radius: 14px;
+  background: #263d30;
+  color: white;
+  font-size: 14px;
+  box-shadow: 0 4px 25px #0002;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+#toast.show {
+  opacity: 1;
+}
+.error {
+  color: #9a4335;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.back-link {
+  min-height: 44px;
+  padding: 8px 0;
+  color: var(--green);
+  font-size: 14px;
+}
+.money {
+  font-size: 30px;
+  font-family: var(--serif);
+  margin: 12px 0;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after,
+  dialog::backdrop {
+    animation: none !important;
+    transition: none !important;
+  }
+  /* Ohne Übergang gibt es kein Hereinfahren, das Blatt steht sofort da. */
+  dialog {
+    translate: 0 0;
+  }
+}
+@media (min-width: 601px) {
+  dialog {
+    margin: auto;
+    border-radius: 25px;
+  }
+  .shell {
+    padding-top: 35px;
+  }
+  .nav {
+    border-radius: 20px 20px 0 0;
+  }
+}
+@media (max-width: 360px) {
+  .shell {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  h1 {
+    font-size: 38px;
+  }
+  .grid {
+    gap: 18px 10px;
+  }
+}
+
+.upload-area button .icon {
+  width: 23px;
+  height: 23px;
+  margin: 0;
+  color: inherit;
+}
+.compact-upload {
+  padding: 16px;
+  margin: 22px 0;
+}
+.compact-upload .stack {
+  grid-template-columns: 1fr 1fr;
+}
+.compact-upload .primary,
+.compact-upload .secondary {
+  padding: 12px 8px;
+  font-size: 13px;
+}
+details {
+  margin: 20px 0;
+}
+summary {
+  padding: 12px 0;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* Bilder blenden ein, sobald sie Pixel haben. `wireFades` setzt `loaded` bei
+   bereits gecachten Bildern sofort, die überspringen den Übergang damit. */
+img.fade {
+  opacity: 0;
+}
+img.fade.loaded {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  img.fade {
+    transition: opacity 0.28s ease;
+  }
+}
+/* Gefilterte Kacheln liegen weiter im Grid, nur unsichtbar. `.item` setzt
+   `display: flex` und würde das UA-Default für [hidden] sonst überschreiben. */
+[hidden] {
+  display: none !important;
+}
+/* Weiche Kante an der Seite, zu der eine horizontale Reihe noch weiterläuft.
+   `at-start` / `at-end` kommen aus `wireScrollFade`. */
+.scroll-fade {
+  --fade-left: 26px;
+  --fade-right: 26px;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+}
+.scroll-fade.at-start {
+  --fade-left: 0px;
+}
+.scroll-fade.at-end {
+  --fade-right: 0px;
+}
+
+/* Platzhalter für die Teile, die erst die Detail-Anfrage kennt. Bild, Name und
+   Farben stehen schon aus der Übersicht, hier wird nur der Rest nachgereicht. */
+.skeleton {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(100deg, #e7eae2 34%, #f1f3ee 50%, #e7eae2 66%);
+  background-size: 300% 100%;
+  animation: skeleton-sweep 1.5s ease-in-out infinite;
+}
+@keyframes skeleton-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+.skeleton-line {
+  height: 11px;
+  margin: 6px 0;
+}
+.skeleton-button {
+  height: 52px;
+  border-radius: 14px;
+  margin: 14px 0 0;
+}
+.skeleton-version {
+  flex: none;
+  width: 128px;
+  height: 140px;
+  border-radius: 10px;
+}

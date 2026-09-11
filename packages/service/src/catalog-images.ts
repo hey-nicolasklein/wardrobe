@@ -4,9 +4,12 @@ import type { NormalizedBoundingBox } from '@form/contracts';
 
 const maximumInputPixels = 40_000_000;
 const referenceJpegQuality = 92;
-const contextPaddingRatio = 0.18;
+// Room left around the garment on each side, as a share of its longer edge.
+const contextPaddingRatio = 0.25;
 const keyDistanceTransparent = 12;
 const keyDistanceOpaque = 32;
+// How many pixels in from the matte edge to decontaminate chroma spill (the halo).
+const spillEdgeRadius = 6;
 
 export class CatalogImageError extends Error {
   constructor(
@@ -42,19 +45,33 @@ export async function cropGenerationReference(
     throw new CatalogImageError('validation', 'The normalized Source Photo has no dimensions.');
   }
 
-  const targetLeft = Math.floor((box.x / 1_000) * metadata.width);
-  const targetTop = Math.floor((box.y / 1_000) * metadata.height);
-  const targetWidth = Math.max(1, Math.ceil((box.width / 1_000) * metadata.width));
-  const targetHeight = Math.max(1, Math.ceil((box.height / 1_000) * metadata.height));
-  const horizontalPadding = Math.ceil(targetWidth * contextPaddingRatio);
-  const verticalPadding = Math.ceil(targetHeight * contextPaddingRatio);
-  const left = Math.max(0, targetLeft - horizontalPadding);
-  const top = Math.max(0, targetTop - verticalPadding);
-  const right = Math.min(metadata.width, targetLeft + targetWidth + horizontalPadding);
-  const bottom = Math.min(metadata.height, targetTop + targetHeight + verticalPadding);
+  // A square window centred on the garment, sized from its longer edge. Padding
+  // each axis by a share of its own length starved flat boxes: a 462x140 pair of
+  // shorts got generous room sideways and almost none above the waistband, so
+  // necklines and hems fell outside the reference and the model invented them.
+  // Square also matches the square output, which keeps the garment's pixels.
+  const centerX = ((box.x + box.width / 2) / 1_000) * metadata.width;
+  const centerY = ((box.y + box.height / 2) / 1_000) * metadata.height;
+  const longEdge = Math.max(
+    (box.width / 1_000) * metadata.width,
+    (box.height / 1_000) * metadata.height,
+  );
+  const desired = Math.round(longEdge * (1 + 2 * contextPaddingRatio));
+  // Clamped per axis, not by one shared side. A single side capped at the
+  // shorter image edge would cut a garment that is taller than the photo is
+  // wide — a full-length coat in a portrait shot — so the window gives up
+  // squareness only as far as the photo forces it, and never drops the box.
+  const cropWidth = Math.max(1, Math.min(desired, metadata.width));
+  const cropHeight = Math.max(1, Math.min(desired, metadata.height));
+  const left = Math.round(
+    Math.min(Math.max(0, centerX - cropWidth / 2), metadata.width - cropWidth),
+  );
+  const top = Math.round(
+    Math.min(Math.max(0, centerY - cropHeight / 2), metadata.height - cropHeight),
+  );
 
   return image
-    .extract({ left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) })
+    .extract({ left, top, width: cropWidth, height: cropHeight })
     .jpeg({ quality: referenceJpegQuality, chromaSubsampling: '4:4:4' })
     .toBuffer();
 }
@@ -147,21 +164,83 @@ export async function removeValidatedChromaBackground(
     );
   }
 
-  for (let offset = 0; offset < decoded.data.length; offset += channels) {
+  // Coarse matte by colour distance: garment opaque, background transparent,
+  // with a narrow feather. Snapshot it so the edge pass reads a stable matte.
+  const matte = new Uint8Array(width * height);
+  for (let index = 0; index < matte.length; index += 1) {
+    const offset = index * channels;
     const distance = colorDistance(
       decoded.data[offset]!,
       decoded.data[offset + 1]!,
       decoded.data[offset + 2]!,
       key,
     );
-    if (distance <= keyDistanceTransparent) {
-      decoded.data[offset + 3] = 0;
-    } else if (distance < keyDistanceOpaque) {
-      decoded.data[offset + 3] = Math.round(
-        ((distance - keyDistanceTransparent) /
-          (keyDistanceOpaque - keyDistanceTransparent)) *
-          255,
-      );
+    matte[index] =
+      distance <= keyDistanceTransparent
+        ? 0
+        : distance < keyDistanceOpaque
+          ? Math.round(
+              ((distance - keyDistanceTransparent) /
+                (keyDistanceOpaque - keyDistanceTransparent)) *
+                255,
+            )
+          : 255;
+    decoded.data[offset + 3] = matte[index]!;
+  }
+
+  // Distance keying alone leaves a tinted ring on soft edges: a blend of garment
+  // and background sits far from the pure key colour, so it stays opaque and
+  // keeps its chroma tint (the halo). Near the matte edge, re-key by how strongly
+  // a pixel leans toward the key colour and un-mix that contribution back out,
+  // recovering the true garment colour so the edge fades cleanly over any
+  // background. Gated spatially, so a garment body is never touched. spillChannels
+  // carry the key (green for #00ff00, red and blue for the #ff00ff fallback);
+  // anchorChannels are the garment-bearing rest.
+  const keyMax = Math.max(key[0], key[1], key[2]);
+  const spillChannels = [0, 1, 2].filter((channel) => key[channel]! > keyMax / 2);
+  const anchorChannels = [0, 1, 2].filter((channel) => key[channel]! <= keyMax / 2);
+  const spillKey =
+    spillChannels.reduce((sum, channel) => sum + key[channel]!, 0) /
+    Math.max(1, spillChannels.length);
+  const anchorKey = Math.max(0, ...anchorChannels.map((channel) => key[channel]!));
+  const keyStrength = spillKey - anchorKey;
+  if (anchorChannels.length > 0 && keyStrength > 0) {
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const index = y * width + x;
+        if (matte[index] === 0) continue;
+        let nearEdge = false;
+        for (let dy = -spillEdgeRadius; dy <= spillEdgeRadius && !nearEdge; dy += 1) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= height) continue;
+          for (let dx = -spillEdgeRadius; dx <= spillEdgeRadius; dx += 1) {
+            const nx = x + dx;
+            if (nx < 0 || nx >= width) continue;
+            if (matte[ny * width + nx] === 0) {
+              nearEdge = true;
+              break;
+            }
+          }
+        }
+        if (!nearEdge) continue;
+        const offset = index * channels;
+        const spill =
+          spillChannels.reduce((sum, channel) => sum + decoded.data[offset + channel]!, 0) /
+          spillChannels.length;
+        const anchor = Math.max(0, ...anchorChannels.map((channel) => decoded.data[offset + channel]!));
+        let coverage = 1 - (spill - anchor) / keyStrength;
+        coverage = Math.max(0, Math.min(coverage, matte[index]! / 255));
+        if (coverage <= 0) {
+          decoded.data[offset + 3] = 0;
+          continue;
+        }
+        for (const channel of [0, 1, 2]) {
+          const unmixed =
+            (decoded.data[offset + channel]! - (1 - coverage) * key[channel]!) / coverage;
+          decoded.data[offset + channel] = Math.max(0, Math.min(255, Math.round(unmixed)));
+        }
+        decoded.data[offset + 3] = Math.round(coverage * 255);
+      }
     }
   }
 

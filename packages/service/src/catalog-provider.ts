@@ -7,6 +7,7 @@ import {
   type ItemMetadata,
   type NormalizedBoundingBox,
 } from '@form/contracts';
+import sharp from 'sharp';
 import { z } from 'zod';
 
 export type ProviderFailureCategory =
@@ -87,10 +88,10 @@ const detectionOutputSchema = z
           ]),
           colors: z.array(z.string()),
           boundingBox: z.object({
-            x: z.number(),
-            y: z.number(),
-            width: z.number(),
-            height: z.number(),
+            top: z.number(),
+            left: z.number(),
+            bottom: z.number(),
+            right: z.number(),
           }),
         })
         .strict(),
@@ -98,57 +99,71 @@ const detectionOutputSchema = z
   })
   .strict();
 
-const detectionJsonSchema = {
-  type: 'object',
-  properties: {
-    detections: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          name: { type: 'string' },
-          category: {
-            type: 'string',
-            enum: [
-              'top',
-              'jacket',
-              'pants',
-              'skirt',
-              'dress',
-              'shoes',
-              'bag',
-              'hat',
-              'scarf',
-              'unsupported',
-            ],
-          },
-          colors: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 6 },
-          boundingBox: {
-            type: 'object',
-            properties: {
-              x: { type: 'integer', minimum: 0, maximum: 999 },
-              y: { type: 'integer', minimum: 0, maximum: 999 },
-              width: { type: 'integer', minimum: 1, maximum: 1000 },
-              height: { type: 'integer', minimum: 1, maximum: 1000 },
+function detectionJsonSchema(pixelWidth: number, pixelHeight: number) {
+  return {
+    type: 'object',
+    properties: {
+      detections: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            category: {
+              type: 'string',
+              enum: [
+                'top',
+                'jacket',
+                'pants',
+                'skirt',
+                'dress',
+                'shoes',
+                'bag',
+                'hat',
+                'scarf',
+                'unsupported',
+              ],
             },
-            required: ['x', 'y', 'width', 'height'],
-            additionalProperties: false,
+            colors: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 6 },
+            boundingBox: {
+              type: 'object',
+              properties: {
+                top: { type: 'integer', minimum: 0, maximum: pixelHeight - 1 },
+                left: { type: 'integer', minimum: 0, maximum: pixelWidth - 1 },
+                bottom: { type: 'integer', minimum: 1, maximum: pixelHeight },
+                right: { type: 'integer', minimum: 1, maximum: pixelWidth },
+              },
+              required: ['top', 'left', 'bottom', 'right'],
+              additionalProperties: false,
+            },
           },
+          required: ['name', 'category', 'colors', 'boundingBox'],
+          additionalProperties: false,
         },
-        required: ['name', 'category', 'colors', 'boundingBox'],
-        additionalProperties: false,
       },
     },
-  },
-  required: ['detections'],
-  additionalProperties: false,
-} as const;
+    required: ['detections'],
+    additionalProperties: false,
+  } as const;
+}
 
-const detectionPrompt = `Identify every distinct visible clothing item and wearable accessory in this image.
+function detectionPrompt(pixelWidth: number, pixelHeight: number) {
+  return `This image is exactly ${pixelWidth} pixels wide and ${pixelHeight} pixels high. Identify every distinct visible clothing item and wearable accessory in it.
 
-Return layered garments and small accessories separately. Do not infer hidden items, merge separate garments, or return brands, materials, tags, notes, masks, or polygons. Propose a concise visible-pixel-supported name and color list. Use category unsupported for a visible wearable outside the supported categories. Bounding boxes are integer coordinates in a normalized 1000 by 1000 frame and must contain the visible item.`;
+Treat screenshots and product grids as multiple pictured instances. Return each separately pictured garment as its own proposal, even when the same product appears more than once. Never merge a main product image with thumbnails, recommendations, captions, or controls.
 
-export const shelfImagePromptVersion = 'laid-flat-v1';
+Return layered garments and small accessories separately. Do not infer hidden items or return brands, materials, tags, notes, masks, or polygons. Propose a concise visible-pixel-supported name and color list. Use category unsupported for a visible wearable outside the supported categories.
+
+For every bounding box, locate the outermost visible pixels of exactly one garment. Use a tight box with at most 2% padding and exclude captions, controls, cards, background, and other garments. Use original image pixels in the standard order top, left, bottom, right. Top and bottom are pixel rows from 0 to ${pixelHeight}. Left and right are pixel columns from 0 to ${pixelWidth}. The origin is the image's top-left corner. Before responding, verify that the center of each box lies on its named garment and that the box does not group multiple pictured instances.`;
+}
+
+export const shelfImagePromptVersion = 'laid-flat-v3';
+
+// Recorded on every attempt, so older rows keep the model that produced them.
+// Flare emits 1536 output tokens against gpt-image-2's 6143 for the same
+// high/816x816 request — same rate card, a quarter of the tokens, and it holds
+// the flat chroma key more reliably on fuzzy edges.
+export const shelfImageModel = 'gpt-image-2.5-flare';
 
 export function buildShelfImagePrompt(metadata: ItemMetadata): string {
   return `Create a faithful e-commerce catalog presentation from the source image.
@@ -158,7 +173,10 @@ SUBJECT
 - Remove every person, body part, mannequin, hanger, tag string, prop, and surrounding object.
 - Present the garment laid flat, viewed straight from above, centered, with generous even padding.
 - Preserve the source-supported silhouette, proportions, color, pattern, seams, panels, hems, cuffs, collar, closures, pockets, trim, wear, and fabric behavior exactly.
-- Construction must be supported by the source. Omit logos, labels, text, hardware, lining, reverse-side features, material claims, or decorative details that are hidden, illegible, ambiguous, or uncertain.
+- Reproduce the fabric's visible surface at full detail: weave or knit structure, pile, ribbing, quilting, jacquard or tonal motifs, sheen, and the exact repeat and scale of any pattern. A textured fabric must never be rendered as a flat, smooth surface, and a tonal pattern must stay visible even when it is close to the base color.
+- Match collar shape, lapel roll, opening depth, and cuff or hem construction to the source rather than to a generic version of this garment type.
+- Keep every brand mark that is visible on the garment in the source: logo, wordmark, emblem, embroidery, print, or woven label. Reproduce its exact wording, letterforms, colors, size relative to the garment, and position, and keep it as sharp as the source shows it. Never move a brand mark to a more typical spot, never enlarge it, and never replace it with a generic or invented mark.
+- Construction must be supported by the source. Omit logos, labels, text, hardware, lining, reverse-side features, material claims, or decorative details that are hidden, illegible, ambiguous, or uncertain. An illegible mark stays out entirely rather than being rendered as approximate or garbled lettering.
 - Where removing the wearer exposes an unseen area, use only the plainest continuation of source-supported fabric needed to make the empty item complete. Add no new seam, fold, fastening, texture, or design detail.
 
 BACKGROUND
@@ -169,14 +187,26 @@ BACKGROUND
 - Never use a key color present anywhere in the garment.
 
 OUTPUT
-- One square shop-style product image. Garment only. No styling, text, border, watermark, or extra view.`;
+- One square shop-style product image. Garment only. No styling, border, watermark, or extra view, and no text beyond what is printed, woven, or embroidered on the garment itself.`;
 }
 
-function clampBox(box: z.infer<typeof detectionOutputSchema>['detections'][number]['boundingBox']): NormalizedBoundingBox {
-  const x = Math.max(0, Math.min(999, Math.round(box.x)));
-  const y = Math.max(0, Math.min(999, Math.round(box.y)));
-  const width = Math.max(1, Math.min(1_000 - x, Math.round(box.width)));
-  const height = Math.max(1, Math.min(1_000 - y, Math.round(box.height)));
+function clampBox(
+  box: z.infer<typeof detectionOutputSchema>['detections'][number]['boundingBox'],
+  pixelWidth: number,
+  pixelHeight: number,
+): NormalizedBoundingBox {
+  const x = Math.max(0, Math.min(999, Math.round((box.left / pixelWidth) * 1_000)));
+  const y = Math.max(0, Math.min(999, Math.round((box.top / pixelHeight) * 1_000)));
+  const right = Math.max(
+    x + 1,
+    Math.min(1_000, Math.round((box.right / pixelWidth) * 1_000)),
+  );
+  const bottom = Math.max(
+    y + 1,
+    Math.min(1_000, Math.round((box.bottom / pixelHeight) * 1_000)),
+  );
+  const width = right - x;
+  const height = bottom - y;
   return { x, y, width, height };
 }
 
@@ -228,6 +258,16 @@ export class OpenAICatalogProvider implements CatalogProvider {
     model: string;
     signal?: AbortSignal;
   }): Promise<DetectionProviderResult> {
+    const metadata = await sharp(input.jpegBytes).metadata();
+    const pixelWidth = metadata.width;
+    const pixelHeight = metadata.height;
+    if (!pixelWidth || !pixelHeight) {
+      throw new CatalogProviderError(
+        'validation',
+        'The source image dimensions could not be read.',
+        false,
+      );
+    }
     let response: Response;
     try {
       response = await fetch(`${this.baseUrl}/responses`, {
@@ -244,7 +284,10 @@ export class OpenAICatalogProvider implements CatalogProvider {
             {
               role: 'user',
               content: [
-                { type: 'input_text', text: detectionPrompt },
+                {
+                  type: 'input_text',
+                  text: detectionPrompt(pixelWidth, pixelHeight),
+                },
                 {
                   type: 'input_image',
                   image_url: `data:image/jpeg;base64,${Buffer.from(input.jpegBytes).toString('base64')}`,
@@ -258,7 +301,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
               type: 'json_schema',
               name: 'garment_detections',
               strict: true,
-              schema: detectionJsonSchema,
+              schema: detectionJsonSchema(pixelWidth, pixelHeight),
             },
           },
         }),
@@ -301,7 +344,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
         name: detection.name.trim().slice(0, 80),
         category: detection.category,
         colors: detection.colors.map((color) => color.trim().slice(0, 32)).filter(Boolean).slice(0, 6),
-        boundingBox: clampBox(detection.boundingBox),
+        boundingBox: clampBox(detection.boundingBox, pixelWidth, pixelHeight),
       }),
     );
     return {

@@ -7,14 +7,11 @@ COPY packages ./packages
 COPY tsconfig.base.json ./
 RUN npm ci
 
-FROM dependencies AS web-build
-ARG EXPO_PUBLIC_API_URL
-ENV EXPO_PUBLIC_API_URL=$EXPO_PUBLIC_API_URL
-RUN npm run export:web --workspace=@form/mobile
-
 FROM nginx:1.29-alpine AS web
+ARG FORM_VERSION=dev
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=web-build /app/apps/mobile/dist /usr/share/nginx/html
+COPY apps/web/public /usr/share/nginx/html
+RUN printf '{"version":"%s"}' "$FORM_VERSION" > /usr/share/nginx/html/version.json
 
 FROM dependencies AS api
 CMD ["npm", "run", "start", "--workspace=@form/api"]

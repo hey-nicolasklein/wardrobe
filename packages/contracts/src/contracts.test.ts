@@ -55,14 +55,23 @@ test('rejects a normalized detection extending beyond the source frame', () => {
   assert.equal(result.success, false);
 });
 
-test('defaults paid generation to the agreed low 816 square contract', () => {
+test('defaults paid generation to the agreed high 816 square contract', () => {
   const request = enqueueGenerationRequestSchema.parse({
     wardrobeItemId: id,
     idempotencyKey: 'command-0123456789abcdef',
   });
 
-  assert.equal(request.quality, 'low');
+  assert.equal(request.quality, 'high');
   assert.equal(request.size, '816x816');
+  assert.equal(request.autoKeep, true);
+  assert.equal(
+    enqueueGenerationRequestSchema.parse({
+      wardrobeItemId: id,
+      autoKeep: true,
+      idempotencyKey: 'automatic-command-0123456789',
+    }).autoKeep,
+    true,
+  );
 });
 
 test('requires an offline-safe edit command to change at least one field', () => {
