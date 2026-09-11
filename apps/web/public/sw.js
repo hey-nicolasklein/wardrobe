@@ -1,4 +1,4 @@
-const cacheName = 'form-shell-v1';
+const cacheName = 'form-shell-v2';
 const shell = [
   '/',
   '/index.html',

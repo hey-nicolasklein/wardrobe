@@ -16,8 +16,13 @@ The production instance runs on the `stargate` host at `https://stargate.stork-p
 **Ship every finished change here without asking.** There are no users besides Nico, and the tailnet instance is expected to run the current version at all times. Once a change is implemented and verified, rebuild and recreate the affected services in the same turn, then report the deployed state. Migrating, resetting, or deleting data is *not* covered by this — those still need an explicit request.
 
 - Rebuild only what carries the change: `web` for anything in `apps/web/public`, `api` for `apps/api` or `packages/contracts`, `worker` for `apps/worker` or `packages/service` (prompts and image processing live there). Contracts changes touch `api` and `worker` both. Compose recreates `api` alongside `web` on its own — that is expected, not a mistake.
-- Deploy command (`--env-file` is required, the compose file interpolates from it):
-  `docker compose --env-file .env.production -f compose.production.yaml up -d --build <services>`
+- Deploy command: `deploy/ship.sh [services]` (default `web api worker`). Always use it
+  instead of calling compose by hand. It stamps a fresh `FORM_VERSION`, rebuilds, and
+  blocks until `/version.json` reports that stamp. A bare
+  `docker compose --env-file .env.production -f compose.production.yaml up -d --build`
+  leaves `FORM_VERSION` unset, which bakes the literal `dev` into `version.json`; open
+  clients then never see the version change, never reload, and keep running the old
+  `app.js`. `web` is always rebuilt because it carries the stamp.
 - Confirm afterwards: `ps` shows the rebuilt services healthy, and `curl -s http://127.0.0.1:18081/<asset>` serves the new bytes.
 - It runs as the long-lived `form-production` Docker Compose project from `compose.production.yaml` (`web`, `api`, `worker`, `postgres`, `object-storage`), all `restart: unless-stopped`.
 - Tailscale Serve terminates HTTPS on `:8443` and proxies to `127.0.0.1:${FORM_WEB_PORT}` (default `18081`), the `web` container, which proxies `/v1/` to the API. `tailscale serve status` shows the mapping.

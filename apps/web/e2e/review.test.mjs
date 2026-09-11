@@ -40,7 +40,9 @@ try {
       exact: true,
     })
     .waitFor();
-  assert.ok(await page.getByText(/12 US-Cent/).isVisible());
+  // Matches the measured cost of a high-quality 816x816 image, not the old
+  // 12-cent guess the dialog used to quote.
+  assert.ok(await page.getByText(/19 US-Cent/).isVisible());
   await page
     .getByRole('button', { name: 'Abbrechen', exact: true })
     .click();

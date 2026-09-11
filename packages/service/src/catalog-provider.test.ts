@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import sharp from 'sharp';
+
 import {
   CatalogProviderError,
   OpenAICatalogProvider,
@@ -35,7 +37,7 @@ test('uses strict Responses output and clamps detection boxes', async () => {
                     name: 'Red overshirt',
                     category: 'jacket',
                     colors: ['red'],
-                    boundingBox: { x: 900, y: 10, width: 300, height: 400 },
+                    boundingBox: { top: 2, left: 90, bottom: 82, right: 120 },
                   },
                 ],
               }),
@@ -46,8 +48,13 @@ test('uses strict Responses output and clamps detection boxes', async () => {
     });
   };
   try {
+    const jpegBytes = await sharp({
+      create: { width: 100, height: 200, channels: 3, background: '#ffffff' },
+    })
+      .jpeg()
+      .toBuffer();
     const result = await new OpenAICatalogProvider('test-key').detect({
-      jpegBytes: Buffer.from('fixture'),
+      jpegBytes,
       model: 'gpt-5.4-mini',
     });
     assert.equal(result.requestId, 'resp_fixture');
@@ -60,6 +67,15 @@ test('uses strict Responses output and clamps detection boxes', async () => {
     const format = (requestBody?.text as { format: { strict: boolean; schema: unknown } }).format;
     assert.equal(format.strict, true);
     assert.equal((format.schema as { additionalProperties: boolean }).additionalProperties, false);
+    const prompt = (
+      requestBody?.input as Array<{ content: Array<{ type: string; text?: string }> }>
+    )[0]?.content.find(({ type }) => type === 'input_text')?.text;
+    assert.match(prompt ?? '', /Treat screenshots and product grids as multiple pictured instances/);
+    assert.match(
+      prompt ?? '',
+      /exclude captions, controls, cards, background, and other garments/,
+    );
+    assert.match(prompt ?? '', /exactly 100 pixels wide and 200 pixels high/);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -161,12 +177,17 @@ test('replay outputs are isolated and cost arithmetic stays integer', async () =
 
 test('classifies transient and non-retryable provider failures', async () => {
   const originalFetch = globalThis.fetch;
+  const jpegBytes = await sharp({
+    create: { width: 10, height: 10, channels: 3, background: '#ffffff' },
+  })
+    .jpeg()
+    .toBuffer();
   globalThis.fetch = async () =>
     Response.json({ error: { code: 'rate_limit_exceeded', message: 'slow down' } }, { status: 429 });
   try {
     await assert.rejects(
       new OpenAICatalogProvider('test-key').detect({
-        jpegBytes: Buffer.from('fixture'),
+        jpegBytes,
         model: 'gpt-5.4-mini',
       }),
       (error: unknown) =>
@@ -186,7 +207,7 @@ test('classifies transient and non-retryable provider failures', async () => {
   try {
     await assert.rejects(
       new OpenAICatalogProvider('test-key').detect({
-        jpegBytes: Buffer.from('fixture'),
+        jpegBytes,
         model: 'gpt-5.4-mini',
       }),
       (error: unknown) =>

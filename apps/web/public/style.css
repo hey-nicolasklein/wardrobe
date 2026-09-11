@@ -2,6 +2,9 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   color: #242923;
   background: #f6f5f1;
+  /* Ohne diese Angabe malt Safari Flächen, die es selbst beisteuert – etwa den
+     Streifen hinter der Statusleiste – in seinem eigenen Weiß statt in Papier. */
+  color-scheme: light;
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
   --green: #344d3f;
@@ -15,6 +18,16 @@
 }
 body {
   margin: 0;
+  background: #f6f5f1;
+  min-height: 100dvh;
+  transition: background-color 0.34s ease;
+}
+/* Der Streifen hinter der Statusleiste wird von iOS aus der Seitenfarbe
+   gefüllt, nicht aus Overlays – weder der ::backdrop des Dialogs noch #scrim
+   erreichen ihn. Beim geöffneten Blatt bekommt die Seite deshalb direkt die
+   Farbe, die der Schleier sonst erzeugt: #1d281c bei 40 % über dem Papier. */
+body.sheet-open {
+  background: #9fa39c;
 }
 button,
 input,
@@ -289,10 +302,12 @@ h3 {
     opacity: 1;
   }
 }
-.item:nth-child(4n + 2) .photo {
+/* Der Farbton hängt am Stück, nicht an seiner Position: `nth-child` zählt auch
+   ausgeblendete Kacheln mit, die Töne sprängen beim Filtern also umher. */
+.item.tint-1 .photo {
   background: #ebe7e0;
 }
-.item:nth-child(4n + 3) .photo {
+.item.tint-2 .photo {
   background: #e5e9e6;
 }
 .item-name {
@@ -326,8 +341,9 @@ h3 {
   right: 0;
   max-width: 600px;
   margin: auto;
-  background: #f6f5f1f2;
-  backdrop-filter: blur(20px);
+  /* Deckend wie die Blatt-Kopfzeile: helle Kacheln, die darunter wegscrollen,
+     drückten durch den Halbton als weißer Schleier durch. */
+  background: #f6f5f1;
   border-top: 1px solid var(--line);
   padding: 9px 12px calc(8px + env(safe-area-inset-bottom));
   display: flex;
@@ -483,6 +499,9 @@ h3 {
     transform: rotate(360deg);
   }
 }
+/* Das Blatt fährt von unten herein und beim Schließen wieder hinaus. `display`
+   und `overlay` müssen mit `allow-discrete` mitlaufen, sonst verschwindet der
+   Dialog sofort und die Ausblende-Animation wäre nie zu sehen. */
 dialog {
   border: 0;
   padding: 0;
@@ -494,23 +513,72 @@ dialog {
   background: #f6f5f1;
   color: inherit;
   box-shadow: 0 -10px 70px #0002;
-  overscroll-behavior: contain;
+  /* `none`, nicht `contain`: das Blatt ist selbst der Scroll-Container, und iOS
+     würde den Inhalt am oberen Rand federn lassen. Diese Feder liefe zusätzlich
+     zur Zieh-Geste, der Inhalt wanderte also schneller als das Blatt. */
+  overscroll-behavior: none;
+  translate: 0 100%;
+  transition:
+    translate 0.34s cubic-bezier(0.32, 0.72, 0, 1),
+    display 0.34s allow-discrete,
+    overlay 0.34s allow-discrete;
 }
-dialog::backdrop {
+dialog[open] {
+  translate: 0 0;
+}
+@starting-style {
+  dialog[open] {
+    translate: 0 100%;
+  }
+}
+/* Während der Finger zieht, folgt das Blatt direkt statt zu animieren. */
+dialog.dragging {
+  transition: none;
+}
+/* Der ::backdrop eines Dialogs endet auf iOS an `safe-area-inset-top`, der
+   Streifen hinter der Statusleiste bliebe also hell stehen. Dieser Schleier ist
+   ein normales fixiertes Element und deckt mit `viewport-fit=cover` wirklich die
+   ganze Fläche ab. Der ::backdrop selbst bleibt deshalb unsichtbar. */
+#scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  opacity: 0;
+  pointer-events: none;
   background: #1d281c66;
   backdrop-filter: blur(3px);
+  transition: opacity 0.34s ease;
 }
-.sheet-head {
+#scrim.show {
+  opacity: 1;
+}
+dialog::backdrop {
+  background: transparent;
+}
+/* Greifbarer Hinweis, dass sich das Blatt nach unten wegziehen lässt. Als
+   einziges Element bleibt er beim Scrollen oben stehen. */
+.sheet-grip {
   position: sticky;
-  top: 0;
-  background: #f6f5f1f5;
-  backdrop-filter: blur(15px);
+  top: 8px;
+  z-index: 3;
+  width: 38px;
+  height: 5px;
+  border-radius: 3px;
+  background: #1d281c26;
+  margin: 8px auto 0;
+}
+/* Titel und Schließen scrollen mit dem Inhalt weg. */
+.sheet-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 15px;
-  padding: 16px 20px 8px;
-  z-index: 2;
+  padding: 14px 20px 8px;
+}
+/* Bekommt beim Öffnen den Fokus, damit nicht der Schließen-Knopf ihn zieht und
+   seinen Fokusring zeigt. Vorlesen des Titels ist obendrein das bessere Ziel. */
+#sheet-title:focus {
+  outline: none;
 }
 .sheet-head h2 {
   font-family: inherit;
@@ -759,10 +827,19 @@ dialog::backdrop {
   font-size: 13px;
   color: var(--muted);
 }
+/* Läuft wie die Galerie über die volle Blattbreite. Das Padding hält die erste
+   Kachel in der Textspalte; beim Wischen laufen die Kacheln bis an den
+   Bildschirmrand und blenden dort aus. */
 .versions {
   display: flex;
   gap: 12px;
   overflow-x: auto;
+  margin: 0 -22px;
+  padding: 0 22px;
+  scrollbar-width: none;
+}
+.versions::-webkit-scrollbar {
+  display: none;
 }
 .version {
   min-width: 128px;
@@ -916,9 +993,14 @@ dialog::backdrop {
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
-  *::after {
+  *::after,
+  dialog::backdrop {
     animation: none !important;
     transition: none !important;
+  }
+  /* Ohne Übergang gibt es kein Hereinfahren, das Blatt steht sofort da. */
+  dialog {
+    translate: 0 0;
   }
 }
 @media (min-width: 601px) {
@@ -971,4 +1053,82 @@ summary {
   padding: 12px 0;
   font-size: 14px;
   cursor: pointer;
+}
+
+/* Bilder blenden ein, sobald sie Pixel haben. `wireFades` setzt `loaded` bei
+   bereits gecachten Bildern sofort, die überspringen den Übergang damit. */
+img.fade {
+  opacity: 0;
+}
+img.fade.loaded {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  img.fade {
+    transition: opacity 0.28s ease;
+  }
+}
+/* Gefilterte Kacheln liegen weiter im Grid, nur unsichtbar. `.item` setzt
+   `display: flex` und würde das UA-Default für [hidden] sonst überschreiben. */
+[hidden] {
+  display: none !important;
+}
+/* Weiche Kante an der Seite, zu der eine horizontale Reihe noch weiterläuft.
+   `at-start` / `at-end` kommen aus `wireScrollFade`. */
+.scroll-fade {
+  --fade-left: 26px;
+  --fade-right: 26px;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    #000 var(--fade-left),
+    #000 calc(100% - var(--fade-right)),
+    transparent 100%
+  );
+}
+.scroll-fade.at-start {
+  --fade-left: 0px;
+}
+.scroll-fade.at-end {
+  --fade-right: 0px;
+}
+
+/* Platzhalter für die Teile, die erst die Detail-Anfrage kennt. Bild, Name und
+   Farben stehen schon aus der Übersicht, hier wird nur der Rest nachgereicht. */
+.skeleton {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(100deg, #e7eae2 34%, #f1f3ee 50%, #e7eae2 66%);
+  background-size: 300% 100%;
+  animation: skeleton-sweep 1.5s ease-in-out infinite;
+}
+@keyframes skeleton-sweep {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+.skeleton-line {
+  height: 11px;
+  margin: 6px 0;
+}
+.skeleton-button {
+  height: 52px;
+  border-radius: 14px;
+  margin: 14px 0 0;
+}
+.skeleton-version {
+  flex: none;
+  width: 128px;
+  height: 140px;
+  border-radius: 10px;
 }

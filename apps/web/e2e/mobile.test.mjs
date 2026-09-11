@@ -73,14 +73,15 @@ try {
     .count()
     .catch(() => 0);
   await page.getByRole('searchbox').fill('Browser-Test Hemd');
-  assert.equal(await page.locator('.item').count(), 1);
+  // Filtering hides tiles instead of rebuilding the grid, so count what is shown.
+  assert.equal(await page.locator('.item:not([hidden])').count(), 1);
   await page.getByRole('button', { name: /Browser-Test Hemd/ }).click();
   await page.getByRole('button', { name: 'Stück endgültig löschen …' }).click();
   await page
     .getByRole('button', { name: 'Stück endgültig löschen', exact: true })
     .click();
   await page.locator('dialog').waitFor({ state: 'hidden' });
-  assert.equal(await page.locator('.item').count(), 0);
+  assert.equal(await page.locator('.item:not([hidden])').count(), 0);
   await page
     .getByRole('button', { name: 'Einstellungen', exact: true })
     .click();

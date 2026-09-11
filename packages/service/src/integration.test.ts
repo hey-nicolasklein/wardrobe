@@ -261,6 +261,7 @@ test('replay pipeline detects, crops, accounts, and stores review assets', { ski
       wardrobeItemId: item.id,
       quality: 'low',
       size: '816x816',
+      autoKeep: false,
       idempotencyKey: 'pipeline-generation-command-0001',
     });
     await executeCatalogJob(
@@ -305,6 +306,50 @@ test('replay pipeline detects, crops, accounts, and stores review assets', { ski
       cost_microunits: '140',
       resolved_chroma_key: '#00ff00',
       assets: 3,
+    });
+
+    const automaticGeneration = await enqueueShelfImageGeneration(database, {
+      accountId: fixtureIds.populatedAccount,
+      wardrobeItemId: item.id,
+      quality: 'low',
+      size: '816x816',
+      autoKeep: true,
+      idempotencyKey: 'pipeline-automatic-generation-command-0001',
+    });
+    await executeCatalogJob(
+      database,
+      storage,
+      provider,
+      {
+        id: automaticGeneration.jobId,
+        accountId: fixtureIds.populatedAccount,
+        wardrobeItemId: item.id,
+        generationAttemptId: automaticGeneration.generationAttemptId,
+        kind: 'generate-shelf-image',
+        payload: { generationAttemptId: automaticGeneration.generationAttemptId },
+        attempts: 1,
+        maxAttempts: 2,
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      },
+      executionConfig,
+    );
+    const automaticallyKept = await database.query<{
+      attempt_state: string;
+      item_status: string;
+      current_version_attempt_id: string;
+    }>(
+      `SELECT attempts.state AS attempt_state, items.status AS item_status,
+         versions.generation_attempt_id AS current_version_attempt_id
+       FROM generation_attempts attempts
+       JOIN wardrobe_items items ON items.id = attempts.wardrobe_item_id
+       JOIN shelf_image_versions versions ON versions.id = items.current_shelf_image_version_id
+       WHERE attempts.id = $1`,
+      [automaticGeneration.generationAttemptId],
+    );
+    assert.deepEqual(automaticallyKept.rows[0], {
+      attempt_state: 'kept',
+      item_status: 'ready',
+      current_version_attempt_id: automaticGeneration.generationAttemptId,
     });
 
     const nonUniformOutput = await sharp({

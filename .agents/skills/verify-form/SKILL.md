@@ -79,10 +79,13 @@ It navigates to the hash route, waits for images, checks for horizontal overflow
 page/HTTP errors, writes an ARIA snapshot + full-page screenshot to `FORM_VERIFY_OUT`
 (default `/tmp/form-verify`), prints a JSON report, and exits non-zero on overflow or errors.
 
-For **mutating** flows (upload → save → edit → search → archive → restore → delete),
-the repo already ships the authoritative driver — run it, don't reinvent it:
+For **mutating** flows, the repo ships authoritative drivers — run them, don't reinvent them:
 
 ```sh
+# automatic upload → detect → select → import (stubs only the paid detection result):
+PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium \
+  node --env-file=.env.services.local --import tsx apps/web/e2e/add-auto.test.mjs
+# item edit → search → archive → restore → delete:
 PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium node apps/web/e2e/mobile.test.mjs
 # catalog-image review / version restore (keeps a stub image; makes no OpenAI call):
 PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium node apps/web/e2e/review.test.mjs
@@ -94,7 +97,7 @@ Prefer **stable handles** over coordinates. The UI is German. Real handles:
 - Item cards: `.item` (grid), each is a `<button>` whose accessible name includes the item name (e.g. `getByRole('button', { name: /Navy overshirt/ })`).
 - Search box: `getByRole('searchbox')` (aria-label `Kleiderschrank durchsuchen`).
 - Category chips: `[data-cat="jacket"]` etc. (`top jacket pants skirt dress shoes bag hat scarf`).
-- Add screen inputs: `#library-input` (multi photo), `#camera-input`. Draft save forms: `[data-save]`, with fields by label `Name`, `Farben`, `Notizen`, plus category/state selects.
+- Add screen inputs: `#library-input` (multi photo), `#camera-input`. Detected pieces: `[data-toggle-piece]`; import: `[data-import-detected]`; fallback form: `[data-manual-save]`.
 - Detail dialog: opens as `dialog`; primary action `Änderungen speichern`; `Ins Archiv legen` / `Zurück in den Schrank`; `Stück endgültig löschen …` then confirm `Stück endgültig löschen`.
 - Reset: Settings → `Kleiderschrank leeren …` → type `ALLES LÖSCHEN` → `Alles endgültig löschen`.
 
@@ -111,11 +114,10 @@ state**, not just a final screen:
   the new/edited/deleted item, or that an uploaded original exists via its asset download route.
 
 Drive the **real user path** (nav → card → dialog buttons), not internal setters. Do not
-point a proof at a test-only endpoint. The one honest mock here is image *generation*:
-`review.test.mjs` exercises keep/use-original/restore against seeded shelf-image versions
-and stops at the paid-generation confirmation — it never calls OpenAI. That boundary is
-real (generation is a separate worker job behind an explicit user confirm), so verifying
-up to the confirmation dialog is a complete UI proof of that path.
+point a proof at a test-only endpoint. The honest mocks are deterministic detection
+proposals in `add-auto.test.mjs` and seeded shelf-image versions in `review.test.mjs`.
+Neither calls OpenAI. Upload, selection, persistence, generation enqueue, review, and
+restore still use real local paths.
 
 ## Cleanup
 
@@ -135,8 +137,8 @@ boot, you do **not** need to undo fixture mutations; the next launch is clean.
 - `helpers/doctor.sh` — read-only readiness check (invocation under **Doctor**).
 - `helpers/drive.mjs` — parameterized read-only browser smoke (invocation under **Drive**).
 
-Both are executable and self-contained. The repo's own `apps/web/e2e/mobile.test.mjs`
-and `review.test.mjs` are the maintained mutating drivers; treat them as first-class helpers.
+Both are executable and self-contained. The repo's own `apps/web/e2e/add-auto.test.mjs`,
+`mobile.test.mjs`, and `review.test.mjs` are the maintained mutating drivers.
 
 ## Feature map
 

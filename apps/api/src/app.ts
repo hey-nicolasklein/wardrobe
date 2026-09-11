@@ -186,8 +186,11 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
 
   let resetting = false;
   let activeWrites = 0;
+  // The two media routes address immutable bytes and set their own caching
+  // headers. Everything else under /v1 is account state that must not be cached.
+  const mediaRoute = /^\/v1\/(wardrobe-items\/[^/]+\/preview|assets\/[^/]+\/content)$/;
   app.use('/v1/*', async (context, next) => {
-    context.header('Cache-Control', 'no-store');
+    if (!mediaRoute.test(context.req.path)) context.header('Cache-Control', 'no-store');
     if (resetting) return context.json(errorPayload('conflict', 'reset-in-progress', 'Der Kleiderschrank wird gerade geleert.'), 409);
     const origin = context.req.header('Origin');
     if (!['GET', 'HEAD', 'OPTIONS'].includes(context.req.method) && ((origin && resolved.webOrigin && origin !== resolved.webOrigin) || context.req.header('Sec-Fetch-Site') === 'cross-site')) {
@@ -252,14 +255,27 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
 
   app.get('/v1/wardrobe-items/:wardrobeItemId/preview', async context => {
     const authenticated = await currentSession(context);
-    if (!authenticated) return context.json(errorPayload('authentication', 'authentication-required', 'Session required.'), 401);
+    // Set per response, not through `context.header`: a prepared header is
+    // merged over whatever the handler returns and would defeat the caching
+    // headers on the image itself.
+    const uncached = { 'Cache-Control': 'no-store' } as const;
+    if (!authenticated) return context.json(errorPayload('authentication', 'authentication-required', 'Session required.'), 401, uncached);
     try {
       const variant = context.req.query('variant') === 'source' ? 'source' : 'display';
       const bytes = await itemPreview(database, storage, authenticated.session.id, context.req.param('wardrobeItemId'), variant);
-      return new Response(new Uint8Array(bytes), { headers: { 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=60' } });
+      // Callers pass the item's record version, which every image and status
+      // change bumps, so a versioned URL always names the same bytes and can be
+      // served from the browser cache without a revalidation round trip.
+      const versioned = Boolean(context.req.query('v'));
+      return new Response(new Uint8Array(bytes), {
+        headers: {
+          'Content-Type': 'image/webp',
+          'Cache-Control': versioned ? 'private, max-age=31536000, immutable' : 'private, max-age=60',
+        },
+      });
     } catch (error) {
       const mapped = wardrobeError(error);
-      if (mapped) return context.json(mapped.payload, mapped.status);
+      if (mapped) return context.json(mapped.payload, mapped.status, uncached);
       throw error;
     }
   });
@@ -442,13 +458,15 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
   });
 
   app.get('/v1/assets/:assetId/content', async (context) => {
+    // See the preview route: prepared headers would win over the response's own.
+    const uncached = { 'Cache-Control': 'no-store' } as const;
     const verified = verifyMediaToken(secret, context.req.query('token') ?? '');
     if (!verified || verified.assetId !== context.req.param('assetId')) {
-      return context.json(errorPayload('authentication', 'invalid-media-token', 'This media link is invalid or expired.'), 401);
+      return context.json(errorPayload('authentication', 'invalid-media-token', 'This media link is invalid or expired.'), 401, uncached);
     }
     const asset = await findOwnedPrivateAsset(database, verified.accountId, verified.assetId);
     if (!asset || asset.state !== 'ready' || !asset.objectVersionId) {
-      return context.json(errorPayload('not-found', 'asset-not-found', 'Asset not found.'), 404);
+      return context.json(errorPayload('not-found', 'asset-not-found', 'Asset not found.'), 404, uncached);
     }
     const object = await storage.client.send(new GetObjectCommand({
       Bucket: storage.bucket,
@@ -456,7 +474,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       VersionId: asset.objectVersionId,
     }));
     if (!object.Body) {
-      return context.json(errorPayload('not-found', 'asset-content-missing', 'Asset content not found.'), 404);
+      return context.json(errorPayload('not-found', 'asset-content-missing', 'Asset content not found.'), 404, uncached);
     }
     return new Response(object.Body.transformToWebStream(), {
       headers: {

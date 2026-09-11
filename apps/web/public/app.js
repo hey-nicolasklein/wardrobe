@@ -94,6 +94,36 @@ const money = (micros) =>
     minimumFractionDigits: 3,
     maximumFractionDigits: 3,
   }).format(micros / 1e6);
+// Images carrying `.fade` start transparent and fade in once they have pixels.
+// Anything already in the browser cache reports `complete` synchronously and
+// skips the transition, so a re-render never flashes a picture back in.
+function wireFades(root) {
+  root.querySelectorAll('img.fade:not(.loaded)').forEach((img) => {
+    if (img.complete && img.naturalWidth) return img.classList.add('loaded');
+    const show = () => img.classList.add('loaded');
+    img.addEventListener('load', show, { once: true });
+    img.addEventListener('error', show, { once: true });
+  });
+}
+// Fades out the edge of a horizontally scrolling row that has more content
+// behind it. The mask only softens the side you can still scroll towards, so a
+// row that already fits stays crisp on both ends.
+function wireScrollFade(row) {
+  if (!row || row.classList.contains('scroll-fade')) return;
+  row.classList.add('scroll-fade');
+  const update = () => {
+    row.classList.toggle('at-start', row.scrollLeft <= 1);
+    row.classList.toggle(
+      'at-end',
+      row.scrollLeft >= row.scrollWidth - row.clientWidth - 1,
+    );
+  };
+  row.addEventListener('scroll', update, { passive: true });
+  // Tiles can still be sizing up when this runs, and the row is collected
+  // together with its observer once the sheet or the page is replaced.
+  new ResizeObserver(update).observe(row);
+  update();
+}
 function toast(message) {
   const el = $('#toast');
   el.textContent = message;
@@ -175,6 +205,10 @@ function render() {
   if (page === 'settings') return renderSettings();
   renderWardrobe();
 }
+// Each collection keeps its results container alive while it is off screen, so
+// coming back to a tab re-attaches images the browser has already decoded
+// instead of building fresh <img> nodes for them.
+const resultsByPage = new Map();
 function renderWardrobe() {
   const collection = items.filter((i) => i.state === page);
   const title =
@@ -189,7 +223,7 @@ function renderWardrobe() {
   $('#add').onclick = () => navigate('add');
   $('#search').oninput = (e) => {
     query = e.target.value;
-    renderResults();
+    applyFilter();
   };
   document.querySelectorAll('[data-cat]').forEach(
     (b) =>
@@ -199,43 +233,103 @@ function renderWardrobe() {
           c.classList.toggle('active', c.dataset.cat === category);
           c.setAttribute('aria-pressed', String(c.dataset.cat === category));
         });
-        renderResults();
+        applyFilter();
       }),
   );
+  wireScrollFade($('.filters'));
+  const cached = resultsByPage.get(page);
+  if (cached) $('#results').replaceWith(cached);
+  else resultsByPage.set(page, $('#results'));
   renderResults();
 }
 function renderItemPhoto(item) {
   if (['queued', 'generating'].includes(item.status))
     return `<div class="photo"><div class="wardrobe-image-progress" role="status" aria-label="Katalogbild für ${esc(item.metadata.name)} wird erstellt"><span class="spinner"></span><span>Bild wird erstellt</span></div></div>`;
-  return `<div class="photo"><img src="${preview(item)}" alt="${esc(item.metadata.name)}" loading="lazy" decoding="async"><img class="photo-source" data-source="${sourcePreview(item)}" alt="" aria-hidden="true" loading="lazy" decoding="async">${item.status === 'failed' ? '<span class="badge">Bild fehlgeschlagen</span>' : ''}</div>`;
+  return `<div class="photo"><img class="fade" src="${preview(item)}" alt="${esc(item.metadata.name)}" loading="lazy" decoding="async"><img class="photo-source" data-source="${sourcePreview(item)}" alt="" aria-hidden="true" loading="lazy" decoding="async">${item.status === 'failed' ? '<span class="badge">Bild fehlgeschlagen</span>' : ''}</div>`;
 }
-function renderResults() {
-  const list = items.filter(
-    (i) =>
-      i.state === page &&
-      (category === 'all' || i.metadata.category === category) &&
-      `${i.metadata.name} ${i.metadata.colors.join(' ')} ${i.metadata.notes || ''} ${categories[i.metadata.category]}`
-        .toLocaleLowerCase()
-        .includes(query.toLocaleLowerCase()),
-  );
-  $('#results').innerHTML = list.length
-    ? `<div class="section-row"><span>${list.length} ${list.length === 1 ? 'Stück' : 'Stücke'}</span><span>Zuletzt hinzugefügt</span></div><div class="grid">${list.map((i) => `<button class="item" data-item="${i.id}">${renderItemPhoto(i)}<span class="item-name">${esc(i.metadata.name)}</span><span class="item-category">${categories[i.metadata.category]} · ${esc(i.metadata.colors.join(', '))}</span></button>`).join('')}</div>`
-    : `<div class="empty">${icon('closet')}<h2>${query || category !== 'all' ? 'Noch nicht gefunden.' : 'Platz für deine Stücke.'}</h2><p>${query || category !== 'all' ? 'Versuche einen anderen Suchbegriff oder eine andere Kategorie.' : 'Fang mit ein paar Lieblingsstücken an. Ein Foto reicht, den Rest kannst du später ergänzen.'}</p>${!query && category === 'all' ? '<button class="primary" id="empty-add">Erstes Stück hinzufügen</button>' : ''}</div>`;
-  document.querySelectorAll('[data-item]').forEach((b) => {
-    b.onclick = () => openDetail(b.dataset.item);
-    // Fade to the original upload on hover. Load it only on first hover to keep
-    // the grid light, and drop the layer if the source photo is gone.
-    const source = $('.photo-source', b);
-    if (!source) return;
+// Everything a tile renders. A tile is rebuilt only when this changes, so
+// polling and re-renders leave untouched pieces exactly as they are.
+const tileSignature = (item) =>
+  `${item.recordVersion}:${item.status}:${item.metadata.name}:${item.metadata.category}:${item.metadata.colors.join(',')}`;
+// A stable tint per piece, derived from its id so it never moves when the grid
+// is filtered or reordered.
+const tint = (id) => {
+  let sum = 0;
+  for (const character of id) sum = (sum + character.charCodeAt(0)) % 3;
+  return sum;
+};
+function buildTile(item) {
+  const tile = document.createElement('button');
+  tile.className = `item tint-${tint(item.id)}`;
+  tile.dataset.item = item.id;
+  tile.dataset.signature = tileSignature(item);
+  tile.innerHTML = `${renderItemPhoto(item)}<span class="item-name">${esc(item.metadata.name)}</span><span class="item-category">${categories[item.metadata.category]} · ${esc(item.metadata.colors.join(', '))}</span>`;
+  tile.onclick = () => openDetail(item.id);
+  wireFades(tile);
+  // Fade to the original upload on hover. Load it only on first hover to keep
+  // the grid light, and drop the layer if the source photo is gone.
+  const source = $('.photo-source', tile);
+  if (source) {
     source.onerror = () => source.remove();
-    b.addEventListener(
+    tile.addEventListener(
       'mouseenter',
       () => {
         if (!source.src) source.src = source.dataset.source;
       },
       { once: true },
     );
-  });
+  }
+  return tile;
+}
+const matchesFilter = (item) =>
+  (category === 'all' || item.metadata.category === category) &&
+  `${item.metadata.name} ${item.metadata.colors.join(' ')} ${item.metadata.notes || ''} ${categories[item.metadata.category]}`
+    .toLocaleLowerCase()
+    .includes(query.toLocaleLowerCase());
+// Reconciles the grid against the current collection, reusing the tile nodes it
+// already has. Filtering never comes through here: it only toggles visibility,
+// so a chip tap costs no image loading at all.
+function renderResults() {
+  const container = $('#results');
+  if (!container) return;
+  if (!$('.grid', container))
+    container.innerHTML = `<div class="section-row"><span id="result-count"></span><span>Zuletzt hinzugefügt</span></div><div class="grid"></div><div class="empty" id="no-results" hidden></div>`;
+  const grid = $('.grid', container);
+  const existing = new Map(
+    [...grid.children].map((node) => [node.dataset.item, node]),
+  );
+  const tiles = items
+    .filter((i) => i.state === page)
+    .map((item) => {
+      const node = existing.get(item.id);
+      return node?.dataset.signature === tileSignature(item)
+        ? node
+        : buildTile(item);
+    });
+  grid.replaceChildren(...tiles);
+  applyFilter();
+}
+function applyFilter() {
+  const container = $('#results');
+  const grid = container && $('.grid', container);
+  const empty = container && $('#no-results', container);
+  if (!grid || !empty) return;
+  const byId = new Map(items.map((item) => [item.id, item]));
+  let visible = 0;
+  for (const tile of grid.children) {
+    const item = byId.get(tile.dataset.item);
+    const show = Boolean(item) && matchesFilter(item);
+    tile.hidden = !show;
+    if (show) visible++;
+  }
+  $('#result-count', container).textContent =
+    `${visible} ${visible === 1 ? 'Stück' : 'Stücke'}`;
+  $('.section-row', container).hidden = !visible;
+  grid.hidden = !visible;
+  empty.hidden = Boolean(visible);
+  if (visible) return;
+  const narrowed = Boolean(query) || category !== 'all';
+  empty.innerHTML = `${icon('closet')}<h2>${narrowed ? 'Noch nicht gefunden.' : 'Platz für deine Stücke.'}</h2><p>${narrowed ? 'Versuche einen anderen Suchbegriff oder eine andere Kategorie.' : 'Fang mit ein paar Lieblingsstücken an. Ein Foto reicht, den Rest kannst du später ergänzen.'}</p>${narrowed ? '' : '<button class="primary" id="empty-add">Erstes Stück hinzufügen</button>'}`;
   if ($('#empty-add')) $('#empty-add').onclick = () => navigate('add');
 }
 async function refreshItems() {
@@ -285,202 +379,225 @@ function readFields(form) {
 }
 // `keepScroll` is for redrawing the sheet that is already on screen, e.g. while
 // polling a running generation. Without it the reader gets thrown back to the
-// top of the sheet on every tick.
+// top of the sheet on every tick. Pass a number to restore a specific offset,
+// which is how the sheet returns to where it was after a confirmation covered it.
 function showSheet(title, content, keepScroll = false) {
   detailId = null;
-  const offset = $('#sheet').scrollTop;
-  $('#sheet').innerHTML =
-    `<div class="sheet-head"><h2 id="sheet-title">${esc(title)}</h2><button class="close" id="close-sheet" aria-label="Schließen">${icon('close')}</button></div><div class="sheet-body">${content}</div>`;
+  const sheet = $('#sheet');
+  const offset = typeof keepScroll === 'number' ? keepScroll : sheet.scrollTop;
+  const heldFocus = sheet.contains(document.activeElement);
+  sheet.innerHTML =
+    `<div class="sheet-grip" aria-hidden="true"></div><div class="sheet-head"><h2 id="sheet-title" tabindex="-1">${esc(title)}</h2><button class="close" id="close-sheet" aria-label="Schließen">${icon('close')}</button></div><div class="sheet-body">${content}</div>`;
   $('#close-sheet').onclick = closeSheet;
-  if (!$('#sheet').open) {
-    $('#sheet').showModal();
-    document.body.style.overflow = 'hidden';
+  if (!sheet.open) {
+    sheet.showModal();
+    // `showModal` parks the focus on the first focusable child, which is the
+    // close button, and it lights up its focus ring. The title is the better
+    // landing point: it reads the sheet out and shows no ring.
+    $('#sheet-title').focus({ preventScroll: true });
+    setSheetChrome(true);
+  } else if (heldFocus && !sheet.contains(document.activeElement)) {
+    // Swapping the content dropped the focused element. Without this the focus
+    // falls out of the open dialog onto the page behind it.
+    $('#sheet-title').focus({ preventScroll: true });
   }
-  $('#sheet').scrollTop = keepScroll ? offset : 0;
+  const target = keepScroll === false ? 0 : offset;
+  sheet.scrollTop = target;
+  // The sheet can still be growing into its final height on this frame, which
+  // would clamp the offset we just set.
+  if (target) requestAnimationFrame(() => (sheet.scrollTop = target));
+}
+// Everything outside the dialog that reacts to it: the scrim over the page, the
+// page scroll lock, and the colour iOS fills the status bar strip with.
+const paper = '#f6f5f1';
+const dimmedPaper = '#9fa39c';
+function setSheetChrome(open) {
+  $('#scrim').classList.toggle('show', open);
+  document.body.classList.toggle('sheet-open', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+  $('meta[name="theme-color"]').content = open ? dimmedPaper : paper;
 }
 function closeSheet() {
   $('#sheet').close();
   detailId = null;
-  document.body.style.overflow = '';
+  setSheetChrome(false);
 }
 $('#sheet').addEventListener('close', () => {
   detailId = null;
-  document.body.style.overflow = '';
+  setSheetChrome(false);
 });
+// Tapping the blurred area around the sheet closes it. A click on the backdrop
+// is reported with the dialog itself as the target, so the coordinates decide:
+// dead space inside the sheet must not close it.
+$('#sheet').addEventListener('click', (event) => {
+  const sheet = event.currentTarget;
+  if (event.target !== sheet) return;
+  const box = sheet.getBoundingClientRect();
+  const inside =
+    event.clientX >= box.left &&
+    event.clientX <= box.right &&
+    event.clientY >= box.top &&
+    event.clientY <= box.bottom;
+  if (!inside) closeSheet();
+});
+// Drag the sheet down to dismiss it. The drag only takes over when the content
+// is already scrolled to the top or the finger started on the head, the gesture
+// is locked to one axis on the first move, and the sideways-scrolling rows are
+// excluded — so it never steals a scroll or a swipe from inside the sheet.
+(function wireSheetDrag() {
+  const sheet = $('#sheet');
+  const threshold = 110;
+  let startY = null;
+  let startX = 0;
+  let offset = 0;
+  let axis = null;
+  let dragging = false;
+  const reset = () => {
+    sheet.classList.remove('dragging');
+    sheet.style.translate = '';
+    startY = null;
+    offset = 0;
+    axis = null;
+    dragging = false;
+  };
+  sheet.addEventListener(
+    'touchstart',
+    (event) => {
+      reset();
+      if (event.touches.length !== 1) return;
+      const fromHead = event.target.closest?.('.sheet-head, .sheet-grip');
+      // Rows that scroll sideways own their gesture completely. Without this a
+      // swipe through the gallery nudges the whole sheet up and down.
+      if (event.target.closest?.('.gallery, .versions')) return;
+      if (sheet.scrollTop > 0 && !fromHead) return;
+      startY = event.touches[0].clientY;
+      startX = event.touches[0].clientX;
+    },
+    { passive: true },
+  );
+  sheet.addEventListener(
+    'touchmove',
+    (event) => {
+      if (startY === null) return;
+      const moveY = event.touches[0].clientY - startY;
+      const moveX = event.touches[0].clientX - startX;
+      // Decide once whether this is a vertical or a horizontal gesture, and
+      // leave horizontal ones alone for the rest of the touch.
+      if (axis === null) {
+        if (Math.abs(moveX) < 8 && Math.abs(moveY) < 8) return;
+        axis = Math.abs(moveX) > Math.abs(moveY) ? 'x' : 'y';
+      }
+      if (axis === 'x') return;
+      offset = moveY;
+      if (offset <= 0) {
+        if (dragging) {
+          sheet.classList.remove('dragging');
+          sheet.style.translate = '';
+          dragging = false;
+        }
+        return;
+      }
+      event.preventDefault();
+      dragging = true;
+      sheet.classList.add('dragging');
+      sheet.style.translate = `0 ${offset}px`;
+    },
+    { passive: false },
+  );
+  const release = () => {
+    if (!dragging) return reset();
+    const shouldClose = offset > threshold;
+    // Dropping `dragging` first hands the sheet back to the CSS transition, so
+    // it either springs back or carries on into the closing animation.
+    sheet.classList.remove('dragging');
+    sheet.style.translate = '';
+    if (shouldClose) closeSheet();
+    startY = null;
+    offset = 0;
+    axis = null;
+    dragging = false;
+  };
+  sheet.addEventListener('touchend', release);
+  sheet.addEventListener('touchcancel', release);
+})();
+// Every call to the download endpoint mints a fresh signed link, and a fresh URL
+// is always a cache miss. Hold each one until shortly before it expires so a
+// re-render reuses the picture the browser already has.
+const assetUrls = new Map();
+const assetUrlRequests = new Map();
 async function assetUrl(id) {
-  return (await api(`/assets/${id}/download`)).downloadUrl;
+  const cached = assetUrls.get(id);
+  if (cached && cached.expiresAt > Date.now() + 30_000) return cached.url;
+  let request = assetUrlRequests.get(id);
+  if (!request) {
+    request = api(`/assets/${id}/download`)
+      .then((data) => {
+        assetUrls.set(id, {
+          url: data.downloadUrl,
+          expiresAt: Date.parse(data.expiresAt),
+        });
+        return data.downloadUrl;
+      })
+      .finally(() => assetUrlRequests.delete(id));
+    assetUrlRequests.set(id, request);
+  }
+  return request;
 }
+// The payload behind the sheet currently on screen. Switching to the edit form
+// or backing out of a confirmation changes nothing on the server, so those paths
+// re-render from here instead of paying for a spinner and a refetch.
+let detailCache = null;
+// Whether a catalog image is being produced right now. The list and the detail
+// payload report this differently, but both have to agree so that the gallery
+// built for the placeholder survives into the loaded sheet.
+const listRunning = (item) => ['queued', 'generating'].includes(item.status);
+// What the picture row shows. Matching signatures mean the row on screen is
+// still correct and can stay exactly as it is.
+const gallerySignature = (item, running) => `${running}:${preview(item)}`;
+// The picture row and the title block. Both the placeholder and the loaded sheet
+// render this from the same strings, so the sheet only fills in underneath.
+const galleryMarkup = (item, running) =>
+  `<div class="gallery" id="detail-gallery" data-item="${item.id}" data-signature="${esc(gallerySignature(item, running))}">${
+    running
+      ? `<figure class="slide"><div class="wardrobe-image-progress" role="status" aria-label="Katalogbild für ${esc(item.metadata.name)} wird erstellt"><span class="spinner"></span><span>Bild wird erstellt</span></div></figure>`
+      : `<figure class="slide"><img class="fade" src="${preview(item)}" alt="${esc(item.metadata.name)}"></figure>`
+  }<figure class="slide worn"><img class="fade" id="worn" src="${sourcePreview(item)}" alt="${esc(item.metadata.name)}, getragen"><figcaption>Originalfoto</figcaption></figure></div><div id="detail-heading"><p class="eyebrow">${categories[item.metadata.category]}</p><h2>${esc(item.metadata.name)}</h2><p class="muted item-colors">${esc(item.metadata.colors.join(' · '))}</p></div>`;
+// Stand-ins for the few parts that only the detail request knows: where the
+// piece lives, its notes, and the saved catalog images.
+const detailSkeleton = `<div role="status" aria-label="Details werden geladen"><dl class="facts"><div><dt>Gehört in</dt><dd><span class="skeleton skeleton-line" style="width:110px"></span></dd></div></dl><span class="skeleton skeleton-button"></span><div class="rule"></div><h3>Katalogbilder</h3><p class="muted"><span class="skeleton skeleton-line" style="width:100%"></span><span class="skeleton skeleton-line" style="width:62%"></span></p><div class="versions">${'<span class="skeleton skeleton-version"></span>'.repeat(3)}</div><div class="rule"></div><span class="skeleton skeleton-button"></span></div>`;
 // The sheet has two states: 'view' shows the piece read-only, 'edit' shows only
 // the metadata form. Both need the same detail payload and command handlers.
-async function openDetail(id, mode = 'view', refresh = false) {
-  if (!refresh)
+// `cached` renders from `detailCache`, `refresh` redraws the sheet in place, and
+// `scrollTop` restores an offset taken before a confirmation replaced the sheet.
+async function openDetail(
+  id,
+  mode = 'view',
+  { refresh = false, cached = false, scrollTop = null } = {},
+) {
+  if (cached && detailCache?.id === id)
+    return renderDetail(id, detailCache.detail, mode, { refresh, scrollTop });
+  if (!refresh) {
+    // The grid already holds the picture, the name and the colours, so the sheet
+    // opens with those in place and only skeletons what the request still owes.
+    const known = mode === 'view' && items.find((item) => item.id === id);
     showSheet(
       mode === 'edit' ? 'Stück bearbeiten' : 'Dein Stück',
-      '<div class="loading"><span class="spinner"></span> Wird geladen …</div>',
+      known
+        ? `${galleryMarkup(known, listRunning(known))}<div id="detail-body">${detailSkeleton}</div>`
+        : '<div class="loading"><span class="spinner"></span> Wird geladen …</div>',
     );
+    if (known) {
+      wireFades($('#sheet'));
+      if ($('#worn'))
+        $('#worn').onerror = () => $('#worn').closest('.slide').remove();
+    }
+  }
   detailId = id;
   try {
     const detail = await api(`/wardrobe-items/${id}`);
     if (detailId !== id || !$('#sheet').open) return;
-    const i = detail.wardrobeItem;
-    const running = detail.generationAttempts.some((a) =>
-      ['queued', 'processing'].includes(a.state),
-    );
-    const failed = detail.generationAttempts[0]?.state === 'failed';
-    const primarySlide = running
-      ? `<figure class="slide"><div class="wardrobe-image-progress" role="status" aria-label="Katalogbild für ${esc(i.metadata.name)} wird erstellt"><span class="spinner"></span><span>Bild wird erstellt</span></div></figure>`
-      : `<figure class="slide"><img src="${preview(i)}" alt="${esc(i.metadata.name)}"></figure>`;
-    const collections = {
-      owning: 'Mein Schrank',
-      wanting: 'Wunschliste',
-      archived: 'Archiv',
-    };
-    // Leftmost is the plus tile, then the image in use, then the older ones
-    // newest first, and the original photo closes the row on the right.
-    const ordered = [...detail.shelfImageVersions].sort(
-      (left, right) =>
-        (right.id === i.currentShelfImageVersionId) -
-        (left.id === i.currentShelfImageVersionId),
-    );
-    const versionTiles = ordered
-      .map((v) => {
-        const current = v.id === i.currentShelfImageVersionId;
-        return `<button class="version${current ? ' current' : ''}" data-version="${v.id}" ${current ? 'disabled' : ''}><span class="version-frame"><img data-asset="${v.transparentAssetId}" alt="Gespeichertes Katalogbild">${v.quality === 'high' ? '<span class="version-tag">HQ</span>' : ''}</span><span>${current ? 'Aktuelles Bild' : 'Dieses Bild verwenden'}</span></button>`;
-      })
-      .join('');
-    const body =
-      mode === 'edit'
-        ? `<form id="edit-item">${fields(i.metadata, i.state)}<button class="primary" style="margin-top:20px" type="submit">Änderungen speichern</button></form><button class="text-button" id="cancel-edit">Abbrechen</button>`
-        : `<dl class="facts"><div><dt>Gehört in</dt><dd>${collections[i.state]}</dd></div>${i.metadata.notes ? `<div><dt>Notizen</dt><dd>${esc(i.metadata.notes)}</dd></div>` : ''}</dl><button class="secondary" id="edit-details">Details bearbeiten</button>
-    <div class="rule"></div>${running ? '<div class="note generating"><p><span class="spinner"></span>Dein Bild wird erstellt. Du kannst weiter durch deinen Schrank stöbern.</p><button class="text-button" id="check-generation">Status aktualisieren</button></div>' : `<h3>Katalogbilder</h3><p class="muted">${failed ? 'Der letzte Versuch ist fehlgeschlagen. ' : ''}Ein neues Bild wird automatisch verwendet, ein älteres kannst du jederzeit wieder auswählen.</p><div class="versions"><button class="version add-version" id="generate" aria-label="Katalogbild erstellen …"><span class="version-frame">${icon('plus')}</span><span>Neues Bild …</span></button>${versionTiles}<button class="version source-version" id="source"><span class="version-frame"><img id="source-tile" src="${sourcePreview(i)}" alt="" aria-hidden="true"></span><span>Originalfoto ansehen</span></button></div>`}
-    <div class="rule"></div><div class="stack"><button class="secondary" id="archive">${i.state === 'archived' ? 'Zurück in den Schrank' : 'Ins Archiv legen'}</button><button class="text-button" id="delete">Stück endgültig löschen …</button></div>`;
-    showSheet(
-      mode === 'edit' ? 'Stück bearbeiten' : 'Dein Stück',
-      `<div class="gallery">${primarySlide}<figure class="slide worn"><img id="worn" src="${sourcePreview(i)}" alt="${esc(i.metadata.name)}, getragen"><figcaption>Originalfoto</figcaption></figure></div><p class="eyebrow">${categories[i.metadata.category]}</p><h2>${esc(i.metadata.name)}</h2><p class="muted item-colors">${esc(i.metadata.colors.join(' · '))}</p>${body}`,
-      refresh,
-    );
-    detailId = id;
-    // Drop the worn photo and the source tile when the original upload is gone.
-    if ($('#worn'))
-      $('#worn').onerror = () => $('#worn').closest('.slide').remove();
-    if ($('#source-tile'))
-      $('#source-tile').onerror = () => $('#source').remove();
-    const command = () => ({
-      expectedRecordVersion: i.recordVersion,
-      idempotencyKey: key(),
-    });
-    if ($('#edit-details'))
-      $('#edit-details').onclick = () => openDetail(id, 'edit');
-    if ($('#cancel-edit')) $('#cancel-edit').onclick = () => openDetail(id);
-    if ($('#edit-item'))
-      $('#edit-item').onsubmit = async (e) => {
-        e.preventDefault();
-        const form = e.currentTarget;
-        await action($('button[type=submit]', form), async () => {
-          try {
-            await api(
-              `/wardrobe-items/${id}`,
-              { ...readFields(form), ...command() },
-              'PATCH',
-            );
-            await refreshItems();
-            render();
-            closeSheet();
-            toast('Änderungen gespeichert');
-          } catch (error) {
-            formError(form, error);
-          }
-        });
-      };
-    if ($('#check-generation'))
-      $('#check-generation').onclick = () => openDetail(id);
-    if ($('#generate'))
-      $('#generate').onclick = () => {
-        showSheet(
-          'Katalogbild erstellen',
-          `<h2>Nur für dieses Stück.</h2><p>Das neue Katalogbild wird automatisch verwendet. Ein älteres Bild kannst du jederzeit wieder auswählen.</p><div class="note">Die Ausgabe kostet zusätzlich zum Eingabebild und Text. Abgerechnet wird nach tatsächlichem Verbrauch. In hoher Qualität liegt ein Bild nach aktueller Tarifrechnung bei etwa 12 US-Cent. Das ist eine Orientierung, kein garantierter Festpreis.</div><p class="muted" style="margin:16px 0">GPT Image 2 · High · ein neues Bild</p><button class="primary" id="confirm-generate">Ein kostenpflichtiges Bild anfordern</button><button class="text-button" id="cancel-generate">Abbrechen</button>`,
-        );
-        $('#cancel-generate').onclick = () => openDetail(id);
-        const generationKey = key();
-        $('#confirm-generate').onclick = (e) =>
-          action(e.currentTarget, async () => {
-            await api('/generations', {
-              wardrobeItemId: id,
-              quality: 'high',
-              size: '816x816',
-              autoKeep: true,
-              idempotencyKey: generationKey,
-            });
-            await refreshItems();
-            render();
-            await openDetail(id);
-            toast('Dein Bild wird erstellt');
-          });
-      };
-    if ($('#source'))
-      $('#source').onclick = (e) =>
-        action(e.currentTarget, async () => {
-          const url = await assetUrl(detail.sourcePhoto.assetId);
-          showSheet(
-            'Originalfoto',
-            `<div class="detail-photo"><img src="${esc(url)}" alt="Originalfoto"></div><button class="secondary" id="back-detail">Zurück zum Stück</button>`,
-          );
-          $('#back-detail').onclick = () => openDetail(id);
-        });
-    document.querySelectorAll('[data-asset]').forEach((img) =>
-      assetUrl(img.dataset.asset)
-        .then((url) => {
-          if (img.isConnected) img.src = url;
-        })
-        .catch(() => {}),
-    );
-    document.querySelectorAll('[data-version]').forEach(
-      (b) =>
-        (b.onclick = () =>
-          action(b, async () => {
-            await api(
-              `/wardrobe-items/${id}/shelf-image-versions/${b.dataset.version}/restore`,
-              command(),
-            );
-            await refreshItems();
-            render();
-            await openDetail(id);
-          })),
-    );
-    if ($('#archive'))
-      $('#archive').onclick = (e) =>
-        action(e.currentTarget, async () => {
-          await api(
-            `/wardrobe-items/${id}`,
-            {
-              state: i.state === 'archived' ? 'owning' : 'archived',
-              ...command(),
-            },
-            'PATCH',
-          );
-          await refreshItems();
-          render();
-          closeSheet();
-          toast(
-            i.state === 'archived' ? 'Zurück im Schrank' : 'Im Archiv abgelegt',
-          );
-        });
-    if ($('#delete'))
-      $('#delete').onclick = () => {
-        showSheet(
-          'Stück löschen',
-          `<h2>Endgültig löschen?</h2><p>„${esc(i.metadata.name)}“ und seine Katalogbilder werden gelöscht. Das lässt sich nicht rückgängig machen.</p><button class="danger" id="confirm-delete">Stück endgültig löschen</button><button class="text-button" id="cancel-delete">Behalten</button>`,
-        );
-        $('#cancel-delete').onclick = () => openDetail(id);
-        $('#confirm-delete').onclick = (e) =>
-          action(e.currentTarget, async () => {
-            await api(`/wardrobe-items/${id}`, command(), 'DELETE');
-            await refreshItems();
-            render();
-            closeSheet();
-            toast('Stück gelöscht');
-          });
-      };
+    detailCache = { id, detail };
+    renderDetail(id, detail, mode, { refresh, scrollTop });
   } catch (error) {
     if ($('#sheet').open) {
       showSheet(
@@ -490,6 +607,191 @@ async function openDetail(id, mode = 'view', refresh = false) {
       $('#retry-detail').onclick = () => openDetail(id);
     }
   }
+}
+function renderDetail(id, detail, mode, { refresh = false, scrollTop = null }) {
+  const i = detail.wardrobeItem;
+  const running = detail.generationAttempts.some((a) =>
+    ['queued', 'processing'].includes(a.state),
+  );
+  const failed = detail.generationAttempts[0]?.state === 'failed';
+  const collections = {
+    owning: 'Mein Schrank',
+    wanting: 'Wunschliste',
+    archived: 'Archiv',
+  };
+  // Leftmost is the plus tile, then the image in use, then the older ones
+  // newest first, and the original photo closes the row on the right.
+  const ordered = [...detail.shelfImageVersions].sort(
+    (left, right) =>
+      (right.id === i.currentShelfImageVersionId) -
+      (left.id === i.currentShelfImageVersionId),
+  );
+  const versionTiles = ordered
+    .map((v) => {
+      const current = v.id === i.currentShelfImageVersionId;
+      return `<button class="version${current ? ' current' : ''}" data-version="${v.id}" ${current ? 'disabled' : ''}><span class="version-frame"><img data-asset="${v.transparentAssetId}" alt="Gespeichertes Katalogbild">${v.quality === 'high' ? '<span class="version-tag">HQ</span>' : ''}</span><span>${current ? 'Aktuelles Bild' : 'Dieses Bild verwenden'}</span></button>`;
+    })
+    .join('');
+  const body =
+    mode === 'edit'
+      ? `<form id="edit-item">${fields(i.metadata, i.state)}<button class="primary" style="margin-top:20px" type="submit">Änderungen speichern</button></form><button class="text-button" id="cancel-edit">Abbrechen</button>`
+      : `<dl class="facts"><div><dt>Gehört in</dt><dd>${collections[i.state]}</dd></div>${i.metadata.notes ? `<div><dt>Notizen</dt><dd>${esc(i.metadata.notes)}</dd></div>` : ''}</dl><button class="secondary" id="edit-details">Details bearbeiten</button>
+  <div class="rule"></div>${running ? '<div class="note generating"><p><span class="spinner"></span>Dein Bild wird erstellt. Du kannst weiter durch deinen Schrank stöbern.</p><button class="text-button" id="check-generation">Status aktualisieren</button></div>' : `<h3>Katalogbilder</h3><p class="muted">${failed ? 'Der letzte Versuch ist fehlgeschlagen. ' : ''}Ein neues Bild wird automatisch verwendet, ein älteres kannst du jederzeit wieder auswählen.</p><div class="versions"><button class="version add-version" id="generate" aria-label="Katalogbild erstellen …"><span class="version-frame">${icon('plus')}</span><span>Neues Bild …</span></button>${versionTiles}<button class="version source-version" id="source"><span class="version-frame"><img id="source-tile" src="${sourcePreview(i)}" alt="" aria-hidden="true"></span><span>Originalfoto ansehen</span></button></div>`}
+  <div class="rule"></div><div class="stack"><button class="secondary" id="archive">${i.state === 'archived' ? 'Zurück in den Schrank' : 'Ins Archiv legen'}</button><button class="text-button" id="delete">Stück endgültig löschen …</button></div>`;
+  const title = mode === 'edit' ? 'Stück bearbeiten' : 'Dein Stück';
+  // The gallery only depends on the pictures, not on the mode or the metadata
+  // below it. Reusing it keeps the images on screen when the sheet toggles
+  // into the edit form or when a poll redraws a running generation.
+  const gallery = $('#detail-gallery');
+  const reusable =
+    gallery?.dataset.item === id &&
+    gallery.dataset.signature === gallerySignature(i, running);
+  if (reusable) {
+    $('#sheet-title').textContent = title;
+    $('#detail-heading').innerHTML = `<p class="eyebrow">${categories[i.metadata.category]}</p><h2>${esc(i.metadata.name)}</h2><p class="muted item-colors">${esc(i.metadata.colors.join(' · '))}</p>`;
+    $('#detail-body').innerHTML = body;
+  } else {
+    showSheet(
+      title,
+      `${galleryMarkup(i, running)}<div id="detail-body">${body}</div>`,
+      scrollTop ?? refresh,
+    );
+  }
+  wireFades($('#sheet'));
+  wireScrollFade($('.versions'));
+  detailId = id;
+  // Drop the worn photo and the source tile when the original upload is gone.
+  if ($('#worn'))
+    $('#worn').onerror = () => $('#worn').closest('.slide').remove();
+  if ($('#source-tile'))
+    $('#source-tile').onerror = () => $('#source').remove();
+  const command = () => ({
+    expectedRecordVersion: i.recordVersion,
+    idempotencyKey: key(),
+  });
+  if ($('#edit-details'))
+    $('#edit-details').onclick = () =>
+      openDetail(id, 'edit', { cached: true });
+  if ($('#cancel-edit'))
+    $('#cancel-edit').onclick = () => openDetail(id, 'view', { cached: true });
+  if ($('#edit-item'))
+    $('#edit-item').onsubmit = async (e) => {
+      e.preventDefault();
+      const form = e.currentTarget;
+      await action($('button[type=submit]', form), async () => {
+        try {
+          await api(
+            `/wardrobe-items/${id}`,
+            { ...readFields(form), ...command() },
+            'PATCH',
+          );
+          await refreshItems();
+          render();
+          closeSheet();
+          toast('Änderungen gespeichert');
+        } catch (error) {
+          formError(form, error);
+        }
+      });
+    };
+  if ($('#check-generation'))
+    $('#check-generation').onclick = () => openDetail(id);
+  if ($('#generate'))
+    $('#generate').onclick = () => {
+      // Backing out of the dialog must land where the reader left the sheet,
+      // which is usually scrolled down at the catalog images.
+      const offset = $('#sheet').scrollTop;
+      showSheet(
+        'Katalogbild erstellen',
+        `<h2>Nur für dieses Stück.</h2><p>Das neue Katalogbild wird automatisch verwendet. Ein älteres Bild kannst du jederzeit wieder auswählen.</p><div class="note">Die Ausgabe kostet zusätzlich zum Eingabebild und Text. Abgerechnet wird nach tatsächlichem Verbrauch. In hoher Qualität liegt ein Bild nach den bisher erfassten Abrechnungen bei etwa 19 US-Cent. Das ist eine Orientierung, kein garantierter Festpreis.</div><p class="muted" style="margin:16px 0">GPT Image 2 · High · ein neues Bild</p><button class="primary" id="confirm-generate">Ein kostenpflichtiges Bild anfordern</button><button class="text-button" id="cancel-generate">Abbrechen</button>`,
+      );
+      $('#cancel-generate').onclick = () =>
+        openDetail(id, 'view', { cached: true, scrollTop: offset });
+      const generationKey = key();
+      $('#confirm-generate').onclick = (e) =>
+        action(e.currentTarget, async () => {
+          await api('/generations', {
+            wardrobeItemId: id,
+            quality: 'high',
+            size: '816x816',
+            autoKeep: true,
+            idempotencyKey: generationKey,
+          });
+          await refreshItems();
+          render();
+          await openDetail(id);
+          toast('Dein Bild wird erstellt');
+        });
+    };
+  if ($('#source'))
+    $('#source').onclick = (e) =>
+      action(e.currentTarget, async () => {
+        const offset = $('#sheet').scrollTop;
+        const url = await assetUrl(detail.sourcePhoto.assetId);
+        showSheet(
+          'Originalfoto',
+          `<div class="detail-photo"><img class="fade" src="${esc(url)}" alt="Originalfoto"></div><button class="secondary" id="back-detail">Zurück zum Stück</button>`,
+        );
+        wireFades($('#sheet'));
+        $('#back-detail').onclick = () =>
+          openDetail(id, 'view', { cached: true, scrollTop: offset });
+      });
+  document.querySelectorAll('[data-asset]').forEach((img) =>
+    assetUrl(img.dataset.asset)
+      .then((url) => {
+        if (img.isConnected) img.src = url;
+      })
+      .catch(() => {}),
+  );
+  document.querySelectorAll('[data-version]').forEach(
+    (b) =>
+      (b.onclick = () =>
+        action(b, async () => {
+          await api(
+            `/wardrobe-items/${id}/shelf-image-versions/${b.dataset.version}/restore`,
+            command(),
+          );
+          await refreshItems();
+          render();
+          await openDetail(id);
+        })),
+  );
+  if ($('#archive'))
+    $('#archive').onclick = (e) =>
+      action(e.currentTarget, async () => {
+        await api(
+          `/wardrobe-items/${id}`,
+          {
+            state: i.state === 'archived' ? 'owning' : 'archived',
+            ...command(),
+          },
+          'PATCH',
+        );
+        await refreshItems();
+        render();
+        closeSheet();
+        toast(
+          i.state === 'archived' ? 'Zurück im Schrank' : 'Im Archiv abgelegt',
+        );
+      });
+  if ($('#delete'))
+    $('#delete').onclick = () => {
+      const offset = $('#sheet').scrollTop;
+      showSheet(
+        'Stück löschen',
+        `<h2>Endgültig löschen?</h2><p>„${esc(i.metadata.name)}“ und seine Katalogbilder werden gelöscht. Das lässt sich nicht rückgängig machen.</p><button class="danger" id="confirm-delete">Stück endgültig löschen</button><button class="text-button" id="cancel-delete">Behalten</button>`,
+      );
+      $('#cancel-delete').onclick = () =>
+        openDetail(id, 'view', { cached: true, scrollTop: offset });
+      $('#confirm-delete').onclick = (e) =>
+        action(e.currentTarget, async () => {
+          await api(`/wardrobe-items/${id}`, command(), 'DELETE');
+          await refreshItems();
+          render();
+          closeSheet();
+          toast('Stück gelöscht');
+        });
+    };
 }
 async function preparePhoto(file) {
   if (file.size > 25 * 1024 * 1024)
@@ -862,7 +1164,7 @@ async function importManual(draft, form) {
 }
 function renderSettings() {
   shell(
-    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><section class="panel"><h3>Automatische Katalogbilder</h3><p>Beim Hinzufügen analysiert OpenAI dein Foto und erstellt für jedes ausgewählte Stück automatisch ein Katalogbild. Beides ist kostenpflichtig. Die Bildgenerierung läuft in sparsamer Qualität.</p><p>Weitere Katalogbilder startest du in der Detailansicht weiterhin einzeln. Dort siehst du auch die erfassten Kosten.</p><a class="text-button" href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noreferrer">Aktuelle OpenAI-Preise ↗</a></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos und Bildverläufe werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
+    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><section class="panel"><h3>Automatische Katalogbilder</h3><p>Beim Hinzufügen analysiert OpenAI dein Foto und erstellt für jedes ausgewählte Stück automatisch ein Katalogbild. Beides ist kostenpflichtig. Die Bildgenerierung läuft in hoher Qualität und kostet pro Stück etwa 19 US-Cent.</p><p>Weitere Katalogbilder startest du in der Detailansicht weiterhin einzeln. Dort siehst du auch die erfassten Kosten.</p><a class="text-button" href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noreferrer">Aktuelle OpenAI-Preise ↗</a></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos und Bildverläufe werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
   );
   $('#open-archive').onclick = () => navigate('archived');
   $('#reset').onclick = () => {
@@ -880,6 +1182,9 @@ function renderSettings() {
           await api('/personal/reset', { confirmation: 'ALLES LÖSCHEN' });
           drafts = [];
           persistDrafts();
+          resultsByPage.clear();
+          assetUrls.clear();
+          detailCache = null;
           await refreshItems();
           closeSheet();
           navigate('owning');
@@ -933,7 +1238,12 @@ async function refreshVersion() {
   } catch {}
 }
 refreshVersion();
-setInterval(refreshVersion, 60_000);
+setInterval(refreshVersion, 30_000);
+// A PWA spends most of its life in the background, where the interval is
+// throttled. Checking on the way back in is what makes a deploy land promptly.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) refreshVersion();
+});
 start();
 
 let checking = false;
@@ -947,7 +1257,7 @@ setInterval(async () => {
       if (previous !== JSON.stringify(items)) {
         if (['owning', 'wanting', 'archived'].includes(page)) renderResults();
         if (detailId && $('#check-generation'))
-          await openDetail(detailId, 'view', true);
+          await openDetail(detailId, 'view', { refresh: true });
       }
     }
     if (page === 'add')

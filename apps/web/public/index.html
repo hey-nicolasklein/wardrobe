@@ -8,7 +8,12 @@
     />
     <meta name="theme-color" content="#f6f5f1" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- Gehört zu viewport-fit=cover: "default" malt im Homescreen-Betrieb einen
+         weißen Statusbalken, "black-translucent" lässt die Seite durchscheinen. -->
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
     <meta name="apple-mobile-web-app-title" content="FORM" />
     <meta
       name="description"
@@ -25,6 +30,7 @@
       <div class="loading">Dein Kleiderschrank wird geöffnet …</div>
     </div>
     <div id="toast" role="status" aria-live="polite"></div>
+    <div id="scrim" aria-hidden="true"></div>
     <dialog id="sheet" aria-labelledby="sheet-title"></dialog>
     <script type="module" src="/app.js"></script>
   </body>

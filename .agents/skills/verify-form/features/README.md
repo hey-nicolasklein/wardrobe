@@ -43,7 +43,7 @@ doctor, the drive harness, and cleanup.
 ## Features
 
 - [Browse & search wardrobe](./browse-search.md) — collections, category filter, live search.
-- [Photo intake & save](./photo-intake.md) — upload photo(s), name, save into the closet.
+- [Photo intake & save](./photo-intake.md) — upload, automatic detection, selection, import, and fallback.
 - [Item lifecycle](./item-lifecycle.md) — edit, archive, restore, permanent delete.
 - [Catalog image review](./catalog-image-review.md) — keep/use-original/restore versions; paid-generation confirm.
 - [Reset wardrobe](./reset-wardrobe.md) — typed-confirmation destructive clear, with active-job guard.
