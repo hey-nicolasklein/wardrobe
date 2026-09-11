@@ -159,6 +159,12 @@ For every bounding box, locate the outermost visible pixels of exactly one garme
 
 export const shelfImagePromptVersion = 'laid-flat-v3';
 
+// Recorded on every attempt, so older rows keep the model that produced them.
+// Flare emits 1536 output tokens against gpt-image-2's 6143 for the same
+// high/816x816 request — same rate card, a quarter of the tokens, and it holds
+// the flat chroma key more reliably on fuzzy edges.
+export const shelfImageModel = 'gpt-image-2.5-flare';
+
 export function buildShelfImagePrompt(metadata: ItemMetadata): string {
   return `Create a faithful e-commerce catalog presentation from the source image.
 

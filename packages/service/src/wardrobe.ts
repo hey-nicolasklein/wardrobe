@@ -13,7 +13,7 @@ import type {
   WardrobeItem,
 } from '@form/contracts';
 
-import { shelfImagePromptVersion } from './catalog-provider.js';
+import { shelfImageModel, shelfImagePromptVersion } from './catalog-provider.js';
 import type { Database, DatabaseClient } from './database.js';
 import { withTransaction } from './database.js';
 import { enqueueJob } from './jobs.js';
@@ -608,7 +608,7 @@ export async function enqueueShelfImageGeneration(
       `INSERT INTO generation_attempts (
          id, account_id, wardrobe_item_id, source_photo_id, detection_proposal_id,
          state, reviewed_metadata, model, quality, output_size, prompt_version, auto_keep
-       ) VALUES ($1, $2, $3, $4, $5, 'queued', $6, 'gpt-image-2', $7, $8, $9, $10)`,
+       ) VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10, $11)`,
       [
         generationAttemptId,
         input.accountId,
@@ -616,6 +616,7 @@ export async function enqueueShelfImageGeneration(
         row.source_photo_id,
         row.detection_proposal_id,
         JSON.stringify(metadata),
+        shelfImageModel,
         input.quality,
         input.size,
         shelfImagePromptVersion,

@@ -144,7 +144,7 @@ test('sends one requested quality and requires the provider usage ledger', async
 test('replay outputs are isolated and cost arithmetic stays integer', async () => {
   const replay = new ReplayCatalogProvider([
     {
-      key: 'generate:gpt-image-2:medium',
+      key: 'generate:gpt-image-2.5-flare:medium',
       generation: {
         requestId: 'replay-medium',
         pngBytes: Buffer.from([1, 2, 3]),
@@ -158,9 +158,9 @@ test('replay outputs are isolated and cost arithmetic stays integer', async () =
       },
     },
   ]);
-  const first = await replay.generate({ model: 'gpt-image-2', quality: 'medium' });
+  const first = await replay.generate({ model: 'gpt-image-2.5-flare', quality: 'medium' });
   first.pngBytes[0] = 9;
-  const second = await replay.generate({ model: 'gpt-image-2', quality: 'medium' });
+  const second = await replay.generate({ model: 'gpt-image-2.5-flare', quality: 'medium' });
   assert.equal(second.pngBytes[0], 1);
   assert.equal(
     calculateCostMicrounits(first.usage, {

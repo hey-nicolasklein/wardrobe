@@ -204,7 +204,7 @@ test('replay pipeline detects, crops, accounts, and stores review assets', { ski
         },
       },
       {
-        key: 'generate:gpt-image-2:low',
+        key: 'generate:gpt-image-2.5-flare:low',
         generation: {
           requestId: 'replay-generation-request',
           pngBytes: keyedOutput,
@@ -370,7 +370,7 @@ test('replay pipeline detects, crops, accounts, and stores review assets', { ski
       .toBuffer();
     const failingProvider = new ReplayCatalogProvider([
       {
-        key: 'generate:gpt-image-2:low',
+        key: 'generate:gpt-image-2.5-flare:low',
         generation: {
           requestId: 'replay-billed-chroma-failure',
           pngBytes: nonUniformOutput,
