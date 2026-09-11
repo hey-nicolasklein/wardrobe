@@ -43,8 +43,8 @@ test('normalizes orientation and crops reviewed boxes with context', async () =>
     { width: 240, height: 120, orientation: undefined },
   );
 
-  // 120x60 box in a 240x120 image: the square window wants 120*1.5 = 180px but
-  // the image is only 120 tall, so it clamps to the full height.
+  // 120x60 box in a 240x120 image wants a 180px window; the height clamps to
+  // the 120px the photo has, the width keeps the full 180.
   const crop = await cropGenerationReference(normalized, {
     x: 250,
     y: 250,
@@ -52,8 +52,31 @@ test('normalizes orientation and crops reviewed boxes with context', async () =>
     height: 500,
   });
   const cropMetadata = await sharp(crop).metadata();
-  assert.equal(cropMetadata.width, 120);
+  assert.equal(cropMetadata.width, 180);
   assert.equal(cropMetadata.height, 120);
+});
+
+test('keeps a garment taller than the photo is wide', async () => {
+  const portrait = await sharp({
+    create: { width: 1200, height: 2400, channels: 3, background: '#445566' },
+  })
+    .jpeg()
+    .toBuffer();
+  // A full-length coat: 1920px tall in a photo only 1200px wide. Sizing one
+  // square side and capping it at the shorter image edge would have produced a
+  // 1200px window and sliced 720px off the garment before the paid request.
+  const crop = await cropGenerationReference(await normalizeSourceForProvider(portrait), {
+    x: 350,
+    y: 100,
+    width: 300,
+    height: 800,
+  });
+  const cropMetadata = await sharp(crop).metadata();
+  assert.ok(
+    cropMetadata.height! >= 1920,
+    `window must contain the whole garment, got ${cropMetadata.height}`,
+  );
+  assert.equal(cropMetadata.width, 1200, 'width clamps to the photo');
 });
 
 test('gives a flat box room above and below, not just sideways', async () => {

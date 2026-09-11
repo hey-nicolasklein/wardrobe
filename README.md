@@ -15,9 +15,13 @@ The PWA caches only its static shell. Wardrobe browsing and changes require a co
 Use Node.js 24 and `npm ci` for development. Persistent PostgreSQL and MinIO data remain outside the repository. To rebuild the dedicated application services:
 
 ```sh
-docker compose --env-file .env.production -f compose.production.yaml build api worker web
-docker compose --env-file .env.production -f compose.production.yaml up -d --no-deps --wait api worker web
+deploy/ship.sh              # web, api and worker
+deploy/ship.sh api worker   # those plus web, which carries the version stamp
 ```
+
+The script stamps `FORM_VERSION` and waits until `/version.json` reports it.
+Calling Compose directly leaves that variable unset, bakes the literal `dev`
+into the web image, and open clients then never notice the release.
 
 The web image contains static HTML, CSS and JavaScript served by nginx. It proxies the existing Hono API and uses same-origin requests. No Expo export or app-store build is involved. Keep the loopback web port behind the existing private HTTPS proxy. Read `docs/mobile-web.md` for the pivot, cost findings and verification.
 

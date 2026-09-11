@@ -56,23 +56,22 @@ export async function cropGenerationReference(
     (box.width / 1_000) * metadata.width,
     (box.height / 1_000) * metadata.height,
   );
-  const side = Math.max(
-    1,
-    Math.min(
-      Math.round(longEdge * (1 + 2 * contextPaddingRatio)),
-      metadata.width,
-      metadata.height,
-    ),
-  );
+  const desired = Math.round(longEdge * (1 + 2 * contextPaddingRatio));
+  // Clamped per axis, not by one shared side. A single side capped at the
+  // shorter image edge would cut a garment that is taller than the photo is
+  // wide — a full-length coat in a portrait shot — so the window gives up
+  // squareness only as far as the photo forces it, and never drops the box.
+  const cropWidth = Math.max(1, Math.min(desired, metadata.width));
+  const cropHeight = Math.max(1, Math.min(desired, metadata.height));
   const left = Math.round(
-    Math.min(Math.max(0, centerX - side / 2), metadata.width - side),
+    Math.min(Math.max(0, centerX - cropWidth / 2), metadata.width - cropWidth),
   );
   const top = Math.round(
-    Math.min(Math.max(0, centerY - side / 2), metadata.height - side),
+    Math.min(Math.max(0, centerY - cropHeight / 2), metadata.height - cropHeight),
   );
 
   return image
-    .extract({ left, top, width: side, height: side })
+    .extract({ left, top, width: cropWidth, height: cropHeight })
     .jpeg({ quality: referenceJpegQuality, chromaSubsampling: '4:4:4' })
     .toBuffer();
 }
