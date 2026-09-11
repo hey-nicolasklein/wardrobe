@@ -43,6 +43,8 @@ test('normalizes orientation and crops reviewed boxes with context', async () =>
     { width: 240, height: 120, orientation: undefined },
   );
 
+  // 120x60 box in a 240x120 image: the square window wants 120*1.5 = 180px but
+  // the image is only 120 tall, so it clamps to the full height.
   const crop = await cropGenerationReference(normalized, {
     x: 250,
     y: 250,
@@ -50,8 +52,32 @@ test('normalizes orientation and crops reviewed boxes with context', async () =>
     height: 500,
   });
   const cropMetadata = await sharp(crop).metadata();
-  assert.equal(cropMetadata.width, 164);
-  assert.equal(cropMetadata.height, 82);
+  assert.equal(cropMetadata.width, 120);
+  assert.equal(cropMetadata.height, 120);
+});
+
+test('gives a flat box room above and below, not just sideways', async () => {
+  const wide = await sharp({
+    create: { width: 1000, height: 1000, channels: 3, background: '#445566' },
+  })
+    .jpeg()
+    .toBuffer();
+  // A shorts-shaped box: wide and short. Padding each axis by its own length
+  // used to leave almost no vertical context, cutting off waistbands and hems.
+  const crop = await cropGenerationReference(await normalizeSourceForProvider(wide), {
+    x: 200,
+    y: 600,
+    width: 500,
+    height: 150,
+  });
+  const cropMetadata = await sharp(crop).metadata();
+  assert.equal(cropMetadata.width, 750, 'square window sized from the long edge');
+  assert.equal(cropMetadata.height, 750);
+  // The box is 150px tall, so the window carries 600px of context around it.
+  assert.ok(
+    cropMetadata.height! - 150 > 500,
+    'a flat box still gets generous vertical context',
+  );
 });
 
 test('infers each fixture chroma key and preserves garment pixels', async () => {

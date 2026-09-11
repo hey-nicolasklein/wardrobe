@@ -4,7 +4,8 @@ import type { NormalizedBoundingBox } from '@form/contracts';
 
 const maximumInputPixels = 40_000_000;
 const referenceJpegQuality = 92;
-const contextPaddingRatio = 0.18;
+// Room left around the garment on each side, as a share of its longer edge.
+const contextPaddingRatio = 0.25;
 const keyDistanceTransparent = 12;
 const keyDistanceOpaque = 32;
 // How many pixels in from the matte edge to decontaminate chroma spill (the halo).
@@ -44,19 +45,34 @@ export async function cropGenerationReference(
     throw new CatalogImageError('validation', 'The normalized Source Photo has no dimensions.');
   }
 
-  const targetLeft = Math.floor((box.x / 1_000) * metadata.width);
-  const targetTop = Math.floor((box.y / 1_000) * metadata.height);
-  const targetWidth = Math.max(1, Math.ceil((box.width / 1_000) * metadata.width));
-  const targetHeight = Math.max(1, Math.ceil((box.height / 1_000) * metadata.height));
-  const horizontalPadding = Math.ceil(targetWidth * contextPaddingRatio);
-  const verticalPadding = Math.ceil(targetHeight * contextPaddingRatio);
-  const left = Math.max(0, targetLeft - horizontalPadding);
-  const top = Math.max(0, targetTop - verticalPadding);
-  const right = Math.min(metadata.width, targetLeft + targetWidth + horizontalPadding);
-  const bottom = Math.min(metadata.height, targetTop + targetHeight + verticalPadding);
+  // A square window centred on the garment, sized from its longer edge. Padding
+  // each axis by a share of its own length starved flat boxes: a 462x140 pair of
+  // shorts got generous room sideways and almost none above the waistband, so
+  // necklines and hems fell outside the reference and the model invented them.
+  // Square also matches the square output, which keeps the garment's pixels.
+  const centerX = ((box.x + box.width / 2) / 1_000) * metadata.width;
+  const centerY = ((box.y + box.height / 2) / 1_000) * metadata.height;
+  const longEdge = Math.max(
+    (box.width / 1_000) * metadata.width,
+    (box.height / 1_000) * metadata.height,
+  );
+  const side = Math.max(
+    1,
+    Math.min(
+      Math.round(longEdge * (1 + 2 * contextPaddingRatio)),
+      metadata.width,
+      metadata.height,
+    ),
+  );
+  const left = Math.round(
+    Math.min(Math.max(0, centerX - side / 2), metadata.width - side),
+  );
+  const top = Math.round(
+    Math.min(Math.max(0, centerY - side / 2), metadata.height - side),
+  );
 
   return image
-    .extract({ left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) })
+    .extract({ left, top, width: side, height: side })
     .jpeg({ quality: referenceJpegQuality, chromaSubsampling: '4:4:4' })
     .toBuffer();
 }
