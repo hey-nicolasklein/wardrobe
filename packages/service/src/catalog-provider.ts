@@ -179,7 +179,7 @@ Return layered garments and small accessories separately. Do not infer hidden it
 For every bounding box, locate the outermost visible pixels of exactly one garment. Use a tight box with at most 2% padding and exclude captions, controls, cards, background, and other garments. Use original image pixels in the standard order top, left, bottom, right. Top and bottom are pixel rows from 0 to ${pixelHeight}. Left and right are pixel columns from 0 to ${pixelWidth}. The origin is the image's top-left corner. Before responding, verify that the center of each box lies on its named garment and that the box does not group multiple pictured instances.`;
 }
 
-export const shelfImagePromptVersion = 'laid-flat-v3';
+export const shelfImagePromptVersion = 'laid-flat-v4';
 
 // Recorded on every attempt, so older rows keep the model that produced them.
 // Flare emits 1536 output tokens against gpt-image-2's 6143 for the same
@@ -188,12 +188,16 @@ export const shelfImagePromptVersion = 'laid-flat-v3';
 export const shelfImageModel = 'gpt-image-2.5-flare';
 
 export function buildShelfImagePrompt(metadata: ItemMetadata): string {
+  const presentation =
+    metadata.category === 'shoes'
+      ? 'For a pair of shoes, show both shoes. Place the right shoe upright on its sole, facing upward in the composition so its top and opening are visible. Place the left shoe immediately to its left, laid on its outer side to show its side profile. Keep both shoes fully visible, at the same scale, and naturally paired.'
+      : 'Present the garment laid flat, viewed straight from above, centered, with generous even padding.';
   return `Create a faithful e-commerce catalog presentation from the source image.
 
 SUBJECT
 - Show only the complete empty garment: ${metadata.name} (${metadata.category}; reviewed colors: ${metadata.colors.join(', ')}).
 - Remove every person, body part, mannequin, hanger, tag string, prop, and surrounding object.
-- Present the garment laid flat, viewed straight from above, centered, with generous even padding.
+- ${presentation}
 - Preserve the source-supported silhouette, proportions, color, pattern, seams, panels, hems, cuffs, collar, closures, pockets, trim, wear, and fabric behavior exactly.
 - Reproduce the fabric's visible surface at full detail: weave or knit structure, pile, ribbing, quilting, jacquard or tonal motifs, sheen, and the exact repeat and scale of any pattern. A textured fabric must never be rendered as a flat, smooth surface, and a tonal pattern must stay visible even when it is close to the base color.
 - Match collar shape, lapel roll, opening depth, and cuff or hem construction to the source rather than to a generic version of this garment type.

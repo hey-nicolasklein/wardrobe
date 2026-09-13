@@ -557,6 +557,7 @@ function wireLookCards() {
   );
 }
 function openLookComposer(preselected = []) {
+  const idempotencyKey = key();
   const eligible = items.filter(
     (item) => item.state !== 'archived' && item.currentShelfImageVersionId,
   );
@@ -582,7 +583,7 @@ function openLookComposer(preselected = []) {
         exactItemIds: data.getAll('item'),
         categories: data.getAll('category'),
         parentLookId: null,
-        idempotencyKey: key(),
+        idempotencyKey,
       });
       await refreshInspiration();
       closeSheet();

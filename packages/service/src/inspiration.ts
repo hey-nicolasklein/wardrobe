@@ -480,6 +480,15 @@ export async function retryLook(
   input: { accountId: string; lookId: string; idempotencyKey: string },
 ) {
   return withTransaction(database, async (client) => {
+    const request = { lookId: input.lookId };
+    const prior = await replay<{ jobId: string; lookId: string }>(
+      client,
+      input.accountId,
+      input.idempotencyKey,
+      'retry-look',
+      request,
+    );
+    if (prior) return prior;
     const row = await client.query(
       `UPDATE looks SET state='queued',failure_category=NULL,failure_detail=NULL,started_at=NULL,finished_at=NULL WHERE id=$1 AND account_id=$2 AND state='failed' RETURNING id`,
       [input.lookId, input.accountId],
@@ -499,7 +508,9 @@ export async function retryLook(
       input.lookId,
       jobId,
     ]);
-    return { jobId, lookId: input.lookId };
+    const body = { jobId, lookId: input.lookId };
+    await remember(client, input.accountId, input.idempotencyKey, 'retry-look', request, body);
+    return body;
   });
 }
 export async function deleteLook(database: Database, input: { accountId: string; lookId: string }) {
