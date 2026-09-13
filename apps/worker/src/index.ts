@@ -8,6 +8,8 @@ import {
   createDatabase,
   createPrivateObjectStorage,
   executeCatalogJob,
+  executeInspirationJob,
+  failInspirationAttempt,
   failCatalogAttempt,
   failJob,
   ensurePrivateBucket,
@@ -31,8 +33,7 @@ const executionConfig = {
   requestTimeoutMs: config.OPENAI_REQUEST_TIMEOUT_MS,
   pricing: {
     effectiveDate: config.OPENAI_PRICING_EFFECTIVE_DATE,
-    textInputMicrodollarsPerMillion:
-      config.OPENAI_IMAGE_TEXT_INPUT_RATE_MICRODOLLARS_PER_MILLION,
+    textInputMicrodollarsPerMillion: config.OPENAI_IMAGE_TEXT_INPUT_RATE_MICRODOLLARS_PER_MILLION,
     imageInputMicrodollarsPerMillion: config.OPENAI_IMAGE_INPUT_RATE_MICRODOLLARS_PER_MILLION,
     imageOutputMicrodollarsPerMillion: config.OPENAI_IMAGE_OUTPUT_RATE_MICRODOLLARS_PER_MILLION,
   },
@@ -51,25 +52,32 @@ console.log(
   `FORM worker ${workerId} ready on contract v${contractVersion}; recovered ${recovered} expired lease(s).`,
 );
 
-const recoveryTimer = setInterval(() => {
-  void recoverExpiredLeases(database).catch((error: unknown) => {
-    console.error('Failed to recover expired job leases.', error);
-  });
-}, Math.max(config.REMOTE_IMAGE_LEASE_SECONDS * 500, 5_000));
+const recoveryTimer = setInterval(
+  () => {
+    void recoverExpiredLeases(database).catch((error: unknown) => {
+      console.error('Failed to recover expired job leases.', error);
+    });
+  },
+  Math.max(config.REMOTE_IMAGE_LEASE_SECONDS * 500, 5_000),
+);
 
 let stopping = false;
 
 async function processJob(job: RemoteImageJob): Promise<void> {
-  const heartbeat = setInterval(() => {
-    void renewJobLease(
-      database,
-      job.id,
-      workerId,
-      config.REMOTE_IMAGE_LEASE_SECONDS,
-    ).catch((error: unknown) => console.error(`Failed to renew lease for job ${job.id}.`, error));
-  }, Math.max(Math.floor((config.REMOTE_IMAGE_LEASE_SECONDS * 1_000) / 3), 1_000));
+  const heartbeat = setInterval(
+    () => {
+      void renewJobLease(database, job.id, workerId, config.REMOTE_IMAGE_LEASE_SECONDS).catch(
+        (error: unknown) => console.error(`Failed to renew lease for job ${job.id}.`, error),
+      );
+    },
+    Math.max(Math.floor((config.REMOTE_IMAGE_LEASE_SECONDS * 1_000) / 3), 1_000),
+  );
   try {
-    await executeCatalogJob(database, storage, provider, job, executionConfig);
+    if (job.kind === 'generate-character-sheet' || job.kind === 'generate-look') {
+      await executeInspirationJob(database, storage, provider, job, executionConfig);
+    } else {
+      await executeCatalogJob(database, storage, provider, job, executionConfig);
+    }
     if (!(await completeJob(database, job.id, workerId))) {
       console.error(`Job ${job.id} completed after its worker lease was lost.`);
     }
@@ -82,7 +90,11 @@ async function processJob(job: RemoteImageJob): Promise<void> {
       retryDelaySeconds: Math.min(60, 5 * 2 ** Math.max(0, job.attempts - 1)),
     });
     if (outcome === 'failed') {
-      await failCatalogAttempt(database, job, catalogError);
+      if (job.kind === 'generate-character-sheet' || job.kind === 'generate-look') {
+        await failInspirationAttempt(database, job, catalogError);
+      } else {
+        await failCatalogAttempt(database, job, catalogError);
+      }
     }
     if (outcome !== 'retried') {
       console.error(`Catalog job ${job.id} ${outcome}.`, catalogError);
