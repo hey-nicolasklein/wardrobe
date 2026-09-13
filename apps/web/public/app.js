@@ -878,13 +878,10 @@ function showSheet(title, content, keepScroll = false) {
   // would clamp the offset we just set.
   if (target) requestAnimationFrame(() => (sheet.scrollTop = target));
 }
-// Everything outside the dialog that reacts to it: the scrim over the page, the
-// page scroll lock, and the colour iOS fills the status bar strip with.
+// Lock page scrolling and match the browser chrome to the native backdrop.
 const paper = '#f6f5f1';
 const dimmedPaper = '#9fa39c';
 function setSheetChrome(open) {
-  $('#scrim').classList.toggle('show', open);
-  document.body.classList.toggle('sheet-open', open);
   document.body.style.overflow = open ? 'hidden' : '';
   $('meta[name="theme-color"]').content = open ? dimmedPaper : paper;
 }

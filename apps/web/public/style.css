@@ -25,14 +25,6 @@ body {
   margin: 0;
   background: #f6f5f1;
   min-height: 100dvh;
-  transition: background-color 0.34s ease;
-}
-/* Der Streifen hinter der Statusleiste wird von iOS aus der Seitenfarbe
-   gefüllt, nicht aus Overlays – weder der ::backdrop des Dialogs noch #scrim
-   erreichen ihn. Beim geöffneten Blatt bekommt die Seite deshalb direkt die
-   Farbe, die der Schleier sonst erzeugt: #1d281c bei 40 % über dem Papier. */
-body.sheet-open {
-  background: #9fa39c;
 }
 button,
 input,
@@ -994,9 +986,14 @@ dialog {
   max-width: 600px;
   max-height: 94dvh;
   margin: auto auto 0;
-  border-radius: 25px 25px 0 0;
-  /* Clip the composited dialog background and animated descendants together. */
-  clip-path: inset(0 round 25px 25px 0 0);
+  --sheet-radius: 25px 25px 0 0;
+  border-radius: var(--sheet-radius);
+  clip-path: inset(0 round var(--sheet-radius));
+  /* Keep the scrolling background and composited children inside the same clip. */
+  -webkit-mask-image: linear-gradient(#000, #000);
+  mask-image: linear-gradient(#000, #000);
+  isolation: isolate;
+  overflow: auto;
   background: #f6f5f1;
   color: inherit;
   box-shadow: 0 -10px 70px #0002;
@@ -1022,25 +1019,29 @@ dialog[open] {
 dialog.dragging {
   transition: none;
 }
-/* Der ::backdrop eines Dialogs endet auf iOS an `safe-area-inset-top`, der
-   Streifen hinter der Statusleiste bliebe also hell stehen. Dieser Schleier ist
-   ein normales fixiertes Element und deckt mit `viewport-fit=cover` wirklich die
-   ganze Fläche ab. Der ::backdrop selbst bleibt deshalb unsichtbar. */
-#scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 4;
-  opacity: 0;
-  pointer-events: none;
+/* Keep the dimming above all page content in the dialog's top layer. */
+dialog::backdrop {
   background: #1d281c66;
   backdrop-filter: blur(3px);
-  transition: opacity 0.34s ease;
+  -webkit-backdrop-filter: blur(3px);
+  transition:
+    background-color 0.34s ease,
+    backdrop-filter 0.34s ease,
+    -webkit-backdrop-filter 0.34s ease,
+    display 0.34s allow-discrete,
+    overlay 0.34s allow-discrete;
 }
-#scrim.show {
-  opacity: 1;
+dialog:not([open])::backdrop {
+  background: #1d281c00;
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
 }
-dialog::backdrop {
-  background: transparent;
+@starting-style {
+  dialog[open]::backdrop {
+    background: #1d281c00;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  }
 }
 /* Greifbarer Hinweis, dass sich das Blatt nach unten wegziehen lässt. Als
    einziges Element bleibt er beim Scrollen oben stehen. */
@@ -1776,7 +1777,7 @@ dialog::backdrop {
 @media (min-width: 601px) {
   dialog {
     margin: auto;
-    border-radius: 25px;
+    --sheet-radius: 25px;
   }
   .shell {
     padding-top: 35px;
