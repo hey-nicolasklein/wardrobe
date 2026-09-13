@@ -12,6 +12,11 @@
   --line: #e2e4dc;
   --paper: #fff;
   --serif: ui-serif, Georgia, serif;
+  /* Überschwingende Kurve: Elemente schießen leicht über ihr Ziel hinaus und
+     federn zurück. */
+  --pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Startet schnell und läuft lange aus – für Flächen, die sich setzen sollen. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 * {
   box-sizing: border-box;
@@ -74,6 +79,17 @@ textarea {
   width: 100%;
   color: inherit;
 }
+/* Der Block darüber beschreibt ein Textfeld. Auf eine Checkbox gelegt schiebt
+   ihn Safari unter das native Kästchen, statt ihn zu verwerfen: das Kästchen
+   wächst um Rahmen und Innenabstand und sitzt nicht mehr auf der Textzeile. */
+input[type='checkbox'] {
+  width: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  accent-color: var(--green);
+}
 select {
   border: 1px solid var(--line);
   background: white;
@@ -98,8 +114,7 @@ p {
 .shell {
   max-width: 600px;
   margin: auto;
-  padding: calc(22px + env(safe-area-inset-top)) 22px
-    calc(112px + env(safe-area-inset-bottom));
+  padding: calc(22px + env(safe-area-inset-top)) 22px calc(112px + env(safe-area-inset-bottom));
 }
 .masthead {
   display: flex;
@@ -241,6 +256,278 @@ h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 22px 13px;
 }
+.look-feed {
+  display: grid;
+  gap: 22px;
+}
+.look-card {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #e7e9e2;
+}
+.look-photo {
+  width: 100%;
+  display: block;
+  padding: 0;
+  aspect-ratio: 4/5;
+  position: relative;
+}
+.look-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition:
+    filter 0.45s var(--ease-out),
+    transform 0.6s var(--ease-out);
+}
+/* Der Schleier liegt immer bereit und wird nur eingeblendet. Als reines
+   `content` im Zustand `.revealed` gäbe es keinen Vorzustand, von dem aus der
+   Browser überblenden könnte – die Tönung säße schlagartig da, während die
+   Unschärfe noch läuft. */
+.look-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #f1f5fa;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.45s var(--ease-out);
+}
+.look-more {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #ffffffe6;
+  z-index: 2;
+}
+.developing,
+.failed-look {
+  min-height: 260px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 14px;
+}
+.developing h2,
+.failed-look h2 {
+  font-size: 25px;
+}
+.developing p,
+.failed-look p {
+  color: var(--muted);
+  font-size: 14px;
+}
+.look-items {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+/* Ruhezustand: klein, leicht gekippt und in der Mitte des Fotos gestapelt. Von
+   hier springen die Stücke beim Tippen nach außen. Die Verzögerung ist beim
+   Einklappen umgekehrt, damit das zuletzt erschienene Stück zuerst zurückkehrt.
+   Getönte Kachel statt Schlagschatten, wie im Schrank: ein Filter würde
+   während der laufenden Transform-Animation mitrastern und als Rechteck
+   abbrechen. */
+.look-items button {
+  pointer-events: auto;
+  position: absolute;
+  width: var(--item-size, 26%);
+  aspect-ratio: 1;
+  padding: 0;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  scale: 0.35;
+  rotate: -14deg;
+  opacity: 0;
+  background: #eaece5;
+  border-radius: 14px;
+  overflow: hidden;
+  transition:
+    top 0.34s var(--pop),
+    left 0.34s var(--pop),
+    scale 0.34s var(--pop),
+    rotate 0.34s var(--pop),
+    opacity 0.3s ease;
+  transition-delay: calc((var(--item-count, 1) - 1 - var(--item-order, 0)) * 45ms);
+}
+.look-items button.tint-1 {
+  background: #ebe7e0;
+}
+.look-items button.tint-2 {
+  background: #e5e9e6;
+}
+.look-items img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+/* Heller, leicht kühler Schleier statt eines dunklen: das Foto tritt zurück,
+   ohne die Karte schwer zu machen, und die Stücke liegen sichtbar davor. */
+.revealed .look-photo::after {
+  opacity: 0.65;
+}
+.revealed .look-photo img {
+  filter: blur(12px) brightness(1.06) saturate(0.8);
+  transform: scale(1.08);
+}
+.revealed .look-items button {
+  top: calc(50% + var(--item-y));
+  left: calc(50% + var(--item-x));
+  scale: 1;
+  rotate: 0deg;
+  opacity: 1;
+  transition-delay: calc(var(--item-order, 0) * 45ms);
+}
+/* Beim Antippen federt das Stück kurz ein, bevor die Detailansicht öffnet. */
+.look-items button:active {
+  scale: 0.92;
+  transition-duration: 0.1s;
+  transition-delay: 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .look-photo img,
+  .look-photo::after,
+  .look-items button,
+  .revealed .look-items button {
+    transition: none;
+    transition-delay: 0s;
+  }
+}
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 22px 0;
+}
+legend {
+  font-size: 13px;
+  font-weight: 650;
+  margin-bottom: 10px;
+}
+.composer-items {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+.select-item {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  font-size: 11px;
+}
+.select-item input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+.select-item img {
+  width: 100%;
+  aspect-ratio: 3/4;
+  object-fit: contain;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: #eaece5;
+}
+.select-item input:checked + img {
+  border-color: var(--green);
+}
+.select-item span {
+  display: block;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+.composer-categories {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.composer-categories label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.composer-categories input {
+  flex: 0 0 auto;
+  margin: 0;
+}
+.character-versions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+.character-version {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  text-align: left;
+  background: #f6f5f1;
+}
+.character-version.active {
+  border-color: var(--green);
+  background: #edf1ea;
+}
+.character-thumbnail {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 9/16;
+  background: #eaece5;
+  overflow: hidden;
+}
+.character-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.character-placeholder .icon {
+  color: var(--muted);
+}
+.character-version-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px;
+  font-size: 12px;
+}
+.character-version-copy small {
+  color: var(--muted);
+}
+.character-detail {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 9/16;
+  width: min(100%, 360px);
+  margin: 0 auto 22px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #eaece5;
+}
+.character-detail img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 /* Buttons zentrieren gestreckten Inhalt vertikal – als Flex-Spalte bleibt das
    Foto oben, damit Kacheln einer Zeile auch bei zweizeiligen Titeln fluchten. */
 .item {
@@ -268,7 +555,10 @@ h3 {
   object-fit: contain;
   display: block;
 }
-.photo-source {
+/* Braucht die gleiche Spezifität wie `.photo img`, sonst gewinnt dessen
+   `object-fit: contain` und das Originalfoto füllt die Kachel nicht. Es darf
+   beschnitten werden, das Katalogbild darunter zeigt das Stück ganz. */
+.photo img.photo-source {
   position: absolute;
   inset: 0;
   object-fit: cover;
@@ -711,6 +1001,20 @@ dialog::backdrop {
   border-radius: 12px;
   background: #eaece5;
 }
+.detection-choice-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.detection-choice-row .detection-choice {
+  margin: 0;
+}
+.detection-choice-row select {
+  font-size: 13px;
+  padding: 10px 8px;
+}
 .detection-stage > img {
   max-height: none;
   border-radius: 0;
@@ -740,11 +1044,15 @@ dialog::backdrop {
   min-height: 34px;
   border: 2px solid #ffffffcc;
   border-radius: 8px;
-  box-shadow: 0 0 0 1px #26332966, inset 0 0 0 999px #1e2d210d;
+  box-shadow:
+    0 0 0 1px #26332966,
+    inset 0 0 0 999px #1e2d210d;
 }
 .detection-box.selected {
   border-color: white;
-  box-shadow: 0 0 0 2px var(--green), inset 0 0 0 999px #344d3f18;
+  box-shadow:
+    0 0 0 2px var(--green),
+    inset 0 0 0 999px #344d3f18;
 }
 .detection-box span {
   position: absolute;
