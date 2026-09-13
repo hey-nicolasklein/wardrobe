@@ -379,31 +379,77 @@ function renderLookCards() {
   });
   $('#look-feed').replaceChildren(...cards);
 }
-/* Places one item on a circle around the look photo. `--item-order` drives the
-   stagger so pieces pop out one after another, clockwise from the top. The
-   radius has to clear the tile size, or neighbouring tiles touch at the corners:
-   at four pieces the horizontal and vertical spacing is the bare radius, so it
-   needs to stay a few percent above `--item-size`. Vertically the factor 0.8
-   cancels the 4:5 card, since a `top` percentage counts against its height. */
-function lookItemPosition(index, total) {
-  const stagger = `--item-order:${index};--item-count:${total};`;
-  if (total === 1) return `--item-x:0%;--item-y:0%;${stagger}`;
-  const angle = (index / total) * Math.PI * 2 - Math.PI / 2;
-  const radius = total > 5 ? 33 : 30;
-  return `--item-x:${(Math.cos(angle) * radius).toFixed(2)}%;--item-y:${(
-    Math.sin(angle) * radius * 0.8
-  ).toFixed(2)}%;--item-size:${total > 5 ? 22 : 26}%;${stagger}`;
+/* Plätze am Körper der Person, als Prozent von der Bildmitte aus: x zählt gegen
+   die Breite der Karte, y gegen ihre Höhe. Die Mitte bleibt frei, damit die
+   Person zwischen ihren Stücken stehen bleibt. */
+const lookAnchors = {
+  chestLeft: [-27, -23],
+  chestRight: [27, -23],
+  waistLeft: [-33, 2],
+  waistRight: [33, 2],
+  legsRight: [27, 22],
+  legsLeft: [-27, 22],
+  head: [0, -40],
+  feet: [0, 41],
+};
+/* Wunschplätze je Kategorie, vom besten zum nächstbesten. Die Reihenfolge der
+   Vergabe entscheidet bei Streit, deshalb steht sie fest: von Kopf bis Fuß. */
+const lookAnchorWishes = {
+  hat: ['head', 'chestRight', 'chestLeft'],
+  top: ['chestLeft', 'chestRight', 'waistLeft'],
+  dress: ['chestLeft', 'chestRight', 'legsLeft'],
+  jacket: ['chestRight', 'waistRight', 'chestLeft'],
+  scarf: ['waistLeft', 'head', 'chestLeft'],
+  pants: ['legsRight', 'legsLeft', 'waistRight'],
+  skirt: ['legsRight', 'legsLeft', 'waistRight'],
+  bag: ['waistRight', 'legsRight', 'waistLeft'],
+  shoes: ['feet', 'legsLeft', 'legsRight'],
+};
+const lookPlacementOrder = Object.keys(lookAnchorWishes);
+/* Verteilt die Stücke eines Looks um die Person. Jede Kategorie bekommt ihren
+   Platz am Körper, ohne Oberteil rückt die Jacke auf dessen Stelle. Sind mehr
+   Stücke da als Anker, landet der Rest auf einem weiten Ring – das kommt bei
+   einem Outfit praktisch nicht vor, soll aber nicht stapeln.
+   `--item-order` treibt den Versatz, die Stücke erscheinen also von oben nach
+   unten. Viele Stücke werden kleiner, sonst überlappen die Nachbarplätze. */
+function lookItemPositions(categories) {
+  const free = new Set(Object.keys(lookAnchors));
+  const wishesFor = (category) =>
+    category === 'jacket' && !categories.includes('top')
+      ? ['chestLeft', ...lookAnchorWishes.jacket]
+      : lookAnchorWishes[category] || [];
+  const size = categories.length > 6 ? 25 : categories.length > 4 ? 30 : 36;
+  const styles = [];
+  [...categories.keys()]
+    .sort(
+      (a, b) =>
+        lookPlacementOrder.indexOf(categories[a]) - lookPlacementOrder.indexOf(categories[b]),
+    )
+    .forEach((index, rank) => {
+      const anchor = wishesFor(categories[index]).find((name) => free.has(name)) || [...free][0];
+      free.delete(anchor);
+      const angle = (rank / categories.length) * Math.PI * 2;
+      const [x, y] = lookAnchors[anchor] || [Math.cos(angle) * 38, Math.sin(angle) * 30];
+      styles[index] =
+        `--item-x:${x.toFixed(2)}%;--item-y:${y.toFixed(2)}%;--item-size:${size}%;--item-order:${rank};--item-count:${categories.length};`;
+    });
+  return styles;
 }
 function renderLookCard(look) {
   if (look.state === 'failed')
     return `<article class="look-card failed-look" data-look="${look.id}"><div><h2>Das Bild ist nicht entstanden.</h2><p>Der Versuch bleibt hier sichtbar. Du kannst ihn erneut starten.</p></div><button class="primary" data-retry-look="${look.id}">Erneut versuchen</button><button class="text-button" data-delete-look="${look.id}">Löschen …</button></article>`;
   if (look.state !== 'ready')
     return `<article class="look-card developing" data-look="${look.id}" role="status"><span class="spinner"></span><div><h2>Dein Look entwickelt sich.</h2><p>Du kannst FORM währenddessen weiter benutzen.</p></div></article>`;
-  return `<article class="look-card ready-look" data-look="${look.id}"><button class="look-photo" data-toggle-look="${look.id}" aria-label="Getragene Stücke anzeigen" aria-pressed="false"><img class="fade" data-asset="${look.assetId}" alt="Generierter persönlicher Look" loading="lazy" decoding="async"></button><button class="look-more" data-look-menu="${look.id}" aria-label="Aktionen für Look">${icon('more')}</button><div class="look-items" data-look-items="${look.id}" hidden>${look.wardrobeItemIds
-    .map((id, index) => {
-      const item = items.find((entry) => entry.id === id) || { id, recordVersion: 0 };
+  // Stücke, die der Schrank nicht (mehr) kennt, gelten als Oberteil: sie
+  // bekommen so einen Platz am Körper statt in der Mitte zu landen.
+  const worn = look.wardrobeItemIds.map(
+    (id) => items.find((entry) => entry.id === id) || { id, recordVersion: 0 },
+  );
+  const positions = lookItemPositions(worn.map((item) => item.metadata?.category || 'top'));
+  return `<article class="look-card ready-look" data-look="${look.id}"><button class="look-photo" data-toggle-look="${look.id}" aria-label="Getragene Stücke anzeigen" aria-pressed="false"><img class="fade" data-asset="${look.assetId}" alt="Generierter persönlicher Look" loading="lazy" decoding="async"></button><button class="look-more" data-look-menu="${look.id}" aria-label="Aktionen für Look">${icon('more')}</button><div class="look-items" data-look-items="${look.id}" hidden>${worn
+    .map((item, index) => {
       const name = item.metadata?.name || 'Kleidungsstück';
-      return `<button class="tint-${tint(id)}" data-look-item="${id}" aria-label="${esc(name)} öffnen" style="${lookItemPosition(index, look.wardrobeItemIds.length)}"><img src="${preview(item)}" alt="${esc(name)}"></button>`;
+      return `<button data-look-item="${item.id}" aria-label="${esc(name)} öffnen" style="${positions[index]}"><img src="${preview(item)}" alt="${esc(name)}"></button>`;
     })
     .join('')}</div></article>`;
 }

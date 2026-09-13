@@ -278,19 +278,17 @@ h3 {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition:
-    filter 0.45s var(--ease-out),
-    transform 0.6s var(--ease-out);
 }
 /* Der Schleier liegt immer bereit und wird nur eingeblendet. Als reines
    `content` im Zustand `.revealed` gäbe es keinen Vorzustand, von dem aus der
-   Browser überblenden könnte – die Tönung säße schlagartig da, während die
-   Unschärfe noch läuft. */
+   Browser überblenden könnte – die Tönung säße schlagartig da. Weiß statt
+   Unschärfe: das Foto bleibt lesbar, die Person bleibt als Silhouette stehen,
+   von der die Stücke ausgehen, und nichts rastert während der Animation. */
 .look-photo::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: #f1f5fa;
+  background: #fff;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.45s var(--ease-out);
@@ -333,27 +331,24 @@ h3 {
   pointer-events: none;
   z-index: 1;
 }
-/* Ruhezustand: klein, leicht gekippt und in der Mitte des Fotos gestapelt. Von
-   hier springen die Stücke beim Tippen nach außen. Die Verzögerung ist beim
-   Einklappen umgekehrt, damit das zuletzt erschienene Stück zuerst zurückkehrt.
-   Getönte Kachel statt Schlagschatten, wie im Schrank: ein Filter würde
-   während der laufenden Transform-Animation mitrastern und als Rechteck
-   abbrechen. */
+/* Ruhezustand: klein, leicht gekippt und in der Mitte des Fotos gestapelt – dort
+   steht die Person, die Stücke wandern beim Tippen von ihr weg an ihre Stelle am
+   Körper. Die Verzögerung ist beim Einklappen umgekehrt, damit das zuletzt
+   erschienene Stück zuerst zurückkehrt. Keine Kachel und kein Schatten: die
+   Katalogbilder sind freigestellt und sollen direkt auf dem Foto liegen. */
 .look-items button {
   pointer-events: auto;
   position: absolute;
-  width: var(--item-size, 26%);
+  width: var(--item-size, 34%);
   aspect-ratio: 1;
   padding: 0;
   top: 50%;
   left: 50%;
   translate: -50% -50%;
-  scale: 0.35;
+  scale: 0.3;
   rotate: -14deg;
   opacity: 0;
-  background: #eaece5;
-  border-radius: 14px;
-  overflow: hidden;
+  background: none;
   transition:
     top 0.34s var(--pop),
     left 0.34s var(--pop),
@@ -362,25 +357,15 @@ h3 {
     opacity 0.3s ease;
   transition-delay: calc((var(--item-count, 1) - 1 - var(--item-order, 0)) * 45ms);
 }
-.look-items button.tint-1 {
-  background: #ebe7e0;
-}
-.look-items button.tint-2 {
-  background: #e5e9e6;
-}
 .look-items img {
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
-/* Heller, leicht kühler Schleier statt eines dunklen: das Foto tritt zurück,
-   ohne die Karte schwer zu machen, und die Stücke liegen sichtbar davor. */
+/* Weißer Schleier über dem Foto: die Person bleibt als Umriss erkennbar, die
+   freigestellten Stücke heben sich trotzdem klar ab. */
 .revealed .look-photo::after {
-  opacity: 0.65;
-}
-.revealed .look-photo img {
-  filter: blur(12px) brightness(1.06) saturate(0.8);
-  transform: scale(1.08);
+  opacity: 0.76;
 }
 .revealed .look-items button {
   top: calc(50% + var(--item-y));
@@ -397,7 +382,6 @@ h3 {
   transition-delay: 0s;
 }
 @media (prefers-reduced-motion: reduce) {
-  .look-photo img,
   .look-photo::after,
   .look-items button,
   .revealed .look-items button {
