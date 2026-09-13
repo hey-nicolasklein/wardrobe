@@ -16,8 +16,8 @@ import { IdempotencyConflictError, OwnedResourceNotFoundError } from './media.js
 import type { PrivateObjectStorage } from './storage.js';
 
 export const characterSheetModel = 'gpt-image-2.5-flare';
-export const characterSheetPromptVersion = 'identity-sheet-v2';
-export const characterSheetRefinePromptVersion = 'identity-sheet-refine-v1';
+export const characterSheetPromptVersion = 'identity-sheet-v3';
+export const characterSheetRefinePromptVersion = 'identity-sheet-refine-v2';
 export const lookModel = 'gpt-image-2.5-flare';
 export const lookPlannerModel = 'gpt-5.4-mini';
 export const lookPromptVersion = 'candid-iphone-v1';
@@ -595,15 +595,10 @@ async function writeAsset(
   );
   return id;
 }
-// Looks are candid shots taken from the front or slightly off to one side, never from behind
-// and never in profile. The sheet therefore spends its pixels on the angles a Look can use:
-// a face row over a full-body row, both in the same straight / slightly left / slightly right order.
 const characterPrompt = (note: string | null) =>
-  `Create one high-quality 9:16 identity Character Sheet of the same person shown in all reference photos, laid out as two rows of three views each. Top row: three large close-ups of the face, facing the camera straight on, turned slightly towards the left, and turned slightly towards the right. Bottom row: three full-body views of the same person in the same three angles and the same order. Never show a full profile, a three-quarter rear angle, or the back of the person. Use neutral fitted clothing, consistent soft studio lighting, and a plain background. Preserve identity, body proportions, skin, hair, and stable features${note ? `. Stable details: ${note}` : ''}. No text, labels, callouts, collage borders, decoration, or watermark.`;
-// Layout has to survive a refinement: look generation assumes the sheet shows a face row over a
-// full-body row, and drifting layout between versions would change every later Look.
+  `Create one high-quality 9:16 identity Character Sheet of the same person shown in all reference photos, laid out as two rows of three views each. Top row: three large close-ups of the face in this exact left-to-right order: strict left-side profile with the nose pointing towards the left edge, direct front-facing view looking into the camera, strict right-side profile with the nose pointing towards the right edge. Bottom row: three full-body views in the same left-profile, front-facing, right-profile order. The two profile views must show opposite sides of the face and must not duplicate the same three-quarter angle. Never show a three-quarter rear angle or the back of the person. Use neutral fitted clothing, consistent soft studio lighting, and a plain background. Preserve identity, body proportions, skin, hair, and stable features${note ? `. Stable details: ${note}` : ''}. No text, labels, callouts, collage borders, decoration, or watermark.`;
 const refinementPrompt = (note: string | null, instruction: string) =>
-  `The first reference image is an existing 9:16 identity Character Sheet. The remaining reference photos show the same real person and are the ground truth for identity. Redraw the sheet with the same layout, the same views in the same positions, the same neutral fitted clothing, lighting, and plain background. Correct only this: ${instruction}. Keep every other region identical to the first reference and preserve identity, body proportions, skin, and hair. Two exceptions: if the existing sheet holds a profile or back view, replace it in place with the same person turned slightly towards the camera, and if it does not already show a row of three face close-ups above a row of three full-body views, rebuild it into that layout with the angles straight on, slightly left, and slightly right in both rows${note ? `. Stable details: ${note}` : ''}. No text, labels, callouts, collage borders, decoration, or watermark.`;
+  `The first reference image is an existing 9:16 identity Character Sheet. The remaining reference photos show the same real person and are the ground truth for identity. Redraw the sheet with the same layout, the same views in the same positions, the same neutral fitted clothing, lighting, and plain background. Correct only this: ${instruction}. Keep every other region identical to the first reference and preserve identity, body proportions, skin, and hair. If it does not already show a row of three face close-ups above a row of three full-body views, rebuild it into that layout. In each row, use this exact left-to-right order: strict left-side profile with the nose pointing towards the left edge, direct front-facing view looking into the camera, strict right-side profile with the nose pointing towards the right edge. The two profile views must show opposite sides of the face and must not duplicate the same three-quarter angle${note ? `. Stable details: ${note}` : ''}. No text, labels, callouts, collage borders, decoration, or watermark.`;
 function lookPrompt(
   concept: LookConcept,
   items: Array<{ name: string; category: string; colors: string[] }>,

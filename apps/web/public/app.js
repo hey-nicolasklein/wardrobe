@@ -1425,9 +1425,10 @@ async function loadSettingsData() {
     characterSheets = sheets.characterSheets;
     if (!$('#character-settings')) return;
     const current = currentCharacterSheet();
+    const pending = characterSheets.find((sheet) => isCharacterPending(sheet));
     const past = characterSheets.filter((sheet) => sheet.id !== current?.id);
     $('#character-settings').innerHTML = current
-      ? `<button class="character-current ${current.active ? 'active' : ''}" data-character="${current.id}" aria-label="Character Sheet vom ${sheetDate(current)} öffnen">${characterThumbnail(current)}<span class="character-current-copy"><strong>${characterStatus(current)}</strong><small>Seit ${sheetDate(current)}</small><small>${current.referenceAssetIds.length} ${current.referenceAssetIds.length === 1 ? 'Referenzfoto' : 'Referenzfotos'}${current.refinementInstruction ? ' · verfeinert' : ''}</small></span></button>${past.length ? `<button class="secondary" id="character-history">Frühere Versionen · ${past.length}</button>` : ''}`
+      ? `${characterCurrentCard(current)}${pending && pending.id !== current.id ? characterCurrentCard(pending, true) : ''}${past.length ? `<button class="secondary" id="character-history">Frühere Versionen · ${past.length}</button>` : ''}`
       : '<p class="muted">Noch nicht eingerichtet.</p>';
     $('#cost-settings').innerHTML =
       `<div class="setting-row">Looks gesamt<span>${money(costData.costs.lookTotalMicrounits)}</span></div><div class="setting-row">Ø pro fertigem Look<span>${money(costData.costs.averageSuccessfulLookMicrounits)}</span></div><div class="setting-row">Character Sheets<span>${money(costData.costs.characterSheetTotalMicrounits)}</span></div>`;
@@ -1447,14 +1448,16 @@ const characterStatus = (sheet) =>
       : sheet.state === 'ready'
         ? 'Gespeichert'
         : 'Wird erstellt …';
+const isCharacterPending = (sheet) => !['ready', 'failed'].includes(sheet.state);
 const characterThumbnail = (sheet) =>
   sheet.assetId
     ? `<span class="character-thumbnail"><img class="fade" data-asset="${sheet.assetId}" alt="Character Sheet vom ${sheetDate(sheet)}" decoding="async"></span>`
     : `<span class="character-thumbnail character-placeholder">${sheet.state === 'failed' ? icon('close') : '<span class="spinner"></span>'}</span>`;
-// Settings only ever show one sheet: the active one, or the newest attempt while
-// the first generation is still running.
 function currentCharacterSheet() {
   return characterSheets.find((sheet) => sheet.active) ?? characterSheets[0] ?? null;
+}
+function characterCurrentCard(sheet, pending = false) {
+  return `<button class="character-current ${sheet.active ? 'active' : ''} ${pending ? 'character-current-pending' : ''}" data-character="${sheet.id}" aria-label="Character Sheet vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-current-copy"><strong>${pending ? 'Neues Character Sheet wird erstellt …' : characterStatus(sheet)}</strong><small>${pending ? 'Die aktive Version bleibt in der Zwischenzeit erhalten.' : `Seit ${sheetDate(sheet)}`}</small><small>${sheet.referenceAssetIds.length} ${sheet.referenceAssetIds.length === 1 ? 'Referenzfoto' : 'Referenzfotos'}${sheet.refinementInstruction ? ' · verfeinert' : ''}</small></span></button>`;
 }
 function wireCharacterCards(root) {
   root.querySelectorAll('img[data-asset]').forEach((img) => (img.src = assetUrl(img.dataset.asset)));

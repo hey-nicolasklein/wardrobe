@@ -515,6 +515,9 @@ legend {
   border-color: var(--green);
   background: #edf1ea;
 }
+.character-current-pending {
+  border-style: dashed;
+}
 .character-current .character-thumbnail {
   flex: none;
   width: 96px;
@@ -530,6 +533,9 @@ legend {
 .character-current-copy small {
   color: var(--muted);
   font-size: 12px;
+}
+#character-settings + #new-character {
+  margin-top: 12px;
 }
 .character-detail {
   display: grid;
