@@ -13,6 +13,8 @@
   /* Die Leisten über und unter dem Bild einer Look-Karte. Deutlich genug vom
      Papier abgesetzt, dass die Karte als eigener Block liest. */
   --card-chrome: #e9e8dc;
+  --cost-looks: #344d3f;
+  --cost-sheets: #9aab7d;
   --paper: #fff;
   --serif: ui-serif, Georgia, serif;
   /* Überschwingende Kurve: Elemente schießen leicht über ihr Ziel hinaus und
@@ -2247,3 +2249,23 @@ dialog:has(#look-composer) .sheet-body {
   .flat-garment { transition: background-color 180ms ease; }
   .flat-garment:active img { transform: scale(0.96); }
 }
+
+/* Generierungskosten: ein halber Ring, in dem die beiden Quellen nebeneinander
+   liegen. Die Summe steht in seiner Öffnung, die Aufschlüsselung darunter. */
+.cost-gauge { position: relative; max-width: 300px; margin: 10px auto 0; }
+.cost-dial { display: block; width: 100%; }
+/* Strichbreite kommt als Attribut aus dem Markup: die Bogenlängen rechnen mit
+   ihr, die beiden dürfen nicht auseinanderlaufen. */
+.cost-track, .cost-arc { fill: none; stroke-linecap: round; }
+.cost-track { stroke: #dfe1d5; }
+.cost-arc { stroke: var(--cost-color); }
+/* Sitzt zwischen den Bogenenden, nicht darunter: der Ring rahmt die Summe. */
+.cost-total { position: absolute; inset: auto 0 0; text-align: center; }
+.cost-total strong { display: block; font-family: var(--serif); font-size: 34px; font-weight: 400; letter-spacing: -1.2px; line-height: 1; font-variant-numeric: tabular-nums; }
+.cost-total span { display: block; margin-top: 8px; font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.cost-legend { margin: 20px 0 0; padding: 0; list-style: none; }
+.cost-legend li { display: flex; align-items: center; gap: 11px; padding: 13px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.cost-dot { flex: 0 0 10px; height: 10px; border-radius: 50%; }
+.cost-legend-name { flex: 1; min-width: 0; }
+.cost-legend-value { flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.cost-legend em { display: block; margin-top: 4px; font-size: 11px; font-style: normal; color: var(--muted); }

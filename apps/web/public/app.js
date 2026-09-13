@@ -2030,14 +2030,101 @@ async function loadSettingsData() {
     characterSheets = sheets.characterSheets;
     if (!$('#character-settings')) return;
     $('#character-settings').innerHTML = characterSettingsMarkup();
-    $('#cost-settings').innerHTML =
-      `<div class="setting-row">Looks gesamt<span>${money(costData.costs.lookTotalMicrounits)}</span></div><div class="setting-row">Ø pro fertigem Look<span>${money(costData.costs.averageSuccessfulLookMicrounits)}</span></div><div class="setting-row">Character Sheets<span>${money(costData.costs.characterSheetTotalMicrounits)}</span></div>`;
+    $('#cost-settings').innerHTML = costSettingsMarkup(costData.costs, characterSheets.length);
+    animateCostGauge($('#cost-settings'));
     wireCharacterCards($('#character-settings'));
     if ($('#character-history')) $('#character-history').onclick = openCharacterHistory;
   } catch (error) {
     if ($('#character-settings'))
       $('#character-settings').innerHTML = `<p class="error">${esc(error.message)}</p>`;
   }
+}
+const COST_ARC_PATH = 'M 18 98 A 82 82 0 0 1 182 98';
+const COST_ARC_LENGTH = Math.PI * 82;
+const COST_ARC_WIDTH = 15;
+/* Ein runder Abschluss ist selbst schon eine halbe Strichbreite lang, an beiden
+   Enden zusammen also eine ganze. Der sichtbare Bogen ist damit immer breiter
+   als sein Strich – gezeichnet wird deshalb um genau diese Breite kürzer und um
+   eine halbe nach innen versetzt. Sonst läge ein 2-%-Anteil als Klecks auf dem
+   Ring und griffe zusätzlich in seinen Nachbarn hinein. */
+function costArcDash(start, visible) {
+  const drawn = Math.max(visible - COST_ARC_WIDTH, 0.01);
+  return `stroke-dasharray="${drawn.toFixed(2)} ${COST_ARC_LENGTH.toFixed(2)}" stroke-dashoffset="${-(start + COST_ARC_WIDTH / 2).toFixed(2)}"`;
+}
+/* Verteilt die Bogenlänge auf die Anteile. Was schmaler als ein Abschluss wäre,
+   bekommt diese Mindestbreite; den Fehlbetrag tragen die größeren Anteile
+   anteilig mit, damit der Ring am Ende genau aufgeht. */
+function costArcSpans(values, total, gap) {
+  const spans = values.map((value) => (total ? (value / total) * (COST_ARC_LENGTH - gap) : 0));
+  // Ein Anteil von null wird gar nicht gezeichnet und darf deshalb auch keine
+  // Mindestbreite beanspruchen – sonst bliebe am Ring ein Stummel frei.
+  const deficit = spans.reduce((sum, span) => sum + (span > 0 ? Math.max(COST_ARC_WIDTH - span, 0) : 0), 0);
+  const surplus = spans.reduce((sum, span) => sum + Math.max(span - COST_ARC_WIDTH, 0), 0);
+  if (!deficit || !surplus) return spans;
+  return spans.map((span) =>
+    span <= 0 ? 0
+      : span < COST_ARC_WIDTH ? COST_ARC_WIDTH
+        : span - (span - COST_ARC_WIDTH) * (deficit / surplus));
+}
+/* Ein halber Ring statt einer Liste: die beiden Quellen liegen nebeneinander,
+   die Summe steht in der Öffnung, die Aufschlüsselung darunter. Mittelpunkt
+   (100, 98), Radius 82 – die Bogenlänge daraus ist die Rechengrundlage. */
+function costSettingsMarkup(costs, sheetCount) {
+  const parts = [
+    {
+      label: 'Looks',
+      color: 'var(--cost-looks)',
+      value: Math.max(costs.lookTotalMicrounits, 0),
+      note: `${costs.successfulLookCount} fertig`,
+    },
+    {
+      label: 'Character Sheets',
+      color: 'var(--cost-sheets)',
+      value: Math.max(costs.characterSheetTotalMicrounits, 0),
+      note: `${sheetCount} ${sheetCount === 1 ? 'Version' : 'Versionen'}`,
+    },
+  ];
+  const total = parts.reduce((sum, part) => sum + part.value, 0);
+  // Die Lücke trennt die Bögen nur, wenn wirklich beide zu sehen sind – sonst
+  // würde sie den einzigen Bogen verkürzen.
+  const gap = parts.every((part) => part.value) ? 4 : 0;
+  const spans = costArcSpans(parts.map((part) => part.value), total, gap);
+  // Der letzte Anteil bekommt den Rest auf 100, damit zweimal Aufrunden nicht
+  // 101 % ergibt.
+  let remaining = 100;
+  let cursor = 0;
+  const drawn = parts.map((part, index) => {
+    const share = !total ? null : index === parts.length - 1 ? remaining : Math.round((part.value / total) * 100);
+    if (share !== null) remaining -= share;
+    const arc = part.value
+      ? `<path class="cost-arc" style="--cost-color:${part.color}" d="${COST_ARC_PATH}" stroke-width="${COST_ARC_WIDTH}" ${costArcDash(cursor, spans[index])}></path>`
+      : '';
+    if (part.value) cursor += spans[index] + gap;
+    return { ...part, arc, share };
+  });
+  const reading = `Insgesamt ${money(total)} erzeugt, davon ${drawn.map((part) => `${part.label} ${money(part.value)}`).join(' und ')}.`;
+  return `<div class="cost-gauge"><svg class="cost-dial" viewBox="0 0 200 106" role="img" aria-label="${esc(reading)}"><path class="cost-track" d="${COST_ARC_PATH}" stroke-width="${COST_ARC_WIDTH}" ${costArcDash(0, COST_ARC_LENGTH)}></path>${drawn.map((part) => part.arc).join('')}</svg><div class="cost-total"><strong>${money(total)}</strong><span>Gesamt erzeugt</span></div></div><ul class="cost-legend">${drawn
+    .map(
+      (part) =>
+        `<li><span class="cost-dot" style="background:${part.color}"></span><span class="cost-legend-name">${part.label}<em>${esc(part.note)}</em></span><span class="cost-legend-value">${money(part.value)}<em>${part.share === null ? '–' : `${part.share} %`}</em></span></li>`,
+    )
+    .join('')}</ul><div class="setting-row">Ø pro fertigem Look<span>${money(costs.averageSuccessfulLookMicrounits)}</span></div>`;
+}
+/* Die Bögen zeichnen sich nacheinander ein, die Summe steigt leicht auf. Ohne
+   das stünde der Ring schlagartig fertig da, sobald die Zahlen eintreffen. */
+function animateCostGauge(root) {
+  if (!root || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
+  root.querySelectorAll('.cost-arc').forEach((arc, index) => {
+    arc.animate(
+      [{ strokeDasharray: `0 ${COST_ARC_LENGTH.toFixed(2)}` }, { strokeDasharray: arc.getAttribute('stroke-dasharray') }],
+      { duration: 620, delay: index * 140, fill: 'backwards', easing },
+    );
+  });
+  root.querySelector('.cost-total')?.animate(
+    [{ opacity: 0, translate: '0 8px' }, { opacity: 1, translate: '0 0' }],
+    { duration: 460, delay: 120, fill: 'backwards', easing },
+  );
 }
 const sheetDate = (sheet) => new Date(sheet.createdAt).toLocaleDateString('de-DE');
 const characterStatus = (sheet) =>
