@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FORM · Auswahl im Vergleich</title>
+<style>
+:root{--green:#344f40;--pale:#e9eee5;--ink:#283029;--muted:#81867d;--line:#dfe3db;--phone:390px}
+*{box-sizing:border-box}body{margin:0;background:#edece6;color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button{cursor:pointer}button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #bc794e;outline-offset:3px}button{color:inherit}header{padding:40px 42px 26px;max-width:1550px;margin:auto}.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.16em;font-weight:750;color:#67705f}h1{font-size:36px;letter-spacing:-1.5px;line-height:1.1;margin:10px 0 12px}header p{color:#6d746b;max-width:740px;margin:0}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:22px;margin-top:26px;padding:15px 18px;background:#f9f9f5;border:1px solid #d9dcd3;border-radius:12px;width:fit-content}.toolbar label{display:flex;gap:9px;align-items:center;font-weight:600}.toolbar input{accent-color:var(--green);width:17px;height:17px}.toolbar select{background:white;border:1px solid var(--line);padding:6px;border-radius:6px}.reset{border:0;background:none;text-decoration:underline;color:#747b6c}.gallery{padding:4px 42px 60px;display:grid;grid-template-columns:repeat(auto-fit,minmax(var(--phone),1fr));gap:44px 30px;align-items:start;max-width:1550px;margin:auto}.concept{width:var(--phone);justify-self:center}.concept h2{font-size:20px;letter-spacing:-.5px;margin:5px 0}.description{color:#71786d;min-height:43px;margin:0 0 17px;font-size:13px}.phone{width:var(--phone);background:#fbfcf9;border-radius:38px;overflow:hidden;border:1px solid #d0d4ca;box-shadow:0 12px 28px #38402b0d}.status{height:46px;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:12px;font-weight:700}.island{width:93px;height:24px;border-radius:20px;background:#29312a}.screen{padding:9px 18px 0}.app-top{display:flex;align-items:center;gap:10px;font-size:11px;text-transform:uppercase;letter-spacing:2px;font-weight:750;color:#6e7869}.back{font-size:24px;font-weight:400}.screen h3{font-size:25px;letter-spacing:-.8px;margin:13px 0 2px}.subtitle{margin:0 0 18px;color:var(--muted);font-size:13px}.bulk{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:11px 0 16px;border-bottom:1px solid var(--line)}.bulk strong{display:block;font-size:13px}.bulk small{color:var(--muted);font-size:11px}.bulk-actions{display:flex;gap:4px;align-items:center}.select-all{font-size:11px;border:0;background:none;text-decoration:underline;padding:8px 3px}.group{margin-top:19px}.group-head{display:flex;justify-content:space-between;align-items:center;margin:0 1px 9px;color:#7f9475;font-size:12px;font-weight:700}.group-head small{font-size:10px;font-weight:500;color:#8b9285}.group.bottom .group-head{color:#b48373}.items{display:grid;gap:9px}.item{background:white;border:1px solid var(--line);border-radius:15px;overflow:hidden;transition:background .15s,border-color .15s}.item.selected{background:var(--pale);border-color:#9daf94}.main{width:100%;display:grid;grid-template-columns:60px minmax(0,1fr) 28px;gap:11px;align-items:center;text-align:left;border:0;background:none;padding:12px}.photo{width:60px;height:70px;display:flex;align-items:center;justify-content:center;border-radius:9px;background:#e8e5dd;overflow:hidden}.photo svg{width:58px;height:64px;filter:drop-shadow(0 3px 2px #0002)}.copy{min-width:0}.name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-weight:650;font-size:14px;line-height:1.3;letter-spacing:-.2px}.meta{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted);font-size:11px;margin-top:4px}.check{width:27px;height:27px;border:1px solid #cbd1c7;border-radius:50%;display:grid;place-items:center;font-size:15px;background:#fff;color:transparent}.selected .check{background:var(--green);border-color:var(--green);color:white}.ownership{padding:0 12px 12px 83px}.tag{display:inline-flex;align-items:center;gap:5px;max-width:100%;border:1px solid #d7dcd1;background:#f4f5f1;border-radius:7px;padding:5px 8px;font-size:11px;min-height:29px;color:#80867a}.tag.owned{background:#f9fbf5;border-color:#b7c3ab;color:#536547}.tag-text{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}.tag-icon{flex:none}.hint{font-size:10px;color:#969c91;margin:10px 0 0}.footer{margin-top:20px;border-top:1px solid var(--line);padding:14px 18px 8px;background:#fbfcf9}.add{border:0;background:var(--green);color:white;border-radius:13px;width:100%;padding:14px;font-size:14px;font-weight:650}.add:disabled{background:#c6ccc0;cursor:default}.feedback{min-height:23px;text-align:center;font-size:10px;color:#74816b;padding-top:6px}.home{height:4px;background:#343b32;width:112px;border-radius:5px;margin:4px auto 3px}
+/* 02: ownership occupies its own full-width row. */
+.band .ownership{padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #dce2d6}.band .ownership:after{content:"Antippen zum Ändern";font-size:9px;color:#929a8b}.band .tag{border:0;background:transparent;padding:2px 0}.band .tag.owned{background:transparent}.band .main{padding-bottom:10px}
+/* 03: selection lives over the image, leaving more room for the title. */
+.image-check .main{grid-template-columns:66px minmax(0,1fr);position:relative}.image-check .photo{width:66px;height:76px}.image-check .check{position:absolute;top:64px;left:57px;width:24px;height:24px;border:2px solid white;font-size:12px}.image-check .ownership{padding-left:89px}.image-check .item.selected{border-color:#bbc8b0}
+/* 04: a shared category container, separate selected rows. */
+.grouped .group{border:1px solid var(--line);border-radius:15px;overflow:hidden;background:white}.grouped .group.has-selection{border-color:#a5b699}.grouped .group-head{margin:0;padding:10px 12px;background:#f3f5ee}.grouped .has-selection .group-head{background:#e4ebdd}.grouped .items{gap:0}.grouped .item{border:0;border-radius:0;border-top:1px solid #e1e6db}.grouped .item.selected{background:#eff3e9}.grouped .main{grid-template-columns:27px 54px minmax(0,1fr);gap:10px}.grouped .check{grid-column:1;grid-row:1}.grouped .photo{grid-column:2;grid-row:1;width:54px;height:62px}.grouped .copy{grid-column:3;grid-row:1}.grouped .ownership{padding-left:113px}.grouped .tag{font-size:10px}
+/* 05: ownership aligned below the photo, with a one-line title. */
+.compact .main{grid-template-columns:48px minmax(0,1fr) 27px;padding:13px 12px 8px;gap:10px}.compact .photo{width:48px;height:55px}.compact .name{display:block;white-space:nowrap;text-overflow:ellipsis}.compact .ownership{padding-left:70px}.compact .item{border-radius:12px}.compact .tag{border-radius:30px}.compact .item.selected{background:#e7eddf;border-color:#9eaf92}
+/* Chip remains a sibling of the selection button, with its own hit area.
+   The image and selection check now span the entire three-line content block. */
+.aligned .item{position:relative}
+.aligned .main{grid-template-columns:64px minmax(0,1fr) 27px;padding:12px;gap:12px;min-height:106px}
+.aligned .photo{width:64px;height:82px}
+.aligned .copy{align-self:start;padding-top:2px}
+.aligned .ownership{position:absolute;left:88px;right:49px;bottom:12px;padding:0}
+.aligned .tag{min-height:27px;padding:4px 8px}
+.aligned .check{align-self:center}
+.aligned .name{line-height:19px}
+.aligned .meta{margin-top:3px}
+.aligned.top-check .check{align-self:start;margin-top:3px}
+.aligned.tight .main{grid-template-columns:58px minmax(0,1fr) 27px;min-height:94px;padding:10px 12px;gap:10px}
+.aligned.tight .photo{width:58px;height:74px}
+.aligned.tight .ownership{left:80px;bottom:10px}
+.aligned.tight .copy{padding-top:0}
+.aligned.tight .tag{min-height:25px;padding:3px 8px}
+.concept.aligned h2{color:#344f40}
+@media(max-width:500px){header{padding:25px 16px}.gallery{padding:4px 12px 40px;display:flex;flex-direction:column;align-items:center;overflow-x:auto}.toolbar{gap:12px}h1{font-size:29px}}
+</style>
+</head>
+<body>
+<header><div class="eyebrow">FORM / Design exploration / 03</div><h1>Konzept 5, besser ausgerichtet.</h1><p>Die ersten drei Varianten entwickeln Konzept 5 weiter. Bild und Check umfassen jetzt auch die Höhe des Besitz-Tags. Mein Favorit ist A. Die bisherigen Konzepte bleiben darunter zum Vergleich. Alle Zustände und Breiten sind weiterhin interaktiv.</p>
+<div class="toolbar"><label><input id="long" type="checkbox">Überlange Labels</label><label>iPhone-Breite <select id="width"><option value="375">375 px</option><option value="390" selected>390 px</option><option value="430">430 px</option></select></label><button class="reset" id="reset">Alles zurücksetzen</button></div></header>
+<main class="gallery" id="gallery"></main>
+<script>
+const concepts=[
+ ['compact aligned','A · Bild über die volle Höhe','Empfehlung: 64 × 82 px Bild, Text und Chip linksbündig. Der Auswahl-Check sitzt mittig zur gesamten Karte.'],
+ ['compact aligned top-check','B · Check auf Titelhöhe','Gleiche Karte, aber der Check sitzt oben neben dem Titel. Der Besitz-Tag bleibt unten beim Text.'],
+ ['compact aligned tight','C · Gleiche Ordnung, dichter','58 × 74 px Bild und kleinere Abstände. Der Check bleibt mittig, die Karte wird insgesamt niedriger.'],
+ ['soft','Weiche Karte, kleiner Tag','Die ruhige Fläche aus Konzept 1. Besitz steht direkt unter den Details.'],
+ ['band','Besitz in einer eigenen Zeile','Mehr Platz für den Titel. Der Besitzstatus erhält eine schmale, getrennte Zeile.'],
+ ['image-check','Check am Bild','Der Auswahl-Check wandert ans Foto. So bleibt rechts mehr Platz für lange Namen.'],
+ ['grouped','Eine gemeinsame Kategorie','Eine ruhige Hülle pro Kategorie. Nur die gewählten Zeilen werden eingefärbt.'],
+ ['compact','Konzept 5 · Bisheriger Stand','Zum Vergleich: Der Besitz-Tag liegt in einer eigenen Zeile unter dem Bild.']
+];
+const products=[
+ {name:'Jacke mit Fellkragen',long:'Schwarze Puffärmel-Jacke mit abnehmbarem Kunstfellkragen und goldfarbenen Knöpfen',meta:'Jacken · Schwarz, Creme',longMeta:'Jacken · Schwarz, Creme, Dunkelbraun, Gold, mehrfarbig',type:'jacket'},
+ {name:'Braunes Overshirt',long:'Braunes Overshirt aus strukturierter Baumwolle mit aufgesetzten Brusttaschen',meta:'Hemden · Braun',longMeta:'Hemden & Overshirts · Kastanienbraun, Beige, Sand',type:'shirt'},
+ {name:'Schwarze weite Hose',long:'Schwarze High-Waist-Anzughose mit weitem Bein und extra langem Saum',meta:'Hosen · Schwarz',longMeta:'Hosen · Tiefschwarz, Anthrazit, melierte Details',type:'pants'}
+];
+let states=concepts.map(()=>({selected:[true,false,false],owned:[true,false,true],feedback:''}));
+const icon='<span aria-hidden="true">✓</span>';
+function garment(type){
+ const shape=type==='pants'?'<path d="M17 9h31l3 46-15 1-5-30-4 30-15-1z" fill="#292d2c"/><path d="M18 14h29M31 14v12" stroke="#686b63" fill="none"/>':type==='shirt'?'<path d="m19 12 10-5h7l10 5 12 23-10 5-5-13 2 31H18l1-31-5 13-10-5z" fill="#8d7055"/><path d="m29 7 3 12 4-12M32 19v39M21 25h7v8h-7M37 25h7v8h-7" stroke="#b79b7c" fill="none"/>':'<path d="m19 14 11-6h5l12 6 12 25-13 6-5-15 3 28H19l2-28-6 15L3 39z" fill="#303332"/><path d="m27 9-8 8 7 22 7-18 6 18 8-22-10-8-4 12z" fill="#a18a69"/><path d="M33 23v35" stroke="#b6ab8f"/>';
+ return '<svg viewBox="0 0 64 64" aria-hidden="true">'+shape+'</svg>';
+}
+function render(){
+ const long=document.querySelector('#long').checked;
+ document.querySelector('#gallery').innerHTML=concepts.map(([style,title,description],c)=>{
+ const state=states[c],count=state.selected.filter(Boolean).length;
+ function item(p,i){const name=long?p.long:p.name,meta=long?p.longMeta:p.meta,owned=state.owned[i];return '<div class="item '+(state.selected[i]?'selected':'')+'"><button class="main" data-action="select" data-item="'+i+'" aria-pressed="'+state.selected[i]+'" aria-label="'+name+' zum Hinzufügen auswählen"><span class="photo">'+garment(p.type)+'</span><span class="copy"><span class="name" title="'+name+'">'+name+'</span><span class="meta" title="'+meta+'">'+meta+'</span></span><span class="check" aria-hidden="true">✓</span></button><div class="ownership"><button class="tag '+(owned?'owned':'')+'" data-action="own" data-item="'+i+'" aria-pressed="'+owned+'" aria-label="Besitze ich: '+p.name+'"><span class="tag-icon" aria-hidden="true">'+(owned?'✓':'+')+'</span><span class="tag-text">'+(owned?'Besitze ich':'Besitze ich nicht')+'</span></button></div></div>'}
+ function group(indices,bottom){const n=indices.filter(i=>state.selected[i]).length;return '<section class="group '+(bottom?'bottom ':'')+(n?'has-selection':'')+'"><div class="group-head"><span>'+(bottom?'Unterteile':'Oberteile')+'</span><small>'+n+' / '+indices.length+'</small></div><div class="items">'+indices.map(i=>item(products[i],i)).join('')+'</div></section>'}
+ return '<article class="concept '+style+'" data-concept="'+c+'"><div class="eyebrow">Konzept 0'+(c+1)+'</div><h2>'+title+'</h2><p class="description">'+description+'</p><div class="phone"><div class="status"><span>9:41</span><span class="island"></span><span>▮▮▮  ▰</span></div><div class="screen"><div class="app-top"><span class="back" aria-hidden="true">‹</span>Stücke erkennen</div><h3>Was möchtest du hinzufügen?</h3><p class="subtitle">3 Stücke erkannt · Wähle deine Stücke aus</p><div class="bulk"><div><strong>Alle Stücke zunächst</strong><small>Besitzstatus für alle übernehmen</small></div><div class="bulk-actions"><button class="tag '+(state.owned.every(Boolean)?'owned':'')+'" data-action="own-all" aria-pressed="'+state.owned.every(Boolean)+'">'+(state.owned.every(Boolean)?'✓':'○')+' Besitze ich</button></div></div>'+group([0,1],false)+group([2],true)+'<div class="hint"><button class="select-all" data-action="select-all">'+(count===3?'Auswahl aufheben':'Alle auswählen')+'</button> · Auswahl und Besitz sind unabhängig</div></div><div class="footer"><button class="add" data-action="add" '+(!count?'disabled':'')+'>'+count+' '+(count===1?'Stück':'Stücke')+' hinzufügen</button><div class="feedback" role="status">'+state.feedback+'</div><div class="home"></div></div></div></article>';
+ }).join('');
+}
+document.querySelector('#gallery').addEventListener('click',event=>{
+ const button=event.target.closest('button[data-action]');if(!button)return;
+ const c=Number(button.closest('[data-concept]').dataset.concept),state=states[c],i=Number(button.dataset.item),action=button.dataset.action;
+ state.feedback='';
+ if(action==='select')state.selected[i]=!state.selected[i];
+ if(action==='own')state.owned[i]=!state.owned[i];
+ if(action==='own-all')state.owned.fill(!state.owned.every(Boolean));
+ if(action==='select-all')state.selected.fill(!state.selected.every(Boolean));
+ if(action==='add')state.feedback='Demo: '+state.selected.filter(Boolean).length+' Stücke würden hinzugefügt.';
+ render();
+ const selector='[data-concept="'+c+'"] [data-action="'+action+'"]'+(button.dataset.item!==undefined?'[data-item="'+i+'"]':'');
+ document.querySelector(selector)?.focus({preventScroll:true});
+});
+document.querySelector('#long').addEventListener('change',render);
+document.querySelector('#width').addEventListener('change',event=>document.documentElement.style.setProperty('--phone',event.target.value+'px'));
+document.querySelector('#reset').addEventListener('click',()=>{states=concepts.map(()=>({selected:[true,false,false],owned:[true,false,true],feedback:''}));document.querySelector('#long').checked=false;document.querySelector('#width').value='390';document.documentElement.style.setProperty('--phone','390px');render()});
+render();
+</script>
+</body>
+</html>
