@@ -28,10 +28,7 @@ export const supportedCategorySchema = z.enum([
   'scarf',
 ]);
 
-export const detectionCategorySchema = z.enum([
-  ...supportedCategorySchema.options,
-  'unsupported',
-]);
+export const detectionCategorySchema = z.enum([...supportedCategorySchema.options, 'unsupported']);
 
 export const itemNameSchema = z.string().trim().min(1).max(80);
 export const colorSchema = z.string().trim().min(1).max(32);
@@ -97,6 +94,8 @@ export const assetPurposeSchema = z.enum([
   'shelf-image-keyed',
   'shelf-image-transparent',
   'fixture',
+  'character-sheet',
+  'look',
 ]);
 
 export const privateAssetSchema = z
@@ -199,6 +198,67 @@ export const wardrobeItemSchema = z
   })
   .strict();
 
+export const characterSheetStateSchema = z.enum(['queued', 'processing', 'ready', 'failed']);
+export const characterSheetSchema = z
+  .object({
+    id: opaqueIdSchema,
+    state: characterSheetStateSchema,
+    referenceAssetIds: z.array(opaqueIdSchema).min(1).max(4),
+    note: z.string().trim().max(1_000).nullable(),
+    // Set together: a refinement re-renders its parent sheet with the instruction applied.
+    parentCharacterSheetId: opaqueIdSchema.nullable(),
+    refinementInstruction: z.string().trim().max(1_000).nullable(),
+    assetId: opaqueIdSchema.nullable(),
+    active: z.boolean(),
+    model: z.string().min(1).max(64),
+    quality: z.literal('high'),
+    size: z.literal('864x1536'),
+    providerRequestId: z.string().min(1).max(255).nullable(),
+    costMicrounits: z.number().int().nonnegative().nullable(),
+    failureCategory: z.string().min(1).max(80).nullable(),
+    createdAt: timestampSchema,
+    finishedAt: timestampSchema.nullable(),
+  })
+  .strict();
+
+export const lookStateSchema = z.enum(['queued', 'planning', 'generating', 'ready', 'failed']);
+export const lookConceptSchema = z
+  .object({
+    activity: z.string().trim().min(1).max(300),
+    scene: z.string().trim().min(1).max(300),
+    framing: z.enum(['full-body', 'three-quarter']),
+    mood: z.string().trim().min(1).max(200),
+  })
+  .strict();
+export const lookSchema = z
+  .object({
+    id: opaqueIdSchema,
+    state: lookStateSchema,
+    assetId: opaqueIdSchema.nullable(),
+    wardrobeItemIds: z.array(opaqueIdSchema),
+    characterSheetId: opaqueIdSchema,
+    parentLookId: opaqueIdSchema.nullable(),
+    concept: lookConceptSchema.nullable(),
+    model: z.string().min(1).max(64),
+    quality: z.literal('medium'),
+    size: z.literal('1024x1280'),
+    providerRequestId: z.string().min(1).max(255).nullable(),
+    costMicrounits: z.number().int().nonnegative().nullable(),
+    failureCategory: z.string().min(1).max(80).nullable(),
+    createdAt: timestampSchema,
+    finishedAt: timestampSchema.nullable(),
+  })
+  .strict();
+
+export const generationCostSummarySchema = z
+  .object({
+    lookTotalMicrounits: z.number().int().nonnegative(),
+    successfulLookCount: z.number().int().nonnegative(),
+    averageSuccessfulLookMicrounits: z.number().int().nonnegative(),
+    characterSheetTotalMicrounits: z.number().int().nonnegative(),
+  })
+  .strict();
+
 export type ItemState = z.infer<typeof itemStateSchema>;
 export type ItemStatus = z.infer<typeof itemStatusSchema>;
 export type SupportedCategory = z.infer<typeof supportedCategorySchema>;
@@ -214,3 +274,6 @@ export type GenerationQuality = z.infer<typeof generationQualitySchema>;
 export type GenerationAttempt = z.infer<typeof generationAttemptSchema>;
 export type ShelfImageVersion = z.infer<typeof shelfImageVersionSchema>;
 export type WardrobeItem = z.infer<typeof wardrobeItemSchema>;
+export type CharacterSheet = z.infer<typeof characterSheetSchema>;
+export type Look = z.infer<typeof lookSchema>;
+export type LookConcept = z.infer<typeof lookConceptSchema>;

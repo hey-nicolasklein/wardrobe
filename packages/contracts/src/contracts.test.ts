@@ -5,9 +5,12 @@ import {
   apiErrorSchema,
   accountCredentialsSchema,
   createWardrobeItemRequestSchema,
+  createCharacterSheetRequestSchema,
+  createLookRequestSchema,
   detectionProposalsResponseSchema,
   enqueueGenerationRequestSchema,
   garmentDetectionSchema,
+  refineCharacterSheetRequestSchema,
   signInRequestSchema,
   updateWardrobeItemRequestSchema,
   wardrobeItemDetailResponseSchema,
@@ -115,8 +118,10 @@ test('makes the browser cookie and native token transports explicit', () => {
 
 test('shares administrator and sign-in credential limits', () => {
   assert.equal(
-    accountCredentialsSchema.safeParse({ email: 'not-an-email', password: 'long-enough-password' })
-      .success,
+    accountCredentialsSchema.safeParse({
+      email: 'not-an-email',
+      password: 'long-enough-password',
+    }).success,
     false,
   );
   assert.equal(
@@ -146,4 +151,65 @@ test('requires immutable generation history in item detail responses', () => {
   });
 
   assert.equal(result.success, false);
+});
+
+test('keeps Character Sheet and Look creation constrained and strict', () => {
+  assert.equal(
+    createCharacterSheetRequestSchema.safeParse({
+      referenceAssetIds: [id],
+      note: null,
+      idempotencyKey: 'character-command-0123456789',
+    }).success,
+    true,
+  );
+  assert.equal(
+    createCharacterSheetRequestSchema.safeParse({
+      referenceAssetIds: [id, id, id, id, id],
+      idempotencyKey: 'character-command-0123456789',
+    }).success,
+    false,
+  );
+  assert.equal(
+    refineCharacterSheetRequestSchema.safeParse({
+      referenceAssetIds: [id],
+      instruction: 'Fix the back view',
+      idempotencyKey: 'character-command-0123456789',
+    }).success,
+    true,
+  );
+  // The parent sheet occupies the fourth reference slot, and a refinement needs a target.
+  assert.equal(
+    refineCharacterSheetRequestSchema.safeParse({
+      referenceAssetIds: [id, id, id, id],
+      instruction: 'Fix the back view',
+      idempotencyKey: 'character-command-0123456789',
+    }).success,
+    false,
+  );
+  assert.equal(
+    refineCharacterSheetRequestSchema.safeParse({
+      referenceAssetIds: [id],
+      instruction: '  ',
+      idempotencyKey: 'character-command-0123456789',
+    }).success,
+    false,
+  );
+  assert.deepEqual(
+    createLookRequestSchema.parse({
+      idempotencyKey: 'look-command-0123456789',
+    }),
+    {
+      exactItemIds: [],
+      categories: [],
+      parentLookId: null,
+      idempotencyKey: 'look-command-0123456789',
+    },
+  );
+  assert.equal(
+    createLookRequestSchema.safeParse({
+      idempotencyKey: 'look-command-0123456789',
+      freeTextPrompt: 'invent something',
+    }).success,
+    false,
+  );
 });
