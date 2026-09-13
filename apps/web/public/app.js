@@ -17,6 +17,7 @@ const categories = {
 };
 const icons = {
   closet: '<path d="M4 3h16v18H4zM12 3v18M9 11v2m6-2v2"/>',
+  person: '<circle cx="12" cy="8" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   heart:
     '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/>',
@@ -853,7 +854,9 @@ function readFields(form) {
 // polling a running generation. Without it the reader gets thrown back to the
 // top of the sheet on every tick. Pass a number to restore a specific offset,
 // which is how the sheet returns to where it was after a confirmation covered it.
+let sheetReturn = null;
 function showSheet(title, content, keepScroll = false) {
+  sheetReturn = null;
   detailId = null;
   const sheet = $('#sheet');
   const offset = typeof keepScroll === 'number' ? keepScroll : sheet.scrollTop;
@@ -886,11 +889,22 @@ function setSheetChrome(open) {
   $('meta[name="theme-color"]').content = open ? dimmedPaper : paper;
 }
 function closeSheet() {
+  if (sheetReturn) {
+    const back = sheetReturn;
+    sheetReturn = null;
+    back();
+    return;
+  }
   $('#sheet').close();
   detailId = null;
   setSheetChrome(false);
 }
+$('#sheet').addEventListener('cancel', (event) => {
+  event.preventDefault();
+  closeSheet();
+});
 $('#sheet').addEventListener('close', () => {
+  sheetReturn = null;
   detailId = null;
   setSheetChrome(false);
 });
@@ -936,7 +950,7 @@ $('#sheet').addEventListener('click', (event) => {
       const fromHead = event.target.closest?.('.sheet-head, .sheet-grip');
       // Rows that scroll sideways own their gesture completely. Without this a
       // swipe through the gallery nudges the whole sheet up and down.
-      if (event.target.closest?.('.gallery, .versions')) return;
+      if (event.target.closest?.('.gallery, .versions, .character-versions')) return;
       if ((sheet.scrollTop > 0 || event.target.closest?.('.composer-scroll')) && !fromHead) return;
       startY = event.touches[0].clientY;
       startX = event.touches[0].clientX;
@@ -1002,7 +1016,10 @@ let detailCache = null;
 const listRunning = (item) => ['queued', 'generating'].includes(item.status);
 // What the picture row shows. Matching signatures mean the row on screen is
 // still correct and can stay exactly as it is.
-const gallerySignature = (item, running) => `${running}:${preview(item)}`;
+const itemLooks = (item) =>
+  looks.filter((look) => look.state === 'ready' && look.assetId && look.wardrobeItemIds.includes(item.id));
+const gallerySignature = (item, running) =>
+  JSON.stringify([running, preview(item), sourcePreview(item), itemLooks(item).map((look) => [look.id, look.assetId])]);
 // The picture row and the title block. Both the placeholder and the loaded sheet
 // render this from the same strings, so the sheet only fills in underneath.
 const galleryMarkup = (item, running) =>
@@ -1010,7 +1027,9 @@ const galleryMarkup = (item, running) =>
     running
       ? `<figure class="slide">${imageGenerationProgress(item.metadata.name)}</figure>`
       : `<figure class="slide catalog-slide"><div class="catalog-item"><img class="fade" src="${preview(item)}" alt="${esc(item.metadata.name)}"></div></figure>`
-  }<figure class="slide worn"><img class="fade" id="worn" src="${sourcePreview(item)}" alt="${esc(item.metadata.name)}, getragen"><figcaption>Originalfoto</figcaption></figure></div><div id="detail-heading"><p class="eyebrow">${categories[item.metadata.category]}</p><h2>${esc(item.metadata.name)}</h2><p class="muted item-colors">${esc(item.metadata.colors.join(' · '))}</p></div>`;
+  }<figure class="slide worn"><img class="fade" id="worn" src="${sourcePreview(item)}" alt="${esc(item.metadata.name)}, getragen"><figcaption>Originalfoto</figcaption></figure>${itemLooks(item)
+    .map((look) => `<figure class="slide worn generated-look"><img class="fade" src="${assetUrl(look.assetId)}" alt="${esc(item.metadata.name)}, in einem generierten Look" loading="lazy" decoding="async"><figcaption>Generierter Look · ${esc(lookDateLabel(look.createdAt))}</figcaption></figure>`)
+    .join('')}</div><div id="detail-heading"><p class="eyebrow">${categories[item.metadata.category]}</p><h2>${esc(item.metadata.name)}</h2><p class="muted item-colors">${esc(item.metadata.colors.join(' · '))}</p></div>`;
 // Keep movement local to this gallery so replacing the sheet releases its listeners.
 function wireCatalogMotion() {
   const gallery = $('#detail-gallery');
@@ -1671,7 +1690,7 @@ async function importManual(draft, form) {
 }
 function renderSettings() {
   shell(
-    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><h3>Character Sheet</h3><p>Deine aktive Identitätsreferenz für persönliche Looks. Frühere Versionen bleiben erhalten.</p><div id="character-settings">${characterSettingsMarkup()}</div><button class="primary" id="new-character">Neues Character Sheet</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Character Sheets werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
+    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><div class="character-section-heading"><div><h3>Character Sheets</h3><p>Dein Abbild für persönliche Looks.</p></div></div><div id="character-settings">${characterSettingsMarkup()}</div><button class="primary" id="new-character">Neues Character Sheet</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Character Sheets werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
   );
   $('#new-character').onclick = openCharacterSetup;
   wireCharacterCards($('#character-settings'));
@@ -1752,11 +1771,20 @@ const characterThumbnail = (sheet) =>
 function currentCharacterSheet() {
   return characterSheets.find((sheet) => sheet.active) ?? characterSheets[0] ?? null;
 }
+const characterDescription = (sheet) =>
+  sheet.state === 'failed'
+    ? 'Die Erstellung hat nicht geklappt.'
+    : isCharacterPending(sheet)
+      ? 'Deine Referenz wird gerade erstellt.'
+      : sheet.active
+        ? 'So siehst du in deinen Looks aus.'
+        : 'Eine gespeicherte Version deiner Referenz.';
+const characterBadge = (sheet) =>
+  `<span class="character-status ${sheet.state === 'failed' ? 'failed' : sheet.active ? 'active' : ''}">${icon(sheet.state === 'failed' ? 'close' : sheet.active ? 'check' : 'person')}${characterStatus(sheet)}</span>`;
 function characterCurrentCard(sheet, pending = false) {
   const referenceCount = sheet.referenceAssetIds.length;
-  const title = pending ? 'Neues Character Sheet' : sheet.active ? 'Aktives Character Sheet' : 'Character Sheet';
-  const subtitle = pending ? 'Wird erstellt' : `Seit ${sheetDate(sheet)}`;
-  return `<button class="character-current ${sheet.active ? 'active' : ''} ${pending ? 'character-current-pending' : ''}" data-character="${sheet.id}" aria-label="Character Sheet vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-current-copy"><strong>${title}</strong><small>${subtitle}</small><span class="character-current-meta"><span>${icon('photo')}${referenceCount} ${referenceCount === 1 ? 'Referenzfoto' : 'Referenzfotos'}</span>${sheet.refinementInstruction ? `<span>${icon('check')}Verfeinert</span>` : ''}</span></span></button>`;
+  const title = pending ? 'Deine neue Referenz' : sheet.active ? 'So siehst du in deinen Looks aus.' : 'Deine persönliche Referenz';
+  return `<button class="character-current ${sheet.active ? 'active' : ''} ${pending ? 'character-current-pending' : ''}" data-character="${sheet.id}" aria-label="Character Sheet vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-current-copy">${characterBadge(sheet)}<strong>${title}</strong>${sheet.active ? '' : `<small>${characterDescription(sheet)}</small>`}<span class="character-current-meta"><span>${icon('photo')}${referenceCount} ${referenceCount === 1 ? 'Referenzfoto' : 'Referenzfotos'}</span><span>${sheetDate(sheet)}</span>${sheet.refinementInstruction ? `<span>${icon('check')}Verfeinert</span>` : ''}</span></span><span class="character-open">${icon('arrow')}</span></button>`;
 }
 function wireCharacterCards(root) {
   root.querySelectorAll('img[data-asset]').forEach((img) => (img.src = assetUrl(img.dataset.asset)));
@@ -1765,36 +1793,73 @@ function wireCharacterCards(root) {
     button.onclick = () => openCharacterDetail(button.dataset.character);
   });
 }
-function openCharacterHistory() {
-  const current = currentCharacterSheet();
-  const pending = characterSheets.find((sheet) => isCharacterPending(sheet));
-  const past = characterSheets.filter((sheet) => sheet.id !== current?.id && sheet.id !== pending?.id);
-  showSheet(
-    'Frühere Versionen',
-    `<h2>Deine bisherigen Sheets.</h2><p>Wähle eine Version, um sie anzusehen, wieder zu aktivieren oder zu löschen.</p><div class="character-versions">${past.map((sheet) => `<button class="character-version" data-character="${sheet.id}" aria-label="Character Sheet vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-version-copy"><strong>${characterStatus(sheet)}</strong><small>${sheetDate(sheet)}</small></span></button>`).join('')}</div>`,
-  );
-  wireCharacterCards($('#sheet'));
+function characterHistoryMarkup(excludeId) {
+  const past = characterSheets.filter((sheet) => sheet.id !== excludeId && !sheet.active && !isCharacterPending(sheet));
+  return past.length ? `<section class="character-history"><h3>Frühere Versionen</h3><p class="muted">Wähle ein Sheet, um es anzusehen.</p><div class="character-versions" aria-label="Frühere Character Sheets">${past.map((sheet) => `<button class="character-version" data-past-character="${sheet.id}" aria-label="Character Sheet vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-version-copy"><strong>${sheetDate(sheet)}</strong><small>${characterStatus(sheet)}</small></span></button>`).join('')}</div></section>` : '';
 }
-function openCharacterDetail(id) {
+function animateCharacterNavigation(direction) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const body = $('#sheet .sheet-body');
+  const content = document.createElement('div');
+  content.className = 'character-transition-content';
+  content.append(...body.childNodes);
+  body.append(content);
+  content.animate(
+    [
+      { opacity: 0, transform: `translateX(${direction * 24}px)` },
+      { opacity: 1, transform: 'translateX(0)' },
+    ],
+    { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+  );
+}
+function wireCharacterHistory(returnTo) {
+  const root = $('#sheet');
+  root.querySelectorAll('img[data-asset]').forEach((img) => (img.src = assetUrl(img.dataset.asset)));
+  wireFades(root);
+  root.querySelectorAll('[data-past-character]').forEach((button) => {
+    button.onclick = () => {
+      const scrollTop = root.scrollTop;
+      const scrollLeft = root.querySelector('.character-versions').scrollLeft;
+      openCharacterDetail(button.dataset.pastCharacter, () => {
+        returnTo();
+        root.scrollTop = scrollTop;
+        root.querySelector('.character-versions')?.scrollTo({ left: scrollLeft });
+        root.querySelector(`[data-past-character="${button.dataset.pastCharacter}"]`)?.focus({ preventScroll: true });
+        animateCharacterNavigation(-1);
+      });
+      animateCharacterNavigation(1);
+    };
+  });
+}
+function openCharacterHistory() {
+  showSheet('Frühere Versionen', `<h2>Deine bisherigen Sheets.</h2>${characterHistoryMarkup() || '<p class="muted">Keine früheren Versionen vorhanden.</p>'}`);
+  wireCharacterHistory(openCharacterHistory);
+}
+function openCharacterDetail(id, returnTo = null) {
   const sheet = characterSheets.find((entry) => entry.id === id);
   if (!sheet) return;
-  const status = characterStatus(sheet);
   showSheet(
     'Character Sheet',
-    `${sheet.assetId ? `<figure class="character-detail"><img class="fade" data-asset="${sheet.assetId}" alt="Character Sheet in voller Ansicht" decoding="async"></figure>` : `<div class="character-detail character-placeholder">${sheet.state === 'failed' ? icon('close') : '<span class="spinner"></span>'}</div>`}<dl class="facts"><div><dt>Status</dt><dd>${status}</dd></div><div><dt>Erstellt</dt><dd>${new Date(sheet.createdAt).toLocaleString('de-DE')}</dd></div><div><dt>Referenzfotos</dt><dd>${sheet.referenceAssetIds.length}</dd></div><div><dt>Modell</dt><dd>${esc(sheet.model)} · ${sheet.quality} · ${sheet.size}</dd></div>${sheet.note ? `<div><dt>Hinweis</dt><dd>${esc(sheet.note)}</dd></div>` : ''}${sheet.refinementInstruction ? `<div><dt>Verfeinerung</dt><dd>${esc(sheet.refinementInstruction)}</dd></div>` : ''}${sheet.costMicrounits !== null ? `<div><dt>Kosten</dt><dd>${money(sheet.costMicrounits)}</dd></div>` : ''}${sheet.failureCategory ? `<div><dt>Fehler</dt><dd>${esc(sheet.failureCategory)}</dd></div>` : ''}</dl>${sheet.state === 'ready' && !sheet.active ? '<button class="primary" id="activate-character">Als aktiv verwenden</button>' : ''}${sheet.state === 'ready' && sheet.assetId ? '<button class="secondary" id="refine-character">Mit neuen Fotos verfeinern</button>' : ''}${!sheet.active && ['ready', 'failed'].includes(sheet.state) ? '<button class="text-button" id="remove-character">Character Sheet löschen …</button>' : ''}`,
+    `<header class="character-detail-heading"><div>${characterBadge(sheet)}<h2>${sheet.active ? 'So siehst du in deinen Looks aus.' : 'Deine persönliche Referenz.'}</h2>${sheet.active ? '' : `<p>${characterDescription(sheet)}</p>`}</div></header>${sheet.assetId ? `<figure class="character-detail"><img class="fade" data-asset="${sheet.assetId}" alt="Character Sheet in voller Ansicht" decoding="async"></figure>` : `<div class="character-detail character-placeholder">${sheet.state === 'failed' ? icon('close') : '<span class="spinner"></span>'}</div>`}<h3 class="character-details-title">Über dieses Sheet</h3><dl class="facts"><div><dt>Erstellt</dt><dd>${new Date(sheet.createdAt).toLocaleString('de-DE')}</dd></div><div><dt>Referenzfotos</dt><dd>${sheet.referenceAssetIds.length}</dd></div><div><dt>Modell</dt><dd>${esc(sheet.model)} · ${sheet.quality} · ${sheet.size}</dd></div>${sheet.note ? `<div><dt>Hinweis</dt><dd>${esc(sheet.note)}</dd></div>` : ''}${sheet.refinementInstruction ? `<div><dt>Verfeinerung</dt><dd>${esc(sheet.refinementInstruction)}</dd></div>` : ''}${sheet.costMicrounits !== null ? `<div><dt>Kosten</dt><dd>${money(sheet.costMicrounits)}</dd></div>` : ''}${sheet.failureCategory ? `<div><dt>Fehler</dt><dd>${esc(sheet.failureCategory)}</dd></div>` : ''}</dl>${sheet.state === 'ready' && !sheet.active ? '<button class="primary" id="activate-character">Als aktiv verwenden</button>' : ''}${sheet.state === 'ready' && sheet.assetId ? '<button class="secondary" id="refine-character">Mit neuen Fotos verfeinern</button>' : ''}${!sheet.active && ['ready', 'failed'].includes(sheet.state) ? '<button class="text-button" id="remove-character">Character Sheet löschen …</button>' : ''}`,
   );
-  const image = $('#sheet img[data-asset]');
-  if (image) {
-    image.src = assetUrl(image.dataset.asset);
-    wireFades($('#sheet'));
+  if (returnTo) {
+    sheetReturn = returnTo;
+    $('#close-sheet').setAttribute('aria-label', 'Zurück zu früheren Versionen');
+    $('#sheet-title').insertAdjacentHTML('beforebegin', `<button class="character-back" aria-label="Zurück zu früheren Versionen">${icon('arrow')}</button>`);
+    $('.character-back').onclick = closeSheet;
+  } else {
+    $('#sheet .sheet-body').insertAdjacentHTML('beforeend', characterHistoryMarkup(id));
   }
+  wireCharacterHistory(() => openCharacterDetail(id));
   if ($('#activate-character'))
     $('#activate-character').onclick = (event) =>
       action(event.currentTarget, async () => {
         await api(`/character-sheets/${id}/activate`, { idempotencyKey: key() });
         await refreshInspiration();
-        closeSheet();
+        sheetReturn = null;
         renderSettings();
+        if (returnTo) returnTo();
+        else openCharacterDetail(id);
         toast('Character Sheet aktiviert.');
       });
   if ($('#refine-character')) $('#refine-character').onclick = () => openCharacterRefine(id);
@@ -1804,13 +1869,16 @@ function openCharacterDetail(id) {
         'Character Sheet löschen',
         '<h2>Version dauerhaft entfernen?</h2><p>Sie verschwindet aus deinen Einstellungen und kann nicht wieder aktiviert werden. Bereits erzeugte Looks und historische Kosten bleiben erhalten.</p><button class="danger" id="confirm-character-removal">Dauerhaft löschen</button><button class="text-button" id="cancel-character-removal">Abbrechen</button>',
       );
-      $('#cancel-character-removal').onclick = () => openCharacterDetail(id);
+      sheetReturn = () => openCharacterDetail(id, returnTo);
+      $('#cancel-character-removal').onclick = closeSheet;
       $('#confirm-character-removal').onclick = (event) =>
         action(event.currentTarget, async () => {
           await api(`/character-sheets/${id}`, {}, 'DELETE');
           await refreshInspiration();
-          closeSheet();
+          sheetReturn = null;
           renderSettings();
+          if (returnTo) returnTo();
+          else openCharacterHistory();
           toast('Character Sheet gelöscht.');
         });
     };
