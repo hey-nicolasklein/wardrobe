@@ -27,6 +27,10 @@ const icons = {
   close: '<path d="m6 6 12 12M18 6 6 18"/>',
   arrow: '<path d="m14 6-6 6 6 6"/>',
   check: '<path d="m5 12 4 4L19 6"/>',
+  top: '<path d="m8 4 4 3 4-3 4 4-3 3v9H7v-9L4 8z"/>',
+  bottom: '<path d="M7 4h10l-1 16h-3l-1-8-1 8H8z"/>',
+  shoes: '<path d="M4 15h7l3-5 2 4 4 2v4H4z"/>',
+  accessory: '<path d="M6 8h12v12H6zM9 8V6a3 3 0 0 1 6 0v2"/>',
   photo:
     '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1"/><path d="m3 17 6-6 4 4 3-3 5 5"/>',
   feed: '<path d="M4 5h16v14H4z"/><path d="m4 15 4-4 3 3 3-4 6 6"/><circle cx="16" cy="9" r="1"/>',
@@ -34,6 +38,17 @@ const icons = {
 };
 const icon = (name) =>
   `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.closet}</svg>`;
+const imageGenerationProgress = (name) =>
+  `<div class="wardrobe-image-progress" role="status" aria-label="Katalogbild für ${esc(name)} wird erstellt"><span class="image-generation-loader" aria-hidden="true">${Array.from({ length: 9 }, (_, index) => `<i style="--tile:${index}"></i>`).join('')}</span><span>Bild wird erstellt</span></div>`;
+const detectionCategoryTheme = (category) =>
+  ['top', 'jacket', 'dress'].includes(category)
+    ? 'top'
+    : ['pants', 'skirt'].includes(category)
+      ? 'bottom'
+      : category === 'shoes'
+        ? 'shoes'
+        : 'accessory';
+const detectionCategoryIcon = (category) => detectionCategoryTheme(category);
 let items = [],
   looks = [],
   characterSheets = [],
@@ -74,7 +89,18 @@ drafts = drafts.map((draft) => {
   }
   return { ...draft, phase: draft.detecting ? 'detecting' : 'uploaded' };
 });
-const persistDrafts = () => localStorage.setItem('form-photo-drafts', JSON.stringify(drafts));
+const persistDrafts = () =>
+  localStorage.setItem(
+    'form-photo-drafts',
+    JSON.stringify(
+      drafts
+        .filter((draft) => draft.phase !== 'uploading')
+        .map(({ localPreviewUrl: _localPreviewUrl, ...draft }) => draft),
+    ),
+  );
+const revokeDraftPreview = (draft) => {
+  if (draft.localPreviewUrl) URL.revokeObjectURL(draft.localPreviewUrl);
+};
 const preview = (item) =>
   `/v1/wardrobe-items/${encodeURIComponent(item.id)}/preview?v=${item.recordVersion}`;
 // The full, uncropped source photo the piece was created from. Returns 404 once
@@ -256,7 +282,7 @@ function renderWardrobe() {
 }
 function renderItemPhoto(item) {
   if (['queued', 'generating'].includes(item.status))
-    return `<div class="photo"><div class="wardrobe-image-progress" role="status" aria-label="Katalogbild für ${esc(item.metadata.name)} wird erstellt"><span class="spinner"></span><span>Bild wird erstellt</span></div></div>`;
+    return `<div class="photo">${imageGenerationProgress(item.metadata.name)}</div>`;
   return `<div class="photo"><img class="fade" src="${preview(item)}" alt="${esc(item.metadata.name)}" loading="lazy" decoding="async"><img class="photo-source" data-source="${sourcePreview(item)}" alt="" aria-hidden="true" loading="lazy" decoding="async">${item.status === 'failed' ? '<span class="badge">Bild fehlgeschlagen</span>' : ''}</div>`;
 }
 // Everything a tile renders. A tile is rebuilt only when this changes, so
@@ -810,12 +836,12 @@ const gallerySignature = (item, running) => `${running}:${preview(item)}`;
 const galleryMarkup = (item, running) =>
   `<div class="gallery" id="detail-gallery" data-item="${item.id}" data-signature="${esc(gallerySignature(item, running))}">${
     running
-      ? `<figure class="slide"><div class="wardrobe-image-progress" role="status" aria-label="Katalogbild für ${esc(item.metadata.name)} wird erstellt"><span class="spinner"></span><span>Bild wird erstellt</span></div></figure>`
+      ? `<figure class="slide">${imageGenerationProgress(item.metadata.name)}</figure>`
       : `<figure class="slide"><img class="fade" src="${preview(item)}" alt="${esc(item.metadata.name)}"></figure>`
   }<figure class="slide worn"><img class="fade" id="worn" src="${sourcePreview(item)}" alt="${esc(item.metadata.name)}, getragen"><figcaption>Originalfoto</figcaption></figure></div><div id="detail-heading"><p class="eyebrow">${categories[item.metadata.category]}</p><h2>${esc(item.metadata.name)}</h2><p class="muted item-colors">${esc(item.metadata.colors.join(' · '))}</p></div>`;
 // Stand-ins for the few parts that only the detail request knows: where the
 // piece lives, its notes, and the saved catalog images.
-const detailSkeleton = `<div role="status" aria-label="Details werden geladen"><dl class="facts"><div><dt>Gehört in</dt><dd><span class="skeleton skeleton-line" style="width:110px"></span></dd></div></dl><span class="skeleton skeleton-button"></span><div class="rule"></div><h3>Katalogbilder</h3><p class="muted"><span class="skeleton skeleton-line" style="width:100%"></span><span class="skeleton skeleton-line" style="width:62%"></span></p><div class="versions">${'<span class="skeleton skeleton-version"></span>'.repeat(3)}</div><div class="rule"></div><span class="skeleton skeleton-button"></span></div>`;
+const detailSkeleton = `<div role="status" aria-label="Details werden geladen"><dl class="facts"><div><dt>Gehört in</dt><dd><span class="skeleton skeleton-line" style="width:110px"></span></dd></div></dl><span class="skeleton skeleton-button"></span><span class="skeleton skeleton-button"></span><div class="rule"></div><h3>Katalogbilder</h3><p class="muted"><span class="skeleton skeleton-line" style="width:100%"></span><span class="skeleton skeleton-line" style="width:62%"></span></p><div class="versions">${'<span class="skeleton skeleton-version"></span>'.repeat(3)}</div><div class="rule"></div><span class="skeleton skeleton-button"></span></div>`;
 // The sheet has two states: 'view' shows the piece read-only, 'edit' shows only
 // the metadata form. Both need the same detail payload and command handlers.
 // `cached` renders from `detailCache`, `refresh` redraws the sheet in place, and
@@ -1073,8 +1099,9 @@ async function uploadPhoto(uploadUrl, headers, blob) {
   throw failure;
 }
 function renderAdd() {
+  const hasActivity = drafts.length || importBusy;
   shell(
-    `<p class="eyebrow">Stück für Stück</p><h1>${drafts.length ? 'Wähle deine Stücke.' : 'Foto rein.<br>Schrank fertig.'}</h1><p class="muted">Wir erkennen deine Kleidung, du wählst aus, was in den Schrank kommt.</p><div class="upload-area ${drafts.length ? 'compact-upload' : ''}">${drafts.length ? '' : `${icon('camera')}<h2>Alles auf ein Foto.</h2><p>Ein einzelnes Stück oder ein ganzes Outfit. Ein ruhiger Hintergrund hilft bei der Erkennung.</p>`}<div class="stack"><button class="primary" id="camera" ${importBusy ? 'disabled' : ''}>${icon('camera')} Foto aufnehmen</button><button class="secondary" id="library" ${importBusy ? 'disabled' : ''}>${icon('photo')} Fotos auswählen</button></div><input hidden type="file" id="camera-input" accept="image/*" capture="environment"><input hidden type="file" id="library-input" accept="image/*" multiple></div><p class="note">Analyse und Katalogbilder werden automatisch mit OpenAI erstellt und sind kostenpflichtig. Nach deiner Auswahl läuft alles im Hintergrund weiter.</p><div id="import-progress" role="status" aria-live="polite">${importBusy ? '<div class="loading"><span class="spinner"></span> Fotos werden hochgeladen …</div>' : ''}</div><div id="drafts"></div>`,
+    `<p class="eyebrow">Stück für Stück</p><h1>${hasActivity ? 'Wähle deine Stücke.' : 'Foto rein.<br>Schrank fertig.'}</h1><p class="muted">Wir erkennen deine Kleidung, du wählst aus, was in den Schrank kommt.</p><div class="upload-area ${hasActivity ? 'compact-upload' : ''}">${hasActivity ? '' : `${icon('camera')}<h2>Alles auf ein Foto.</h2><p>Ein einzelnes Stück oder ein ganzes Outfit. Ein ruhiger Hintergrund hilft bei der Erkennung.</p>`}<div class="stack"><button class="primary" id="camera" ${importBusy ? 'disabled' : ''}>${icon('camera')} Foto aufnehmen</button><button class="secondary" id="library" ${importBusy ? 'disabled' : ''}>${icon('photo')} Fotos auswählen</button></div><input hidden type="file" id="camera-input" accept="image/*" capture="environment"><input hidden type="file" id="library-input" accept="image/*" multiple></div><p class="note">Analyse und Katalogbilder werden automatisch mit OpenAI erstellt und sind kostenpflichtig. Nach deiner Auswahl läuft alles im Hintergrund weiter.</p><div id="drafts"></div>`,
   );
   $('#camera').onclick = () => $('#camera-input').click();
   $('#library').onclick = () => $('#library-input').click();
@@ -1092,10 +1119,17 @@ async function importPhotos(files) {
   let failed = 0;
   const failures = [];
   for (let n = 0; n < files.length; n++) {
-    if ($('#import-progress'))
-      $('#import-progress').innerHTML =
-        `<div class="loading"><span class="spinner"></span> Foto ${n + 1} von ${files.length} …</div>`;
+    let draft;
     try {
+      draft = {
+        id: key(),
+        localPreviewUrl: URL.createObjectURL(files[n]),
+        phase: 'uploading',
+        state: 'owning',
+      };
+      drafts.push(draft);
+      persistDrafts();
+      if (page === 'add') renderDrafts();
       const blob = await preparePhoto(files[n]);
       const intent = await api('/source-photos/upload-intents', {
         fileName: 'wardrobe.jpg',
@@ -1107,17 +1141,22 @@ async function importPhotos(files) {
         assetId: intent.assetId,
         idempotencyKey: key(),
       });
-      drafts.push({
-        id: key(),
+      Object.assign(draft, {
         sourcePhotoId: completed.sourcePhoto.id,
         assetId: completed.asset.id,
         phase: 'uploaded',
         state: 'owning',
       });
       persistDrafts();
-      const draft = drafts.at(-1);
-      if (draft) await startDetection(draft);
+      if (page === 'add') renderDrafts();
+      await startDetection(draft);
     } catch (error) {
+      if (draft) {
+        revokeDraftPreview(draft);
+        drafts = drafts.filter((item) => item.id !== draft.id);
+        persistDrafts();
+        if (page === 'add') renderDrafts();
+      }
       failed++;
       failures.push(`${files[n].name}: ${error.message}`);
     }
@@ -1137,7 +1176,9 @@ function renderDrafts() {
     : '';
   document
     .querySelectorAll('[data-draft-asset]')
-    .forEach((img) => (img.src = assetUrl(img.dataset.draftAsset)));
+    .forEach(
+      (img) => (img.src = img.dataset.draftPreview || assetUrl(img.dataset.draftAsset)),
+    );
   document.querySelectorAll('[data-choice-preview]').forEach((canvas) => {
     const draft = drafts.find((item) => item.id === canvas.dataset.draft);
     const proposal = draft?.detections?.find((item) => item.id === canvas.dataset.choicePreview);
@@ -1151,7 +1192,7 @@ function renderDrafts() {
       if (!proposal || draft.phase === 'importing') return;
       proposal.selected = !proposal.selected;
       persistDrafts();
-      renderDrafts();
+      updateDetectionSelection(draft, proposal);
     };
   });
   document.querySelectorAll('[data-import-detected]').forEach((button) => {
@@ -1160,22 +1201,24 @@ function renderDrafts() {
       if (draft) action(button, () => importDetected(draft));
     };
   });
-  document.querySelectorAll('[data-batch-state]').forEach((select) => {
-    select.onchange = () => {
-      const draft = drafts.find((item) => item.id === select.dataset.batchState);
+  document.querySelectorAll('[data-batch-owning]').forEach((toggle) => {
+    toggle.onchange = () => {
+      const draft = drafts.find((item) => item.id === toggle.dataset.batchOwning);
       if (!draft) return;
-      draft.state = select.value;
-      for (const proposal of draft.detections || []) proposal.state = select.value;
+      draft.state = toggle.checked ? 'owning' : 'wanting';
+      for (const proposal of draft.detections || []) proposal.state = draft.state;
       persistDrafts();
-      renderDrafts();
+      document
+        .querySelectorAll(`[data-piece-owning][data-draft="${CSS.escape(draft.id)}"]`)
+        .forEach((pieceToggle) => (pieceToggle.checked = toggle.checked));
     };
   });
-  document.querySelectorAll('[data-piece-state]').forEach((select) => {
-    select.onchange = () => {
-      const draft = drafts.find((item) => item.id === select.dataset.draft);
-      const proposal = draft?.detections?.find((item) => item.id === select.dataset.pieceState);
+  document.querySelectorAll('[data-piece-owning]').forEach((toggle) => {
+    toggle.onchange = () => {
+      const draft = drafts.find((item) => item.id === toggle.dataset.draft);
+      const proposal = draft?.detections?.find((item) => item.id === toggle.dataset.pieceOwning);
       if (!proposal) return;
-      proposal.state = select.value;
+      proposal.state = toggle.checked ? 'owning' : 'wanting';
       persistDrafts();
     };
   });
@@ -1189,33 +1232,54 @@ function renderDrafts() {
   document.querySelectorAll('[data-discard]').forEach(
     (b) =>
       (b.onclick = () => {
+        const draft = drafts.find((item) => item.id === b.dataset.discard);
+        if (draft) revokeDraftPreview(draft);
         drafts = drafts.filter((d) => d.id !== b.dataset.discard);
         persistDrafts();
-        renderDrafts();
+        if (drafts.length) renderDrafts();
+        else renderAdd();
       }),
   );
 }
 function renderDetectionDraft(draft) {
   const discard = `<button class="close" data-discard="${draft.id}" aria-label="Foto verwerfen">${icon('close')}</button>`;
   if (draft.phase === 'manual') {
-    return `<article class="draft" data-draft="${draft.id}"><div class="draft-head"><div><h3>Selbst hinzufügen</h3><p class="draft-status">${esc(draft.failure || 'Auf diesem Foto wurde kein Stück erkannt.')}</p></div>${discard}</div><img data-draft-asset="${draft.assetId}" alt="Hochgeladenes Foto"><form data-manual-save="${draft.id}">${fields(draft.metadata, 'owning')}<button class="primary" style="margin-top:18px" type="submit">Stück hinzufügen</button></form></article>`;
+    return `<article class="draft" data-draft="${draft.id}"><div class="draft-head"><div><h3>Selbst hinzufügen</h3><p class="draft-status">${esc(draft.failure || 'Auf diesem Foto wurde kein Stück erkannt.')}</p></div>${discard}</div><img data-draft-asset="${draft.assetId}" data-draft-preview="${esc(draft.localPreviewUrl || '')}" alt="Hochgeladenes Foto"><form data-manual-save="${draft.id}">${fields(draft.metadata, 'owning')}<button class="primary" style="margin-top:18px" type="submit">Stück hinzufügen</button></form></article>`;
   }
   const detections = (draft.detections || []).filter((item) => !item.imported);
   const selected = detections.filter((item) => item.selected && !item.imported);
   const overlays = detections
     .map(
       (item, index) =>
-        `<button class="detection-box ${item.selected ? 'selected' : ''}" data-draft="${draft.id}" data-toggle-piece="${item.id}" aria-label="${esc(item.name)} ${item.selected ? 'abwählen' : 'auswählen'}" aria-pressed="${item.selected}" style="left:${item.boundingBox.x / 10}%;top:${item.boundingBox.y / 10}%;width:${item.boundingBox.width / 10}%;height:${item.boundingBox.height / 10}%"><span>${index + 1}</span></button>`,
+        `<button class="detection-box category-${detectionCategoryTheme(item.category)} ${item.selected ? 'selected' : ''}" data-draft="${draft.id}" data-toggle-piece="${item.id}" aria-label="${esc(item.name)} ${item.selected ? 'abwählen' : 'auswählen'}" aria-pressed="${item.selected}" style="left:${item.boundingBox.x / 10}%;top:${item.boundingBox.y / 10}%;width:${item.boundingBox.width / 10}%;height:${item.boundingBox.height / 10}%"><span class="detection-badge">${icon(detectionCategoryIcon(item.category))}</span></button>`,
     )
     .join('');
-  const choices = detections
-    .map(
-      (item, index) =>
-        `<div class="detection-choice-row"><button class="detection-choice ${item.selected ? 'selected' : ''}" data-draft="${draft.id}" data-toggle-piece="${item.id}" aria-pressed="${item.selected}"><canvas class="choice-preview" data-draft="${draft.id}" data-choice-preview="${item.id}" width="112" height="112" aria-hidden="true"></canvas><span class="choice-copy"><strong>${esc(item.name)}</strong><small>${esc(categories[item.category])} · ${esc(item.colors.join(', '))}</small></span><span class="choice-number">${item.selected ? icon('check') : index + 1}</span></button><select data-draft="${draft.id}" data-piece-state="${item.id}" aria-label="Status für ${esc(item.name)}"><option value="owning" ${(item.state || draft.state || 'owning') === 'owning' ? 'selected' : ''}>Besitze ich</option><option value="wanting" ${(item.state || draft.state) === 'wanting' ? 'selected' : ''}>Wünsche ich mir</option></select></div>`,
-    )
+  const categoryGroups = [
+    { label: 'Oberteile', icon: 'top', categories: ['top', 'jacket', 'dress'] },
+    { label: 'Unterteile', icon: 'bottom', categories: ['pants', 'skirt'] },
+    { label: 'Schuhe', icon: 'shoes', categories: ['shoes'] },
+    { label: 'Accessoires', icon: 'accessory', categories: [] },
+  ];
+  const choices = categoryGroups
+    .map((groupDefinition) => {
+      const { label, icon: groupIcon, categories: groupCategories } = groupDefinition;
+      const group = detections
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) =>
+          groupCategories.length ? groupCategories.includes(item.category) : !['top', 'jacket', 'dress', 'pants', 'skirt', 'shoes'].includes(item.category),
+        );
+      if (!group.length) return '';
+      return `<section class="detection-group category-${groupIcon}"><h4>${icon(groupIcon)}<span>${label}</span></h4>${group
+        .map(
+          ({ item, index }) =>
+            `<div class="detection-choice-row category-${detectionCategoryTheme(item.category)} ${item.selected ? 'selected' : ''}"><button class="detection-choice ${item.selected ? 'selected' : ''}" data-draft="${draft.id}" data-toggle-piece="${item.id}" aria-pressed="${item.selected}"><canvas class="choice-preview" data-draft="${draft.id}" data-choice-preview="${item.id}" width="112" height="112" aria-hidden="true"></canvas><span class="choice-copy"><strong>${esc(item.name)}</strong><small>${esc(categories[item.category])} · ${esc(item.colors.join(', '))}</small></span><span class="choice-number">${item.selected ? icon('check') : index + 1}</span></button><label class="state-toggle"><span>Besitze ich</span><input type="checkbox" data-draft="${draft.id}" data-piece-owning="${item.id}" aria-label="${esc(item.name)} besitze ich" ${(item.state || draft.state || 'owning') === 'owning' ? 'checked' : ''}><span class="toggle-control" aria-hidden="true"></span></label></div>`,
+        )
+        .join('')}</section>`;
+    })
     .join('');
-  const busy = ['uploaded', 'detecting'].includes(draft.phase);
-  return `<article class="draft scan-card" data-draft="${draft.id}"><div class="draft-head"><div><h3>${busy ? 'Foto wird analysiert' : `${detections.length} ${detections.length === 1 ? 'Stück erkannt' : 'Stücke erkannt'}`}</h3><p class="draft-status">${busy ? 'Du kannst die App dabei geöffnet lassen oder später wiederkommen.' : 'Tippe auf die Rahmen, um deine Auswahl zu ändern.'}</p></div>${discard}</div><div class="detection-stage"><img data-draft-asset="${draft.assetId}" alt="Hochgeladenes Foto">${busy ? '<div class="scan-progress"><span class="spinner"></span><span>Kleidung wird erkannt …</span></div>' : overlays}</div>${busy ? '' : `<label>Alle Stücke zunächst<select data-batch-state="${draft.id}"><option value="owning" ${(draft.state || 'owning') === 'owning' ? 'selected' : ''}>Besitze ich</option><option value="wanting" ${draft.state === 'wanting' ? 'selected' : ''}>Wünsche ich mir</option></select></label><div class="detection-choices">${choices}</div><button class="primary" data-import-detected="${draft.id}" ${selected.length || draft.phase === 'importing' ? '' : 'disabled'}>${draft.phase === 'importing' ? '<span class="spinner"></span> Wird hinzugefügt …' : `${selected.length} ${selected.length === 1 ? 'Stück' : 'Stücke'} hinzufügen`}</button>`}</article>`;
+  const busy = ['uploading', 'uploaded', 'detecting'].includes(draft.phase);
+  const analyzing = draft.phase !== 'uploading';
+  return `<article class="draft scan-card" data-draft="${draft.id}"><div class="draft-head"><div><h3>${busy ? analyzing ? 'Foto wird analysiert' : 'Foto wird hochgeladen' : `${detections.length} ${detections.length === 1 ? 'Stück erkannt' : 'Stücke erkannt'}`}</h3><p class="draft-status">${busy ? analyzing ? 'FORM sucht nach Kleidungsstücken auf deinem Foto.' : 'Dein Foto erscheint sofort, während es hochgeladen wird.' : 'Tippe auf die Rahmen, um deine Auswahl zu ändern.'}</p></div>${discard}</div><div class="detection-stage"><img data-draft-asset="${draft.assetId}" data-draft-preview="${esc(draft.localPreviewUrl || '')}" alt="Hochgeladenes Foto">${busy ? `<div class="scan-progress">${icon('search')}<span>${analyzing ? 'Kleidung wird erkannt …' : 'Foto wird hochgeladen …'}</span></div>` : overlays}</div>${busy ? '' : `<div class="batch-state"><span>Alle Stücke zunächst</span><small>Gilt für alle erkannten Stücke</small><label class="state-toggle"><span>Besitze ich</span><input type="checkbox" data-batch-owning="${draft.id}" aria-label="Alle Stücke besitze ich" ${(draft.state || 'owning') === 'owning' ? 'checked' : ''}><span class="toggle-control" aria-hidden="true"></span></label></div><div class="detection-choices">${choices}</div><button class="primary" data-import-detected="${draft.id}" ${selected.length || draft.phase === 'importing' ? '' : 'disabled'}>${draft.phase === 'importing' ? '<span class="spinner"></span> Wird hinzugefügt …' : `${selected.length} ${selected.length === 1 ? 'Stück' : 'Stücke'} hinzufügen`}</button>`}</article>`;
 }
 async function drawDetectionPreview(canvas, url, box) {
   const image = new Image();
@@ -1226,7 +1290,7 @@ async function drawDetectionPreview(canvas, url, box) {
   const sourceY = (box.y / 1000) * image.naturalHeight;
   const sourceWidth = (box.width / 1000) * image.naturalWidth;
   const sourceHeight = (box.height / 1000) * image.naturalHeight;
-  const scale = Math.min(canvas.width / sourceWidth, canvas.height / sourceHeight);
+  const scale = Math.max(canvas.width / sourceWidth, canvas.height / sourceHeight);
   const width = sourceWidth * scale;
   const height = sourceHeight * scale;
   const context = canvas.getContext('2d');
@@ -1257,6 +1321,31 @@ async function startDetection(draft) {
     scheduleDetectionCheck(draft);
   } catch (error) {
     useManualFallback(draft, error.message);
+  }
+}
+function updateDetectionSelection(draft, proposal) {
+  const selected = proposal.selected;
+  const index = draft.detections.filter((item) => !item.imported).indexOf(proposal);
+  document
+    .querySelectorAll(
+      `[data-draft="${CSS.escape(draft.id)}"][data-toggle-piece="${CSS.escape(proposal.id)}"]`,
+    )
+    .forEach((button) => {
+      button.classList.toggle('selected', selected);
+      button.closest('.detection-choice-row')?.classList.toggle('selected', selected);
+      button.setAttribute('aria-pressed', selected);
+      if (button.classList.contains('detection-box'))
+        button.setAttribute('aria-label', `${proposal.name} ${selected ? 'abwählen' : 'auswählen'}`);
+      const number = button.querySelector('.choice-number');
+      if (number) number.innerHTML = selected ? icon('check') : index + 1;
+    });
+  const selectedCount = draft.detections.filter((item) => item.selected && !item.imported).length;
+  const importButton = document.querySelector(
+    `[data-import-detected="${CSS.escape(draft.id)}"]`,
+  );
+  if (importButton) {
+    importButton.disabled = !selectedCount;
+    importButton.textContent = `${selectedCount} ${selectedCount === 1 ? 'Stück' : 'Stücke'} hinzufügen`;
   }
 }
 function scheduleDetectionCheck(draft) {
@@ -1338,6 +1427,7 @@ async function importDetected(draft) {
       proposal.imported = true;
       persistDrafts();
     }
+    revokeDraftPreview(draft);
     drafts = drafts.filter((item) => item.id !== draft.id);
     persistDrafts();
     await refreshItems();
@@ -1380,9 +1470,11 @@ async function importManual(draft, form) {
 }
 function renderSettings() {
   shell(
-    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><h3>Character Sheet</h3><p>Deine aktive Identitätsreferenz für persönliche Looks. Frühere Versionen bleiben erhalten.</p><div id="character-settings"><div class="loading"><span class="spinner"></span></div></div><button class="primary" id="new-character">Neues Character Sheet</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Character Sheets werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
+    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><h3>Character Sheet</h3><p>Deine aktive Identitätsreferenz für persönliche Looks. Frühere Versionen bleiben erhalten.</p><div id="character-settings">${characterSettingsMarkup()}</div><button class="primary" id="new-character">Neues Character Sheet</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Character Sheets werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
   );
   $('#new-character').onclick = openCharacterSetup;
+  wireCharacterCards($('#character-settings'));
+  if ($('#character-history')) $('#character-history').onclick = openCharacterHistory;
   loadSettingsData();
   $('#open-archive').onclick = () => navigate('archived');
   $('#reset').onclick = () => {
@@ -1416,6 +1508,14 @@ function renderSettings() {
     };
   };
 }
+function characterSettingsMarkup() {
+  const current = currentCharacterSheet();
+  const pending = characterSheets.find((sheet) => isCharacterPending(sheet));
+  const past = characterSheets.filter((sheet) => sheet.id !== current?.id && sheet.id !== pending?.id);
+  return current
+    ? `${pending && pending.id !== current.id ? characterCurrentCard(pending, true) : ''}${characterCurrentCard(current)}${past.length ? `<button class="secondary" id="character-history">Frühere Versionen · ${past.length}</button>` : ''}`
+    : '<p class="muted">Noch nicht eingerichtet.</p>';
+}
 async function loadSettingsData() {
   try {
     const [sheets, costData] = await Promise.all([
@@ -1424,12 +1524,7 @@ async function loadSettingsData() {
     ]);
     characterSheets = sheets.characterSheets;
     if (!$('#character-settings')) return;
-    const current = currentCharacterSheet();
-    const pending = characterSheets.find((sheet) => isCharacterPending(sheet));
-    const past = characterSheets.filter((sheet) => sheet.id !== current?.id);
-    $('#character-settings').innerHTML = current
-      ? `${characterCurrentCard(current)}${pending && pending.id !== current.id ? characterCurrentCard(pending, true) : ''}${past.length ? `<button class="secondary" id="character-history">Frühere Versionen · ${past.length}</button>` : ''}`
-      : '<p class="muted">Noch nicht eingerichtet.</p>';
+    $('#character-settings').innerHTML = characterSettingsMarkup();
     $('#cost-settings').innerHTML =
       `<div class="setting-row">Looks gesamt<span>${money(costData.costs.lookTotalMicrounits)}</span></div><div class="setting-row">Ø pro fertigem Look<span>${money(costData.costs.averageSuccessfulLookMicrounits)}</span></div><div class="setting-row">Character Sheets<span>${money(costData.costs.characterSheetTotalMicrounits)}</span></div>`;
     wireCharacterCards($('#character-settings'));
@@ -1457,7 +1552,10 @@ function currentCharacterSheet() {
   return characterSheets.find((sheet) => sheet.active) ?? characterSheets[0] ?? null;
 }
 function characterCurrentCard(sheet, pending = false) {
-  return `<button class="character-current ${sheet.active ? 'active' : ''} ${pending ? 'character-current-pending' : ''}" data-character="${sheet.id}" aria-label="Character Sheet vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-current-copy"><strong>${pending ? 'Neues Character Sheet wird erstellt …' : characterStatus(sheet)}</strong><small>${pending ? 'Die aktive Version bleibt in der Zwischenzeit erhalten.' : `Seit ${sheetDate(sheet)}`}</small><small>${sheet.referenceAssetIds.length} ${sheet.referenceAssetIds.length === 1 ? 'Referenzfoto' : 'Referenzfotos'}${sheet.refinementInstruction ? ' · verfeinert' : ''}</small></span></button>`;
+  const referenceCount = sheet.referenceAssetIds.length;
+  const title = pending ? 'Neues Character Sheet' : sheet.active ? 'Aktives Character Sheet' : 'Character Sheet';
+  const subtitle = pending ? 'Wird erstellt' : `Seit ${sheetDate(sheet)}`;
+  return `<button class="character-current ${sheet.active ? 'active' : ''} ${pending ? 'character-current-pending' : ''}" data-character="${sheet.id}" aria-label="Character Sheet vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-current-copy"><strong>${title}</strong><small>${subtitle}</small><span class="character-current-meta"><span>${icon('photo')}${referenceCount} ${referenceCount === 1 ? 'Referenzfoto' : 'Referenzfotos'}</span>${sheet.refinementInstruction ? `<span>${icon('check')}Verfeinert</span>` : ''}</span></span></button>`;
 }
 function wireCharacterCards(root) {
   root.querySelectorAll('img[data-asset]').forEach((img) => (img.src = assetUrl(img.dataset.asset)));
@@ -1468,7 +1566,8 @@ function wireCharacterCards(root) {
 }
 function openCharacterHistory() {
   const current = currentCharacterSheet();
-  const past = characterSheets.filter((sheet) => sheet.id !== current?.id);
+  const pending = characterSheets.find((sheet) => isCharacterPending(sheet));
+  const past = characterSheets.filter((sheet) => sheet.id !== current?.id && sheet.id !== pending?.id);
   showSheet(
     'Frühere Versionen',
     `<h2>Deine bisherigen Sheets.</h2><p>Wähle eine Version, um sie anzusehen, wieder zu aktivieren oder zu löschen.</p><div class="character-versions">${past.map((sheet) => `<button class="character-version" data-character="${sheet.id}" aria-label="Character Sheet vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-version-copy"><strong>${characterStatus(sheet)}</strong><small>${sheetDate(sheet)}</small></span></button>`).join('')}</div>`,
@@ -1532,7 +1631,7 @@ async function uploadReferenceFile(file) {
 function openCharacterSetup() {
   showSheet(
     'Character Sheet',
-    `<h2>So erkennt FORM dich.</h2><p>Wähle ein bis vier klare Fotos von Gesicht und Körper. Ein kurzer Hinweis kann stabile Details ergänzen.</p><form id="character-form"><label>Referenzfotos<input type="file" name="photos" accept="image/*" multiple required></label><label>Hinweis <span class="muted">optional</span><textarea name="note" maxlength="1000" placeholder="Zum Beispiel Körpergröße oder Haarfarbe"></textarea></label><button class="primary" type="submit">Character Sheet erstellen</button></form>`,
+    `<h2>So erkennt FORM dich.</h2><p>Wähle ein bis vier klare Fotos von Gesicht und Körper. Ein kurzer Hinweis kann stabile Details ergänzen.</p><form id="character-form"><label>Referenzfotos<input type="file" name="photos" accept="image/*" multiple required></label><div id="character-upload-progress"></div><label>Hinweis <span class="muted">optional</span><textarea name="note" maxlength="1000" placeholder="Zum Beispiel Körpergröße oder Haarfarbe"></textarea></label><button class="primary" type="submit">Character Sheet erstellen</button></form>`,
   );
   $('#character-form').onsubmit = (event) => {
     event.preventDefault();
@@ -1543,7 +1642,11 @@ function openCharacterSetup() {
     action($('button[type=submit]', form), async () => {
       try {
         const referenceAssetIds = [];
-        for (const file of files) referenceAssetIds.push(await uploadReferenceFile(file));
+        for (const [index, file] of files.entries()) {
+          renderCharacterUploadProgress(form, files, index);
+          referenceAssetIds.push(await uploadReferenceFile(file));
+        }
+        renderCharacterUploadProgress(form, files, files.length);
         await api('/character-sheets', {
           referenceAssetIds,
           note: new FormData(form).get('note').trim() || null,
@@ -1558,6 +1661,18 @@ function openCharacterSetup() {
       }
     });
   };
+}
+function renderCharacterUploadProgress(form, files, completed) {
+  const progress = $('#character-upload-progress', form);
+  if (!progress) return;
+  progress.innerHTML = `<div class="character-upload-progress" role="status" aria-live="polite"><strong>${completed === files.length ? 'Character Sheet wird vorbereitet' : 'Fotos werden hochgeladen'}</strong>${files
+    .map((file, index) => {
+      const state = index < completed ? 'done' : index === completed ? 'uploading' : 'waiting';
+      const label =
+        state === 'done' ? 'Hochgeladen' : state === 'uploading' ? 'Wird hochgeladen …' : 'Wartet';
+      return `<div class="character-upload-file ${state}"><span class="character-upload-state" aria-hidden="true">${state === 'done' ? icon('check') : ''}</span><span>${esc(file.name)}</span><small>${label}</small></div>`;
+    })
+    .join('')}</div>`;
 }
 // Refining keeps the current sheet active; the result has to be activated by hand.
 function openCharacterRefine(id) {

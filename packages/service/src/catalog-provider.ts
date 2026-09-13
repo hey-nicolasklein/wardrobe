@@ -174,7 +174,7 @@ function detectionPrompt(pixelWidth: number, pixelHeight: number) {
 
 Treat screenshots and product grids as multiple pictured instances. Return each separately pictured garment as its own proposal, even when the same product appears more than once. Never merge a main product image with thumbnails, recommendations, captions, or controls.
 
-Return layered garments and small accessories separately. Do not infer hidden items or return brands, materials, tags, notes, masks, or polygons. Propose a concise visible-pixel-supported name and color list. Use category unsupported for a visible wearable outside the supported categories.
+Return layered garments and small accessories separately. Do not infer hidden items or return brands, materials, tags, notes, masks, or polygons. Propose a concise visible-pixel-supported name and color list. Write every name in title case, capitalizing each meaningful word, for example "Black Wide-Leg Pants" or "Oversized Black Jacket with Faux-Fur Leopard Collar". Use category unsupported for a visible wearable outside the supported categories.
 
 For every bounding box, locate the outermost visible pixels of exactly one garment. Use a tight box with at most 2% padding and exclude captions, controls, cards, background, and other garments. Use original image pixels in the standard order top, left, bottom, right. Top and bottom are pixel rows from 0 to ${pixelHeight}. Left and right are pixel columns from 0 to ${pixelWidth}. The origin is the image's top-left corner. Before responding, verify that the center of each box lies on its named garment and that the box does not group multiple pictured instances.`;
 }
