@@ -1,9 +1,10 @@
-const cacheName = 'form-shell-v2';
+const cacheName = 'form-shell-v3';
 const shell = [
   '/',
   '/index.html',
   '/style.css',
   '/app.js',
+  '/flat-lay.js',
   '/icon-192.png',
   '/icon-512.png',
   '/manifest.webmanifest',

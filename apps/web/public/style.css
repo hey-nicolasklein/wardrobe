@@ -2161,3 +2161,86 @@ dialog:has(#look-composer) .sheet-body {
 #composer-reset { min-height: 44px; padding: 10px 12px; }
 .composer-footer .primary { min-height: 56px; padding: 18px 24px; }
 #composer-reset { width: auto; margin: 0; }
+
+/* One composition for the dressing table, pending looks and saved outfits. */
+.flat-lay {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  isolation: isolate;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 25% 15%, #fffdf5 0, transparent 65%), #eeece3;
+}
+.flat-garment {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  left: var(--flat-x);
+  top: var(--flat-y);
+  width: var(--flat-size);
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  transform: translate(-50%, -50%) rotate(var(--flat-angle));
+  border-radius: 14px;
+  -webkit-tap-highlight-color: transparent;
+}
+.flat-garment img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.flat-garment:focus-visible { outline: 2px solid var(--green); outline-offset: -3px; }
+.flat-garment[aria-pressed="true"] { background: #687b4812; outline: 1px solid #687b4855; }
+.flat-garment:disabled { opacity: 0.65; }
+.flat-missing { display: block; padding: 8px; font-size: 11px; line-height: 1.4; color: var(--muted); text-align: center; }
+.flat-empty { display: grid; place-content: center; min-height: 260px; padding: 28px; color: var(--muted); text-align: center; }
+.look-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: #f0efe9; }
+.look-toolbar .look-more { position: static; flex-shrink: 0; background: transparent; }
+.look-view-switch { display: flex; padding: 3px; border-radius: 24px; background: #e3e4da; }
+.look-view-switch button { min-height: 38px; padding: 8px 18px; border-radius: 22px; background: transparent; color: #606855; font-size: 12px; }
+.look-view-switch button[aria-pressed="true"] { background: #fffdf7; color: #26351d; box-shadow: 0 1px 4px #27371b0b; }
+.look-stage { position: relative; aspect-ratio: 4 / 5; }
+.look-flat-view { width: 100%; height: 100%; }
+.look-flat-view .flat-empty { height: 100%; }
+.ready-look .look-footer { position: relative; padding: 10px 16px 16px; color: #26351d; background: #f0efe9; }
+.ready-look .look-date { color: var(--muted); }
+.ready-look.revealed .look-footer { visibility: visible; }
+.ready-look .look-actions [data-look-mark="liked"][aria-pressed="true"] { color: #b14456; }
+.look-progress { display: flex; align-items: center; gap: 16px; padding: 20px; background: #f0efe9; }
+.look-progress .spinner { width: 22px; height: 22px; flex-shrink: 0; }
+.look-progress strong { font-size: 14px; }
+.look-progress p { margin: 5px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.look-planning-art { display: grid; place-items: center; min-height: 230px; background: #eeece3; }
+.look-planning-art .icon { width: 56px; height: 56px; color: #88937c; }
+.failed-look:has(.flat-lay) { padding: 0 0 24px; }
+.failed-look:has(.flat-lay) > div:not(.flat-lay) { padding: 0 24px; }
+.composer-tray { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 0 10px; background: transparent; text-align: left; color: var(--ink); }
+.composer-tray-copy { display: flex; flex: 0 0 105px; flex-direction: column; gap: 7px; font-size: 11px; }
+.composer-tray-copy strong { font-size: 12px; font-weight: 500; }
+.composer-tray-copy > span { display: flex; align-items: center; gap: 3px; color: var(--muted); }
+.composer-tray-copy .icon { width: 13px; height: 13px; }
+.composer-tray-items { display: flex; align-items: center; justify-content: flex-end; flex: 1; min-width: 0; height: 62px; }
+.composer-tray-items > span { display: block; flex: 0 1 56px; min-width: 0; aspect-ratio: 1; }
+.composer-tray-items img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.composer-tray-items .composer-tray-more { flex: 0 0 28px; display: grid; place-items: center; font-size: 11px; color: var(--muted); }
+.composer-footer:has(.composer-tray:not([hidden])) { padding-top: 4px; }
+.composer-summary { height: auto; min-height: 44px; }
+.composer-preview { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; background: #eeece3; }
+.composer-preview-head { padding: 4px 22px 0; }
+.composer-preview-head button { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 0; font-size: 13px; }
+.composer-preview-head button .icon { width: 16px; height: 16px; rotate: 180deg; }
+.composer-preview-head p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+#composer-board { max-width: 440px; margin: auto; }
+#composer-board .flat-lay { background: transparent; }
+.composer-piece { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 76px; padding: 12px 22px 20px; }
+.composer-piece strong { display: block; font-size: 14px; line-height: 1.4; }
+.composer-piece span, .composer-piece p { display: block; margin: 4px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.composer-piece button { flex: 0 0 auto; min-height: 44px; padding: 8px 0; font-size: 12px; }
+.garment-flight { position: absolute; z-index: 20; pointer-events: none; object-fit: contain; border: 0; padding: 0; background: transparent; }
+@media (max-height: 740px) {
+  .composer-footer { padding: 6px 22px max(12px, env(safe-area-inset-bottom)); }
+  .composer-tray-items { height: 48px; }
+  #composer-board { max-width: 290px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .flat-garment { transition: background-color 180ms ease; }
+  .flat-garment:active img { transform: scale(0.96); }
+}

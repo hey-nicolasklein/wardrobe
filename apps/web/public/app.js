@@ -1,3 +1,5 @@
+import { flatLayLayout } from './flat-lay.js';
+
 const $ = (s, root = document) => root.querySelector(s);
 const esc = (value) =>
   String(value ?? '').replace(
@@ -397,8 +399,25 @@ function renderFeed() {
 // Keep complete cards, including their decoded images, while another page is
 // open. A card is replaced only when its server representation changes.
 const feedCards = new Map();
-const lookCardSignature = (look) => JSON.stringify(look);
+const lookViews = new Map();
+// Keep the chosen starting pieces through a reload while the planner is working.
+// The API becomes authoritative as soon as it publishes wardrobeItemIds.
+let lookStarts;
+try { lookStarts = JSON.parse(sessionStorage.getItem('form-look-starts') || '{}'); } catch {}
+if (!lookStarts || typeof lookStarts !== 'object' || Array.isArray(lookStarts)) lookStarts = {};
+function rememberLookStart(id, ids) {
+  lookStarts[id] = ids;
+  try { sessionStorage.setItem('form-look-starts', JSON.stringify(lookStarts)); } catch {}
+}
+function lookGarments(look) {
+  const ids = look.wardrobeItemIds.length || look.state === 'ready'
+    ? look.wardrobeItemIds : Array.isArray(lookStarts[look.id]) ? lookStarts[look.id] : [];
+  return ids.map((id) => items.find((item) => item.id === id) || { id });
+}
+const lookCardSignature = (look) => JSON.stringify([look, lookGarments(look), lookViews.get(look.id)]);
 function renderLookCards() {
+  const oldPositions = new Map([...document.querySelectorAll('.look-card .flat-lay')].map((board) =>
+    [board.closest('[data-look]').dataset.look, garmentRects(board)]));
   const currentIds = new Set(looks.map((look) => look.id));
   for (const id of feedCards.keys()) if (!currentIds.has(id)) feedCards.delete(id);
   const cards = looks.map((look) => {
@@ -412,6 +431,123 @@ function renderLookCards() {
     return card;
   });
   $('#look-feed').replaceChildren(...cards);
+  cards.forEach((card) => {
+    const previous = oldPositions.get(card.dataset.look);
+    if (previous) animateGarments($('.flat-lay', card), previous);
+  });
+}
+function flatLayMarkup(garments, { interactive = true, selected = null } = {}) {
+  return `<div class="flat-lay" role="group" aria-label="Outfit als Flat Lay">${flatLayLayout(garments).map(({ item, x, y, size, angle }) => {
+    const name = item.metadata?.name || 'Nicht mehr im Schrank';
+    const tag = interactive ? 'button' : 'span';
+    return `<${tag} ${interactive ? `type="button" ${item.metadata ? '' : 'disabled'} aria-label="${esc(name)}${item.metadata ? ' auswählen' : ''}"` : ''} class="flat-garment" data-garment="${esc(item.id)}" style="--flat-x:${x}%;--flat-y:${y / 1.25}%;--flat-size:${size}%;--flat-angle:${angle}deg"${selected !== null && interactive ? ` aria-pressed="${selected === item.id}"` : ''}>${item.metadata ? `<img src="${preview(item)}" alt="${interactive ? '' : esc(name)}" decoding="async">` : `<span class="flat-missing">${esc(name)}</span>`}</${tag}>`;
+  }).join('')}</div>`;
+}
+function garmentRects(root) {
+  return new Map(root ? [...root.querySelectorAll('[data-garment]')].filter((node) => node.getClientRects().length).map((node) => [node.dataset.garment, node.getBoundingClientRect()]) : []);
+}
+function animateGarments(root, before = new Map()) {
+  if (!root || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  root.querySelectorAll('[data-garment]').forEach((node, index) => {
+    const old = before.get(node.dataset.garment);
+    const now = node.getBoundingClientRect();
+    if (!now.width) return;
+    const delta = old ? { translate: `${old.x + old.width / 2 - now.x - now.width / 2}px ${old.y + old.height / 2 - now.y - now.height / 2}px`, scale: String(old.width / now.width), opacity: 1 }
+      : { translate: '0 14px', scale: '0.88', opacity: 0 };
+    node.animate([delta, { translate: '0 0', scale: '1', opacity: 1 }], {
+      duration: 420, delay: old ? 0 : index * 35, easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+    });
+  });
+}
+function wireFlatImages(root) {
+  root.querySelectorAll('.flat-garment img, .composer-tray img').forEach((img) => {
+    const missing = () => {
+      const item = items.find((entry) => entry.id === img.closest('[data-garment]')?.dataset.garment);
+      const label = document.createElement('span');
+      label.className = 'flat-missing';
+      label.textContent = item?.metadata.name || 'Bild nicht verfügbar';
+      img.replaceWith(label);
+    };
+    img.onerror = missing;
+    if (img.complete && !img.naturalWidth) missing();
+  });
+}
+function flyGarment(image, from, to) {
+  if (!image || !from.width || !to.width || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const sheet = $('#sheet');
+  const bounds = sheet.getBoundingClientRect();
+  const ghost = image.cloneNode();
+  ghost.className = 'garment-flight';
+  ghost.alt = '';
+  ghost.setAttribute('aria-hidden', 'true');
+  Object.assign(ghost.style, {
+    left: `${from.left - bounds.left}px`, top: `${from.top - bounds.top + sheet.scrollTop}px`,
+    width: `${from.width}px`, height: `${from.height}px`,
+  });
+  sheet.append(ghost);
+  const animation = ghost.animate([
+    { transform: 'translate(0, 0) scale(1)', opacity: 1 },
+    { transform: `translate(${to.x + to.width / 2 - from.x - from.width / 2}px, ${to.y + to.height / 2 - from.y - from.height / 2}px) scale(${to.width / from.width})`, opacity: 0.4 },
+  ], { duration: 480, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+  animation.finished.catch(() => {}).finally(() => ghost.remove());
+}
+async function flatLayFile(look) {
+  const garments = lookGarments(look);
+  if (!garments.length || garments.some((item) => !item.metadata))
+    throw new Error('Für diesen Flat Lay fehlen Stücke im Schrank.');
+  const layout = flatLayLayout(garments);
+  const images = await Promise.all(layout.map(async ({ item }) => {
+    const img = new Image();
+    img.src = preview(item);
+    try { await img.decode(); } catch { throw new Error(`Das Bild für „${item.metadata.name}“ konnte nicht geladen werden.`); }
+    return img;
+  }));
+  const canvas = document.createElement('canvas');
+  canvas.width = 1200;
+  canvas.height = 1660;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#f0eee6';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#26351d';
+  ctx.font = '600 38px sans-serif';
+  ctx.fillText('FORM', 64, 78);
+  ctx.font = '20px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('DEIN OUTFIT', 1136, 76);
+  layout.forEach(({ x, y, size, angle }, index) => {
+    const img = images[index];
+    const scale = size * 11 / Math.max(img.naturalWidth, img.naturalHeight);
+    ctx.save();
+    ctx.translate(50 + x * 11, 130 + y * 11);
+    ctx.rotate(angle * Math.PI / 180);
+    ctx.drawImage(img, -img.naturalWidth * scale / 2, -img.naturalHeight * scale / 2, img.naturalWidth * scale, img.naturalHeight * scale);
+    ctx.restore();
+  });
+  ctx.textAlign = 'left';
+  ctx.font = '28px sans-serif';
+  ctx.fillText(look.concept?.mood || 'Deine Kombination.', 64, 1570, 1072);
+  ctx.font = '20px sans-serif';
+  ctx.fillText(`${garments.length} Stücke · ${new Date(look.createdAt).toLocaleDateString('de-DE')}`, 64, 1610);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('Der Flat Lay konnte nicht gespeichert werden.');
+  return new File([blob], `form-flat-lay-${look.id}.png`, { type: 'image/png' });
+}
+async function shareFlatLay(look, download = false) {
+  const file = await flatLayFile(look);
+  if (!download && navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: 'Mein Outfit', text: lookCaption(look) }); return; }
+    catch (error) {
+      if (error.name === 'AbortError') return;
+      if (error.name !== 'NotAllowedError') throw error;
+    }
+  }
+  const url = URL.createObjectURL(file);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = file.name;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  toast('Flat Lay heruntergeladen');
 }
 /* Plätze am Körper der Person, als Prozent von der Bildmitte aus: x zählt gegen
    die Breite der Karte, y gegen ihre Höhe. Die Mitte bleibt frei, damit die
@@ -532,22 +668,37 @@ async function shareLook(look) {
   toast('Bild zum Teilen heruntergeladen');
 }
 function renderLookCard(look) {
+  const garments = lookGarments(look);
   if (look.state === 'failed')
-    return `<article class="look-card failed-look" data-look="${look.id}"><div><h2>Das Bild ist nicht entstanden.</h2><p>Der Versuch bleibt hier sichtbar. Du kannst ihn erneut starten.</p></div><button class="primary" data-retry-look="${look.id}">Erneut versuchen</button><button class="text-button" data-delete-look="${look.id}">Löschen …</button></article>`;
-  if (look.state !== 'ready')
-    return `<article class="look-card developing" data-look="${look.id}" role="status"><span class="spinner"></span><div><h2>Dein Look entwickelt sich.</h2><p>Du kannst FORM währenddessen weiter benutzen.</p></div></article>`;
-  // Stücke, die der Schrank nicht (mehr) kennt, gelten als Oberteil: sie
-  // bekommen so einen Platz am Körper statt in der Mitte zu landen.
-  const worn = look.wardrobeItemIds.map(
-    (id) => items.find((entry) => entry.id === id) || { id, recordVersion: 0 },
-  );
-  const positions = lookItemPositions(worn.map((item) => item.metadata?.category || 'top'));
-  return `<article class="look-card ready-look" data-look="${look.id}"><button class="look-photo" data-toggle-look="${look.id}" aria-label="Getragene Stücke anzeigen" aria-pressed="false"><img class="fade" data-asset="${look.assetId}" alt="Generierter persönlicher Look" loading="lazy" decoding="async"></button><button class="look-more" data-look-menu="${look.id}" aria-label="Aktionen für Look">${icon('more')}</button><div class="look-items" data-look-items="${look.id}" hidden>${worn
-    .map((item, index) => {
-      const name = item.metadata?.name || 'Kleidungsstück';
-      return `<button data-look-item="${item.id}" aria-label="${esc(name)} öffnen" style="${positions[index]}"><img src="${preview(item)}" alt="${esc(name)}"></button>`;
-    })
-    .join('')}</div>${renderLookFooter(look)}</article>`;
+    return `<article class="look-card failed-look" data-look="${look.id}">${garments.length ? flatLayMarkup(garments) : ''}<div><h2>Das Bild ist nicht entstanden.</h2><p>Deine Stücke bleiben hier. Du kannst das Bild erneut erstellen.</p></div><button class="primary" data-retry-look="${look.id}">Erneut versuchen</button><button class="text-button" data-delete-look="${look.id}">Löschen …</button></article>`;
+  if (look.state !== 'ready') {
+    lookViews.set(look.id, 'flat');
+    return `<article class="look-card developing-look" data-look="${look.id}">${garments.length ? flatLayMarkup(garments) : '<div class="look-planning-art" aria-hidden="true">' + icon('closet') + '</div>'}<div class="look-progress" role="status"><span class="spinner"></span><div><strong>${look.state === 'generating' ? 'Dein Outfit steht.' : 'FORM kombiniert für dich.'}</strong><p>${look.state === 'generating' ? 'Das getragene Bild entsteht gerade.' : garments.length ? 'Diese Stücke sind dabei. FORM ergänzt den Rest.' : 'Deine Stücke erscheinen hier, sobald der Look zusammengestellt ist.'}</p></div></div></article>`;
+  }
+  const positions = lookItemPositions(garments.map((item) => item.metadata?.category || 'top'));
+  const flat = lookViews.get(look.id) === 'flat';
+  return `<article class="look-card ready-look ${flat ? 'is-flat' : ''}" data-look="${look.id}"><div class="look-toolbar"><div class="look-view-switch" role="group" aria-label="Look-Ansicht"><button type="button" data-look-view="worn" aria-pressed="${!flat}">Getragen</button><button type="button" data-look-view="flat" aria-pressed="${flat}">Gelegt</button></div><button class="look-more" data-look-menu="${look.id}" aria-label="Aktionen für Look">${icon('more')}</button></div><div class="look-stage"><button class="look-photo" data-toggle-look="${look.id}" aria-label="Getragene Stücke anzeigen" aria-pressed="false" ${flat ? 'hidden' : ''}><img class="fade" data-asset="${look.assetId}" alt="Generierter persönlicher Look" loading="lazy" decoding="async"></button><div class="look-flat-view" ${flat ? '' : 'hidden'}>${garments.length ? flatLayMarkup(garments) : '<p class="flat-empty">Die Stücke dieses Looks sind nicht mehr verfügbar.</p>'}</div><div class="look-items" data-look-items="${look.id}" hidden>${garments.map((item, index) => {
+      const name = item.metadata?.name || 'Kleidungsstück nicht mehr verfügbar';
+      return `<button data-look-item="${item.id}" aria-label="${esc(name)} öffnen" ${item.metadata ? '' : 'disabled'} style="${positions[index]}">${item.metadata ? `<img src="${preview(item)}" alt="${esc(name)}">` : ''}</button>`;
+    }).join('')}</div></div>${renderLookFooter(look)}</article>`;
+}
+function setLookView(card, view) {
+  const flat = view === 'flat';
+  const overlay = $('[data-look-items]', card);
+  clearTimeout(overlay.hideTimer);
+  overlay.hidden = true;
+  card.classList.remove('revealed');
+  $('[data-toggle-look]', card).setAttribute('aria-pressed', 'false');
+  $('[data-toggle-look]', card).setAttribute('aria-label', 'Getragene Stücke anzeigen');
+  card.classList.toggle('is-flat', flat);
+  $('.look-photo', card).hidden = flat;
+  $('.look-flat-view', card).hidden = !flat;
+  card.querySelectorAll('[data-look-view]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.lookView === view)));
+  lookViews.set(card.dataset.look, view);
+  const look = looks.find((entry) => entry.id === card.dataset.look);
+  const cached = feedCards.get(card.dataset.look);
+  if (cached && look) cached.signature = lookCardSignature(look);
+  if (flat) animateGarments($('.flat-lay', card));
 }
 /* Opens or closes the item overlay of a look card. The overlay stays in the DOM
    while the pieces fly back into the middle, so it is only hidden once the
@@ -580,6 +731,13 @@ function lookRevealDuration(overlay) {
   return 340 + Math.max(overlay.children.length - 1, 0) * 45;
 }
 function wireLookCards() {
+  document.querySelectorAll('[data-look-view]').forEach((button) => {
+    button.onclick = () => setLookView(button.closest('[data-look]'), button.dataset.lookView);
+  });
+  document.querySelectorAll('.look-card .flat-garment:not(:disabled)').forEach((button) => {
+    button.onclick = () => openDetail(button.dataset.garment);
+  });
+  wireFlatImages($('#look-feed'));
   document.querySelectorAll('[data-look-mark]').forEach((button) => {
     button.onclick = () => {
       const id = button.closest('[data-look]').dataset.look;
@@ -596,7 +754,10 @@ function wireLookCards() {
     button.onclick = () => button.setAttribute('aria-expanded', String(button.getAttribute('aria-expanded') !== 'true'));
   });
   document.querySelectorAll('[data-share-look]').forEach((button) => {
-    button.onclick = () => action(button, () => shareLook(looks.find((look) => look.id === button.dataset.shareLook)));
+    button.onclick = () => action(button, () => {
+      const look = looks.find((look) => look.id === button.dataset.shareLook);
+      return lookViews.get(look.id) === 'flat' ? shareFlatLay(look) : shareLook(look);
+    });
   });
   document.querySelectorAll('.look-date').forEach((date) => {
     date.textContent = lookDateLabel(date.dateTime);
@@ -671,7 +832,8 @@ function openLookComposer(preselected = []) {
         <p id="composer-empty" class="muted" hidden></p>
         <details class="composer-more"><summary>${icon('filter')} Kategorien vorgeben</summary><div class="composer-categories">${Object.entries(categories).map(([value, label]) => `<label><input type="checkbox" name="category" value="${value}"> ${label}</label>`).join('')}</div></details>
       </div>
-      <div class="composer-footer"><div class="composer-summary"><span id="composer-summary" role="status"></span><button type="button" class="text-button" id="composer-reset" aria-label="Auswahl leeren">Leeren</button></div><button class="primary" type="submit">Look erstellen</button></div>
+      <section class="composer-preview" aria-label="Deine Auswahl als Flat Lay" hidden><div class="composer-preview-head"><button type="button" class="text-button" id="composer-back">${icon('arrow')} Weiter auswählen</button><p>Damit starten wir. FORM ergänzt den Rest.</p></div><div id="composer-board"></div><div class="composer-piece" id="composer-piece" aria-live="polite"><p>Tippe ein Stück an, um es aus der Auswahl zu nehmen.</p></div></section>
+      <div class="composer-footer"><button type="button" class="composer-tray" id="composer-tray" aria-label="Auswahl als Flat Lay ansehen" aria-expanded="false" hidden><span class="composer-tray-copy"><strong>Damit starten wir</strong><span>Auswahl ansehen ${icon('arrow')}</span></span><span class="composer-tray-items"></span></button><div class="composer-summary"><span id="composer-summary" role="status"></span><button type="button" class="text-button" id="composer-reset" aria-label="Auswahl leeren">Leeren</button></div><button class="primary" type="submit">Look erstellen</button></div>
     </form>`,
   );
   const form = $('#look-composer');
@@ -679,6 +841,59 @@ function openLookComposer(preselected = []) {
   const categoryInputs = [...form.querySelectorAll('input[name=category]')];
   let selectedOnly = false;
   let itemCategory = '';
+  let expanded = false;
+  let selectedPiece = null;
+  let pickerScroll = 0;
+  const selectedGarments = () => itemInputs.filter((input) => input.checked).map((input) => eligible.find((item) => item.id === input.value));
+  const setExpanded = (open) => {
+    expanded = open;
+    if (open) pickerScroll = $('.composer-scroll', form).scrollTop;
+    $('.composer-scroll', form).hidden = open;
+    $('.composer-preview', form).hidden = !open;
+    $('#composer-tray').hidden = open || !selectedGarments().length;
+    $('#composer-tray').setAttribute('aria-expanded', String(open));
+    sheetReturn = open ? () => setExpanded(false) : null;
+    if (open) {
+      updateTray();
+      $('#composer-back').focus({ preventScroll: true });
+      animateGarments($('#composer-board'));
+    } else {
+      $('.composer-scroll', form).scrollTop = pickerScroll;
+      (selectedGarments().length ? $('#composer-tray') : $('#composer-search')).focus({ preventScroll: true });
+    }
+  };
+  const updatePiece = () => {
+    const item = selectedGarments().find((item) => item.id === selectedPiece);
+    const panel = $('#composer-piece');
+    panel.innerHTML = item ? `<div><strong>${esc(item.metadata.name)}</strong><span>${esc(categories[item.metadata.category])}</span></div><button type="button" class="text-button" id="composer-remove">Auswahl entfernen</button>` : '<p>Tippe ein Stück an, um es aus der Auswahl zu nehmen.</p>';
+    $('#composer-board').querySelectorAll('[data-garment]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.garment === selectedPiece)));
+    if (item) $('#composer-remove').onclick = () => {
+      itemInputs.find((input) => input.value === item.id).checked = false;
+      selectedPiece = null;
+      updateSelection();
+      filterItems();
+      ($('#composer-board .flat-garment') || $('#composer-back')).focus({ preventScroll: true });
+    };
+  };
+  const updateTray = () => {
+    const garments = selectedGarments();
+    const tray = $('#composer-tray');
+    const before = garmentRects(expanded ? $('#composer-board') : tray);
+    tray.hidden = expanded || !garments.length;
+    $('.composer-tray-items', tray).innerHTML = garments.slice(0, 5).map((item) => `<span data-garment="${item.id}"><img src="${preview(item)}" alt=""></span>`).join('') + (garments.length > 5 ? `<span class="composer-tray-more">+${garments.length - 5}</span>` : '');
+    tray.setAttribute('aria-label', `${garments.length} ausgewählte Stücke als Flat Lay ansehen`);
+    if (expanded) {
+      $('#composer-board').innerHTML = garments.length ? flatLayMarkup(garments, { selected: selectedPiece }) : '<div class="flat-empty"><p>Deine Auswahl ist leer.</p><p>Wähle weitere Stücke oder lass FORM für dich kombinieren.</p></div>';
+      $('#composer-board').querySelectorAll('[data-garment]').forEach((button) => {
+        button.onclick = () => { selectedPiece = button.dataset.garment; updatePiece(); };
+      });
+      updatePiece();
+    }
+    wireFlatImages(form);
+    animateGarments(expanded ? $('#composer-board') : tray, before);
+  };
+  $('#composer-tray').onclick = () => setExpanded(true);
+  $('#composer-back').onclick = () => setExpanded(false);
   const filterItems = () => {
     const search = $('#composer-search').value.trim().toLocaleLowerCase('de');
     let count = 0;
@@ -705,9 +920,16 @@ function openLookComposer(preselected = []) {
     form.querySelectorAll('[data-occasion]').forEach((button) => {
       button.setAttribute('aria-pressed', String(button.dataset.occasion === occasion));
     });
+    updateTray();
   };
-  form.addEventListener('change', () => {
+  form.addEventListener('change', (event) => {
+    const input = event.target;
+    const gridImage = input.name === 'item' ? input.closest('label').querySelector('img') : null;
+    const previous = input.name === 'item' ? $(`[data-garment="${input.value}"]`, $('#composer-tray')) : null;
+    const from = input.checked ? gridImage?.getBoundingClientRect() : previous?.getBoundingClientRect();
     updateSelection();
+    const destination = input.checked ? $(`[data-garment="${input.value}"]`, $('#composer-tray')) : gridImage;
+    if (from && destination) flyGarment(gridImage, from, destination.getBoundingClientRect());
     if (selectedOnly) filterItems();
   });
   $('#composer-search').oninput = filterItems;
@@ -740,6 +962,7 @@ function openLookComposer(preselected = []) {
     $('#composer-selected-only').setAttribute('aria-pressed', 'false');
     $('#composer-search').value = '';
     itemCategory = '';
+    selectedPiece = null;
     form.querySelectorAll('[data-composer-filter]').forEach((chip) => {
       chip.setAttribute('aria-pressed', String(!chip.dataset.composerFilter));
     });
@@ -760,6 +983,8 @@ function openLookComposer(preselected = []) {
         parentLookId: null,
         idempotencyKey,
       });
+      rememberLookStart(created.lookId, data.getAll('item'));
+      sheetReturn = null;
       await refreshInspiration();
       closeSheet();
       navigate('feed');
@@ -776,16 +1001,19 @@ function openLookMenu(id) {
   if (!look) return;
   showSheet(
     'Look',
-    `<h2>Was möchtest du tun?</h2><div class="stack"><button class="secondary" id="vary-look">Variation erstellen</button><button class="secondary" id="look-details">Details ansehen</button><button class="secondary" id="download-look">Bild laden</button><button class="danger" id="remove-look">Look löschen …</button></div>`,
+    `<h2>Was möchtest du tun?</h2><div class="stack"><button class="secondary" id="vary-look">Variation erstellen</button><button class="secondary" id="combine-look">Mit diesen Stücken kombinieren</button><button class="secondary" id="look-details">Details ansehen</button><button class="secondary" id="download-look">Getragenes Bild laden</button><button class="secondary" id="download-flat-lay">Flat Lay laden</button><button class="danger" id="remove-look">Look löschen …</button></div>`,
   );
+  $('#combine-look').onclick = () => openLookComposer(look.wardrobeItemIds);
+  $('#download-flat-lay').onclick = (event) => action(event.currentTarget, () => shareFlatLay(look, true));
   $('#vary-look').onclick = (event) =>
     action(event.currentTarget, async () => {
-      await api('/looks', {
+      const created = await api('/looks', {
         exactItemIds: [],
         categories: [],
         parentLookId: id,
         idempotencyKey: key(),
       });
+      rememberLookStart(created.lookId, look.wardrobeItemIds);
       await refreshInspiration();
       closeSheet();
       navigate('feed');
@@ -2039,7 +2267,10 @@ setInterval(async () => {
       const previous = JSON.stringify([looks, characterSheets]);
       await refreshInspiration();
       if (previous !== JSON.stringify([looks, characterSheets])) {
-        if (page === 'feed') renderFeed();
+        if (page === 'feed') {
+          if ($('#look-feed') && looks.length) { renderLookCards(); wireLookCards(); }
+          else renderFeed();
+        }
         if (page === 'settings') renderSettings();
       }
     }
