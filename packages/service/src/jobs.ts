@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import type { Database, DatabaseClient } from './database.js';
 import { withTransaction } from './database.js';
 
-export type RemoteImageJobKind = 'detect-source-photo' | 'generate-shelf-image';
+export type RemoteImageJobKind =
+  'detect-source-photo' | 'generate-shelf-image' | 'generate-character-sheet' | 'generate-look';
 export type RemoteImageJob = {
   id: string;
   accountId: string;
@@ -186,7 +187,14 @@ export async function failJob(
          updated_at = now()
      WHERE id = $1 AND state = 'leased' AND lease_owner = $2
      RETURNING state`,
-    [jobId, workerId, failure.retryable, failure.category, failure.detail, failure.retryDelaySeconds ?? 5],
+    [
+      jobId,
+      workerId,
+      failure.retryable,
+      failure.category,
+      failure.detail,
+      failure.retryDelaySeconds ?? 5,
+    ],
   );
   const state = result.rows[0]?.state;
   if (!state) return 'not-owned';

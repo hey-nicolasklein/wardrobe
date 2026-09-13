@@ -3,6 +3,8 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import {
   createDatabase,
   createPrivateObjectStorage,
+  ensurePrivateBucket,
+  migrateDatabase,
   readDatabaseConfig,
   readObjectStorageConfig,
   resetFixtures,
@@ -11,6 +13,10 @@ import {
 import { createApp } from '../../api/src/app.ts';
 const database = createDatabase(readDatabaseConfig());
 const storage = createPrivateObjectStorage(readObjectStorageConfig());
+// Bootstrap its own schema and bucket so launching is one command against an empty
+// fixture database, not a launch that half-fails until someone runs migrate by hand.
+await migrateDatabase(database);
+await ensurePrivateBucket(storage);
 await resetFixtures(database, storage);
 const app = createApp({
   database,

@@ -1,31 +1,57 @@
-# Local development access
+# Working in this repo
 
-When starting the application locally, make it reachable through Tailscale as well as localhost.
+FORM is a private single-user wardrobe PWA. Static HTML/CSS/JS in `apps/web/public`
+(`app.js` is the whole client, hash-routed), a Hono API in `apps/api`, a background
+worker in `apps/worker`, shared code in `packages/`.
 
-- Resolve the machine's current Tailscale IPv4 address instead of assuming a fixed address.
-- Configure the mobile client's public API URL and the API's allowed web origin to use the same Tailscale host or IP.
-- Restart affected development processes after changing environment configuration.
-- Verify the web app, API readiness, and browser sign-in/CORS through the Tailscale address.
-- Always include the working Tailscale URL and local fixture credentials in the final response.
-- Keep secrets out of tracked files; Tailscale-specific runtime values belong in ignored local environment files.
+## What "done" means
 
-# Live deployment (stargate)
+A change is done when the code is written and checked at the cheapest level that
+actually covers it. Match the check to the change — do not escalate past it:
 
-The production instance runs on the `stargate` host at `https://stargate.stork-platy.ts.net:8443` (tailnet only).
+| Change | Check |
+| --- | --- |
+| Copy, styling, a small `app.js` branch | Read the diff. Reload the dev server if it is running. |
+| API handler, service logic, contracts | `npm run verify --workspace=@form/<pkg>` |
+| Schema, storage, cross-package behaviour | `npm run test:integration` |
+| A user path you genuinely can't reason about | the `verify-form` skill (browser) |
 
-**Ship every finished change here without asking.** There are no users besides Nico, and the tailnet instance is expected to run the current version at all times. Once a change is implemented and verified, rebuild and recreate the affected services in the same turn, then report the deployed state. Migrating, resetting, or deleting data is *not* covered by this — those still need an explicit request.
+Browser e2e is the most expensive check here: Docker services, a fixture server, a
+real Chromium. It is for proving a multi-step user flow works, not for confirming a
+label changed. Reach for it when the change spans upload → detect → save → review, or
+when something is visibly broken and you cannot tell why. Not otherwise, and not
+unprompted on a one-line edit.
 
-- Rebuild only what carries the change: `web` for anything in `apps/web/public`, `api` for `apps/api` or `packages/contracts`, `worker` for `apps/worker` or `packages/service` (prompts and image processing live there). Contracts changes touch `api` and `worker` both. Compose recreates `api` alongside `web` on its own — that is expected, not a mistake.
-- Deploy command: `deploy/ship.sh [services]` (default `web api worker`). Always use it
-  instead of calling compose by hand. It stamps a fresh `FORM_VERSION`, rebuilds, and
-  blocks until `/version.json` reports that stamp. A bare
-  `docker compose --env-file .env.production -f compose.production.yaml up -d --build`
-  leaves `FORM_VERSION` unset, which bakes the literal `dev` into `version.json`; open
-  clients then never see the version change, never reload, and keep running the old
-  `app.js`. `web` is always rebuilt because it carries the stamp.
-- Confirm afterwards: `ps` shows the rebuilt services healthy, and `curl -s http://127.0.0.1:18081/<asset>` serves the new bytes.
-- It runs as the long-lived `form-production` Docker Compose project from `compose.production.yaml` (`web`, `api`, `worker`, `postgres`, `object-storage`), all `restart: unless-stopped`.
-- Tailscale Serve terminates HTTPS on `:8443` and proxies to `127.0.0.1:${FORM_WEB_PORT}` (default `18081`), the `web` container, which proxies `/v1/` to the API. `tailscale serve status` shows the mapping.
-- Runtime config lives in the git-ignored `.env.production` (`PUBLIC_WEB_ORIGIN`, `WEB_ORIGIN`, `S3_PUBLIC_ENDPOINT`, `PERSONAL_ACCOUNT_ID`). No login screen: `PERSONAL_ACCOUNT_ID` opens that account automatically.
-- Web and API assets are baked into their images (`build.target`), so shipping changes needs a rebuild and recreate, not just a restart. Run `npm run services:migrate` only when the schema changes.
-- Status check (read-only): `docker compose -f compose.production.yaml ps`.
+Stopping after the matching check and saying what you checked is a complete answer.
+
+## Deploying
+
+The production host `stargate` is **not** part of finishing a change. Deploy only when
+asked to deploy, ship, release, or roll back — then use the `deploy-stargate` skill,
+which carries the full procedure. Never ship as a follow-on to an edit, and do not
+offer to on every turn.
+
+Migrating, resetting, or deleting data — local or production — is always its own
+explicit request.
+
+## Local data
+
+Two separate databases on the same local Postgres (`:55432`):
+
+- **`form`** — your dev wardrobe. `npm run dev:*` uses it via `apps/api/.env.local`.
+  Real state you may care about. Nothing automated may truncate it.
+- **`form_fixtures`** — disposable, with its own `form-fixture-media` bucket.
+  Everything under `.env.services.local` uses it: integration tests, `fixtures:reset`,
+  and the browser fixture server, which re-seeds it on every boot.
+
+`resetFixtures` TRUNCATEs every table and refuses any database whose name does not end
+in `_fixtures` (`assertFixtureTarget` in `packages/service/src/fixtures.ts`). Do not
+route around that guard; if a fixture run wants the dev database, the env file is wrong.
+
+## Serving the dev app to a phone
+
+Only when asked to reach the app from a device. Resolve the machine's current Tailscale
+IPv4 rather than assuming a fixed address, point the client's public API URL and the
+API's `WEB_ORIGIN` at that same host, restart the affected dev processes, and check
+sign-in/CORS through the Tailscale address. Tailscale-specific values belong in ignored
+local env files, never in tracked ones.

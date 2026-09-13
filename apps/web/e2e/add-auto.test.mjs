@@ -93,7 +93,7 @@ try {
   );
 
   await page.getByRole('button', { name: '1 Stück hinzufügen' }).click();
-  await page.getByRole('heading', { name: 'Dein Kleiderschrank.' }).waitFor();
+  await page.getByRole('heading', { name: 'Dein Schrank.' }).waitFor();
   const generatedItem = page.getByRole('button', { name: /Grünes Testhemd/ });
   await generatedItem.waitFor();
   await generatedItem.locator('.wardrobe-image-progress').waitFor({ timeout: 2_000 });
@@ -105,9 +105,7 @@ try {
   await detailDialog.getByRole('button', { name: 'Schließen' }).click();
 
   const itemsResponse = await context.request.get('/v1/wardrobe-items');
-  const itemNames = ((await itemsResponse.json()).wardrobeItems).map(
-    (item) => item.metadata.name,
-  );
+  const itemNames = (await itemsResponse.json()).wardrobeItems.map((item) => item.metadata.name);
   assert.equal(itemNames.includes('Grünes Testhemd'), true);
   assert.equal(itemNames.includes('Blaue Testhose'), false);
 
@@ -119,7 +117,7 @@ try {
   );
   assert.deepEqual(generation.rows[0], { auto_keep: true, state: 'queued' });
 
-  await page.getByRole('button', { name: 'Hinzufügen', exact: true }).click();
+  await page.getByRole('button', { name: 'Kleidung hinzufügen', exact: true }).click();
   await page.locator('#library-input').setInputFiles({
     name: 'unknown.png',
     mimeType: 'image/png',
@@ -134,13 +132,10 @@ try {
     fullPage: true,
   });
   await manualForm.getByRole('button', { name: 'Stück hinzufügen' }).click();
-  await page.getByRole('heading', { name: 'Dein Kleiderschrank.' }).waitFor();
+  await page.getByRole('heading', { name: 'Dein Schrank.' }).waitFor();
   await page.getByRole('button', { name: /Manuelles Teststück/ }).waitFor();
 
-  assert.equal(
-    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-    true,
-  );
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   assert.deepEqual(errors, []);
   console.log(
     'PASS: automatic detection, selectable boxes, selective import, manual fallback, and durable auto-adopt enqueue',

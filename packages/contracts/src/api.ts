@@ -14,6 +14,10 @@ import {
   shelfImageVersionSchema,
   sourcePhotoSchema,
   wardrobeItemSchema,
+  characterSheetSchema,
+  lookSchema,
+  generationCostSummarySchema,
+  supportedCategorySchema,
 } from './domain.js';
 
 export const idempotencyKeySchema = z.string().min(16).max(128);
@@ -34,7 +38,10 @@ export const apiErrorCategorySchema = z.enum([
 export const apiErrorSchema = z
   .object({
     category: apiErrorCategorySchema,
-    code: z.string().regex(/^[a-z0-9-]+$/).max(80),
+    code: z
+      .string()
+      .regex(/^[a-z0-9-]+$/)
+      .max(80),
     message: z.string().min(1).max(500),
     retryable: z.boolean(),
     fieldErrors: z.record(z.string(), z.array(z.string())).optional(),
@@ -70,13 +77,7 @@ export const currentSessionResponseSchema = z.object({ session: sessionSchema })
 export const createUploadIntentRequestSchema = z
   .object({
     fileName: z.string().trim().min(1).max(255),
-    contentType: z.enum([
-      'image/jpeg',
-      'image/png',
-      'image/webp',
-      'image/heic',
-      'image/heif',
-    ]),
+    contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']),
     byteSize: z.number().int().positive(),
   })
   .strict();
@@ -123,15 +124,11 @@ export const updateWardrobeItemRequestSchema = z
   .strict()
   .refine(
     ({ metadata, state, currentShelfImageVersionId }) =>
-      metadata !== undefined ||
-      state !== undefined ||
-      currentShelfImageVersionId !== undefined,
+      metadata !== undefined || state !== undefined || currentShelfImageVersionId !== undefined,
     { message: 'At least one editable field is required' },
   );
 
-export const wardrobeItemResponseSchema = z
-  .object({ wardrobeItem: wardrobeItemSchema })
-  .strict();
+export const wardrobeItemResponseSchema = z.object({ wardrobeItem: wardrobeItemSchema }).strict();
 
 export const wardrobeItemsResponseSchema = z
   .object({ wardrobeItems: z.array(wardrobeItemSchema) })
@@ -231,37 +228,63 @@ export const permanentlyDeleteWardrobeItemResponseSchema = z
   })
   .strict();
 
+export const createCharacterSheetRequestSchema = z
+  .object({
+    referenceAssetIds: z.array(opaqueIdSchema).min(1).max(4),
+    note: z.string().trim().max(1_000).nullable().default(null),
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+// The parent's rendered sheet takes the first of the four reference slots.
+export const refineCharacterSheetRequestSchema = z
+  .object({
+    referenceAssetIds: z.array(opaqueIdSchema).min(1).max(3),
+    instruction: z.string().trim().min(1).max(1_000),
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+export const activateCharacterSheetRequestSchema = z
+  .object({
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+export const characterSheetsResponseSchema = z
+  .object({
+    characterSheets: z.array(characterSheetSchema),
+  })
+  .strict();
+export const characterSheetResponseSchema = z
+  .object({ characterSheet: characterSheetSchema })
+  .strict();
+
+export const createLookRequestSchema = z
+  .object({
+    exactItemIds: z.array(opaqueIdSchema).max(12).default([]),
+    categories: z.array(supportedCategorySchema).max(9).default([]),
+    parentLookId: opaqueIdSchema.nullable().default(null),
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+export const retryLookRequestSchema = z.object({ idempotencyKey: idempotencyKeySchema }).strict();
+export const looksResponseSchema = z.object({ looks: z.array(lookSchema) }).strict();
+export const lookResponseSchema = z.object({ look: lookSchema }).strict();
+export const generationCostSummaryResponseSchema = z
+  .object({ costs: generationCostSummarySchema })
+  .strict();
+
 export type ApiErrorCategory = z.infer<typeof apiErrorCategorySchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
 export type SignInRequest = z.infer<typeof signInRequestSchema>;
 export type SignInResponse = z.infer<typeof signInResponseSchema>;
 export type WardrobeItemResponse = z.infer<typeof wardrobeItemResponseSchema>;
 export type WardrobeItemsResponse = z.infer<typeof wardrobeItemsResponseSchema>;
-export type WardrobeItemDetailResponse = z.infer<
-  typeof wardrobeItemDetailResponseSchema
->;
-export type CreateDownloadUrlResponse = z.infer<
-  typeof createDownloadUrlResponseSchema
->;
-export type UpdateWardrobeItemRequest = z.infer<
-  typeof updateWardrobeItemRequestSchema
->;
+export type WardrobeItemDetailResponse = z.infer<typeof wardrobeItemDetailResponseSchema>;
+export type CreateDownloadUrlResponse = z.infer<typeof createDownloadUrlResponseSchema>;
+export type UpdateWardrobeItemRequest = z.infer<typeof updateWardrobeItemRequestSchema>;
 export type RejectShelfImageRequest = z.infer<typeof rejectShelfImageRequestSchema>;
-export type RestoreShelfImageVersionRequest = z.infer<
-  typeof restoreShelfImageVersionRequestSchema
->;
-export type DetectionProposalsResponse = z.infer<
-  typeof detectionProposalsResponseSchema
->;
-export type CreateUploadIntentRequest = z.infer<
-  typeof createUploadIntentRequestSchema
->;
-export type CreateUploadIntentResponse = z.infer<
-  typeof createUploadIntentResponseSchema
->;
-export type CompleteSourceUploadResponse = z.infer<
-  typeof completeSourceUploadResponseSchema
->;
-export type CreateWardrobeItemRequest = z.infer<
-  typeof createWardrobeItemRequestSchema
->;
+export type RestoreShelfImageVersionRequest = z.infer<typeof restoreShelfImageVersionRequestSchema>;
+export type DetectionProposalsResponse = z.infer<typeof detectionProposalsResponseSchema>;
+export type CreateUploadIntentRequest = z.infer<typeof createUploadIntentRequestSchema>;
+export type CreateUploadIntentResponse = z.infer<typeof createUploadIntentResponseSchema>;
+export type CompleteSourceUploadResponse = z.infer<typeof completeSourceUploadResponseSchema>;
+export type CreateWardrobeItemRequest = z.infer<typeof createWardrobeItemRequestSchema>;

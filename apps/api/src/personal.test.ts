@@ -143,3 +143,79 @@ test(
     }
   },
 );
+
+test('refining a Character Sheet queues a new version over HTTP', { skip: !enabled }, async () => {
+  const database = createDatabase(readDatabaseConfig());
+  const storage = createPrivateObjectStorage(readObjectStorageConfig());
+  try {
+    await migrateDatabase(database);
+    await ensurePrivateBucket(storage);
+    await resetFixtures(database, storage);
+    const app = createApp({
+      database,
+      storage,
+      sessionSecret: 'personal-test-secret-at-least-32-characters',
+      personalAccountId: fixtureIds.populatedAccount,
+      webOrigin: 'https://wardrobe.test',
+      checkReadiness: async () => ({
+        status: 'ready',
+        database: 'up',
+        objectStorage: 'up',
+      }),
+    });
+    const parentId = randomUUID();
+    await database.query(
+      `INSERT INTO character_sheets (
+        id, account_id, reference_asset_ids, state, asset_id, active,
+        model, quality, output_size, prompt_version, finished_at
+      ) VALUES ($1, $2, $3, 'ready', $4, true, 'fixture', 'high', '864x1536', 'fixture', now())`,
+      [
+        parentId,
+        fixtureIds.populatedAccount,
+        [fixtureIds.transparentAssetOne],
+        fixtureIds.transparentAssetTwo,
+      ],
+    );
+    const refine = (characterSheetId: string, body: unknown) =>
+      app.request(`/v1/character-sheets/${characterSheetId}/refine`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'https://wardrobe.test',
+        },
+        body: JSON.stringify(body),
+      });
+    const command = {
+      referenceAssetIds: [fixtureIds.transparentAssetOne],
+      instruction: 'Die Seitenansicht wirkt zu breit.',
+      idempotencyKey: randomUUID(),
+    };
+    const accepted = await refine(parentId, command);
+    const { characterSheetId } = (await accepted.json()) as {
+      characterSheetId: string;
+    };
+    assert.equal(accepted.status, 202);
+    const { characterSheets } = (await (
+      await app.request('/v1/character-sheets')
+    ).json()) as { characterSheets: Array<Record<string, unknown>> };
+    const child = characterSheets.find((sheet) => sheet.id === characterSheetId);
+    assert.equal(child?.parentCharacterSheetId, parentId);
+    assert.equal(child?.active, false);
+
+    // A queued version has no render to refine yet.
+    const conflict = await refine(characterSheetId, {
+      ...command,
+      idempotencyKey: randomUUID(),
+    });
+    assert.equal(conflict.status, 409);
+    assert.equal(
+      ((await conflict.json()) as { error: { code: string } }).error.code,
+      'character-sheet-not-refinable',
+    );
+    assert.equal((await refine(parentId, { instruction: '' })).status, 400);
+  } finally {
+    storage.client.destroy();
+    storage.signingClient.destroy();
+    await database.end();
+  }
+});
