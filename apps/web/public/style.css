@@ -295,6 +295,71 @@ h3 {
   pointer-events: none;
   transition: opacity 0.45s var(--ease-out);
 }
+.look-footer {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 2;
+  padding: 38px 16px 16px;
+  color: #fff;
+  background: linear-gradient(transparent, #000b);
+  pointer-events: none;
+}
+.look-footer button {
+  pointer-events: auto;
+  color: inherit;
+  background: none;
+}
+.look-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 -8px 4px;
+}
+.look-actions button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+}
+.look-actions [data-look-mark="saved"] {
+  margin-left: auto;
+}
+.look-actions [aria-pressed="true"] .icon {
+  fill: currentColor;
+}
+.look-actions [data-look-mark="liked"][aria-pressed="true"] {
+  color: #ff7788;
+}
+.look-caption {
+  display: block;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.look-caption[aria-expanded="true"] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.look-caption strong {
+  font-weight: 700;
+}
+.look-date {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #d3d5d0;
+}
+.revealed .look-footer {
+  visibility: hidden;
+}
 .look-more {
   position: absolute;
   top: 12px;

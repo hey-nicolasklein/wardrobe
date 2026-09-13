@@ -20,6 +20,8 @@ const icons = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   heart:
     '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/>',
+  share: '<path d="m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13"/>',
+  bookmark: '<path d="M6 3h12v18l-6-4-6 4V3Z"/>',
   settings:
     '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
@@ -470,6 +472,54 @@ function lookItemPositions(categories) {
     });
   return styles;
 }
+function lookDateLabel(createdAt, now = new Date()) {
+  const date = new Date(createdAt);
+  const calendarDay = (value) => Date.UTC(value.getFullYear(), value.getMonth(), value.getDate());
+  const days = Math.max(0, Math.round((calendarDay(now) - calendarDay(date)) / 86400000));
+  if (days === 0) return 'Heute';
+  if (days === 1) return 'vor 1 Tag';
+  if (days <= 7) return `vor ${days} Tagen`;
+  return date.toLocaleDateString('de-DE');
+}
+function lookMarked(id, kind) {
+  try {
+    return localStorage.getItem(`form-look-${kind}-${id}`) === 'true';
+  } catch {
+    return false;
+  }
+}
+function lookCaption(look) {
+  return [look.concept?.activity, look.concept?.scene].filter(Boolean).join(', ');
+}
+function renderLookFooter(look) {
+  const liked = lookMarked(look.id, 'liked');
+  const saved = lookMarked(look.id, 'saved');
+  const caption = lookCaption(look);
+  return `<div class="look-footer"><div class="look-actions"><button data-look-mark="liked" aria-label="Gefällt mir" aria-pressed="${liked}">${icon('heart')}</button><button data-share-look="${look.id}" aria-label="Look teilen">${icon('share')}</button><button data-look-mark="saved" aria-label="Look merken" aria-pressed="${saved}">${icon('bookmark')}</button></div>${look.concept ? `<button class="look-caption" aria-expanded="false"><strong>${esc(look.concept.mood)}</strong> ${esc(caption)}</button>` : ''}<time class="look-date" datetime="${esc(look.createdAt)}">${lookDateLabel(look.createdAt)}</time></div>`;
+}
+async function shareLook(look) {
+  const response = await fetch(assetUrl(look.assetId));
+  if (!response.ok) throw new Error('Das Bild konnte nicht geladen werden.');
+  const blob = await response.blob();
+  const extension = blob.type === 'image/jpeg' ? 'jpg' : blob.type === 'image/webp' ? 'webp' : 'png';
+  const file = new File([blob], `form-look-${look.id}.${extension}`, { type: blob.type });
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'Mein Look', text: lookCaption(look) });
+      return;
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      if (error.name !== 'NotAllowedError') throw error;
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = file.name;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  toast('Bild zum Teilen heruntergeladen');
+}
 function renderLookCard(look) {
   if (look.state === 'failed')
     return `<article class="look-card failed-look" data-look="${look.id}"><div><h2>Das Bild ist nicht entstanden.</h2><p>Der Versuch bleibt hier sichtbar. Du kannst ihn erneut starten.</p></div><button class="primary" data-retry-look="${look.id}">Erneut versuchen</button><button class="text-button" data-delete-look="${look.id}">Löschen …</button></article>`;
@@ -486,7 +536,7 @@ function renderLookCard(look) {
       const name = item.metadata?.name || 'Kleidungsstück';
       return `<button data-look-item="${item.id}" aria-label="${esc(name)} öffnen" style="${positions[index]}"><img src="${preview(item)}" alt="${esc(name)}"></button>`;
     })
-    .join('')}</div></article>`;
+    .join('')}</div>${renderLookFooter(look)}</article>`;
 }
 /* Opens or closes the item overlay of a look card. The overlay stays in the DOM
    while the pieces fly back into the middle, so it is only hidden once the
@@ -519,6 +569,27 @@ function lookRevealDuration(overlay) {
   return 340 + Math.max(overlay.children.length - 1, 0) * 45;
 }
 function wireLookCards() {
+  document.querySelectorAll('[data-look-mark]').forEach((button) => {
+    button.onclick = () => {
+      const id = button.closest('[data-look]').dataset.look;
+      const marked = button.getAttribute('aria-pressed') !== 'true';
+      try {
+        localStorage.setItem(`form-look-${button.dataset.lookMark}-${id}`, String(marked));
+        button.setAttribute('aria-pressed', String(marked));
+      } catch {
+        toast('Die Markierung konnte nicht gespeichert werden.');
+      }
+    };
+  });
+  document.querySelectorAll('.look-caption').forEach((button) => {
+    button.onclick = () => button.setAttribute('aria-expanded', String(button.getAttribute('aria-expanded') !== 'true'));
+  });
+  document.querySelectorAll('[data-share-look]').forEach((button) => {
+    button.onclick = () => action(button, () => shareLook(looks.find((look) => look.id === button.dataset.shareLook)));
+  });
+  document.querySelectorAll('.look-date').forEach((date) => {
+    date.textContent = lookDateLabel(date.dateTime);
+  });
   document.querySelectorAll('.look-card img[data-asset]').forEach((img) => {
     if (!img.src) img.src = assetUrl(img.dataset.asset);
   });
