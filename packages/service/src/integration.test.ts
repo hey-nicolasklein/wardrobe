@@ -10,6 +10,7 @@ import {
   createDatabase,
   createPrivateObjectStorage,
   createLook,
+  retryLook,
   createWardrobeItemFromDetection,
   enqueueShelfImageGeneration,
   enqueueSourcePhotoDetection,
@@ -169,6 +170,7 @@ test(
         accountId: fixtureIds.populatedAccount,
         exactItemIds: [fixtureIds.readyItem],
         categories: [],
+        occasion: 'party',
         parentLookId: null,
         idempotencyKey: randomUUID(),
       };
@@ -177,14 +179,23 @@ test(
       const feed = await listLooks(database, fixtureIds.populatedAccount);
       assert.equal(feed[0]?.state, 'queued');
       assert.equal(feed[0]?.characterSheetId, characterSheetId);
-      const queued = await database.query<{ kind: string; look_id: string }>(
-        'SELECT kind, look_id FROM remote_image_jobs WHERE id = $1',
+      const queued = await database.query<{ kind: string; look_id: string; payload: unknown }>(
+        'SELECT kind, look_id, payload FROM remote_image_jobs WHERE id = $1',
         [first.jobId],
       );
       assert.deepEqual(queued.rows[0], {
         kind: 'generate-look',
         look_id: first.lookId,
+        payload: { lookId: first.lookId, occasion: 'party' },
       });
+      await database.query("UPDATE looks SET state='failed' WHERE id=$1", [first.lookId]);
+      const retried = await retryLook(database, {
+        accountId: command.accountId, lookId: first.lookId, idempotencyKey: randomUUID(),
+      });
+      const retryJob = await database.query<{ payload: unknown }>(
+        'SELECT payload FROM remote_image_jobs WHERE id=$1', [retried.jobId],
+      );
+      assert.deepEqual(retryJob.rows[0]?.payload, { lookId: first.lookId, occasion: 'party' });
       await assert.rejects(
         createLook(database, {
           ...command,

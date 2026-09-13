@@ -36,6 +36,11 @@ const icons = {
   photo:
     '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1"/><path d="m3 17 6-6 4 4 3-3 5 5"/>',
   feed: '<path d="M4 5h16v14H4z"/><path d="m4 15 4-4 3 3 3-4 6 6"/><circle cx="16" cy="9" r="1"/>',
+  shuffle: '<path d="M3 6h3c5 0 7 12 12 12h3m-4-4 4 4-4 4M3 18h3c2 0 4-3 6-6s4-6 6-6h3m-4-4 4 4-4 4"/>',
+  moon: '<path d="M20 14A8 8 0 0 1 10 4a8 8 0 1 0 10 10Z"/>',
+  party: '<path d="m4 20 4-13 9 9-13 4ZM13 3v3m5 0 2-2m-1 7h3M8 7l9 9"/>',
+  briefcase: '<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V4h8v3M3 12q9 6 18 0M12 12v4"/>',
+  filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
   more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
 };
 const icon = (name) =>
@@ -646,19 +651,102 @@ function openLookComposer(preselected = []) {
   const eligible = items.filter(
     (item) => item.state !== 'archived' && item.currentShelfImageVersionId,
   );
+  const presets = [
+    { name: 'Überraschung', icon: 'shuffle', value: '' },
+    { name: 'Ausgehen', icon: 'moon', value: 'night-out' },
+    { name: 'Party', icon: 'party', value: 'party' },
+    { name: 'Casual', icon: 'top', value: 'casual' },
+  ];
+  let occasion = '';
   showSheet(
     'Look erstellen',
-    `<h2>Was möchtest du tragen?</h2><p class="muted">Leer lassen für eine komplett geplante Überraschung. Stücke und Kategorien lassen sich kombinieren.</p><form id="look-composer"><fieldset><legend>Bestimmte Stücke</legend><div class="composer-items">${eligible.map((item) => `<label class="select-item"><input type="checkbox" name="item" value="${item.id}" ${preselected.includes(item.id) ? 'checked' : ''}><img src="${preview(item)}" alt=""><span>${esc(item.metadata.name)}</span></label>`).join('')}</div></fieldset><fieldset><legend>Kategorien</legend><div class="composer-categories">${Object.entries(
-      categories,
-    )
-      .map(
-        ([value, label]) =>
-          `<label><input type="checkbox" name="category" value="${value}"> ${label}</label>`,
-      )
-      .join(
-        '',
-      )}</div></fieldset><button class="primary" type="submit">Überrasch mich</button></form>`,
+    `<form id="look-composer">
+      <div class="composer-scroll">
+        <div class="composer-presets" role="group" aria-label="Anlass">${presets.map((preset) => `<button type="button" data-occasion="${preset.value}" aria-pressed="${!preset.value}">${icon(preset.icon)}<span>${preset.name}</span></button>`).join('')}</div>
+        <div class="composer-picker-heading"><h3>Was kombinieren wir?</h3><button type="button" class="composer-icon-button" id="composer-selected-only" aria-label="Nur ausgewählte Stücke anzeigen" aria-pressed="false">${icon('check')}<span id="composer-count" aria-live="polite">0 ausgewählt</span></button></div>
+        <div class="composer-search"><label class="composer-search-field"><span class="sr-only">Stücke suchen</span>${icon('search')}<input type="search" id="composer-search" placeholder="Stück, Farbe …"></label></div>
+        <div class="composer-filter-chips" role="group" aria-label="Stücke nach Kategorie filtern">${[['', 'Alle'], ...Object.entries(categories).filter(([value]) => eligible.some((item) => item.metadata.category === value))].map(([value, label]) => `<button type="button" data-composer-filter="${value}" aria-pressed="${!value}">${label}</button>`).join('')}</div>
+        <div class="composer-items">${eligible.map((item) => `<label class="select-item"><input type="checkbox" name="item" value="${item.id}" ${preselected.includes(item.id) ? 'checked' : ''}><img src="${preview(item)}" alt="" loading="lazy"><span>${esc(item.metadata.name)}</span></label>`).join('')}</div>
+        <p id="composer-empty" class="muted" hidden></p>
+        <details class="composer-more"><summary>${icon('filter')} Kategorien vorgeben</summary><div class="composer-categories">${Object.entries(categories).map(([value, label]) => `<label><input type="checkbox" name="category" value="${value}"> ${label}</label>`).join('')}</div></details>
+      </div>
+      <div class="composer-footer"><div class="composer-summary"><span id="composer-summary" role="status"></span><button type="button" class="text-button" id="composer-reset" aria-label="Auswahl leeren">Leeren</button></div><button class="primary" type="submit">Look erstellen</button></div>
+    </form>`,
   );
+  const form = $('#look-composer');
+  const itemInputs = [...form.querySelectorAll('input[name=item]')];
+  const categoryInputs = [...form.querySelectorAll('input[name=category]')];
+  let selectedOnly = false;
+  let itemCategory = '';
+  const filterItems = () => {
+    const search = $('#composer-search').value.trim().toLocaleLowerCase('de');
+    let count = 0;
+    itemInputs.forEach((input, index) => {
+      const item = eligible[index];
+      const text = `${item.metadata.name} ${item.metadata.colors.join(' ')} ${item.metadata.notes || ''}`.toLocaleLowerCase('de');
+      const matches = (selectedOnly ? input.checked : (!itemCategory || item.metadata.category === itemCategory) && text.includes(search));
+      input.closest('label').hidden = !matches;
+      if (matches) count++;
+    });
+    $('#composer-empty').hidden = count > 0;
+    $('#composer-empty').textContent = eligible.length ? 'Keine Stücke gefunden.' : 'Noch keine Stücke mit Katalogbild.';
+  };
+  const updateSelection = () => {
+    const count = itemInputs.filter((input) => input.checked).length;
+    const categoryCount = categoryInputs.filter((input) => input.checked).length;
+    $('#composer-count').textContent = `${count} ausgewählt`;
+    $('#composer-selected-only').setAttribute('aria-label', `${count} ausgewählte Stücke anzeigen`);
+    const occasionLabel = { 'night-out': 'zum Ausgehen', party: 'für die nächste Party', casual: 'als Casual Look' }[occasion];
+    const summary = count
+      ? `${count} ${count === 1 ? 'Stück' : 'Stücke'} + neue Kombinationen${categoryCount ? ` · ${categoryCount} Kategorien` : ''}`
+      : categoryCount ? `${categoryCount} Kategorien vorgegeben` : 'FORM kombiniert für dich';
+    $('#composer-summary').textContent = summary + (occasionLabel ? ` ${occasionLabel}` : '');
+    form.querySelectorAll('[data-occasion]').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.occasion === occasion));
+    });
+  };
+  form.addEventListener('change', () => {
+    updateSelection();
+    if (selectedOnly) filterItems();
+  });
+  $('#composer-search').oninput = filterItems;
+  form.querySelectorAll('[data-composer-filter]').forEach((button) => {
+    button.onclick = () => {
+      itemCategory = button.dataset.composerFilter;
+      selectedOnly = false;
+      $('#composer-selected-only').setAttribute('aria-pressed', 'false');
+      form.querySelectorAll('[data-composer-filter]').forEach((chip) => {
+        chip.setAttribute('aria-pressed', String(chip.dataset.composerFilter === itemCategory));
+      });
+      filterItems();
+    };
+  });
+  $('#composer-selected-only').onclick = (event) => {
+    selectedOnly = !selectedOnly;
+    event.currentTarget.setAttribute('aria-pressed', String(selectedOnly));
+    filterItems();
+  };
+  form.querySelectorAll('[data-occasion]').forEach((button) => {
+    button.onclick = () => {
+      occasion = button.dataset.occasion;
+      updateSelection();
+    };
+  });
+  $('#composer-reset').onclick = () => {
+    [...itemInputs, ...categoryInputs].forEach((input) => { input.checked = false; });
+    occasion = '';
+    selectedOnly = false;
+    $('#composer-selected-only').setAttribute('aria-pressed', 'false');
+    $('#composer-search').value = '';
+    itemCategory = '';
+    form.querySelectorAll('[data-composer-filter]').forEach((chip) => {
+      chip.setAttribute('aria-pressed', String(!chip.dataset.composerFilter));
+    });
+    updateSelection();
+    filterItems();
+  };
+  updateSelection();
+  filterItems();
   $('#look-composer').onsubmit = (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -667,6 +755,7 @@ function openLookComposer(preselected = []) {
       const created = await api('/looks', {
         exactItemIds: data.getAll('item'),
         categories: data.getAll('category'),
+        occasion: occasion || null,
         parentLookId: null,
         idempotencyKey,
       });
@@ -851,7 +940,7 @@ $('#sheet').addEventListener('click', (event) => {
       // Rows that scroll sideways own their gesture completely. Without this a
       // swipe through the gallery nudges the whole sheet up and down.
       if (event.target.closest?.('.gallery, .versions')) return;
-      if (sheet.scrollTop > 0 && !fromHead) return;
+      if ((sheet.scrollTop > 0 || event.target.closest?.('.composer-scroll')) && !fromHead) return;
       startY = event.touches[0].clientY;
       startX = event.touches[0].clientX;
     },

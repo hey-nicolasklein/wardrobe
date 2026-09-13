@@ -72,6 +72,7 @@ export interface CatalogProvider {
     recent: Array<{ itemIds: string[]; concept: LookConcept | null }>;
     exactItemIds: string[];
     categories: string[];
+    occasion?: string | null;
     model: string;
     signal?: AbortSignal;
   }): Promise<{ requestId: string; itemIds: string[]; concept: LookConcept }>;
@@ -490,6 +491,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
     recent: Array<{ itemIds: string[]; concept: LookConcept | null }>;
     exactItemIds: string[];
     categories: string[];
+    occasion?: string | null;
     model: string;
     signal?: AbortSignal;
   }): Promise<{ requestId: string; itemIds: string[]; concept: LookConcept }> {
@@ -529,7 +531,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
         body: JSON.stringify({
           model: input.model,
           store: false,
-          input: `Plan one coherent candid outfit photograph. Exact item IDs are mandatory. Satisfy every requested category. Avoid recent combinations and situations. Do not use weather, season or location context. Candidates: ${JSON.stringify(input.candidates)}. Exact: ${JSON.stringify(input.exactItemIds)}. Categories: ${JSON.stringify(input.categories)}. Recent: ${JSON.stringify(input.recent)}.`,
+          input: `Plan one coherent candid outfit photograph. Exact item IDs are mandatory. Satisfy every requested category. Build a complete outfit around the exact items, adding complementary pieces from the candidates. Match the requested occasion in both clothing and scene when provided. Avoid recent combinations and situations. Do not use weather, season or location context. Candidates: ${JSON.stringify(input.candidates)}. Exact: ${JSON.stringify(input.exactItemIds)}. Categories: ${JSON.stringify(input.categories)}. Occasion: ${JSON.stringify(input.occasion ?? null)}. Recent: ${JSON.stringify(input.recent)}.`,
           text: {
             format: {
               type: 'json_schema',

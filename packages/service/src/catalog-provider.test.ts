@@ -271,3 +271,34 @@ test('classifies transient and non-retryable provider failures', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('look planning includes the occasion while keeping exact items mandatory', async () => {
+  const originalFetch = globalThis.fetch;
+  let prompt = '';
+  globalThis.fetch = async (_input, init) => {
+    prompt = JSON.parse(String(init?.body)).input;
+    return Response.json({
+      id: 'plan-party',
+      output_text: JSON.stringify({
+        itemIds: ['chosen', 'complement'],
+        concept: { activity: 'dancing', scene: 'a party', framing: 'full-body', mood: 'festive' },
+      }),
+    });
+  };
+  try {
+    const provider = new OpenAICatalogProvider('fixture-key');
+    const result = await provider.planLook({
+      candidates: [{ id: 'chosen', metadata }, { id: 'complement', metadata }],
+      recent: [], exactItemIds: ['chosen'], categories: [], occasion: 'party', model: 'fixture',
+    });
+    assert.match(prompt, /Occasion: "party"/);
+    assert.match(prompt, /Exact: \["chosen"\]/);
+    assert.deepEqual(result.itemIds, ['chosen', 'complement']);
+    await assert.rejects(provider.planLook({
+      candidates: [{ id: 'chosen', metadata }, { id: 'complement', metadata }, { id: 'missing', metadata }],
+      recent: [], exactItemIds: ['missing'], categories: [], occasion: 'business', model: 'fixture',
+    }), /invalid Look plan/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

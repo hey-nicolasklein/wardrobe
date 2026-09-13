@@ -213,3 +213,15 @@ test('keeps Character Sheet and Look creation constrained and strict', () => {
     false,
   );
 });
+
+
+test('look occasions accept supported choices and reject unknown ones', () => {
+  for (const occasion of ['night-out', 'party', 'business', 'casual', null]) {
+    assert.equal(createLookRequestSchema.parse({
+      idempotencyKey: 'look-command-0123456789', occasion,
+    }).occasion, occasion);
+  }
+  assert.equal(createLookRequestSchema.safeParse({
+    idempotencyKey: 'look-command-0123456789', occasion: 'unknown',
+  }).success, false);
+});

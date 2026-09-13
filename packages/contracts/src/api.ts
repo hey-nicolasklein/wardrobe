@@ -261,6 +261,7 @@ export const createLookRequestSchema = z
   .object({
     exactItemIds: z.array(opaqueIdSchema).max(12).default([]),
     categories: z.array(supportedCategorySchema).max(9).default([]),
+    occasion: z.enum(['night-out', 'party', 'business', 'casual']).nullable().optional(),
     parentLookId: opaqueIdSchema.nullable().default(null),
     idempotencyKey: idempotencyKeySchema,
   })

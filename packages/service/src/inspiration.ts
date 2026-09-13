@@ -390,6 +390,7 @@ export async function createLook(
     accountId: string;
     exactItemIds: string[];
     categories: SupportedCategory[];
+    occasion?: string | null;
     parentLookId: string | null;
     idempotencyKey: string;
   },
@@ -397,6 +398,7 @@ export async function createLook(
   const request = {
     exactItemIds: input.exactItemIds,
     categories: input.categories,
+    ...(input.occasion ? { occasion: input.occasion } : {}),
     parentLookId: input.parentLookId,
   };
   return withTransaction(database, async (client) => {
@@ -466,7 +468,7 @@ export async function createLook(
     const jobId = await enqueueJob(client, {
       accountId: input.accountId,
       kind: 'generate-look',
-      payload: { lookId },
+      payload: { lookId, occasion: input.occasion ?? null },
       idempotencyKey: `look:${input.idempotencyKey}`,
     });
     await client.query('UPDATE remote_image_jobs SET look_id=$1 WHERE id=$2', [lookId, jobId]);
@@ -498,10 +500,14 @@ export async function retryLook(
         'look-not-retryable',
         'Dieser Look kann nicht erneut versucht werden.',
       );
+    const previous = await client.query<{ payload: { occasion?: string | null } }>(
+      `SELECT payload FROM remote_image_jobs WHERE look_id=$1 AND account_id=$2 ORDER BY created_at DESC LIMIT 1`,
+      [input.lookId, input.accountId],
+    );
     const jobId = await enqueueJob(client, {
       accountId: input.accountId,
       kind: 'generate-look',
-      payload: { lookId: input.lookId },
+      payload: { lookId: input.lookId, occasion: previous.rows[0]?.payload.occasion ?? null },
       idempotencyKey: `look-retry:${input.idempotencyKey}`,
     });
     await client.query('UPDATE remote_image_jobs SET look_id=$1 WHERE id=$2', [
@@ -749,6 +755,7 @@ export async function executeInspirationJob(
         })),
         exactItemIds: row.exact_item_ids,
         categories: row.category_constraints,
+        occasion: (job.payload as { occasion?: string | null }).occasion ?? null,
         model: lookPlannerModel,
         signal: controller.signal,
       });
