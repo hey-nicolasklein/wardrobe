@@ -437,14 +437,23 @@ const lookPlacementOrder = Object.keys(lookAnchorWishes);
    Stücke da als Anker, landet der Rest auf einem weiten Ring – das kommt bei
    einem Outfit praktisch nicht vor, soll aber nicht stapeln.
    `--item-order` treibt den Versatz, die Stücke erscheinen also von oben nach
-   unten. Viele Stücke werden kleiner, sonst überlappen die Nachbarplätze. */
+   unten. Wenige Stücke dürfen den freien Raum nutzen; mit jedem weiteren Stück
+   werden sie kleiner, damit die Anordnung im Bild bleibt. */
 function lookItemPositions(categories) {
   const free = new Set(Object.keys(lookAnchors));
   const wishesFor = (category) =>
     category === 'jacket' && !categories.includes('top')
       ? ['chestLeft', ...lookAnchorWishes.jacket]
       : lookAnchorWishes[category] || [];
-  const size = categories.length > 6 ? 25 : categories.length > 4 ? 30 : 36;
+  const size =
+    {
+      1: 58,
+      2: 48,
+      3: 39,
+      4: 32,
+      5: 29,
+      6: 26,
+    }[categories.length] || 23;
   const styles = [];
   [...categories.keys()]
     .sort(
@@ -1273,7 +1282,7 @@ function renderDetectionDraft(draft) {
       return `<section class="detection-group category-${groupIcon}"><h4>${icon(groupIcon)}<span>${label}</span></h4>${group
         .map(
           ({ item, index }) =>
-            `<div class="detection-choice-row category-${detectionCategoryTheme(item.category)} ${item.selected ? 'selected' : ''}"><button class="detection-choice ${item.selected ? 'selected' : ''}" data-draft="${draft.id}" data-toggle-piece="${item.id}" aria-pressed="${item.selected}"><canvas class="choice-preview" data-draft="${draft.id}" data-choice-preview="${item.id}" width="112" height="112" aria-hidden="true"></canvas><span class="choice-copy"><strong>${esc(item.name)}</strong><small>${esc(categories[item.category])} · ${esc(item.colors.join(', '))}</small></span><span class="choice-number">${item.selected ? icon('check') : index + 1}</span></button><label class="state-toggle"><span>Besitze ich</span><input type="checkbox" data-draft="${draft.id}" data-piece-owning="${item.id}" aria-label="${esc(item.name)} besitze ich" ${(item.state || draft.state || 'owning') === 'owning' ? 'checked' : ''}><span class="toggle-control" aria-hidden="true"></span></label></div>`,
+            `<div class="detection-choice-row category-${detectionCategoryTheme(item.category)} ${item.selected ? 'selected' : ''}"><button class="detection-choice ${item.selected ? 'selected' : ''}" data-draft="${draft.id}" data-toggle-piece="${item.id}" aria-pressed="${item.selected}"><canvas class="choice-preview" data-draft="${draft.id}" data-choice-preview="${item.id}" width="116" height="148" aria-hidden="true"></canvas><span class="choice-copy"><strong title="${esc(item.name)}">${esc(item.name)}</strong><small>${esc(categories[item.category])} · ${esc(item.colors.join(', '))}</small></span><span class="choice-number">${item.selected ? icon('check') : index + 1}</span></button><label class="choice-ownership"><input type="checkbox" data-draft="${draft.id}" data-piece-owning="${item.id}" aria-label="${esc(item.name)} besitze ich" ${(item.state || draft.state || 'owning') === 'owning' ? 'checked' : ''}><span class="ownership-chip" aria-hidden="true"><span class="ownership-yes">${icon('check')}<span>Besitze ich</span></span><span class="ownership-no"><span>＋</span><span>Besitze ich nicht</span></span></span></label></div>`,
         )
         .join('')}</section>`;
     })

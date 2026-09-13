@@ -1209,46 +1209,110 @@ dialog::backdrop {
   outline-offset: 3px;
 }
 .detection-choice-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 132px;
-  gap: 0;
-  align-items: center;
+  position: relative;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: white;
 }
 .detection-choice-row.selected {
-  border-color: var(--detection-color, #8da087);
-  background: var(--detection-tint, #eaece5);
+  border-color: #9eaf92;
+  background: #e7eddf;
 }
 .detection-choice-row.selected .detection-choice {
   background: transparent;
 }
 .detection-choice-row.selected .choice-number {
-  border-color: var(--detection-color, var(--green));
-  background: var(--detection-color, var(--green));
+  border-color: var(--green);
+  background: var(--green);
   color: white;
 }
 .detection-choice-row .detection-choice {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 27px;
+  gap: 10px;
+  padding: 10px 12px;
+  min-height: 94px;
   margin: 0;
   border-radius: 0;
 }
-.detection-choice-row .state-toggle {
-  align-self: stretch;
-  border: 0;
-  border-left: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
+.detection-choice-row .choice-preview {
+  width: 58px;
+  height: 74px;
 }
-@media (max-width: 600px) {
-  .detection-choice-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .detection-choice-row .state-toggle {
-    border-top: 1px solid var(--line);
-    border-left: 0;
-  }
+.detection-choice-row .choice-copy {
+  align-self: start;
+}
+.detection-choice-row .choice-copy strong,
+.detection-choice-row .choice-copy small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.detection-choice-row .choice-copy strong {
+  font-size: 14px;
+  line-height: 19px;
+}
+.detection-choice-row .choice-number {
+  width: 27px;
+  height: 27px;
+}
+.choice-ownership {
+  position: absolute;
+  margin: 0;
+  left: 80px;
+  bottom: 10px;
+  max-width: calc(100% - 129px);
+  cursor: pointer;
+}
+.choice-ownership input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.ownership-chip {
+  display: flex;
+  align-items: center;
+  padding: 3px 8px;
+  min-height: 25px;
+  border: 1px solid #d7dcd1;
+  border-radius: 30px;
+  background: #f4f5f1;
+  color: #80867a;
+  font-size: 11px;
+  line-height: 16px;
+}
+.ownership-yes,
+.ownership-no {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.ownership-yes > span,
+.ownership-no > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ownership-chip .icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+.choice-ownership input:not(:checked) + .ownership-chip .ownership-yes,
+.choice-ownership input:checked + .ownership-chip .ownership-no {
+  display: none;
+}
+.choice-ownership input:checked + .ownership-chip {
+  background: #f9fbf5;
+  border-color: #b7c3ab;
+  color: #536547;
+}
+.choice-ownership input:focus-visible + .ownership-chip {
+  outline: 3px solid #869b7e;
+  outline-offset: 3px;
 }
 .detection-stage > img {
   max-height: none;
