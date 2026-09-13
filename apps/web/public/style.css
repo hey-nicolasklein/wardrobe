@@ -995,6 +995,8 @@ dialog {
   max-height: 94dvh;
   margin: auto auto 0;
   border-radius: 25px 25px 0 0;
+  /* Clip the composited dialog background and animated descendants together. */
+  clip-path: inset(0 round 25px 25px 0 0);
   background: #f6f5f1;
   color: inherit;
   box-shadow: 0 -10px 70px #0002;
@@ -1116,6 +1118,48 @@ dialog::backdrop {
   background: #eaece5;
   border-radius: 16px;
   overflow: hidden;
+}
+.gallery .catalog-slide {
+  isolation: isolate;
+  background: #e8ebe3;
+}
+.catalog-slide::before {
+  content: '';
+  position: absolute;
+  inset: -24%;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 35% 30%, #fffdf3 0%, #fffdf399 22%, transparent 55%),
+    radial-gradient(ellipse at 75% 75%, #b8cbb1 0%, transparent 60%);
+}
+.catalog-item {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .catalog-slide::before {
+    opacity: 0;
+    transform: translateX(var(--catalog-light-x, 0px));
+  }
+  .catalog-slide.catalog-ready::before {
+    animation: catalog-light-reveal 1000ms ease-out 340ms both;
+  }
+  .catalog-item {
+    transform: translateX(var(--catalog-item-x, 0px));
+  }
+  .catalog-ready .catalog-item img.loaded {
+    /* Let the sheet finish entering before the garment settles into place. */
+    animation: catalog-item-reveal 900ms var(--ease-out) 340ms both;
+  }
+}
+@keyframes catalog-light-reveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes catalog-item-reveal {
+  from { opacity: 0; transform: translateY(24px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .gallery .slide.worn {
   background: #ebe7e0;

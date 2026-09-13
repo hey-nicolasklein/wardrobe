@@ -449,13 +449,13 @@ function lookItemPositions(categories) {
       : lookAnchorWishes[category] || [];
   const size =
     {
-      1: 58,
-      2: 48,
-      3: 39,
-      4: 32,
-      5: 29,
-      6: 26,
-    }[categories.length] || 23;
+      1: 66,
+      2: 56,
+      3: 48,
+      4: 42,
+      5: 36,
+      6: 32,
+    }[categories.length] || 28;
   const styles = [];
   [...categories.keys()]
     .sort(
@@ -467,8 +467,13 @@ function lookItemPositions(categories) {
       free.delete(anchor);
       const angle = (rank / categories.length) * Math.PI * 2;
       const [x, y] = lookAnchors[anchor] || [Math.cos(angle) * 38, Math.sin(angle) * 30];
+      // Square items on a 4:5 card, with a 4% inset on every edge.
+      const maxX = 46 - size / 2;
+      const maxY = 46 - size * 0.4;
+      const boundedX = Math.max(-maxX, Math.min(maxX, x));
+      const boundedY = Math.max(-maxY, Math.min(maxY, y));
       styles[index] =
-        `--item-x:${x.toFixed(2)}%;--item-y:${y.toFixed(2)}%;--item-size:${size}%;--item-order:${rank};--item-count:${categories.length};`;
+        `--item-x:${boundedX.toFixed(2)}%;--item-y:${boundedY.toFixed(2)}%;--item-size:${size}%;--item-order:${rank};--item-count:${categories.length};`;
     });
   return styles;
 }
@@ -918,8 +923,35 @@ const galleryMarkup = (item, running) =>
   `<div class="gallery" id="detail-gallery" data-item="${item.id}" data-signature="${esc(gallerySignature(item, running))}">${
     running
       ? `<figure class="slide">${imageGenerationProgress(item.metadata.name)}</figure>`
-      : `<figure class="slide"><img class="fade" src="${preview(item)}" alt="${esc(item.metadata.name)}"></figure>`
+      : `<figure class="slide catalog-slide"><div class="catalog-item"><img class="fade" src="${preview(item)}" alt="${esc(item.metadata.name)}"></div></figure>`
   }<figure class="slide worn"><img class="fade" id="worn" src="${sourcePreview(item)}" alt="${esc(item.metadata.name)}, getragen"><figcaption>Originalfoto</figcaption></figure></div><div id="detail-heading"><p class="eyebrow">${categories[item.metadata.category]}</p><h2>${esc(item.metadata.name)}</h2><p class="muted item-colors">${esc(item.metadata.colors.join(' · '))}</p></div>`;
+// Keep movement local to this gallery so replacing the sheet releases its listeners.
+function wireCatalogMotion() {
+  const gallery = $('#detail-gallery');
+  const slide = gallery?.querySelector('.catalog-slide');
+  if (!slide || slide.dataset.motionWired) return;
+  slide.dataset.motionWired = 'true';
+  const img = slide.querySelector('img');
+  const reveal = () => {
+    if (img.naturalWidth) slide.classList.add('catalog-ready');
+  };
+  if (img.complete) reveal();
+  else img.addEventListener('load', reveal, { once: true });
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  let frame = null;
+  gallery.addEventListener('scroll', () => {
+    if (frame !== null) return;
+    frame = requestAnimationFrame(() => {
+      frame = null;
+      if (!gallery.isConnected) return;
+      const progress = reducedMotion.matches
+        ? 0
+        : Math.max(-1, Math.min(1, gallery.scrollLeft / (slide.clientWidth || 1)));
+      slide.style.setProperty('--catalog-light-x', `${progress * 60}px`);
+      slide.style.setProperty('--catalog-item-x', `${progress * 22}px`);
+    });
+  }, { passive: true });
+}
 // Stand-ins for the few parts that only the detail request knows: where the
 // piece lives, its notes, and the saved catalog images.
 const detailSkeleton = `<div role="status" aria-label="Details werden geladen"><dl class="facts"><div><dt>Gehört in</dt><dd><span class="skeleton skeleton-line" style="width:110px"></span></dd></div></dl><span class="skeleton skeleton-button"></span><span class="skeleton skeleton-button"></span><div class="rule"></div><h3>Katalogbilder</h3><p class="muted"><span class="skeleton skeleton-line" style="width:100%"></span><span class="skeleton skeleton-line" style="width:62%"></span></p><div class="versions">${'<span class="skeleton skeleton-version"></span>'.repeat(3)}</div><div class="rule"></div><span class="skeleton skeleton-button"></span></div>`;
@@ -945,6 +977,7 @@ async function openDetail(
         : '<div class="loading"><span class="spinner"></span> Wird geladen …</div>',
     );
     if (known) {
+      wireCatalogMotion();
       wireFades($('#sheet'));
       if ($('#worn')) $('#worn').onerror = () => $('#worn').closest('.slide').remove();
     }
@@ -1013,6 +1046,7 @@ function renderDetail(id, detail, mode, { refresh = false, scrollTop = null }) {
     );
   }
   wireFades($('#sheet'));
+  wireCatalogMotion();
   wireScrollFade($('.versions'));
   detailId = id;
   // Drop the worn photo and the source tile when the original upload is gone.
