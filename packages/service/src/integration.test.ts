@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 
-import { PutObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 
 import {
@@ -10,6 +10,9 @@ import {
   createDatabase,
   createPrivateObjectStorage,
   createLook,
+  createCharacterSheet,
+  executeInspirationJob,
+  generationCosts,
   retryLook,
   createWardrobeItemFromDetection,
   enqueueShelfImageGeneration,
@@ -31,6 +34,71 @@ import {
 } from './index.js';
 
 const enabled = process.env.FORM_RUN_SERVICE_INTEGRATION === 'true';
+
+test('photo collages cost zero and become the first reference for a priced feed look', { skip: !enabled }, async () => {
+  const database = createDatabase(readDatabaseConfig());
+  const storage = createPrivateObjectStorage(readObjectStorageConfig());
+  const config = { requestTimeoutMs: 10_000, pricing: {
+    effectiveDate: '2026-08-03', textInputMicrodollarsPerMillion: 1_000_000,
+    imageInputMicrodollarsPerMillion: 2_000_000, imageOutputMicrodollarsPerMillion: 3_000_000,
+  } };
+  try {
+    await migrateDatabase(database);
+    await ensurePrivateBucket(storage);
+    await resetFixtures(database, storage);
+    const input = { accountId: fixtureIds.populatedAccount, referenceAssetIds: [fixtureIds.sourceAsset], note: 'braunes Haar', idempotencyKey: 'collage-integration-create-0001' };
+    const created = await createCharacterSheet(database, input);
+    assert.deepEqual(await createCharacterSheet(database, input), created);
+    await assert.rejects(createCharacterSheet(database, { ...input, accountId: fixtureIds.emptyAccount }));
+    const makeJob = (id: string, kind: 'generate-character-sheet' | 'generate-look', payload: unknown) => ({
+      id, accountId: input.accountId, kind, payload, wardrobeItemId: null, generationAttemptId: null,
+      attempts: 1, maxAttempts: 3, leaseExpiresAt: new Date(Date.now() + 60_000),
+    });
+    // An empty replay provider fails on every paid operation.
+    const provider = new ReplayCatalogProvider([]);
+    const sheet = (await listCharacterSheets(database, input.accountId))[0]!;
+    assert.equal(sheet.model, 'photo-collage-v1');
+    assert.equal(sheet.state, 'ready');
+    assert.equal(sheet.active, true);
+    assert.equal(sheet.costMicrounits, 0);
+    assert.equal(sheet.providerRequestId, null);
+    assert.equal(sheet.assetId, fixtureIds.sourceAsset);
+    await assert.rejects(refineCharacterSheet(database, { accountId: input.accountId, characterSheetId: sheet.id, referenceAssetIds: [fixtureIds.sourceAsset], instruction: 'change face', idempotencyKey: 'collage-refinement-refused-0001' }), /Fotocollage/);
+    const asset = (await database.query<{ object_key: string; object_version_id: string; pixel_width: number; pixel_height: number }>('SELECT object_key,object_version_id,pixel_width,pixel_height FROM private_assets WHERE id=$1', [sheet.assetId])).rows[0]!;
+    // The reference remains the uploaded collage asset; no 864×1536 sheet is
+    // rendered or written as a replacement.
+    assert.ok(asset.pixel_width > 0);
+    assert.ok(asset.pixel_height > 0);
+    const object = await storage.client.send(new GetObjectCommand({ Bucket: storage.bucket, Key: asset.object_key, VersionId: asset.object_version_id }));
+    const collageBytes = Buffer.from(await object.Body!.transformToByteArray());
+    const concept = { activity: 'walking', scene: 'a quiet street', mood: 'relaxed', framing: 'full-body' as const };
+    const look = await createLook(database, { accountId: input.accountId, exactItemIds: [fixtureIds.readyItem], categories: [], parentLookId: null, idempotencyKey: 'collage-integration-look-0001' });
+    let referenceChecked = false;
+    const lookProvider = Object.assign(provider, {
+      planLook: async () => ({ requestId: 'plan-collage', itemIds: [fixtureIds.readyItem], concept }),
+      generateComposite: async (request: { references: Uint8Array[]; prompt: string }) => {
+        assert.deepEqual(Buffer.from(request.references[0]!), collageBytes);
+        assert.equal(request.references.length, 2);
+        assert.match(request.prompt, /collage of cropped original photos/);
+        assert.match(request.prompt, /braunes Haar/);
+        referenceChecked = true;
+        return { requestId: 'look-collage', pngBytes: await sharp(collageBytes).resize(1024, 1280).png().toBuffer(), usage: { textInputTokens: 10, imageInputTokens: 200, outputTokens: 30, serviceTier: 'default', raw: { fixture: true } } };
+      },
+    });
+    await executeInspirationJob(database, storage, lookProvider, makeJob(look.jobId, 'generate-look', { lookId: look.lookId }), config);
+    assert.ok(referenceChecked);
+    const feed = await listLooks(database, input.accountId);
+    assert.equal(feed[0]!.characterSheetId, sheet.id);
+    assert.equal(feed[0]!.state, 'ready');
+    assert.equal(feed[0]!.costMicrounits, 500);
+    const costs = await generationCosts(database, input.accountId);
+    assert.equal(costs.characterSheetTotalMicrounits, 0);
+    assert.equal(costs.lookTotalMicrounits, 500);
+  } finally {
+    storage.client.destroy();
+    await database.end();
+  }
+});
 
 test(
   'migrations, fixtures, account guards, and durable leases work together',

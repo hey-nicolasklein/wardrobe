@@ -743,7 +743,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     );
     if (!parsed.success)
       return context.json(
-        errorPayload('validation', 'invalid-character-sheet', 'Wähle ein bis vier Referenzfotos.'),
+        errorPayload('validation', 'invalid-character-sheet', 'Speichere eine Fotocollage als Referenz.'),
         400,
       );
     try {
@@ -752,7 +752,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
           accountId: authenticated.session.id,
           ...parsed.data,
         }),
-        202,
+        201,
       );
     } catch (error) {
       const mapped = wardrobeError(error);

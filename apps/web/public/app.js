@@ -1,4 +1,5 @@
 import { flatLayLayout } from './flat-lay.js';
+import { collageWidth, collageHeight, collageLayout, cropBounds, drawCrop, canvasJpeg } from './identity-collage.js';
 
 const $ = (s, root = document) => root.querySelector(s);
 const esc = (value) =>
@@ -388,7 +389,7 @@ async function refreshInspiration() {
 function renderFeed() {
   const activeSheet = characterSheets.find((sheet) => sheet.active && sheet.state === 'ready');
   shell(
-    `<div class="hero"><div><p class="eyebrow">Deine Garderobe, in Bewegung</p><h1>Für heute.</h1><p class="muted">Neue Kombinationen aus deinen Stücken.</p></div><button class="round" id="add-look" aria-label="Look erstellen">${icon('plus')}</button></div><div class="look-feed" id="look-feed">${looks.length ? '' : `<div class="empty">${icon('feed')}<h2>Noch keine Looks.</h2><p>${activeSheet ? 'Lass FORM dein erstes Outfit zusammenstellen.' : 'Erstelle zuerst dein Character Sheet, damit Looks wirklich nach dir aussehen.'}</p><button class="primary" id="first-look">${activeSheet ? 'Ersten Look erstellen' : 'Character Sheet einrichten'}</button></div>`}</div>`,
+    `<div class="hero"><div><p class="eyebrow">Deine Garderobe, in Bewegung</p><h1>Für heute.</h1><p class="muted">Neue Kombinationen aus deinen Stücken.</p></div><button class="round" id="add-look" aria-label="Look erstellen">${icon('plus')}</button></div><div class="look-feed" id="look-feed">${looks.length ? '' : `<div class="empty">${icon('feed')}<h2>Noch keine Looks.</h2><p>${activeSheet ? 'Lass FORM dein erstes Outfit zusammenstellen.' : 'Erstelle zuerst deine Fotocollage, damit Looks wirklich nach dir aussehen.'}</p><button class="primary" id="first-look">${activeSheet ? 'Ersten Look erstellen' : 'Personenreferenz einrichten'}</button></div>`}</div>`,
   );
   if (looks.length) renderLookCards();
   $('#add-look').onclick = () => (activeSheet ? openLookComposer() : openCharacterSetup());
@@ -1235,7 +1236,7 @@ $('#sheet').addEventListener('click', (event) => {
       const fromHead = event.target.closest?.('.sheet-head, .sheet-grip');
       // Rows that scroll sideways own their gesture completely. Without this a
       // swipe through the gallery nudges the whole sheet up and down.
-      if (event.target.closest?.('.gallery, .versions, .character-versions')) return;
+      if (event.target.closest?.('.gallery, .versions, .character-versions, .character-crop, input[type=range]')) return;
       if ((sheet.scrollTop > 0 || event.target.closest?.('.composer-scroll')) && !fromHead) return;
       startY = event.touches[0].clientY;
       startX = event.touches[0].clientX;
@@ -1975,7 +1976,7 @@ async function importManual(draft, form) {
 }
 function renderSettings() {
   shell(
-    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><div class="character-section-heading"><div><h3>Character Sheets</h3><p>Dein Abbild für persönliche Looks.</p></div></div><div id="character-settings">${characterSettingsMarkup()}</div><button class="primary" id="new-character">Neues Character Sheet</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Character Sheets werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
+    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><div class="character-section-heading"><div><h3>Personenreferenzen</h3><p>Dein Abbild für persönliche Looks.</p></div></div><div id="character-settings">${characterSettingsMarkup()}</div><button class="primary" id="new-character">Neue Fotocollage</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Personenreferenzen werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
   );
   $('#new-character').onclick = openCharacterSetup;
   wireCharacterCards($('#character-settings'));
@@ -2078,10 +2079,10 @@ function costSettingsMarkup(costs, sheetCount) {
       note: `${costs.successfulLookCount} fertig`,
     },
     {
-      label: 'Character Sheets',
+      label: 'Personenreferenzen',
       color: 'var(--cost-sheets)',
       value: Math.max(costs.characterSheetTotalMicrounits, 0),
-      note: `${sheetCount} ${sheetCount === 1 ? 'Version' : 'Versionen'}`,
+      note: `${sheetCount} ${sheetCount === 1 ? 'Version' : 'Versionen'} · Fotocollagen kostenlos`,
     },
   ];
   const total = parts.reduce((sum, part) => sum + part.value, 0);
@@ -2138,7 +2139,7 @@ const characterStatus = (sheet) =>
 const isCharacterPending = (sheet) => !['ready', 'failed'].includes(sheet.state);
 const characterThumbnail = (sheet) =>
   sheet.assetId
-    ? `<span class="character-thumbnail"><img class="fade" data-asset="${sheet.assetId}" alt="Character Sheet vom ${sheetDate(sheet)}" decoding="async"></span>`
+    ? `<span class="character-thumbnail"><img class="fade" data-asset="${sheet.assetId}" alt="Personenreferenz vom ${sheetDate(sheet)}" decoding="async"></span>`
     : `<span class="character-thumbnail character-placeholder">${sheet.state === 'failed' ? icon('close') : '<span class="spinner"></span>'}</span>`;
 function currentCharacterSheet() {
   return characterSheets.find((sheet) => sheet.active) ?? characterSheets[0] ?? null;
@@ -2156,7 +2157,7 @@ const characterBadge = (sheet) =>
 function characterCurrentCard(sheet, pending = false) {
   const referenceCount = sheet.referenceAssetIds.length;
   const title = pending ? 'Deine neue Referenz' : sheet.active ? 'So siehst du in deinen Looks aus.' : 'Deine persönliche Referenz';
-  return `<button class="character-current ${sheet.active ? 'active' : ''} ${pending ? 'character-current-pending' : ''}" data-character="${sheet.id}" aria-label="Character Sheet vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-current-copy">${characterBadge(sheet)}<strong>${title}</strong>${sheet.active ? '' : `<small>${characterDescription(sheet)}</small>`}<span class="character-current-meta"><span>${icon('photo')}${referenceCount} ${referenceCount === 1 ? 'Referenzfoto' : 'Referenzfotos'}</span><span>${sheetDate(sheet)}</span>${sheet.refinementInstruction ? `<span>${icon('check')}Verfeinert</span>` : ''}</span></span><span class="character-open">${icon('arrow')}</span></button>`;
+  return `<button class="character-current ${sheet.active ? 'active' : ''} ${pending ? 'character-current-pending' : ''}" data-character="${sheet.id}" aria-label="Personenreferenz vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-current-copy">${characterBadge(sheet)}<strong>${title}</strong>${sheet.active ? '' : `<small>${characterDescription(sheet)}</small>`}<span class="character-current-meta"><span>${icon('photo')}${referenceCount} ${referenceCount === 1 ? 'Referenzfoto' : 'Referenzfotos'}</span><span>${sheetDate(sheet)}</span>${sheet.refinementInstruction ? `<span>${icon('check')}Verfeinert</span>` : ''}</span></span><span class="character-open">${icon('arrow')}</span></button>`;
 }
 function wireCharacterCards(root) {
   root.querySelectorAll('img[data-asset]').forEach((img) => (img.src = assetUrl(img.dataset.asset)));
@@ -2167,7 +2168,7 @@ function wireCharacterCards(root) {
 }
 function characterHistoryMarkup(excludeId) {
   const past = characterSheets.filter((sheet) => sheet.id !== excludeId && !sheet.active && !isCharacterPending(sheet));
-  return past.length ? `<section class="character-history"><h3>Frühere Versionen</h3><p class="muted">Wähle ein Sheet, um es anzusehen.</p><div class="character-versions" aria-label="Frühere Character Sheets">${past.map((sheet) => `<button class="character-version" data-past-character="${sheet.id}" aria-label="Character Sheet vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-version-copy"><strong>${sheetDate(sheet)}</strong><small>${characterStatus(sheet)}</small></span></button>`).join('')}</div></section>` : '';
+  return past.length ? `<section class="character-history"><h3>Frühere Versionen</h3><p class="muted">Wähle eine Referenz, um sie anzusehen.</p><div class="character-versions" aria-label="Frühere Personenreferenzen">${past.map((sheet) => `<button class="character-version" data-past-character="${sheet.id}" aria-label="Personenreferenz vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-version-copy"><strong>${sheetDate(sheet)}</strong><small>${characterStatus(sheet)}</small></span></button>`).join('')}</div></section>` : '';
 }
 function animateCharacterNavigation(direction) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -2204,15 +2205,15 @@ function wireCharacterHistory(returnTo) {
   });
 }
 function openCharacterHistory() {
-  showSheet('Frühere Versionen', `<h2>Deine bisherigen Sheets.</h2>${characterHistoryMarkup() || '<p class="muted">Keine früheren Versionen vorhanden.</p>'}`);
+  showSheet('Frühere Versionen', `<h2>Deine bisherigen Referenzen.</h2>${characterHistoryMarkup() || '<p class="muted">Keine früheren Versionen vorhanden.</p>'}`);
   wireCharacterHistory(openCharacterHistory);
 }
 function openCharacterDetail(id, returnTo = null) {
   const sheet = characterSheets.find((entry) => entry.id === id);
   if (!sheet) return;
   showSheet(
-    'Character Sheet',
-    `<header class="character-detail-heading"><div>${characterBadge(sheet)}<h2>${sheet.active ? 'So siehst du in deinen Looks aus.' : 'Deine persönliche Referenz.'}</h2>${sheet.active ? '' : `<p>${characterDescription(sheet)}</p>`}</div></header>${sheet.assetId ? `<figure class="character-detail"><img class="fade" data-asset="${sheet.assetId}" alt="Character Sheet in voller Ansicht" decoding="async"></figure>` : `<div class="character-detail character-placeholder">${sheet.state === 'failed' ? icon('close') : '<span class="spinner"></span>'}</div>`}<h3 class="character-details-title">Über dieses Sheet</h3><dl class="facts"><div><dt>Erstellt</dt><dd>${new Date(sheet.createdAt).toLocaleString('de-DE')}</dd></div><div><dt>Referenzfotos</dt><dd>${sheet.referenceAssetIds.length}</dd></div><div><dt>Modell</dt><dd>${esc(sheet.model)} · ${sheet.quality} · ${sheet.size}</dd></div>${sheet.note ? `<div><dt>Hinweis</dt><dd>${esc(sheet.note)}</dd></div>` : ''}${sheet.refinementInstruction ? `<div><dt>Verfeinerung</dt><dd>${esc(sheet.refinementInstruction)}</dd></div>` : ''}${sheet.costMicrounits !== null ? `<div><dt>Kosten</dt><dd>${money(sheet.costMicrounits)}</dd></div>` : ''}${sheet.failureCategory ? `<div><dt>Fehler</dt><dd>${esc(sheet.failureCategory)}</dd></div>` : ''}</dl>${sheet.state === 'ready' && !sheet.active ? '<button class="primary" id="activate-character">Als aktiv verwenden</button>' : ''}${sheet.state === 'ready' && sheet.assetId ? '<button class="secondary" id="refine-character">Mit neuen Fotos verfeinern</button>' : ''}${!sheet.active && ['ready', 'failed'].includes(sheet.state) ? '<button class="text-button" id="remove-character">Character Sheet löschen …</button>' : ''}`,
+    'Personenreferenz',
+    `<header class="character-detail-heading"><div>${characterBadge(sheet)}<h2>${sheet.active ? 'So siehst du in deinen Looks aus.' : 'Deine persönliche Referenz.'}</h2>${sheet.active ? '' : `<p>${characterDescription(sheet)}</p>`}</div></header>${sheet.assetId ? `<figure class="character-detail"><img class="fade" data-asset="${sheet.assetId}" alt="Personenreferenz in voller Ansicht" decoding="async"></figure>` : `<div class="character-detail character-placeholder">${sheet.state === 'failed' ? icon('close') : '<span class="spinner"></span>'}</div>`}<h3 class="character-details-title">Über diese Referenz</h3><dl class="facts"><div><dt>Erstellt</dt><dd>${new Date(sheet.createdAt).toLocaleString('de-DE')}</dd></div><div><dt>Referenzfotos</dt><dd>${sheet.referenceAssetIds.length}</dd></div><div><dt>Erstellung</dt><dd>${sheet.model === 'photo-collage-v1' ? 'Fotocollage' : `${esc(sheet.model)} · ${sheet.quality}`} · ${sheet.size}</dd></div>${sheet.note ? `<div><dt>Hinweis</dt><dd>${esc(sheet.note)}</dd></div>` : ''}${sheet.refinementInstruction ? `<div><dt>Verfeinerung</dt><dd>${esc(sheet.refinementInstruction)}</dd></div>` : ''}${sheet.costMicrounits !== null ? `<div><dt>Kosten</dt><dd>${money(sheet.costMicrounits)}</dd></div>` : ''}${sheet.failureCategory ? `<div><dt>Fehler</dt><dd>${esc(sheet.failureCategory)}</dd></div>` : ''}</dl>${sheet.state === 'ready' && !sheet.active ? '<button class="primary" id="activate-character">Als aktiv verwenden</button>' : ''}${sheet.state === 'ready' && sheet.assetId ? '<button class="secondary" id="refine-character">Neue Fotocollage erstellen</button>' : ''}${!sheet.active && ['ready', 'failed'].includes(sheet.state) ? '<button class="text-button" id="remove-character">Personenreferenz löschen …</button>' : ''}`,
   );
   if (returnTo) {
     sheetReturn = returnTo;
@@ -2232,13 +2233,13 @@ function openCharacterDetail(id, returnTo = null) {
         renderSettings();
         if (returnTo) returnTo();
         else openCharacterDetail(id);
-        toast('Character Sheet aktiviert.');
+        toast('Personenreferenz aktiviert.');
       });
-  if ($('#refine-character')) $('#refine-character').onclick = () => openCharacterRefine(id);
+  if ($('#refine-character')) $('#refine-character').onclick = openCharacterSetup;
   if ($('#remove-character'))
     $('#remove-character').onclick = () => {
       showSheet(
-        'Character Sheet löschen',
+        'Personenreferenz löschen',
         '<h2>Version dauerhaft entfernen?</h2><p>Sie verschwindet aus deinen Einstellungen und kann nicht wieder aktiviert werden. Bereits erzeugte Looks und historische Kosten bleiben erhalten.</p><button class="danger" id="confirm-character-removal">Dauerhaft löschen</button><button class="text-button" id="cancel-character-removal">Abbrechen</button>',
       );
       sheetReturn = () => openCharacterDetail(id, returnTo);
@@ -2251,12 +2252,11 @@ function openCharacterDetail(id, returnTo = null) {
           renderSettings();
           if (returnTo) returnTo();
           else openCharacterHistory();
-          toast('Character Sheet gelöscht.');
+          toast('Personenreferenz gelöscht.');
         });
     };
 }
-async function uploadReferenceFile(file) {
-  const blob = await preparePhoto(file);
+async function uploadReferenceFile(blob) {
   const intent = await api('/source-photos/upload-intents', {
     fileName: 'character-reference.jpg',
     contentType: 'image/jpeg',
@@ -2271,8 +2271,8 @@ async function uploadReferenceFile(file) {
 }
 function openCharacterSetup() {
   showSheet(
-    'Character Sheet',
-    `<h2>So erkennt FORM dich.</h2><p>Wähle ein bis vier klare Fotos von Gesicht und Körper. Ein kurzer Hinweis kann stabile Details ergänzen.</p><form id="character-form"><label>Referenzfotos<input type="file" name="photos" accept="image/*" multiple required></label><div id="character-upload-progress"></div><label>Hinweis <span class="muted">optional</span><textarea name="note" maxlength="1000" placeholder="Zum Beispiel Körpergröße oder Haarfarbe"></textarea></label><button class="primary" type="submit">Character Sheet erstellen</button></form>`,
+    'Fotocollage',
+    `<h2>Deine Fotos. Dein Gesicht.</h2><p>Wähle ein bis vier Fotos derselben Person, möglichst mit Gesicht und ganzer Figur. Danach schneidest du jedes Foto zu und prüfst die Collage.</p><form id="character-form"><label>Referenzfotos<input type="file" name="photos" accept="image/*" multiple required></label><button class="primary" type="submit">Weiter zum Zuschneiden</button></form>`,
   );
   $('#character-form').onsubmit = (event) => {
     event.preventDefault();
@@ -2282,31 +2282,99 @@ function openCharacterSetup() {
       return formError(form, new Error('Bitte wähle ein bis vier Fotos.'));
     action($('button[type=submit]', form), async () => {
       try {
-        const referenceAssetIds = [];
-        for (const [index, file] of files.entries()) {
-          renderCharacterUploadProgress(form, files, index);
-          referenceAssetIds.push(await uploadReferenceFile(file));
+        const photos = [];
+        for (const file of files) {
+          const blob = await preparePhoto(file);
+          const url = URL.createObjectURL(blob);
+          const image = new Image();
+          try { image.src = url; await image.decode(); }
+          finally { URL.revokeObjectURL(url); }
+          photos.push({ image, name: file.name, crop: { zoom: 1, x: 0.5, y: 0.5 } });
         }
-        renderCharacterUploadProgress(form, files, files.length);
-        await api('/character-sheets', {
-          referenceAssetIds,
-          note: new FormData(form).get('note').trim() || null,
-          idempotencyKey: key(),
-        });
+        // Closing the dialog while a large photo decodes must not reopen it.
+        if (!form.isConnected || !$('#sheet').open) return;
+        openCharacterCrop({ photos, layout: collageLayout(photos.length), note: '', idempotencyKey: key() }, 0);
+      } catch (error) { if (form.isConnected) formError(form, error); }
+    });
+  };
+}
+function openCharacterCrop(draft, index) {
+  const photo = draft.photos[index], tile = draft.layout[index];
+  showSheet('Foto zuschneiden', `<p class="eyebrow">Foto ${index + 1} von ${draft.photos.length}</p><h2>Zeig, was dich ausmacht.</h2><p>Ziehe das Foto in den Rahmen und vergrößere Gesicht oder Körper. Alles im Rahmen kommt in die Collage.</p><canvas id="character-crop" class="character-crop" role="img" aria-label="Ausschnitt von ${esc(photo.name)}"></canvas><p id="crop-resolution" class="muted" role="status"></p><label>Vergrößerung<input id="crop-zoom" class="crop-zoom" type="range" min="1" max="6" step="0.01" value="${photo.crop.zoom}"></label><div class="collage-actions"><button class="secondary" id="crop-back">Zurück</button><button class="primary" id="crop-next">${index === draft.photos.length - 1 ? 'Collage prüfen' : 'Nächstes Foto'}</button></div>`);
+  const canvas = $('#character-crop');
+  function redraw() {
+    delete photo.assetId;
+    delete draft.collageAssetId;
+    draft.idempotencyKey = key();
+    drawCrop(canvas, photo.image, tile, photo.crop);
+    const bounds = cropBounds(photo.image.naturalWidth, photo.image.naturalHeight, tile, photo.crop);
+    $('#crop-resolution').textContent = bounds.width < tile.width || bounds.height < tile.height
+      ? 'Dieser Ausschnitt wird vergrößert und kann unscharf wirken. Wähle weniger Zoom oder ein schärferes Foto.' : '';
+    $('#crop-zoom').value = photo.crop.zoom;
+  }
+  $('#crop-zoom').oninput = (event) => {
+    photo.crop.zoom = Number(event.target.value);
+    redraw();
+  };
+  let drag = null;
+  canvas.onpointerdown = (event) => {
+    drag = { clientX: event.clientX, clientY: event.clientY, ...photo.crop };
+    canvas.setPointerCapture(event.pointerId);
+  };
+  canvas.onpointermove = (event) => {
+    if (!drag) return;
+    const bounds = cropBounds(photo.image.naturalWidth, photo.image.naturalHeight, tile, photo.crop);
+    const rect = canvas.getBoundingClientRect();
+    const moveX = (event.clientX - drag.clientX) * bounds.width / rect.width;
+    const moveY = (event.clientY - drag.clientY) * bounds.height / rect.height;
+    const extraX = photo.image.naturalWidth - bounds.width, extraY = photo.image.naturalHeight - bounds.height;
+    photo.crop.x = extraX > 0 ? Math.max(0, Math.min(1, drag.x - moveX / extraX)) : 0.5;
+    photo.crop.y = extraY > 0 ? Math.max(0, Math.min(1, drag.y - moveY / extraY)) : 0.5;
+    redraw();
+  };
+  canvas.onpointerup = canvas.onpointercancel = () => { drag = null; };
+  $('#crop-back').onclick = () => index ? openCharacterCrop(draft, index - 1) : openCharacterSetup();
+  $('#crop-next').onclick = () => index < draft.photos.length - 1 ? openCharacterCrop(draft, index + 1) : openCharacterCollagePreview(draft);
+  redraw();
+}
+function openCharacterCollagePreview(draft) {
+  showSheet('Collage prüfen', `<h2>So erkennt FORM dich.</h2><p>Diese Fotoausschnitte werden unverändert als Referenz für neue Looks verwendet. Die Collage selbst verursacht keine KI-Kosten.</p><canvas id="character-collage-preview" class="character-collage-preview" role="img" aria-label="Vorschau deiner Fotocollage"></canvas><div class="collage-edit-buttons">${draft.photos.map((_, index) => `<button class="secondary" data-recrop="${index}">Foto ${index + 1} zuschneiden</button>`).join('')}</div><form id="character-save-form"><label>Hinweis <span class="muted">optional</span><textarea name="note" maxlength="1000" placeholder="Zum Beispiel Körpergröße">${esc(draft.note)}</textarea></label><div id="character-upload-progress"></div><button class="primary" type="submit">Collage speichern und verwenden</button></form>`);
+  const preview = $('#character-collage-preview');
+  preview.width = collageWidth;
+  preview.height = collageHeight;
+  draft.photos.forEach((photo, index) => {
+    const canvas = document.createElement('canvas'), tile = draft.layout[index];
+    drawCrop(canvas, photo.image, tile, photo.crop);
+    preview.getContext('2d').drawImage(canvas, tile.left, tile.top);
+  });
+  const form = $('#character-save-form');
+  form.elements.note.oninput = () => { draft.note = form.elements.note.value; draft.idempotencyKey = key(); };
+  document.querySelectorAll('[data-recrop]').forEach((button) => { button.onclick = () => openCharacterCrop(draft, Number(button.dataset.recrop)); });
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    action($('button[type=submit]', form), async () => {
+      const edits = [...document.querySelectorAll('[data-recrop]'), form.elements.note];
+      edits.forEach((control) => { control.disabled = true; });
+      try {
+        renderCharacterUploadProgress(form, draft.photos, 0);
+        // Upload the exact collage the person reviewed. The API uses this asset
+        // directly as the look-generation reference; it does not render a sheet.
+        if (!draft.collageAssetId) draft.collageAssetId = await uploadReferenceFile(await canvasJpeg(preview));
+        renderCharacterUploadProgress(form, draft.photos, draft.photos.length);
+        await api('/character-sheets', { referenceAssetIds: [draft.collageAssetId], note: draft.note.trim() || null, idempotencyKey: draft.idempotencyKey });
         await refreshInspiration();
-        closeSheet();
+        if (form.isConnected && $('#sheet').open) closeSheet();
         navigate('settings');
-        toast('Dein Character Sheet wird erstellt.');
-      } catch (error) {
-        formError(form, error);
-      }
+        toast('Deine Fotocollage wird als Referenz verwendet.');
+      } catch (error) { if (form.isConnected) formError(form, error); }
+      finally { edits.forEach((control) => { control.disabled = false; }); }
     });
   };
 }
 function renderCharacterUploadProgress(form, files, completed) {
   const progress = $('#character-upload-progress', form);
   if (!progress) return;
-  progress.innerHTML = `<div class="character-upload-progress" role="status" aria-live="polite"><strong>${completed === files.length ? 'Character Sheet wird vorbereitet' : 'Fotos werden hochgeladen'}</strong>${files
+  progress.innerHTML = `<div class="character-upload-progress" role="status" aria-live="polite"><strong>${completed === files.length ? 'Personenreferenz wird vorbereitet' : 'Fotos werden hochgeladen'}</strong>${files
     .map((file, index) => {
       const state = index < completed ? 'done' : index === completed ? 'uploading' : 'waiting';
       const label =
@@ -2314,37 +2382,6 @@ function renderCharacterUploadProgress(form, files, completed) {
       return `<div class="character-upload-file ${state}"><span class="character-upload-state" aria-hidden="true">${state === 'done' ? icon('check') : ''}</span><span>${esc(file.name)}</span><small>${label}</small></div>`;
     })
     .join('')}</div>`;
-}
-// Refining keeps the current sheet active; the result has to be activated by hand.
-function openCharacterRefine(id) {
-  showSheet(
-    'Verfeinern',
-    `<h2>Was passt noch nicht?</h2><p>Diese Version bleibt erhalten. FORM zeichnet sie mit deinen neuen Fotos neu und ändert nur, was du beschreibst.</p><form id="refine-form"><label>Neue Fotos <span class="muted">ein bis drei</span><input type="file" name="photos" accept="image/*" multiple required></label><label>Was soll sich ändern?<textarea name="instruction" maxlength="1000" required placeholder="Zum Beispiel: Die Rückansicht zeigt die falsche Frisur"></textarea></label><button class="primary" type="submit">Verfeinerung erstellen</button></form>`,
-  );
-  $('#refine-form').onsubmit = (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const files = [...form.elements.photos.files];
-    if (files.length < 1 || files.length > 3)
-      return formError(form, new Error('Bitte wähle ein bis drei Fotos.'));
-    action($('button[type=submit]', form), async () => {
-      try {
-        const referenceAssetIds = [];
-        for (const file of files) referenceAssetIds.push(await uploadReferenceFile(file));
-        await api(`/character-sheets/${id}/refine`, {
-          referenceAssetIds,
-          instruction: new FormData(form).get('instruction').trim(),
-          idempotencyKey: key(),
-        });
-        await refreshInspiration();
-        closeSheet();
-        navigate('settings');
-        toast('Die Verfeinerung wird erstellt.');
-      } catch (error) {
-        formError(form, error);
-      }
-    });
-  };
 }
 async function start() {
   const rawHash = location.hash.slice(1);

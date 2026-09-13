@@ -2269,3 +2269,19 @@ dialog:has(#look-composer) .sheet-body {
 .cost-legend-name { flex: 1; min-width: 0; }
 .cost-legend-value { flex-shrink: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .cost-legend em { display: block; margin-top: 4px; font-size: 11px; font-style: normal; color: var(--muted); }
+
+.character-crop, .character-collage-preview {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 42dvh;
+  margin: 18px auto;
+}
+.character-crop { touch-action: none; cursor: grab; }
+.character-crop:active { cursor: grabbing; }
+.crop-zoom { accent-color: var(--green); }
+.collage-actions { display: flex; gap: 12px; margin-top: 18px; }
+.collage-actions > button { flex: 1; }
+.collage-edit-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 16px 0; }
+#crop-resolution:empty { display: none; }

@@ -230,7 +230,8 @@ export const permanentlyDeleteWardrobeItemResponseSchema = z
 
 export const createCharacterSheetRequestSchema = z
   .object({
-    referenceAssetIds: z.array(opaqueIdSchema).min(1).max(4),
+    // The client has already composed and uploaded the finished photo collage.
+    referenceAssetIds: z.array(opaqueIdSchema).length(1),
     note: z.string().trim().max(1_000).nullable().default(null),
     idempotencyKey: idempotencyKeySchema,
   })

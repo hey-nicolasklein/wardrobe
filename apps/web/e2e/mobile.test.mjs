@@ -228,12 +228,30 @@ try {
   await page.getByRole('button', { name: 'Als aktiv verwenden' }).waitFor();
   await page.getByRole('button', { name: 'Schließen' }).click();
   await page.locator('dialog').waitFor({ state: 'hidden' });
-  // A finished Character Sheet can be refined into a new version from its detail view.
+  // A finished reference starts the photo-collage flow from its detail view.
   await page.locator('.character-current:not(.character-current-pending)').click();
-  await page.getByRole('button', { name: 'Mit neuen Fotos verfeinern' }).click();
-  await page.getByRole('textbox', { name: 'Was soll sich ändern?' }).waitFor();
+  await page.getByRole('button', { name: 'Neue Fotocollage erstellen' }).click();
+  const portrait = Buffer.from('<svg width="800" height="1200" xmlns="http://www.w3.org/2000/svg"><rect width="800" height="1200" fill="#e8e2d8"/><circle cx="400" cy="330" r="170" fill="#c68f72"/><rect x="200" y="500" width="400" height="600" rx="120" fill="#344d3f"/></svg>');
+  await page.locator('#character-form input[type=file]').setInputFiles([
+    { name: 'portrait-one.svg', mimeType: 'image/svg+xml', buffer: portrait },
+    { name: 'portrait-two.svg', mimeType: 'image/svg+xml', buffer: portrait },
+  ]);
+  await page.getByRole('button', { name: 'Weiter zum Zuschneiden' }).click();
+  await page.getByRole('heading', { name: 'Zeig, was dich ausmacht.' }).waitFor();
+  assert.equal(await page.locator('#crop-x, #crop-y').count(), 0);
+  assert.equal(await page.locator('#crop-zoom').count(), 1);
+  assert.equal(await page.locator('#crop-zoom').evaluate((input) => getComputedStyle(input).accentColor), 'rgb(52, 77, 63)');
+  const crop = page.locator('#character-crop');
+  const cropBox = await crop.boundingBox();
+  await page.mouse.move(cropBox.x + cropBox.width / 2, cropBox.y + cropBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cropBox.x + cropBox.width / 2 + 30, cropBox.y + cropBox.height / 2 + 30);
+  await page.mouse.up();
+  await page.getByRole('button', { name: 'Nächstes Foto' }).click();
+  await page.getByRole('button', { name: 'Collage prüfen' }).click();
+  await page.locator('#character-collage-preview').waitFor();
   await page.screenshot({
-    path: '/tmp/form-pwa-qa/character-refine.png',
+    path: '/tmp/form-pwa-qa/character-collage.png',
     fullPage: true,
   });
   await page.getByRole('button', { name: 'Schließen' }).click();

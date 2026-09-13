@@ -17,8 +17,8 @@
     "test:openai-smoke": "FORM_RUN_OPENAI_SMOKE=true node --import tsx --test packages/service/src/openai-smoke.test.ts",
     "test:browser-smoke": "playwright test",
     "dev:production": "concurrently -n api,worker,web -c blue,magenta,cyan \"npm:dev:api\" \"npm:dev:worker\" \"npm:dev:web\"",
-    "dev:api": "node --env-file=apps/api/.env.local --import tsx node_modules/tsx/dist/cli.mjs watch apps/api/src/index.ts",
-    "dev:worker": "node --env-file=apps/worker/.env.local --import tsx node_modules/tsx/dist/cli.mjs watch apps/worker/src/index.ts",
+    "dev:api": "node --env-file=apps/api/.env.local --import tsx node_modules/tsx/dist/cli.mjs watch --include 'packages/**/src/**' apps/api/src/index.ts",
+    "dev:worker": "node --env-file=apps/worker/.env.local --import tsx node_modules/tsx/dist/cli.mjs watch --include 'packages/**/src/**' apps/worker/src/index.ts",
     "dev:web": "node --env-file=apps/api/.env.local --import tsx apps/web/dev.mjs",
     "verify": "npm run verify --workspaces --if-present"
   },

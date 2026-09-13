@@ -164,7 +164,7 @@ test('keeps Character Sheet and Look creation constrained and strict', () => {
   );
   assert.equal(
     createCharacterSheetRequestSchema.safeParse({
-      referenceAssetIds: [id, id, id, id, id],
+      referenceAssetIds: [id, id],
       idempotencyKey: 'character-command-0123456789',
     }).success,
     false,

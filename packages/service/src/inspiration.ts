@@ -12,6 +12,7 @@ import { CatalogProviderError, type CatalogProvider } from './catalog-provider.j
 import type { Database, DatabaseClient } from './database.js';
 import { withTransaction } from './database.js';
 import { enqueueJob, type RemoteImageJob } from './jobs.js';
+import { collageModel, createIdentityCollage } from './identity-collage.js';
 import { IdempotencyConflictError, OwnedResourceNotFoundError } from './media.js';
 import type { PrivateObjectStorage } from './storage.js';
 
@@ -20,7 +21,7 @@ export const characterSheetPromptVersion = 'identity-sheet-v4';
 export const characterSheetRefinePromptVersion = 'identity-sheet-refine-v3';
 export const lookModel = 'gpt-image-2.5-flare';
 export const lookPlannerModel = 'gpt-5.4-mini';
-export const lookPromptVersion = 'candid-iphone-v1';
+export const lookPromptVersion = 'candid-iphone-identity-v2';
 
 type CharacterRow = {
   id: string;
@@ -182,8 +183,8 @@ async function queueCharacterSheet(
       input.note,
       input.parentCharacterSheetId,
       input.instruction,
-      characterSheetModel,
-      input.instruction === null ? characterSheetPromptVersion : characterSheetRefinePromptVersion,
+      input.instruction === null ? collageModel : characterSheetModel,
+      input.instruction === null ? collageModel : characterSheetRefinePromptVersion,
     ],
   );
   const jobId = await enqueueJob(client, {
@@ -222,11 +223,26 @@ export async function createCharacterSheet(
     );
     if (prior) return prior;
     await assertOwnedAssets(client, input.accountId, input.referenceAssetIds);
-    const body = await queueCharacterSheet(client, {
-      ...input,
-      parentCharacterSheetId: null,
-      instruction: null,
-    });
+    const characterSheetId = randomUUID();
+    // A photo collage is the reference asset. Do not enqueue a render or create a
+    // derivative image: that would change the pixels the person approved.
+    await client.query(
+      `UPDATE character_sheets SET active=false WHERE account_id=$1 AND active`,
+      [input.accountId],
+    );
+    await client.query(
+      `INSERT INTO character_sheets(id,account_id,reference_asset_ids,note,state,model,quality,output_size,prompt_version,asset_id,active,cost_microunits,finished_at)
+       VALUES($1,$2,$3,$4,'ready',$5,'high','864x1536',$5,$6,true,0,now())`,
+      [
+        characterSheetId,
+        input.accountId,
+        input.referenceAssetIds,
+        input.note,
+        collageModel,
+        input.referenceAssetIds[0],
+      ],
+    );
+    const body = { characterSheetId };
     await remember(
       client,
       input.accountId,
@@ -271,8 +287,9 @@ export async function refineCharacterSheet(
       state: CharacterSheet['state'];
       asset_id: string | null;
       note: string | null;
+      model: string;
     }>(
-      `SELECT state, asset_id, note FROM character_sheets
+      `SELECT state, asset_id, note, model FROM character_sheets
        WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL`,
       [input.characterSheetId, input.accountId],
     );
@@ -283,6 +300,8 @@ export async function refineCharacterSheet(
         'character-sheet-not-refinable',
         'Nur ein fertiges Character Sheet kann verfeinert werden.',
       );
+    if (parent.model === collageModel)
+      throw new InspirationValidationError('character-sheet-not-refinable', 'Erstelle für eine Fotocollage eine neue Auswahl mit passenden Ausschnitten.');
     await assertOwnedAssets(client, input.accountId, input.referenceAssetIds);
     const body = await queueCharacterSheet(client, {
       accountId: input.accountId,
@@ -375,6 +394,47 @@ async function candidateItems(
 function hasCore(items: Array<{ category: string }>) {
   const cats = new Set(items.map((i) => i.category));
   return cats.has('dress') || (cats.has('top') && (cats.has('pants') || cats.has('skirt')));
+}
+
+// The planner can suggest layers, but an automatic outfit must not turn into a
+// pile of alternatives. Explicitly selected pieces stay untouched: the user is
+// allowed to request an unusual combination on purpose.
+export function normalizeAutomaticLookItems(
+  itemIds: string[],
+  candidates: Array<{ id: string; category: SupportedCategory }>,
+  exactItemIds: string[],
+) {
+  const byId = new Map(candidates.map((item) => [item.id, item]));
+  const exact = new Set(exactItemIds);
+  const exactCategories = new Set(
+    exactItemIds.map((id) => byId.get(id)?.category).filter(Boolean),
+  );
+  const automaticDress = itemIds.some((id) => !exact.has(id) && byId.get(id)?.category === 'dress');
+  const useDress = !exactCategories.has('top') && !exactCategories.has('pants') && !exactCategories.has('skirt') && automaticDress;
+  const used = new Set<string>();
+  const result: string[] = [];
+  // Process mandatory pieces first so an optional duplicate can never crowd one
+  // of them out merely because the model listed it earlier.
+  for (const id of [...itemIds.filter((id) => exact.has(id)), ...itemIds.filter((id) => !exact.has(id))]) {
+    if (used.has(id)) continue;
+    const item = byId.get(id);
+    if (!item) continue;
+    const { category } = item;
+    if (exact.has(id)) {
+      used.add(id);
+      used.add(category === 'pants' || category === 'skirt' ? 'lower' : category);
+      result.push(id);
+      continue;
+    }
+    if (useDress && (category === 'top' || category === 'pants' || category === 'skirt')) continue;
+    if (!useDress && category === 'dress') continue;
+    const slot = category === 'pants' || category === 'skirt' ? 'lower' : category;
+    if (used.has(slot)) continue;
+    used.add(id);
+    used.add(slot);
+    result.push(id);
+  }
+  return result;
 }
 
 export async function listLooks(database: Database, accountId: string): Promise<Look[]> {
@@ -619,8 +679,9 @@ const refinementPrompt = (note: string | null, instruction: string) =>
 function lookPrompt(
   concept: LookConcept,
   items: Array<{ name: string; category: string; colors: string[] }>,
+  identityNote: string | null,
 ) {
-  return `Create one photorealistic 4:5 iPhone-style snapshot as if a friend naturally photographed the referenced person while ${concept.activity}, in ${concept.scene}. Mood: ${concept.mood}. ${concept.framing} framing. The person must not look directly at the camera. Dress the person in exactly these referenced major garments: ${items.map((i) => `${i.name} (${i.category}; ${i.colors.join(', ')})`).join('; ')}. Every selected garment must be fully visible and faithful to its reference. Do not invent other major garments; plain incidental basics such as socks are allowed. Avoid selfies, posed portraits, illustrations, runway staging, extreme editorial styling, text, watermarks, and collages. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
+  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} The remaining references show the garments to wear. Create one photorealistic 4:5 iPhone-style snapshot as if a friend naturally photographed the referenced person while ${concept.activity}, in ${concept.scene}. Mood: ${concept.mood}. ${concept.framing} framing. The person must not look directly at the camera. Dress the person in exactly these referenced major garments: ${items.map((i) => `${i.name} (${i.category}; ${i.colors.join(', ')})`).join('; ')}. Every selected garment must be fully visible and faithful to its reference. Do not invent other major garments; plain incidental basics such as socks are allowed. Avoid selfies, posed portraits, illustrations, runway staging, extreme editorial styling, text, watermarks, and collages. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
 }
 
 export async function executeInspirationJob(
@@ -651,7 +712,13 @@ export async function executeInspirationJob(
       const refs = await Promise.all(
         row.reference_asset_ids.map((asset) => readAsset(database, storage, job.accountId, asset)),
       );
-      const result = await provider.generateComposite({
+      // Legacy queued collage jobs remain replayable. New collages are ready as
+      // soon as their single, finished collage asset is saved.
+      const result = row.model === collageModel ? {
+        pngBytes: await createIdentityCollage(refs),
+        requestId: null,
+        usage: { textInputTokens: 0, imageInputTokens: 0, outputTokens: 0, serviceTier: 'default', raw: { method: collageModel } },
+      } : await provider.generateComposite({
         references: refs,
         prompt:
           row.refinement_instruction === null
@@ -760,7 +827,11 @@ export async function executeInspirationJob(
         signal: controller.signal,
       });
       concept = planned.concept;
-      itemIds = planned.itemIds;
+      itemIds = normalizeAutomaticLookItems(
+        planned.itemIds,
+        candidates.rows,
+        row.exact_item_ids,
+      );
       const plannedItems = candidates.rows.filter((item) => itemIds.includes(item.id));
       const missingCategory = row.category_constraints.find(
         (category) => !plannedItems.some((item) => item.category === category),
@@ -793,8 +864,8 @@ export async function executeInspirationJob(
           );
       });
     }
-    const character = await database.query<{ asset_id: string }>(
-      'SELECT asset_id FROM character_sheets WHERE id=$1 AND account_id=$2',
+    const character = await database.query<{ asset_id: string; note: string | null }>(
+      'SELECT asset_id, note FROM character_sheets WHERE id=$1 AND account_id=$2',
       [row.character_sheet_id, job.accountId],
     );
     const selected = candidates.rows
@@ -809,7 +880,7 @@ export async function executeInspirationJob(
     );
     const result = await provider.generateComposite({
       references: refs,
-      prompt: lookPrompt(concept, selected),
+      prompt: lookPrompt(concept, selected, character.rows[0].note),
       model: row.model,
       quality: 'medium',
       size: '1024x1280',
