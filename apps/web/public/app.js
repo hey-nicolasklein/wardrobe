@@ -452,10 +452,18 @@ function animateGarments(root, before = new Map()) {
     const old = before.get(node.dataset.garment);
     const now = node.getBoundingClientRect();
     if (!now.width) return;
+    // A piece that has not moved needs no flight. Animating it anyway would
+    // restart on every feed poll and cut off an entrance still in progress.
+    if (old && Math.abs(old.x - now.x) < 0.5 && Math.abs(old.y - now.y) < 0.5
+      && Math.abs(old.width - now.width) < 0.5) return;
     const delta = old ? { translate: `${old.x + old.width / 2 - now.x - now.width / 2}px ${old.y + old.height / 2 - now.y - now.height / 2}px`, scale: String(old.width / now.width), opacity: 1 }
       : { translate: '0 14px', scale: '0.88', opacity: 0 };
+    // `backwards` holds the invisible start state through the stagger delay.
+    // Without it a piece sits fully drawn until its turn comes and then blinks
+    // out to animate in — the flicker when switching to the flat lay.
     node.animate([delta, { translate: '0 0', scale: '1', opacity: 1 }], {
-      duration: 420, delay: old ? 0 : index * 35, easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      duration: 420, delay: old ? 0 : index * 35, fill: 'backwards',
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
     });
   });
 }
@@ -472,6 +480,35 @@ function wireFlatImages(root) {
     if (img.complete && !img.naturalWidth) missing();
   });
 }
+/* The rectangle the picture actually covers inside `node`: its content box
+   minus the letterboxing that `object-fit: contain` leaves around a picture
+   whose ratio does not match. Flights are measured on this rather than on the
+   element box, because the grid tile is a padded 3/4 frame and the tray slot a
+   bare square — measuring the boxes would hand the ghost over at a size that
+   matches neither end. `ratio` comes from the flying picture itself, so a tray
+   image that has not decoded yet cannot skew the result. */
+function paintedRect(node, ratio) {
+  const image = node.tagName === 'IMG' ? node : node.querySelector('img');
+  const rect = (image || node).getBoundingClientRect();
+  if (!image || !rect.width) return rect;
+  const style = getComputedStyle(image);
+  const px = (value) => parseFloat(value) || 0;
+  const left = px(style.borderLeftWidth) + px(style.paddingLeft);
+  const top = px(style.borderTopWidth) + px(style.paddingTop);
+  const width = rect.width - left - px(style.borderRightWidth) - px(style.paddingRight);
+  const height = rect.height - top - px(style.borderBottomWidth) - px(style.paddingBottom);
+  if (width <= 0 || height <= 0) return rect;
+  const drawn = Math.min(width, height * ratio);
+  return new DOMRect(
+    rect.left + left + (width - drawn) / 2,
+    rect.top + top + (height - drawn / ratio) / 2,
+    drawn,
+    drawn / ratio,
+  );
+}
+const garmentRatio = (image) =>
+  image?.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : 1;
+const shiftRect = (rect, dy) => (dy ? new DOMRect(rect.x, rect.y + dy, rect.width, rect.height) : rect);
 function flyGarment(image, from, to) {
   if (!image || !from.width || !to.width || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const sheet = $('#sheet');
@@ -699,6 +736,16 @@ function setLookView(card, view) {
   const cached = feedCards.get(card.dataset.look);
   if (cached && look) cached.signature = lookCardSignature(look);
   if (flat) animateGarments($('.flat-lay', card));
+  else animateWornPhoto($('.look-photo', card));
+}
+/* The flat lay settles in piece by piece, so the photo needs an entrance of its
+   own on the way back — without one the switch reads as a hard cut. Kept
+   quieter than the garments: the picture just eases out of a slight zoom. */
+function animateWornPhoto(photo) {
+  if (!photo || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  photo.animate([{ opacity: 0, scale: '1.04' }, { opacity: 1, scale: '1' }], {
+    duration: 360, easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+  });
 }
 /* Opens or closes the item overlay of a look card. The overlay stays in the DOM
    while the pieces fly back into the middle, so it is only hidden once the
@@ -926,10 +973,20 @@ function openLookComposer(preselected = []) {
     const input = event.target;
     const gridImage = input.name === 'item' ? input.closest('label').querySelector('img') : null;
     const previous = input.name === 'item' ? $(`[data-garment="${input.value}"]`, $('#composer-tray')) : null;
-    const from = input.checked ? gridImage?.getBoundingClientRect() : previous?.getBoundingClientRect();
+    const ratio = garmentRatio(gridImage);
+    const footer = $('.composer-footer', form).getBoundingClientRect().top;
+    // Measured before the tray is rebuilt, because that destroys the slot a
+    // deselected piece flies out of. Nothing else may be measured this early:
+    // showing or hiding the tray resizes the footer, which grows the bottom
+    // sheet upwards and moves the picker with it.
+    const leaving = input.checked ? null : previous && paintedRect(previous, ratio);
     updateSelection();
     const destination = input.checked ? $(`[data-garment="${input.value}"]`, $('#composer-tray')) : gridImage;
-    if (from && destination) flyGarment(gridImage, from, destination.getBoundingClientRect());
+    // The stale rect above still refers to the old footer position, so carry it
+    // along by however far the footer just moved.
+    const from = leaving ? shiftRect(leaving, $('.composer-footer', form).getBoundingClientRect().top - footer)
+      : gridImage && paintedRect(gridImage, ratio);
+    if (from && destination) flyGarment(gridImage, from, paintedRect(destination, ratio));
     if (selectedOnly) filterItems();
   });
   $('#composer-search').oninput = filterItems;
