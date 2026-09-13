@@ -1039,6 +1039,11 @@ dialog::backdrop {
   font-size: 13px;
   padding: 10px 8px;
 }
+@media (max-width: 600px) {
+  .detection-choice-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .detection-stage > img {
   max-height: none;
   border-radius: 0;
@@ -1118,6 +1123,7 @@ dialog::backdrop {
 }
 .detection-choice strong {
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 .detection-choice small {
   color: var(--muted);
