@@ -1424,33 +1424,58 @@ async function loadSettingsData() {
     ]);
     characterSheets = sheets.characterSheets;
     if (!$('#character-settings')) return;
-    $('#character-settings').innerHTML = characterSheets.length
-      ? `<div class="character-versions">${characterSheets.map((sheet) => `<button class="character-version ${sheet.active ? 'active' : ''}" data-character="${sheet.id}" aria-label="Character Sheet vom ${new Date(sheet.createdAt).toLocaleDateString('de-DE')} öffnen">${sheet.assetId ? `<span class="character-thumbnail"><img class="fade" data-asset="${sheet.assetId}" alt="Character Sheet vom ${new Date(sheet.createdAt).toLocaleDateString('de-DE')}" decoding="async"></span>` : `<span class="character-thumbnail character-placeholder">${sheet.state === 'failed' ? icon('close') : '<span class="spinner"></span>'}</span>`}<span class="character-version-copy"><strong>${sheet.active ? 'Aktiv' : sheet.state === 'failed' ? 'Fehlgeschlagen' : sheet.state === 'ready' ? 'Gespeichert' : 'Wird erstellt …'}</strong><small>${new Date(sheet.createdAt).toLocaleDateString('de-DE')}</small></span></button>`).join('')}</div>`
+    const current = currentCharacterSheet();
+    const past = characterSheets.filter((sheet) => sheet.id !== current?.id);
+    $('#character-settings').innerHTML = current
+      ? `<button class="character-current ${current.active ? 'active' : ''}" data-character="${current.id}" aria-label="Character Sheet vom ${sheetDate(current)} öffnen">${characterThumbnail(current)}<span class="character-current-copy"><strong>${characterStatus(current)}</strong><small>Seit ${sheetDate(current)}</small><small>${current.referenceAssetIds.length} ${current.referenceAssetIds.length === 1 ? 'Referenzfoto' : 'Referenzfotos'}${current.refinementInstruction ? ' · verfeinert' : ''}</small></span></button>${past.length ? `<button class="secondary" id="character-history">Frühere Versionen · ${past.length}</button>` : ''}`
       : '<p class="muted">Noch nicht eingerichtet.</p>';
     $('#cost-settings').innerHTML =
       `<div class="setting-row">Looks gesamt<span>${money(costData.costs.lookTotalMicrounits)}</span></div><div class="setting-row">Ø pro fertigem Look<span>${money(costData.costs.averageSuccessfulLookMicrounits)}</span></div><div class="setting-row">Character Sheets<span>${money(costData.costs.characterSheetTotalMicrounits)}</span></div>`;
-    document
-      .querySelectorAll('#character-settings img[data-asset]')
-      .forEach((img) => (img.src = assetUrl(img.dataset.asset)));
-    wireFades($('#character-settings'));
-    document.querySelectorAll('[data-character]').forEach((button) => {
-      button.onclick = () => openCharacterDetail(button.dataset.character);
-    });
+    wireCharacterCards($('#character-settings'));
+    if ($('#character-history')) $('#character-history').onclick = openCharacterHistory;
   } catch (error) {
     if ($('#character-settings'))
       $('#character-settings').innerHTML = `<p class="error">${esc(error.message)}</p>`;
   }
 }
-function openCharacterDetail(id) {
-  const sheet = characterSheets.find((entry) => entry.id === id);
-  if (!sheet) return;
-  const status = sheet.active
+const sheetDate = (sheet) => new Date(sheet.createdAt).toLocaleDateString('de-DE');
+const characterStatus = (sheet) =>
+  sheet.active
     ? 'Aktiv'
     : sheet.state === 'failed'
       ? 'Fehlgeschlagen'
       : sheet.state === 'ready'
         ? 'Gespeichert'
-        : 'Wird erstellt';
+        : 'Wird erstellt …';
+const characterThumbnail = (sheet) =>
+  sheet.assetId
+    ? `<span class="character-thumbnail"><img class="fade" data-asset="${sheet.assetId}" alt="Character Sheet vom ${sheetDate(sheet)}" decoding="async"></span>`
+    : `<span class="character-thumbnail character-placeholder">${sheet.state === 'failed' ? icon('close') : '<span class="spinner"></span>'}</span>`;
+// Settings only ever show one sheet: the active one, or the newest attempt while
+// the first generation is still running.
+function currentCharacterSheet() {
+  return characterSheets.find((sheet) => sheet.active) ?? characterSheets[0] ?? null;
+}
+function wireCharacterCards(root) {
+  root.querySelectorAll('img[data-asset]').forEach((img) => (img.src = assetUrl(img.dataset.asset)));
+  wireFades(root);
+  root.querySelectorAll('[data-character]').forEach((button) => {
+    button.onclick = () => openCharacterDetail(button.dataset.character);
+  });
+}
+function openCharacterHistory() {
+  const current = currentCharacterSheet();
+  const past = characterSheets.filter((sheet) => sheet.id !== current?.id);
+  showSheet(
+    'Frühere Versionen',
+    `<h2>Deine bisherigen Sheets.</h2><p>Wähle eine Version, um sie anzusehen, wieder zu aktivieren oder zu löschen.</p><div class="character-versions">${past.map((sheet) => `<button class="character-version" data-character="${sheet.id}" aria-label="Character Sheet vom ${sheetDate(sheet)} öffnen">${characterThumbnail(sheet)}<span class="character-version-copy"><strong>${characterStatus(sheet)}</strong><small>${sheetDate(sheet)}</small></span></button>`).join('')}</div>`,
+  );
+  wireCharacterCards($('#sheet'));
+}
+function openCharacterDetail(id) {
+  const sheet = characterSheets.find((entry) => entry.id === id);
+  if (!sheet) return;
+  const status = characterStatus(sheet);
   showSheet(
     'Character Sheet',
     `${sheet.assetId ? `<figure class="character-detail"><img class="fade" data-asset="${sheet.assetId}" alt="Character Sheet in voller Ansicht" decoding="async"></figure>` : `<div class="character-detail character-placeholder">${sheet.state === 'failed' ? icon('close') : '<span class="spinner"></span>'}</div>`}<dl class="facts"><div><dt>Status</dt><dd>${status}</dd></div><div><dt>Erstellt</dt><dd>${new Date(sheet.createdAt).toLocaleString('de-DE')}</dd></div><div><dt>Referenzfotos</dt><dd>${sheet.referenceAssetIds.length}</dd></div><div><dt>Modell</dt><dd>${esc(sheet.model)} · ${sheet.quality} · ${sheet.size}</dd></div>${sheet.note ? `<div><dt>Hinweis</dt><dd>${esc(sheet.note)}</dd></div>` : ''}${sheet.refinementInstruction ? `<div><dt>Verfeinerung</dt><dd>${esc(sheet.refinementInstruction)}</dd></div>` : ''}${sheet.costMicrounits !== null ? `<div><dt>Kosten</dt><dd>${money(sheet.costMicrounits)}</dd></div>` : ''}${sheet.failureCategory ? `<div><dt>Fehler</dt><dd>${esc(sheet.failureCategory)}</dd></div>` : ''}</dl>${sheet.state === 'ready' && !sheet.active ? '<button class="primary" id="activate-character">Als aktiv verwenden</button>' : ''}${sheet.state === 'ready' && sheet.assetId ? '<button class="secondary" id="refine-character">Mit neuen Fotos verfeinern</button>' : ''}${!sheet.active && ['ready', 'failed'].includes(sheet.state) ? '<button class="text-button" id="remove-character">Character Sheet löschen …</button>' : ''}`,

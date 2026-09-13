@@ -497,6 +497,40 @@ legend {
 .character-version-copy small {
   color: var(--muted);
 }
+/* Die aktive Version steht in den Settings als breite Zeile für sich, damit das
+   Sheet erkennbar bleibt, ohne das Panel auf die Höhe einer 9/16-Kachel zu
+   ziehen. Frühere Versionen liegen als Raster im Dialog dahinter. */
+.character-current {
+  display: flex;
+  width: 100%;
+  margin: 12px 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  text-align: left;
+  background: #f6f5f1;
+}
+.character-current.active {
+  border-color: var(--green);
+  background: #edf1ea;
+}
+.character-current .character-thumbnail {
+  flex: none;
+  width: 96px;
+}
+.character-current-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px;
+  font-size: 13px;
+}
+.character-current-copy small {
+  color: var(--muted);
+  font-size: 12px;
+}
 .character-detail {
   display: grid;
   place-items: center;

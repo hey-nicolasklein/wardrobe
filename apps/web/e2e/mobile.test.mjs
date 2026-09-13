@@ -65,6 +65,24 @@ await page.route('**/v1/character-sheets', async (route) => {
           createdAt: '2026-01-15T12:00:00.000Z',
           finishedAt: '2026-01-15T12:00:00.000Z',
         },
+        {
+          id: '80000000-0000-4000-8000-000000000002',
+          state: 'ready',
+          referenceAssetIds: [lookAssetId],
+          note: null,
+          parentCharacterSheetId: null,
+          refinementInstruction: null,
+          assetId: lookAssetId,
+          active: false,
+          model: 'fixture',
+          quality: 'high',
+          size: '864x1536',
+          providerRequestId: 'fixture',
+          costMicrounits: 0,
+          failureCategory: null,
+          createdAt: '2026-01-02T12:00:00.000Z',
+          finishedAt: '2026-01-02T12:00:00.000Z',
+        },
       ],
     }),
   });
@@ -181,6 +199,14 @@ try {
     path: '/tmp/form-pwa-qa/settings.png',
     fullPage: true,
   });
+  // Settings show the active sheet alone; earlier versions stay behind the dialog.
+  assert.equal(await page.locator('.character-current').count(), 1);
+  assert.equal(await page.locator('.character-version').count(), 0);
+  await page.getByRole('button', { name: 'Frühere Versionen · 1' }).click();
+  await page.getByRole('button', { name: /Character Sheet vom 2\.1\.2026/ }).click();
+  await page.getByRole('button', { name: 'Als aktiv verwenden' }).waitFor();
+  await page.getByRole('button', { name: 'Schließen' }).click();
+  await page.locator('dialog').waitFor({ state: 'hidden' });
   // A finished Character Sheet can be refined into a new version from its detail view.
   await page.getByRole('button', { name: /Character Sheet vom/ }).click();
   await page.getByRole('button', { name: 'Mit neuen Fotos verfeinern' }).click();
