@@ -710,7 +710,9 @@ function renderLookCard(look) {
   if (look.state === 'failed')
     return `<article class="look-card failed-look" data-look="${look.id}">${garments.length ? flatLayMarkup(garments) : ''}<div><h2>Das Bild ist nicht entstanden.</h2><p>Deine Stücke bleiben hier. Du kannst das Bild erneut erstellen.</p></div><button class="primary" data-retry-look="${look.id}">Erneut versuchen</button><button class="text-button" data-delete-look="${look.id}">Löschen …</button></article>`;
   if (look.state !== 'ready') {
-    lookViews.set(look.id, 'flat');
+    // The flat lay is useful while planning, but it is only a loading state.
+    // Once the generated photo arrives, a new look should open as worn.
+    lookViews.delete(look.id);
     return `<article class="look-card developing-look" data-look="${look.id}">${garments.length ? flatLayMarkup(garments) : '<div class="look-planning-art" aria-hidden="true">' + icon('closet') + '</div>'}<div class="look-progress" role="status"><span class="spinner"></span><div><strong>${look.state === 'generating' ? 'Dein Outfit steht.' : 'FORM kombiniert für dich.'}</strong><p>${look.state === 'generating' ? 'Das getragene Bild entsteht gerade.' : garments.length ? 'Diese Stücke sind dabei. FORM ergänzt den Rest.' : 'Deine Stücke erscheinen hier, sobald der Look zusammengestellt ist.'}</p></div></div></article>`;
   }
   const positions = lookItemPositions(garments.map((item) => item.metadata?.category || 'top'));
@@ -1079,7 +1081,7 @@ function openLookMenu(id) {
   $('#look-details').onclick = () =>
     showSheet(
       'Look Details',
-      `<dl class="facts"><div><dt>Konzept</dt><dd>${esc(look.concept ? `${look.concept.activity}, ${look.concept.scene}` : '–')}</dd></div><div><dt>Erstellt</dt><dd>${new Date(look.createdAt).toLocaleString('de-DE')}</dd></div><div><dt>Modell</dt><dd>${esc(look.model)} · ${look.quality} · ${look.size}</dd></div><div><dt>Character Sheet</dt><dd>${esc(look.characterSheetId)}</dd></div><div><dt>Stücke</dt><dd>${look.wardrobeItemIds.map((id) => esc(items.find((i) => i.id === id)?.metadata.name || id)).join(', ')}</dd></div></dl>`,
+      `<dl class="facts"><div><dt>Konzept</dt><dd>${esc(look.concept ? `${look.concept.activity}, ${look.concept.scene}` : '–')}</dd></div><div><dt>Erstellt</dt><dd>${new Date(look.createdAt).toLocaleString('de-DE')}</dd></div><div><dt>Modell</dt><dd>${esc(look.model)} · ${look.quality} · ${look.size}</dd></div><div><dt>Personenreferenz</dt><dd>${esc(look.characterSheetId)}</dd></div><div><dt>Stücke</dt><dd>${look.wardrobeItemIds.map((id) => esc(items.find((i) => i.id === id)?.metadata.name || id)).join(', ')}</dd></div></dl>`,
     );
   $('#download-look').onclick = () => {
     const anchor = document.createElement('a');
