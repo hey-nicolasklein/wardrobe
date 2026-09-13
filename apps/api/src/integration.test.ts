@@ -342,6 +342,23 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
     );
     assert.equal(deniedDownload.status, 404);
 
+    // The app reads its own pictures through the session, without a signed
+    // link, so the URL stays the same and the browser can keep the bytes.
+    const contentPath = `/v1/assets/${fixtureIds.sourceAsset}/content`;
+    const sessionContent = await app.request(contentPath, { headers: ownerHeaders });
+    assert.equal(sessionContent.status, 200);
+    assert.equal(
+      sessionContent.headers.get('Cache-Control'),
+      'private, max-age=31536000, immutable',
+    );
+    assert.ok((await sessionContent.arrayBuffer()).byteLength > 1_000);
+
+    // Widening that route to sessions must not open it to another account, and
+    // an anonymous caller still needs a valid signed link.
+    assert.equal((await app.request(contentPath, { headers: emptyHeaders })).status, 404);
+    assert.equal((await app.request(contentPath)).status, 401);
+    assert.equal((await app.request(`${contentPath}?token=not-a-token`)).status, 401);
+
     const intentResponse = await app.request('/v1/source-photos/upload-intents', {
       method: 'POST',
       headers: { ...ownerHeaders, 'Content-Type': 'application/json' },
