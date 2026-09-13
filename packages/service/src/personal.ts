@@ -92,9 +92,7 @@ export async function itemPreview(
     }),
   );
   const bytes = await object.Body!.transformToByteArray();
-  const normalized = await sharp(bytes, { limitInputPixels: 40_000_000 })
-    .rotate()
-    .toBuffer();
+  const normalized = await sharp(bytes, { limitInputPixels: 40_000_000 }).rotate().toBuffer();
   let image = sharp(normalized);
   if (!row.generated && row.bounding_box) {
     const { width = 1, height = 1 } = await image.metadata();
@@ -104,14 +102,8 @@ export async function itemPreview(
     image = image.extract({
       left,
       top,
-      width: Math.max(
-        1,
-        Math.min(width - left, Math.ceil((b.width * width) / 1000)),
-      ),
-      height: Math.max(
-        1,
-        Math.min(height - top, Math.ceil((b.height * height) / 1000)),
-      ),
+      width: Math.max(1, Math.min(width - left, Math.ceil((b.width * width) / 1000))),
+      height: Math.max(1, Math.min(height - top, Math.ceil((b.height * height) / 1000))),
     });
   }
   return image
@@ -127,9 +119,7 @@ export async function resetPersonalWardrobe(
 ): Promise<void> {
   const assets = await withTransaction(database, async (client) => {
     // Prevent new jobs from being enqueued or leased while clearing their records.
-    await client.query(
-      'LOCK TABLE remote_image_jobs IN SHARE ROW EXCLUSIVE MODE',
-    );
+    await client.query('LOCK TABLE remote_image_jobs IN SHARE ROW EXCLUSIVE MODE');
     const active = await client.query(
       "SELECT 1 FROM remote_image_jobs WHERE account_id = $1 AND state IN ('queued', 'leased') LIMIT 1",
       [accountId],
@@ -144,6 +134,8 @@ export async function resetPersonalWardrobe(
     );
     for (const table of [
       'remote_image_jobs',
+      'looks',
+      'character_sheets',
       'shelf_image_versions',
       'generation_attempts',
       'wardrobe_items',
@@ -152,9 +144,7 @@ export async function resetPersonalWardrobe(
       'source_photos',
       'idempotency_commands',
     ]) {
-      await client.query(`DELETE FROM ${table} WHERE account_id = $1`, [
-        accountId,
-      ]);
+      await client.query(`DELETE FROM ${table} WHERE account_id = $1`, [accountId]);
     }
     const rows = await client.query<{ id: string }>(
       "UPDATE private_assets SET state = 'deleted', deleted_at = now() WHERE account_id = $1 RETURNING id",

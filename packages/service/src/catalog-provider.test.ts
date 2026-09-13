@@ -68,13 +68,15 @@ test('uses strict Responses output and clamps detection boxes', async () => {
     assert.equal(format.strict, true);
     assert.equal((format.schema as { additionalProperties: boolean }).additionalProperties, false);
     const prompt = (
-      requestBody?.input as Array<{ content: Array<{ type: string; text?: string }> }>
+      requestBody?.input as Array<{
+        content: Array<{ type: string; text?: string }>;
+      }>
     )[0]?.content.find(({ type }) => type === 'input_text')?.text;
-    assert.match(prompt ?? '', /Treat screenshots and product grids as multiple pictured instances/);
     assert.match(
       prompt ?? '',
-      /exclude captions, controls, cards, background, and other garments/,
+      /Treat screenshots and product grids as multiple pictured instances/,
     );
+    assert.match(prompt ?? '', /exclude captions, controls, cards, background, and other garments/);
     assert.match(prompt ?? '', /exactly 100 pixels wide and 200 pixels high/);
   } finally {
     globalThis.fetch = originalFetch;
@@ -122,7 +124,9 @@ test('sends one requested quality and requires the provider usage ledger', async
   }
 
   globalThis.fetch = async () =>
-    Response.json({ data: [{ b64_json: Buffer.from('x').toString('base64') }] });
+    Response.json({
+      data: [{ b64_json: Buffer.from('x').toString('base64') }],
+    });
   try {
     await assert.rejects(
       new OpenAICatalogProvider('test-key').generate({
@@ -133,9 +137,50 @@ test('sends one requested quality and requires the provider usage ledger', async
         size: '816x816',
         promptVersion: shelfImagePromptVersion,
       }),
-      (error: unknown) =>
-        error instanceof CatalogProviderError && error.category === 'accounting',
+      (error: unknown) => error instanceof CatalogProviderError && error.category === 'accounting',
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('orders identity before garments and sends custom inspiration dimensions', async () => {
+  const originalFetch = globalThis.fetch;
+  let form: FormData | undefined;
+  globalThis.fetch = async (_input, init) => {
+    form = init?.body as FormData;
+    return Response.json({
+      id: 'look_fixture',
+      data: [{ b64_json: Buffer.from('png fixture').toString('base64') }],
+      usage: {
+        input_tokens_details: { text_tokens: 3, image_tokens: 20 },
+        output_tokens: 40,
+      },
+    });
+  };
+  try {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const webp = Buffer.from('RIFF0000WEBP');
+    await new OpenAICatalogProvider('test-key').generateComposite({
+      references: [jpeg, png, webp],
+      prompt: 'candid look',
+      model: 'gpt-image-2.5-flare',
+      quality: 'medium',
+      size: '1024x1280',
+    });
+    assert.equal(form?.get('quality'), 'medium');
+    assert.equal(form?.get('size'), '1024x1280');
+    const references = form?.getAll('image[]') as File[];
+    assert.deepEqual(
+      references.map((file) => file.name),
+      ['reference-1.jpg', 'reference-2.png', 'reference-3.webp'],
+    );
+    assert.deepEqual(
+      references.map((file) => file.type),
+      ['image/jpeg', 'image/png', 'image/webp'],
+    );
+    assert.deepEqual(Buffer.from(await references[0]!.arrayBuffer()), jpeg);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -158,9 +203,15 @@ test('replay outputs are isolated and cost arithmetic stays integer', async () =
       },
     },
   ]);
-  const first = await replay.generate({ model: 'gpt-image-2.5-flare', quality: 'medium' });
+  const first = await replay.generate({
+    model: 'gpt-image-2.5-flare',
+    quality: 'medium',
+  });
   first.pngBytes[0] = 9;
-  const second = await replay.generate({ model: 'gpt-image-2.5-flare', quality: 'medium' });
+  const second = await replay.generate({
+    model: 'gpt-image-2.5-flare',
+    quality: 'medium',
+  });
   assert.equal(second.pngBytes[0], 1);
   assert.equal(
     calculateCostMicrounits(first.usage, {
@@ -183,7 +234,10 @@ test('classifies transient and non-retryable provider failures', async () => {
     .jpeg()
     .toBuffer();
   globalThis.fetch = async () =>
-    Response.json({ error: { code: 'rate_limit_exceeded', message: 'slow down' } }, { status: 429 });
+    Response.json(
+      { error: { code: 'rate_limit_exceeded', message: 'slow down' } },
+      { status: 429 },
+    );
   try {
     await assert.rejects(
       new OpenAICatalogProvider('test-key').detect({
@@ -191,9 +245,7 @@ test('classifies transient and non-retryable provider failures', async () => {
         model: 'gpt-5.4-mini',
       }),
       (error: unknown) =>
-        error instanceof CatalogProviderError &&
-        error.category === 'rate-limit' &&
-        error.retryable,
+        error instanceof CatalogProviderError && error.category === 'rate-limit' && error.retryable,
     );
   } finally {
     globalThis.fetch = originalFetch;

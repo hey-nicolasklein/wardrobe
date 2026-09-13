@@ -84,7 +84,10 @@ async function clearFixtureObjects(storage: PrivateObjectStorage): Promise<void>
     );
     if (objects.length > 0) {
       await storage.client.send(
-        new DeleteObjectsCommand({ Bucket: storage.bucket, Delete: { Objects: objects } }),
+        new DeleteObjectsCommand({
+          Bucket: storage.bucket,
+          Delete: { Objects: objects },
+        }),
       );
     }
     keyMarker = page.NextKeyMarker;
@@ -103,10 +106,15 @@ export async function resetFixtures(
   await clearFixtureObjects(storage);
   const fixturePngs = new Map(
     await Promise.all(
-      fixtureObjects.map(async (key) => [
-        key,
-        await sharp(Buffer.from(fixtureSvg(key))).png().toBuffer(),
-      ] as const),
+      fixtureObjects.map(
+        async (key) =>
+          [
+            key,
+            await sharp(Buffer.from(fixtureSvg(key)))
+              .png()
+              .toBuffer(),
+          ] as const,
+      ),
     ),
   );
   const fixtureObjectVersions = new Map(
@@ -135,7 +143,7 @@ export async function resetFixtures(
   await withTransaction(database, async (client) => {
     await client.query(`
       TRUNCATE TABLE
-        idempotency_commands, remote_image_jobs, shelf_image_versions,
+        idempotency_commands, remote_image_jobs, look_items, looks, character_sheets, shelf_image_versions,
         generation_attempts, detection_proposals, wardrobe_items,
         source_photos, private_assets, sessions, accounts
       CASCADE
@@ -202,7 +210,17 @@ export async function resetFixtures(
           id, account_id, source_photo_id, state, status, name, category,
           colors, notes, created_at, updated_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $9)`,
-        [id, fixtureIds.populatedAccount, fixtureIds.sourcePhoto, state, status, name, category, colors, timestamp],
+        [
+          id,
+          fixtureIds.populatedAccount,
+          fixtureIds.sourcePhoto,
+          state,
+          status,
+          name,
+          category,
+          colors,
+          timestamp,
+        ],
       );
     }
 

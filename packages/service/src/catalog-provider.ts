@@ -6,6 +6,7 @@ import {
   type GenerationQuality,
   type ItemMetadata,
   type NormalizedBoundingBox,
+  type LookConcept,
 } from '@form/contracts';
 import sharp from 'sharp';
 import { z } from 'zod';
@@ -66,6 +67,22 @@ export interface CatalogProvider {
     promptVersion: string;
     signal?: AbortSignal;
   }): Promise<GenerationProviderResult>;
+  planLook(input: {
+    candidates: Array<{ id: string; metadata: ItemMetadata }>;
+    recent: Array<{ itemIds: string[]; concept: LookConcept | null }>;
+    exactItemIds: string[];
+    categories: string[];
+    model: string;
+    signal?: AbortSignal;
+  }): Promise<{ requestId: string; itemIds: string[]; concept: LookConcept }>;
+  generateComposite(input: {
+    references: Uint8Array[];
+    prompt: string;
+    model: string;
+    quality: GenerationQuality;
+    size: '864x1536' | '1024x1280';
+    signal?: AbortSignal;
+  }): Promise<GenerationProviderResult>;
 }
 
 const detectionOutputSchema = z
@@ -124,7 +141,12 @@ function detectionJsonSchema(pixelWidth: number, pixelHeight: number) {
                 'unsupported',
               ],
             },
-            colors: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 6 },
+            colors: {
+              type: 'array',
+              items: { type: 'string' },
+              minItems: 1,
+              maxItems: 6,
+            },
             boundingBox: {
               type: 'object',
               properties: {
@@ -197,14 +219,8 @@ function clampBox(
 ): NormalizedBoundingBox {
   const x = Math.max(0, Math.min(999, Math.round((box.left / pixelWidth) * 1_000)));
   const y = Math.max(0, Math.min(999, Math.round((box.top / pixelHeight) * 1_000)));
-  const right = Math.max(
-    x + 1,
-    Math.min(1_000, Math.round((box.right / pixelWidth) * 1_000)),
-  );
-  const bottom = Math.max(
-    y + 1,
-    Math.min(1_000, Math.round((box.bottom / pixelHeight) * 1_000)),
-  );
+  const right = Math.max(x + 1, Math.min(1_000, Math.round((box.right / pixelWidth) * 1_000)));
+  const bottom = Math.max(y + 1, Math.min(1_000, Math.round((box.bottom / pixelHeight) * 1_000)));
   const width = right - x;
   const height = bottom - y;
   return { x, y, width, height };
@@ -245,6 +261,41 @@ async function readProviderResponse(response: Response): Promise<unknown> {
       response.status >= 500,
     );
   }
+}
+
+function supportedImageType(bytes: Uint8Array): {
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+  extension: 'jpg' | 'png' | 'webp';
+} {
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
+    return { mimeType: 'image/jpeg', extension: 'jpg' };
+  if (
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  )
+    return { mimeType: 'image/png', extension: 'png' };
+  if (
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  )
+    return { mimeType: 'image/webp', extension: 'webp' };
+  throw new CatalogProviderError(
+    'validation',
+    'An image reference uses an unsupported file format.',
+    false,
+  );
 }
 
 export class OpenAICatalogProvider implements CatalogProvider {
@@ -343,7 +394,10 @@ export class OpenAICatalogProvider implements CatalogProvider {
         id: randomUUID(),
         name: detection.name.trim().slice(0, 80),
         category: detection.category,
-        colors: detection.colors.map((color) => color.trim().slice(0, 32)).filter(Boolean).slice(0, 6),
+        colors: detection.colors
+          .map((color) => color.trim().slice(0, 32))
+          .filter(Boolean)
+          .slice(0, 6),
         boundingBox: clampBox(detection.boundingBox, pixelWidth, pixelHeight),
       }),
     );
@@ -426,6 +480,181 @@ export class OpenAICatalogProvider implements CatalogProvider {
       },
     };
   }
+
+  async planLook(input: {
+    candidates: Array<{ id: string; metadata: ItemMetadata }>;
+    recent: Array<{ itemIds: string[]; concept: LookConcept | null }>;
+    exactItemIds: string[];
+    categories: string[];
+    model: string;
+    signal?: AbortSignal;
+  }): Promise<{ requestId: string; itemIds: string[]; concept: LookConcept }> {
+    const schema = {
+      type: 'object',
+      properties: {
+        itemIds: {
+          type: 'array',
+          items: { type: 'string', enum: input.candidates.map(({ id }) => id) },
+          minItems: 1,
+          maxItems: 12,
+        },
+        concept: {
+          type: 'object',
+          properties: {
+            activity: { type: 'string', maxLength: 300 },
+            scene: { type: 'string', maxLength: 300 },
+            framing: { type: 'string', enum: ['full-body', 'three-quarter'] },
+            mood: { type: 'string', maxLength: 200 },
+          },
+          required: ['activity', 'scene', 'framing', 'mood'],
+          additionalProperties: false,
+        },
+      },
+      required: ['itemIds', 'concept'],
+      additionalProperties: false,
+    } as const;
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/responses`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        signal: input.signal,
+        body: JSON.stringify({
+          model: input.model,
+          store: false,
+          input: `Plan one coherent candid outfit photograph. Exact item IDs are mandatory. Satisfy every requested category. Avoid recent combinations and situations. Do not use weather, season or location context. Candidates: ${JSON.stringify(input.candidates)}. Exact: ${JSON.stringify(input.exactItemIds)}. Categories: ${JSON.stringify(input.categories)}. Recent: ${JSON.stringify(input.recent)}.`,
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'look_plan',
+              strict: true,
+              schema,
+            },
+          },
+        }),
+      });
+    } catch (error) {
+      if ((error as { name?: string }).name === 'AbortError')
+        throw new CatalogProviderError('timeout', 'OpenAI planning timed out.', true);
+      throw new CatalogProviderError('connection', 'OpenAI planning could not connect.', true);
+    }
+    const body = await readProviderResponse(response);
+    if (!response.ok) throw providerErrorFromResponse(response.status, body);
+    const raw = body as {
+      id?: string;
+      output_text?: string;
+      output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+    };
+    try {
+      const text =
+        raw.output_text ??
+        raw.output?.flatMap((o) => o.content ?? []).find((c) => c.type === 'output_text')?.text ??
+        '';
+      const parsed = z
+        .object({
+          itemIds: z.array(z.string()).min(1).max(12),
+          concept: z
+            .object({
+              activity: z.string().min(1).max(300),
+              scene: z.string().min(1).max(300),
+              framing: z.enum(['full-body', 'three-quarter']),
+              mood: z.string().min(1).max(200),
+            })
+            .strict(),
+        })
+        .strict()
+        .parse(JSON.parse(text));
+      const allowed = new Set(input.candidates.map(({ id }) => id));
+      if (
+        parsed.itemIds.some((id) => !allowed.has(id)) ||
+        input.exactItemIds.some((id) => !parsed.itemIds.includes(id))
+      )
+        throw new Error();
+      return {
+        requestId: raw.id ?? response.headers.get('x-request-id') ?? randomUUID(),
+        ...parsed,
+      };
+    } catch {
+      throw new CatalogProviderError('validation', 'OpenAI returned an invalid Look plan.', false);
+    }
+  }
+
+  async generateComposite(input: {
+    references: Uint8Array[];
+    prompt: string;
+    model: string;
+    quality: GenerationQuality;
+    size: '864x1536' | '1024x1280';
+    signal?: AbortSignal;
+  }): Promise<GenerationProviderResult> {
+    const form = new FormData();
+    form.set('model', input.model);
+    input.references.forEach((bytes, index) => {
+      const { mimeType, extension } = supportedImageType(bytes);
+      form.append(
+        'image[]',
+        new Blob([bytes], { type: mimeType }),
+        `reference-${index + 1}.${extension}`,
+      );
+    });
+    form.set('prompt', input.prompt);
+    form.set('quality', input.quality);
+    form.set('size', input.size);
+    form.set('output_format', 'png');
+    form.set('moderation', 'auto');
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/images/edits`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.apiKey}` },
+        body: form,
+        signal: input.signal,
+      });
+    } catch (error) {
+      if ((error as { name?: string }).name === 'AbortError')
+        throw new CatalogProviderError('timeout', 'OpenAI image editing timed out.', true);
+      throw new CatalogProviderError('connection', 'OpenAI image editing could not connect.', true);
+    }
+    const body = await readProviderResponse(response);
+    if (!response.ok) throw providerErrorFromResponse(response.status, body);
+    const raw = body as {
+      id?: string;
+      service_tier?: string;
+      data?: Array<{ b64_json?: string }>;
+      usage?: {
+        output_tokens?: number;
+        input_tokens_details?: { text_tokens?: number; image_tokens?: number };
+      };
+    };
+    const encoded = raw.data?.[0]?.b64_json;
+    const details = raw.usage?.input_tokens_details;
+    if (!encoded)
+      throw new CatalogProviderError('validation', 'OpenAI returned no edited image.', false);
+    if (
+      details?.text_tokens === undefined ||
+      details.image_tokens === undefined ||
+      raw.usage?.output_tokens === undefined
+    )
+      throw new CatalogProviderError(
+        'accounting',
+        'OpenAI returned an image without the required usage ledger.',
+        false,
+      );
+    return {
+      requestId: raw.id ?? response.headers.get('x-request-id') ?? randomUUID(),
+      pngBytes: Buffer.from(encoded, 'base64'),
+      usage: {
+        textInputTokens: details.text_tokens,
+        imageInputTokens: details.image_tokens,
+        outputTokens: raw.usage.output_tokens,
+        serviceTier: raw.service_tier ?? 'default',
+        raw: raw.usage,
+      },
+    };
+  }
 }
 
 export type ReplayCatalogFixture = {
@@ -453,7 +682,8 @@ export class ReplayCatalogProvider implements CatalogProvider {
 
   async detect(input: { model: string }): Promise<DetectionProviderResult> {
     const result = this.fixture(`detect:${input.model}`).detection;
-    if (!result) throw new CatalogProviderError('validation', 'Replay detection is missing.', false);
+    if (!result)
+      throw new CatalogProviderError('validation', 'Replay detection is missing.', false);
     return structuredClone(result);
   }
 
@@ -462,7 +692,50 @@ export class ReplayCatalogProvider implements CatalogProvider {
     quality: GenerationQuality;
   }): Promise<GenerationProviderResult> {
     const result = this.fixture(`generate:${input.model}:${input.quality}`).generation;
-    if (!result) throw new CatalogProviderError('validation', 'Replay generation is missing.', false);
-    return { ...structuredClone(result), pngBytes: Buffer.from(result.pngBytes) };
+    if (!result)
+      throw new CatalogProviderError('validation', 'Replay generation is missing.', false);
+    return {
+      ...structuredClone(result),
+      pngBytes: Buffer.from(result.pngBytes),
+    };
+  }
+
+  async planLook(input: {
+    candidates: Array<{ id: string; metadata: ItemMetadata }>;
+    exactItemIds: string[];
+  }): Promise<{ requestId: string; itemIds: string[]; concept: LookConcept }> {
+    const fixture = this.fixtures.get('plan:look');
+    const planned = fixture as
+      | (ReplayCatalogFixture & {
+          plan?: { requestId: string; itemIds: string[]; concept: LookConcept };
+        })
+      | undefined;
+    return structuredClone(
+      planned?.plan ?? {
+        requestId: 'replay-look-plan',
+        itemIds: input.exactItemIds.length
+          ? input.exactItemIds
+          : input.candidates.slice(0, 3).map(({ id }) => id),
+        concept: {
+          activity: 'walking with a coffee',
+          scene: 'a quiet street',
+          framing: 'full-body',
+          mood: 'relaxed',
+        },
+      },
+    );
+  }
+
+  async generateComposite(input: {
+    model: string;
+    quality: GenerationQuality;
+  }): Promise<GenerationProviderResult> {
+    const result = this.fixture(`generate:${input.model}:${input.quality}`).generation;
+    if (!result)
+      throw new CatalogProviderError('validation', 'Replay generation is missing.', false);
+    return {
+      ...structuredClone(result),
+      pngBytes: Buffer.from(result.pngBytes),
+    };
   }
 }
