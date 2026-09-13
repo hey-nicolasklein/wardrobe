@@ -99,10 +99,31 @@ function pageIsTruncated(nextKeyMarker: string | undefined): boolean {
   return nextKeyMarker !== undefined;
 }
 
+// resetFixtures TRUNCATEs every table. It once pointed at the same database and
+// bucket as `npm run dev:api`, so booting the browser fixture server wiped whatever
+// was in the local wardrobe. Fixtures now live in their own database and bucket, and
+// this guard makes that separation load-bearing instead of a convention a future
+// env file can quietly undo.
+export function assertFixtureTarget(environment: NodeJS.ProcessEnv = process.env): void {
+  const databaseName = new URL(environment.DATABASE_URL ?? 'postgresql://invalid/none').pathname.slice(1);
+  if (!databaseName.endsWith('_fixtures'))
+    throw new Error(
+      `Refusing to reset fixtures against database "${databaseName}": the name must end in "_fixtures". ` +
+        'Point DATABASE_URL at the disposable fixture database (see .env.services.example).',
+    );
+  const bucket = environment.S3_BUCKET ?? '';
+  if (!bucket.includes('fixture'))
+    throw new Error(
+      `Refusing to reset fixtures against bucket "${bucket}": the name must contain "fixture". ` +
+        'Point S3_BUCKET at the disposable fixture bucket (see .env.services.example).',
+    );
+}
+
 export async function resetFixtures(
   database: Database,
   storage: PrivateObjectStorage,
 ): Promise<void> {
+  assertFixtureTarget();
   await clearFixtureObjects(storage);
   const fixturePngs = new Map(
     await Promise.all(

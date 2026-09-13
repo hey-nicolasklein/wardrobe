@@ -1,6 +1,6 @@
 ---
 name: verify-form
-description: Launch and drive FORM, the private mobile-web PWA in apps/web (browse wardrobe, upload/save/edit items, wishlist, archive, catalog images, reset), against disposable Postgres+MinIO fixtures and capture screenshots + ARIA snapshots. Reach for this to prove a real user path works end to end in the browser, not just that unit tests pass.
+description: Drive FORM, the mobile-web PWA in apps/web, in a real browser against the disposable form_fixtures database, and capture screenshots + ARIA snapshots. This is the repo's most expensive check — use it for a multi-step user flow (upload → detect → save → review) or a visible bug you cannot diagnose from the code. Not for copy, styling, or a one-line change; `npm run verify --workspace=<pkg>` covers those.
 ---
 
 # Verify FORM (mobile-web PWA)
@@ -17,19 +17,25 @@ of scope for automated verification (see Gotchas).
 
 ## Launch
 
-Verification runs against **disposable** Postgres + MinIO, never the personal
-deployment. All commands run from the repo root with Node 24+.
+Verification runs against the **disposable `form_fixtures` database** and the
+`form-fixture-media` bucket — never the personal deployment, and never the `form`
+database that `npm run dev:*` uses. All commands run from the repo root with Node 24+.
 
 ```sh
-# 1. Disposable services (idempotent; skip if doctor already sees ports 55432 + 9100)
+# 1. Local services (idempotent; skip if doctor already sees ports 55432 + 9100)
 npm run services:up          # docker compose postgres + object-storage, --wait
-npm run services:migrate     # schema; prints "Database is current." when done
 
-# 2. Fixture web server on loopback :18444 (resets fixtures on every boot)
+# 2. Fixture web server on loopback :18444
 node --env-file=.env.services.local --import tsx apps/web/e2e/serve.mjs
 ```
 
-`.env.services.local` carries the disposable DB/S3 URLs and `FIXTURE_RESET_ALLOWED=true`.
+The server migrates its own schema, creates its bucket, and re-seeds fixtures on every
+boot, so step 2 works against an empty fixture database with no separate migrate step.
+
+`.env.services.local` carries the fixture DB/S3 URLs and `FIXTURE_RESET_ALLOWED=true`.
+It must stay pointed at `form_fixtures`: `resetFixtures` TRUNCATEs every table and
+refuses any database whose name does not end in `_fixtures`. If you see that refusal,
+fix the env file — never the guard.
 The server is **ready** when it prints `PWA test server ready` and `GET /health/ready`
 returns `{"status":"ready",...}` (usually <2s). It serves the static shell at `/` and
 the API under `/v1`. It re-seeds fixtures on each start, so a fresh launch is a clean slate.

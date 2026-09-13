@@ -34,4 +34,11 @@ npm run verify --workspace=@form/contracts
 npm run verify --workspace=@form/web
 ```
 
-Database integration and browser tests require disposable services. Never run fixture reset against the personal deployment.
+Database integration and browser tests run against the disposable `form_fixtures` database and `form-fixture-media` bucket, configured in `.env.services.local`. Local development uses a separate `form` database (`apps/api/.env.local`) that fixture resets must never touch — `resetFixtures` truncates every table and refuses any database whose name does not end in `_fixtures`. Never run fixture reset against the personal deployment.
+
+A fresh checkout needs the fixture database created once:
+
+```sh
+npm run services:up
+docker compose exec postgres createdb -U form form_fixtures   # once; ignore "already exists"
+```
