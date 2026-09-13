@@ -531,7 +531,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
         body: JSON.stringify({
           model: input.model,
           store: false,
-          input: `Plan one coherent candid outfit photograph. Exact item IDs are mandatory. Satisfy every requested category. Build a complete outfit around the exact items, adding complementary pieces from the candidates. Match the requested occasion in both clothing and scene when provided. Avoid recent combinations and situations. Do not use weather, season or location context. Candidates: ${JSON.stringify(input.candidates)}. Exact: ${JSON.stringify(input.exactItemIds)}. Categories: ${JSON.stringify(input.categories)}. Occasion: ${JSON.stringify(input.occasion ?? null)}. Recent: ${JSON.stringify(input.recent)}.`,
+          input: `Plan one coherent candid outfit photograph. Exact item IDs are mandatory. Satisfy every requested category. Build a complete outfit around the exact items, adding complementary pieces from the candidates. For pieces you add automatically, choose at most one top, at most one jacket, and at most one lower-body piece (pants or skirt). A dress replaces the top and lower-body piece; a jacket may be layered over either. Do not select alternative garments in the same slot. Match the requested occasion in both clothing and scene when provided. Avoid recent combinations and situations. Do not use weather, season or location context. Candidates: ${JSON.stringify(input.candidates)}. Exact: ${JSON.stringify(input.exactItemIds)}. Categories: ${JSON.stringify(input.categories)}. Occasion: ${JSON.stringify(input.occasion ?? null)}. Recent: ${JSON.stringify(input.recent)}.`,
           text: {
             format: {
               type: 'json_schema',
