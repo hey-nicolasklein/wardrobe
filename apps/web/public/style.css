@@ -242,6 +242,72 @@ h3 {
   color: white;
   border-color: var(--green);
 }
+.wardrobe-status {
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  background: #eaece5;
+}
+.wardrobe-status .chip {
+  flex: 1;
+  padding: 9px 5px;
+  border-color: transparent;
+  border-radius: 10px;
+  white-space: normal;
+}
+.wardrobe-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.wardrobe-filter-bar .round {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.active-wardrobe-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.active-wardrobe-filters[hidden] {
+  display: none;
+}
+.active-wardrobe-filters .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #eaece5;
+}
+.active-wardrobe-filters .icon {
+  width: 14px;
+  height: 14px;
+}
+.wardrobe-filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.wardrobe-filter-options[hidden],
+.wardrobe-filter-option[hidden] {
+  display: none;
+}
+.wardrobe-filter-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 12px;
+  min-height: 44px;
+}
+.wardrobe-filter-option .color-swatch,
+.active-wardrobe-filters .color-swatch {
+  flex-shrink: 0;
+}
 .feedback-options {
   margin-top: 20px;
 }
@@ -471,6 +537,19 @@ h3 {
   scale: 0.92;
   transition-duration: 0.1s;
   transition-delay: 0s;
+}
+/* Nur mit echtem Zeiger: das Stück wächst unter dem Cursor und legt sich über
+   die Nachbarn. Touch kennt kein Hover und würde den Zustand kleben lassen. */
+@media (hover: hover) and (pointer: fine) {
+  .revealed .look-items button:hover {
+    scale: 1.07;
+    z-index: 3;
+    transition-duration: 0.2s;
+    transition-delay: 0s;
+  }
+  .look-items button:active {
+    scale: 1;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .look-photo::after,
@@ -1343,8 +1422,20 @@ dialog:not([open])::backdrop {
   letter-spacing: 0.3px;
 }
 .item-colors {
-  margin: 6px 0 0;
-  text-transform: capitalize;
+  display: flex;
+  gap: 7px;
+  margin: 9px 0 0;
+}
+.color-swatch {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #4d55451f;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px #ffffff4d;
+}
+.color-swatch.near-paper {
+  border-color: #68706070;
 }
 .inline {
   display: grid;

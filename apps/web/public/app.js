@@ -85,7 +85,10 @@ let items = [],
   characterSheets = [],
   page = 'feed',
   stateFilter = 'all',
-  category = 'all',
+  selectedCategories = new Set(),
+  selectedColors = new Set(),
+  searchExpanded = false,
+  expandedWardrobeFilter = 'color',
   query = '',
   detailId = null,
   importBusy = false,
@@ -245,7 +248,10 @@ function shell(content) {
 }
 function navigate(next) {
   page = next;
-  category = 'all';
+  selectedCategories.clear();
+  selectedColors.clear();
+  searchExpanded = false;
+  expandedWardrobeFilter = 'color';
   query = '';
   location.hash = next;
   render();
@@ -267,11 +273,10 @@ function renderWardrobe() {
     archived ? i.state === 'archived' : i.state !== 'archived',
   );
   shell(`<div class="hero"><div><p class="eyebrow">${archived ? 'Dein Archiv' : 'Weniger suchen. Lieber tragen.'}</p><h1>${archived ? 'Gut aufgehoben.' : 'Dein Schrank.'}</h1><p class="muted">${collection.length} ${collection.length === 1 ? 'Stück' : 'Stücke'} gesammelt.</p></div>${archived ? '' : `<button class="round" id="add" aria-label="Kleidung hinzufügen">${icon('plus')}</button>`}</div>
-  <div class="search">${icon('search')}<input type="search" id="search" aria-label="Kleiderschrank durchsuchen" placeholder="Finde dein Lieblingsstück" value="${esc(query)}"></div>
   ${
     archived
       ? ''
-      : `<div class="filters" aria-label="Status">${[
+      : `<div class="wardrobe-status" role="group" aria-label="Status">${[
           ['all', 'Alle'],
           ['owning', 'Besitze ich'],
           ['wanting', 'Wünsche ich mir'],
@@ -281,7 +286,10 @@ function renderWardrobe() {
               `<button class="chip ${stateFilter === value ? 'active' : ''}" data-state="${value}" aria-pressed="${stateFilter === value}">${label}</button>`,
           )
           .join('')}</div>`
-  }<div class="filters" aria-label="Kategorien">${[['all', 'Alle'], ...Object.entries(categories).filter(([c]) => collection.some((i) => i.metadata.category === c))].map(([c, label]) => `<button class="chip ${category === c ? 'active' : ''}" data-cat="${c}" aria-pressed="${category === c}">${label}</button>`).join('')}</div><div id="results"></div>`);
+  }<div class="wardrobe-filter-bar"><button class="chip" id="filter-category" aria-expanded="${expandedWardrobeFilter === 'category'}" aria-controls="wardrobe-category-options">Kategorie${selectedCategories.size ? ` · ${selectedCategories.size}` : ''} ▾</button><button class="chip" id="filter-color" aria-expanded="${expandedWardrobeFilter === 'color'}" aria-controls="wardrobe-color-options">Farbe${selectedColors.size ? ` · ${selectedColors.size}` : ''} ▾</button><button class="round" id="toggle-search" aria-label="Suche ${searchExpanded || query ? 'schließen' : 'öffnen'}" aria-expanded="${Boolean(searchExpanded || query)}" aria-controls="wardrobe-search">${icon('search')}</button></div>
+  ${wardrobeFilterOptions('category')}${wardrobeFilterOptions('color')}
+  <div class="search" id="wardrobe-search" ${searchExpanded || query ? '' : 'hidden'}>${icon('search')}<input type="search" id="search" aria-label="Kleiderschrank durchsuchen" placeholder="Name, Farbe oder Notiz" value="${esc(query)}"></div>
+  <div id="active-wardrobe-filters" class="active-wardrobe-filters"></div><div id="results"></div>`);
   if ($('#add')) $('#add').onclick = () => navigate('add');
   document.querySelectorAll('[data-state]').forEach(
     (b) =>
@@ -294,22 +302,117 @@ function renderWardrobe() {
     query = e.target.value;
     applyFilter();
   };
-  document.querySelectorAll('[data-cat]').forEach(
-    (b) =>
-      (b.onclick = () => {
-        category = b.dataset.cat;
-        document.querySelectorAll('[data-cat]').forEach((c) => {
-          c.classList.toggle('active', c.dataset.cat === category);
-          c.setAttribute('aria-pressed', String(c.dataset.cat === category));
-        });
-        applyFilter();
-      }),
-  );
-  wireScrollFade($('.filters'));
+  $('#toggle-search').onclick = () => {
+    searchExpanded = !(searchExpanded || query);
+    if (!searchExpanded) query = '';
+    renderWardrobe();
+    $(searchExpanded ? '#search' : '#toggle-search').focus();
+  };
+  for (const kind of ['category', 'color']) {
+    $(`#filter-${kind}`).onclick = () => {
+      expandedWardrobeFilter = expandedWardrobeFilter === kind ? null : kind;
+      renderActiveWardrobeFilters();
+    };
+  }
+  document.querySelectorAll('[data-wardrobe-option]').forEach((button) => {
+    button.onclick = () => {
+      const selected = button.dataset.wardrobeOption === 'color' ? selectedColors : selectedCategories;
+      if (selected.has(button.dataset.value)) selected.delete(button.dataset.value);
+      else selected.add(button.dataset.value);
+      applyFilter();
+    };
+  });
   const cached = resultsByPage.get(page);
   if (cached) $('#results').replaceWith(cached);
   else resultsByPage.set(page, $('#results'));
   renderResults();
+}
+const wardrobeColors = {
+  black: ['Schwarz', '#343632', /schwarz|black|anthrazit|charcoal/],
+  white: ['Weiß', '#f5f1e7', /weiß|weiss|white|elfenbein|ivory|off.?white/],
+  gray: ['Grau', '#b9bdb8', /grau|gr[ae]y|silber|silver/],
+  beige: ['Beige', '#ded0b8', /beige|creme|cream|sand|ecru/],
+  brown: ['Braun', '#99785e', /braun|brown|camel|cognac|taupe|chocolat|schoko/],
+  blue: ['Blau', '#739bbd', /blau|blue|navy|denim|türkis|tuerkis|turquoise|petrol|teal/],
+  green: ['Grün', '#92ad87', /grün|gruen|green|oliv|khaki|mint|salbei|sage/],
+  yellow: ['Gelb', '#e6d68e', /gelb|yellow|gold|senf|mustard/],
+  orange: ['Orange', '#dfa67f', /orange|apricot|aprikos|peach|pfirsich|terracotta|rost|rust/],
+  red: ['Rot', '#c27870', /rot|red|bordeaux|burgund|burgundy|wein|korall|coral/],
+  purple: ['Lila', '#b9a7c9', /lila|purple|violet|lavendel|lavender|flieder|mauve/],
+  pink: ['Rosa', '#dda9b8', /rosa|pink|rosé|rose|magenta|fuchsia/],
+  other: ['Weitere', '#b8bba9', /bunt|multi/],
+};
+// Match every named family so patterned garments can appear under multiple colors.
+function colorFamilies(color) {
+  const normalized = color.toLocaleLowerCase('de').trim();
+  const matches = Object.entries(wardrobeColors)
+    .filter(([, [, , pattern]]) => pattern.test(normalized))
+    .map(([key]) => key);
+  return matches.length ? matches : ['other'];
+}
+// Each picker ignores its own selection so additional options remain selectable.
+function availableWardrobeOptions(kind) {
+  const collection = items.filter((item) =>
+    (page === 'archived' ? item.state === 'archived' : item.state !== 'archived') &&
+    (page === 'archived' || stateFilter === 'all' || item.state === stateFilter) &&
+    (kind === 'color'
+      ? !selectedCategories.size || selectedCategories.has(item.metadata.category)
+      : !selectedColors.size || item.metadata.colors.some((color) => colorFamilies(color).some((family) => selectedColors.has(family)))),
+  );
+  return new Set(collection.flatMap((item) => kind === 'color'
+    ? item.metadata.colors.flatMap(colorFamilies) : [item.metadata.category]));
+}
+function wardrobeFilterOptions(kind) {
+  const isColor = kind === 'color';
+  const selected = isColor ? selectedColors : selectedCategories;
+  const available = availableWardrobeOptions(kind);
+  const options = isColor
+    ? Object.entries(wardrobeColors).map(([key, [label, tone]]) => [key, label, tone])
+    : Object.entries(categories);
+  return `<div id="wardrobe-${kind}-options" class="wardrobe-filter-options" role="group" aria-label="${isColor ? 'Farben' : 'Kategorien'}" ${expandedWardrobeFilter === kind ? '' : 'hidden'}>${options.map(([key, label, tone]) => `<button ${available.has(key) ? '' : 'hidden'} class="chip wardrobe-filter-option ${selected.has(key) ? 'active' : ''}" data-wardrobe-option="${kind}" data-value="${key}" aria-pressed="${selected.has(key)}">${isColor ? `<span class="color-swatch" style="--swatch:${tone}" aria-hidden="true"></span>` : ''}<span>${esc(label)}</span></button>`).join('')}</div>`;
+}
+function renderActiveWardrobeFilters() {
+  const root = $('#active-wardrobe-filters');
+  if (!root) return;
+  for (const [kind, label, selected] of [['category', 'Kategorie', selectedCategories], ['color', 'Farbe', selectedColors]]) {
+    const expanded = expandedWardrobeFilter === kind;
+    const toggle = $(`#filter-${kind}`);
+    toggle.textContent = `${label}${selected.size ? ` · ${selected.size}` : ''} ${expanded ? '▴' : '▾'}`;
+    toggle.setAttribute('aria-expanded', String(expanded));
+    toggle.classList.toggle('active', expanded);
+    const options = $(`#wardrobe-${kind}-options`);
+    options.hidden = !expanded;
+    const available = availableWardrobeOptions(kind);
+    options.querySelectorAll('[data-wardrobe-option]').forEach((button) => {
+      button.hidden = !available.has(button.dataset.value);
+      if (button.hidden && document.activeElement === button) toggle.focus();
+      const active = selected.has(button.dataset.value);
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+  }
+  const chips = [
+    ...[...selectedCategories].map((key) => ['category', key, categories[key]]),
+    ...[...selectedColors].map((key) => ['color', key, wardrobeColors[key][0]]),
+  ];
+  root.hidden = !chips.length && !query;
+  root.innerHTML = chips.map(([kind, key, label]) => `<button class="chip" data-filter-kind="${kind}" data-filter-key="${key}" aria-label="${esc(label)} entfernen">${kind === 'color' ? `<span class="color-swatch" style="--swatch:${wardrobeColors[key][1]}" aria-hidden="true"></span>` : ''}${esc(label)} ${icon('close')}</button>`).join('') + (chips.length || query ? '<button class="text-button" id="reset-wardrobe-filters">Zurücksetzen</button>' : '');
+  root.querySelectorAll('[data-filter-key]').forEach((button) => {
+    button.onclick = () => {
+      const focusId = button.dataset.filterKind === 'color' ? '#filter-color' : '#filter-category';
+      (button.dataset.filterKind === 'color' ? selectedColors : selectedCategories).delete(button.dataset.filterKey);
+      applyFilter();
+      $(focusId).focus();
+    };
+  });
+  if ($('#reset-wardrobe-filters')) $('#reset-wardrobe-filters').onclick = () => {
+    selectedCategories.clear();
+    selectedColors.clear();
+    query = '';
+    $('#search').value = '';
+    applyFilter();
+    $('#filter-category').focus();
+  };
 }
 function renderItemPhoto(item) {
   if (['queued', 'generating'].includes(item.status))
@@ -327,6 +430,51 @@ const tint = (id) => {
   for (const character of id) sum = (sum + character.charCodeAt(0)) % 3;
   return sum;
 };
+const colorTones = {
+  beige: '#ded0b8',
+  black: '#62645f',
+  blau: '#9eb9ce',
+  blue: '#9eb9ce',
+  braun: '#b99b83',
+  brown: '#b99b83',
+  creme: '#eee3c7',
+  cream: '#eee3c7',
+  gelb: '#e6d68e',
+  gold: '#d8bd78',
+  grau: '#b9bdb8',
+  gray: '#b9bdb8',
+  green: '#a9c2a1',
+  grün: '#a9c2a1',
+  grey: '#b9bdb8',
+  lila: '#b9a7c9',
+  navy: '#8296ad',
+  orange: '#dfa67f',
+  pink: '#dda9b8',
+  purple: '#b9a7c9',
+  red: '#cf9189',
+  rosa: '#dda9b8',
+  rot: '#cf9189',
+  schwarz: '#62645f',
+  silber: '#c5c8c5',
+  silver: '#c5c8c5',
+  türkis: '#91c5be',
+  turquoise: '#91c5be',
+  violet: '#b9a7c9',
+  weiß: '#f5f1e7',
+  white: '#f5f1e7',
+  yellow: '#e6d68e',
+};
+function colorTone(name) {
+  const normalized = name.toLocaleLowerCase('de').trim();
+  const match = Object.keys(colorTones).find((color) => normalized.includes(color));
+  return colorTones[match] || '#b8bba9';
+}
+const colorSwatches = (colors) =>
+  `<span class="item-colors" aria-label="Farben: ${esc(colors.join(', '))}">${colors.map((color) => {
+    const tone = colorTone(color);
+    const nearPaper = ['#eee3c7', '#f5f1e7'].includes(tone) ? ' near-paper' : '';
+    return `<span class="color-swatch${nearPaper}" style="--swatch:${tone}" aria-hidden="true"></span>`;
+  }).join('')}</span>`;
 function buildTile(item) {
   const tile = document.createElement('button');
   tile.className = `item tint-${tint(item.id)}`;
@@ -352,7 +500,8 @@ function buildTile(item) {
 }
 const matchesFilter = (item) =>
   (page === 'archived' || stateFilter === 'all' || item.state === stateFilter) &&
-  (category === 'all' || item.metadata.category === category) &&
+  (!selectedCategories.size || selectedCategories.has(item.metadata.category)) &&
+  (!selectedColors.size || item.metadata.colors.some((color) => colorFamilies(color).some((family) => selectedColors.has(family)))) &&
   `${item.metadata.name} ${item.metadata.colors.join(' ')} ${item.metadata.notes || ''} ${categories[item.metadata.category]}`
     .toLocaleLowerCase()
     .includes(query.toLocaleLowerCase());
@@ -376,6 +525,7 @@ function renderResults() {
   applyFilter();
 }
 function applyFilter() {
+  renderActiveWardrobeFilters();
   const container = $('#results');
   const grid = container && $('.grid', container);
   const empty = container && $('#no-results', container);
@@ -389,12 +539,12 @@ function applyFilter() {
     if (show) visible++;
   }
   $('#result-count', container).textContent = `${visible} ${visible === 1 ? 'Stück' : 'Stücke'}`;
-  $('.section-row', container).hidden = !visible;
+  $('.section-row', container).hidden = false;
   grid.hidden = !visible;
   empty.hidden = Boolean(visible);
   if (visible) return;
-  const narrowed = Boolean(query) || category !== 'all';
-  empty.innerHTML = `${icon('closet')}<h2>${narrowed ? 'Noch nicht gefunden.' : 'Platz für deine Stücke.'}</h2><p>${narrowed ? 'Versuche einen anderen Suchbegriff oder eine andere Kategorie.' : 'Fang mit ein paar Lieblingsstücken an. Ein Foto reicht, den Rest kannst du später ergänzen.'}</p>${narrowed ? '' : '<button class="primary" id="empty-add">Erstes Stück hinzufügen</button>'}`;
+  const narrowed = Boolean(query) || selectedCategories.size > 0 || selectedColors.size > 0 || (page !== 'archived' && stateFilter !== 'all');
+  empty.innerHTML = `${icon('closet')}<h2>${narrowed ? 'Noch nicht gefunden.' : 'Platz für deine Stücke.'}</h2><p>${narrowed ? 'Passe deine Filter an oder versuche einen anderen Suchbegriff.' : 'Fang mit ein paar Lieblingsstücken an. Ein Foto reicht, den Rest kannst du später ergänzen.'}</p>${narrowed ? '' : '<button class="primary" id="empty-add">Erstes Stück hinzufügen</button>'}`;
   if ($('#empty-add')) $('#empty-add').onclick = () => navigate('add');
 }
 async function refreshItems() {
@@ -825,9 +975,11 @@ function wireLookCards() {
       (button.onclick = (event) => {
         event.stopPropagation();
         const card = button.closest('.look-card');
+        card.hoverRevealed = false;
         toggleLookReveal(card, !card.classList.contains('revealed'));
       }),
   );
+  wireLookHoverReveal();
   document.querySelectorAll('[data-look-item]').forEach(
     (button) =>
       (button.onclick = (event) => {
@@ -859,6 +1011,23 @@ function wireLookCards() {
           toggleLookReveal(card, false);
       }),
   );
+}
+/* Auf dem Desktop zeigt der Look seine Stücke schon beim Überfahren des Fotos.
+   Ein Klick hat Vorrang: was angeklickt wurde, bleibt beim Verlassen offen. */
+function wireLookHoverReveal() {
+  if (!matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  document.querySelectorAll('.ready-look').forEach((card) => {
+    card.onpointerenter = () => {
+      if (card.classList.contains('revealed')) return;
+      card.hoverRevealed = true;
+      toggleLookReveal(card, true);
+    };
+    card.onpointerleave = () => {
+      if (!card.hoverRevealed) return;
+      card.hoverRevealed = false;
+      toggleLookReveal(card, false);
+    };
+  });
 }
 function openLookComposer(preselected = []) {
   const idempotencyKey = key();
@@ -1360,7 +1529,7 @@ const galleryMarkup = (item, running) =>
       : `<figure class="slide catalog-slide"><div class="catalog-item"><img class="fade" src="${preview(item)}" alt="${esc(item.metadata.name)}"></div></figure>`
   }<figure class="slide worn"><img class="fade" id="worn" src="${sourcePreview(item)}" alt="${esc(item.metadata.name)}, getragen"><figcaption>Originalfoto</figcaption></figure>${itemLooks(item)
     .map((look) => `<figure class="slide worn generated-look"><img class="fade" src="${assetUrl(look.assetId)}" alt="${esc(item.metadata.name)}, in einem generierten Look" loading="lazy" decoding="async"><figcaption>Generierter Look · ${esc(lookDateLabel(look.createdAt))}</figcaption></figure>`)
-    .join('')}</div><div id="detail-heading"><p class="eyebrow">${categories[item.metadata.category]}</p><h2>${esc(item.metadata.name)}</h2><p class="muted item-colors">${esc(item.metadata.colors.join(' · '))}</p></div>`;
+    .join('')}</div><div id="detail-heading"><p class="eyebrow">${categories[item.metadata.category]}</p><h2>${esc(item.metadata.name)}</h2>${colorSwatches(item.metadata.colors)}</div>`;
 // Keep movement local to this gallery so replacing the sheet releases its listeners.
 function wireCatalogMotion() {
   const gallery = $('#detail-gallery');
@@ -1473,7 +1642,7 @@ function renderDetail(id, detail, mode, { refresh = false, scrollTop = null }) {
   if (reusable) {
     $('#sheet-title').textContent = title;
     $('#detail-heading').innerHTML =
-      `<p class="eyebrow">${categories[i.metadata.category]}</p><h2>${esc(i.metadata.name)}</h2><p class="muted item-colors">${esc(i.metadata.colors.join(' · '))}</p>`;
+      `<p class="eyebrow">${categories[i.metadata.category]}</p><h2>${esc(i.metadata.name)}</h2>${colorSwatches(i.metadata.colors)}`;
     $('#detail-body').innerHTML = body;
   } else {
     showSheet(
