@@ -76,7 +76,8 @@ test('photo collages cost zero and become the first reference for a priced feed 
     let referenceChecked = false;
     const lookProvider = Object.assign(provider, {
       planLook: async () => ({ requestId: 'plan-collage', itemIds: [fixtureIds.readyItem], concept }),
-      generateComposite: async (request: { references: Uint8Array[]; prompt: string }) => {
+      generateComposite: async (request: { references: Uint8Array[]; prompt: string; quality: string }) => {
+        assert.equal(request.quality, 'low');
         assert.deepEqual(Buffer.from(request.references[0]!), collageBytes);
         assert.equal(request.references.length, 2);
         assert.match(request.prompt, /collage of cropped original photos/);
@@ -94,6 +95,36 @@ test('photo collages cost zero and become the first reference for a priced feed 
     const costs = await generationCosts(database, input.accountId);
     assert.equal(costs.characterSheetTotalMicrounits, 0);
     assert.equal(costs.lookTotalMicrounits, 500);
+    assert.equal(feed[0]!.quality, 'low');
+    const upgradeCommand = { accountId: input.accountId, exactItemIds: [], categories: [], parentLookId: look.lookId, quality: 'high' as const, preserveComposition: true, idempotencyKey: randomUUID() };
+    const upgraded = await createLook(database, upgradeCommand);
+    assert.deepEqual(await createLook(database, upgradeCommand), upgraded);
+    await assert.rejects(createLook(database, { ...upgradeCommand, quality: 'medium' }), /idempotency/i);
+    const upgrade = (await listLooks(database, input.accountId)).find((entry) => entry.id === upgraded.lookId)!;
+    assert.equal(upgrade.quality, 'high');
+    assert.equal(upgrade.characterSheetId, sheet.id);
+    assert.deepEqual(upgrade.concept, concept);
+    assert.deepEqual(upgrade.wardrobeItemIds, feed[0]!.wardrobeItemIds);
+    await database.query("UPDATE looks SET state='failed' WHERE id=$1", [upgraded.lookId]);
+    const retry = await retryLook(database, { accountId: input.accountId, lookId: upgraded.lookId, idempotencyKey: randomUUID() });
+    const retryPayload = (await database.query<{ payload: { referenceAssetId: string } }>('SELECT payload FROM remote_image_jobs WHERE id=$1', [retry.jobId])).rows[0]!.payload;
+    assert.equal(retryPayload.referenceAssetId, feed[0]!.assetId);
+    let upgradeChecked = false;
+    const upgradeProvider = Object.assign(new ReplayCatalogProvider([]), {
+      planLook: async () => { throw new Error('An upgrade must not re-plan the look'); },
+      generateComposite: async (request: { references: Uint8Array[]; prompt: string; quality: string }) => {
+        assert.equal(request.quality, 'high');
+        assert.equal(request.references.length, 3);
+        assert.deepEqual(Buffer.from(request.references[0]!), await sharp(collageBytes).resize(1024, 1280).png().toBuffer());
+        assert.deepEqual(Buffer.from(request.references[1]!), collageBytes);
+        assert.match(request.prompt, /Preserve its composition/);
+        upgradeChecked = true;
+        return { requestId: 'upgraded-look', pngBytes: await sharp(collageBytes).resize(1024, 1280).png().toBuffer(), usage: { textInputTokens: 10, imageInputTokens: 200, outputTokens: 30, serviceTier: 'default', raw: { fixture: true } } };
+      },
+    });
+    await executeInspirationJob(database, storage, upgradeProvider, makeJob(retry.jobId, 'generate-look', retryPayload), config);
+    assert.ok(upgradeChecked);
+    assert.equal((await listLooks(database, input.accountId)).filter((entry) => entry.state === 'ready').length, 2);
   } finally {
     storage.client.destroy();
     await database.end();

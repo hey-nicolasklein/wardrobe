@@ -58,13 +58,13 @@ test('rejects a normalized detection extending beyond the source frame', () => {
   assert.equal(result.success, false);
 });
 
-test('defaults paid generation to the agreed high 816 square contract', () => {
+test('defaults paid generation to low quality at 816 square', () => {
   const request = enqueueGenerationRequestSchema.parse({
     wardrobeItemId: id,
     idempotencyKey: 'command-0123456789abcdef',
   });
 
-  assert.equal(request.quality, 'high');
+  assert.equal(request.quality, 'low');
   assert.equal(request.size, '816x816');
   assert.equal(request.autoKeep, true);
   assert.equal(
@@ -202,6 +202,8 @@ test('keeps Character Sheet and Look creation constrained and strict', () => {
       exactItemIds: [],
       categories: [],
       parentLookId: null,
+      quality: 'low',
+      preserveComposition: false,
       idempotencyKey: 'look-command-0123456789',
     },
   );

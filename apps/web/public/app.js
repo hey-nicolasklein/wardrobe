@@ -2,6 +2,26 @@ import { flatLayLayout } from './flat-lay.js';
 import { collageWidth, collageHeight, collageLayout, cropBounds, drawCrop, canvasJpeg } from './identity-collage.js';
 
 const $ = (s, root = document) => root.querySelector(s);
+const qualityLevels = ['low', 'medium', 'high'];
+const qualityLabels = ['Niedrig', 'Mittel', 'Hoch'];
+function preferredQuality(kind) {
+  try {
+    const value = localStorage.getItem(`form-quality-${kind}`);
+    return qualityLevels.includes(value) ? value : 'low';
+  } catch { return 'low'; }
+}
+function qualityControl(id, label, value, minimum = 0) {
+  const index = Math.max(minimum, qualityLevels.indexOf(value));
+  return `<fieldset class="quality-control" id="${id}"><legend>${label}</legend><div class="quality-options">${qualityLevels.map((quality, option) => `<label class="quality-option"><input type="radio" name="${id}" value="${quality}" ${option === index ? 'checked' : ''} ${option < minimum ? 'disabled' : ''}><span>${qualityLabels[option]}</span></label>`).join('')}</div></fieldset>`;
+}
+function wireQuality(id, saveKind) {
+  const control = $(`#${id}`);
+  if (saveKind) control.onchange = () => {
+    try { localStorage.setItem(`form-quality-${saveKind}`, selectedQuality(id)); }
+    catch { toast('Die Einstellung konnte nicht gespeichert werden.'); }
+  };
+}
+const selectedQuality = (id) => $(`#${id} input:checked`).value;
 const esc = (value) =>
   String(value ?? '').replace(
     /[&<>"']/g,
@@ -1041,6 +1061,7 @@ function openLookComposer(preselected = []) {
         categories: data.getAll('category'),
         occasion: occasion || null,
         parentLookId: null,
+        quality: preferredQuality('feed'),
         idempotencyKey,
       });
       rememberLookStart(created.lookId, data.getAll('item'));
@@ -1064,6 +1085,27 @@ function openLookMenu(id) {
     `<h2>Was möchtest du tun?</h2><div class="stack"><button class="secondary" id="vary-look">Variation erstellen</button><button class="secondary" id="combine-look">Mit diesen Stücken kombinieren</button><button class="secondary" id="look-details">Details ansehen</button><button class="secondary" id="download-look">Getragenes Bild laden</button><button class="secondary" id="download-flat-lay">Flat Lay laden</button><button class="danger" id="remove-look">Look löschen …</button></div>`,
   );
   $('#combine-look').onclick = () => openLookComposer(look.wardrobeItemIds);
+  if (look.quality !== 'high') {
+    $('#vary-look').insertAdjacentHTML('beforebegin', '<button class="secondary" id="upgrade-look">In höherer Qualität neu erstellen …</button>');
+    $('#upgrade-look').onclick = () => {
+      const minimum = qualityLevels.indexOf(look.quality) + 1;
+      showSheet('Bildqualität erhöhen', `<h2>Derselbe Look, mehr Details.</h2><p>Das vorhandene Bild dient als Vorlage. Kleine Abweichungen sind möglich. Das Original bleibt im Feed.</p>${qualityControl('look-quality', 'Bildqualität', qualityLevels[minimum], minimum)}<p class="muted">Höhere Qualität kostet mehr. Abgerechnet wird nach tatsächlichem Verbrauch.</p><button class="primary" id="confirm-upgrade">Kostenpflichtig neu erstellen</button>`);
+      wireQuality('look-quality');
+      const upgradeKey = key();
+      $('#confirm-upgrade').onclick = (event) => action(event.currentTarget, async () => {
+        const created = await api('/looks', {
+          parentLookId: id,
+          preserveComposition: true,
+          quality: selectedQuality('look-quality'),
+          idempotencyKey: upgradeKey,
+        });
+        rememberLookStart(created.lookId, look.wardrobeItemIds);
+        await refreshInspiration();
+        closeSheet();
+        navigate('feed');
+      });
+    };
+  }
   $('#download-flat-lay').onclick = (event) => action(event.currentTarget, () => shareFlatLay(look, true));
   $('#vary-look').onclick = (event) =>
     action(event.currentTarget, async () => {
@@ -1071,6 +1113,7 @@ function openLookMenu(id) {
         exactItemIds: [],
         categories: [],
         parentLookId: id,
+        quality: preferredQuality('feed'),
         idempotencyKey: key(),
       });
       rememberLookStart(created.lookId, look.wardrobeItemIds);
@@ -1477,16 +1520,17 @@ function renderDetail(id, detail, mode, { refresh = false, scrollTop = null }) {
       const offset = $('#sheet').scrollTop;
       showSheet(
         'Katalogbild erstellen',
-        `<h2>Nur für dieses Stück.</h2><p>Das neue Katalogbild wird automatisch verwendet. Ein älteres Bild kannst du jederzeit wieder auswählen.</p><div class="note">Die Ausgabe kostet zusätzlich zum Eingabebild und Text. Abgerechnet wird nach tatsächlichem Verbrauch. In hoher Qualität liegt ein Bild nach den bisher erfassten Abrechnungen bei etwa 6 US-Cent. Das ist eine Orientierung, kein garantierter Festpreis.</div><p class="muted" style="margin:16px 0">GPT Image 2.5 Flare · High · ein neues Bild</p><button class="primary" id="confirm-generate">Ein kostenpflichtiges Bild anfordern</button><button class="text-button" id="cancel-generate">Abbrechen</button>`,
+        `<h2>Nur für dieses Stück.</h2><p>Das neue Katalogbild wird automatisch verwendet. Ein älteres Bild kannst du jederzeit wieder auswählen.</p><div class="note">Höhere Qualität kostet mehr. Abgerechnet wird nach tatsächlichem Verbrauch.</div>${qualityControl('item-quality', 'Bildqualität', preferredQuality('wardrobe'))}<button class="primary" id="confirm-generate">Ein kostenpflichtiges Bild anfordern</button><button class="text-button" id="cancel-generate">Abbrechen</button>`,
       );
       $('#cancel-generate').onclick = () =>
         openDetail(id, 'view', { cached: true, scrollTop: offset });
+      wireQuality('item-quality');
       const generationKey = key();
       $('#confirm-generate').onclick = (e) =>
         action(e.currentTarget, async () => {
           await api('/generations', {
             wardrobeItemId: id,
-            quality: 'high',
+            quality: selectedQuality('item-quality'),
             size: '816x816',
             autoKeep: true,
             idempotencyKey: generationKey,
@@ -1910,7 +1954,7 @@ async function checkDetection(draft) {
 async function enqueueAutomaticImage(wardrobeItemId, idempotencyKey) {
   await api('/generations', {
     wardrobeItemId,
-    quality: 'high',
+    quality: preferredQuality('wardrobe'),
     size: '816x816',
     autoKeep: true,
     idempotencyKey,
@@ -1981,6 +2025,9 @@ function renderSettings() {
     `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><div class="character-section-heading"><div><h3>Personenreferenzen</h3><p>Dein Abbild für persönliche Looks.</p></div></div><div id="character-settings">${characterSettingsMarkup()}</div><button class="primary" id="new-character">Neue Fotocollage</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Personenreferenzen werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
   );
   $('#new-character').onclick = openCharacterSetup;
+  $('#cost-settings').closest('section').insertAdjacentHTML('afterend', `<section class="panel"><h3>Bildqualität</h3><p>Standard für neue Bilder auf diesem Gerät. Höhere Qualität kostet mehr. Einzelne Bilder kannst du später in höherer Qualität neu erstellen.</p>${qualityControl('feed-quality', 'Feed', preferredQuality('feed'))}${qualityControl('wardrobe-quality', 'Schrank', preferredQuality('wardrobe'))}</section>`);
+  wireQuality('feed-quality', 'feed');
+  wireQuality('wardrobe-quality', 'wardrobe');
   wireCharacterCards($('#character-settings'));
   if ($('#character-history')) $('#character-history').onclick = openCharacterHistory;
   loadSettingsData();

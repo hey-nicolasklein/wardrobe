@@ -1835,6 +1835,15 @@ dialog:not([open])::backdrop {
   border-bottom: 1px solid var(--line);
   font-size: 14px;
 }
+.quality-control { margin: 20px 0; padding: 0; border: 0; }
+.quality-control legend { margin-bottom: 9px; font-size: 14px; }
+.quality-options { display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface, #fff); }
+.quality-option { position: relative; margin: 0; }
+.quality-option input { position: absolute; opacity: 0; pointer-events: none; }
+.quality-option span { display: block; padding: 10px 8px; border-radius: 9px; color: var(--muted); font-size: 13px; text-align: center; cursor: pointer; }
+.quality-option input:checked + span { background: var(--green); color: #fff; }
+.quality-option input:focus-visible + span { outline: 2px solid var(--green); outline-offset: 2px; }
+.quality-option input:disabled + span { opacity: .35; cursor: default; }
 .setting-row:last-child {
   border: 0;
 }

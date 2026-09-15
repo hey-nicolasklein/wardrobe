@@ -240,7 +240,7 @@ export const lookSchema = z
     parentLookId: opaqueIdSchema.nullable(),
     concept: lookConceptSchema.nullable(),
     model: z.string().min(1).max(64),
-    quality: z.literal('medium'),
+    quality: generationQualitySchema,
     size: z.literal('1024x1280'),
     providerRequestId: z.string().min(1).max(255).nullable(),
     costMicrounits: z.number().int().nonnegative().nullable(),

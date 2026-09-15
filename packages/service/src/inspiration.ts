@@ -49,7 +49,7 @@ type LookRow = {
   parent_look_id: string | null;
   planned_concept: LookConcept | null;
   model: string;
-  quality: 'medium';
+  quality: Look['quality'];
   output_size: '1024x1280';
   provider_request_id: string | null;
   cost_microunits: string | null;
@@ -452,6 +452,8 @@ export async function createLook(
     categories: SupportedCategory[];
     occasion?: string | null;
     parentLookId: string | null;
+    quality?: Look['quality'];
+    preserveComposition?: boolean;
     idempotencyKey: string;
   },
 ) {
@@ -460,6 +462,8 @@ export async function createLook(
     categories: input.categories,
     ...(input.occasion ? { occasion: input.occasion } : {}),
     parentLookId: input.parentLookId,
+    quality: input.quality ?? 'low',
+    preserveComposition: input.preserveComposition ?? false,
   };
   return withTransaction(database, async (client) => {
     const prior = await replay<{ jobId: string; lookId: string }>(
@@ -482,6 +486,9 @@ export async function createLook(
       );
     let exactIds = input.exactItemIds;
     let parentId = input.parentLookId;
+    let preserved: { concept: LookConcept; characterId: string; assetId: string } | null = null;
+    if (input.preserveComposition && !parentId)
+      throw new InspirationValidationError('parent-required', 'Wähle einen fertigen Look.');
     if (parentId) {
       const parent = await client.query<{ ids: string[] }>(
         `SELECT COALESCE(array_agg(li.wardrobe_item_id ORDER BY li.ordinal),'{}') ids FROM looks l LEFT JOIN look_items li ON li.look_id=l.id WHERE l.id=$1 AND l.account_id=$2 AND l.state='ready' GROUP BY l.id`,
@@ -489,6 +496,14 @@ export async function createLook(
       );
       if (!parent.rows[0]) throw new OwnedResourceNotFoundError();
       exactIds = parent.rows[0].ids;
+      if (input.preserveComposition) {
+        const original = await client.query<{
+          planned_concept: LookConcept; character_sheet_id: string; asset_id: string;
+        }>("SELECT planned_concept,character_sheet_id,asset_id FROM looks WHERE id=$1 AND account_id=$2 AND deleted_at IS NULL AND state='ready'", [parentId, input.accountId]);
+        const row = original.rows[0];
+        if (!row?.planned_concept || !row.asset_id) throw new OwnedResourceNotFoundError();
+        preserved = { concept: row.planned_concept, characterId: row.character_sheet_id, assetId: row.asset_id };
+      }
     }
     const candidates = await candidateItems(
       client,
@@ -513,22 +528,27 @@ export async function createLook(
         );
     const lookId = randomUUID();
     await client.query(
-      `INSERT INTO looks(id,account_id,character_sheet_id,parent_look_id,state,exact_item_ids,category_constraints,model,quality,output_size,prompt_version) VALUES($1,$2,$3,$4,'queued',$5,$6,$7,'medium','1024x1280',$8)`,
+      `INSERT INTO looks(id,account_id,character_sheet_id,parent_look_id,state,exact_item_ids,category_constraints,model,quality,output_size,prompt_version,planned_concept) VALUES($1,$2,$3,$4,'queued',$5,$6,$7,$9,'1024x1280',$8,$10)`,
       [
         lookId,
         input.accountId,
-        active.rows[0].id,
+        preserved?.characterId ?? active.rows[0].id,
         parentId,
         exactIds,
         input.categories,
         lookModel,
         lookPromptVersion,
+        input.quality ?? 'low',
+        preserved ? JSON.stringify(preserved.concept) : null,
       ],
     );
+    if (preserved)
+      for (const [ordinal, itemId] of exactIds.entries())
+        await client.query('INSERT INTO look_items(look_id,wardrobe_item_id,ordinal) VALUES($1,$2,$3)', [lookId, itemId, ordinal]);
     const jobId = await enqueueJob(client, {
       accountId: input.accountId,
       kind: 'generate-look',
-      payload: { lookId, occasion: input.occasion ?? null },
+      payload: { lookId, occasion: input.occasion ?? null, ...(preserved ? { referenceAssetId: preserved.assetId } : {}) },
       idempotencyKey: `look:${input.idempotencyKey}`,
     });
     await client.query('UPDATE remote_image_jobs SET look_id=$1 WHERE id=$2', [lookId, jobId]);
@@ -560,14 +580,14 @@ export async function retryLook(
         'look-not-retryable',
         'Dieser Look kann nicht erneut versucht werden.',
       );
-    const previous = await client.query<{ payload: { occasion?: string | null } }>(
+    const previous = await client.query<{ payload: { occasion?: string | null; referenceAssetId?: string } }>(
       `SELECT payload FROM remote_image_jobs WHERE look_id=$1 AND account_id=$2 ORDER BY created_at DESC LIMIT 1`,
       [input.lookId, input.accountId],
     );
     const jobId = await enqueueJob(client, {
       accountId: input.accountId,
       kind: 'generate-look',
-      payload: { lookId: input.lookId, occasion: previous.rows[0]?.payload.occasion ?? null },
+      payload: { ...previous.rows[0]?.payload, lookId: input.lookId, occasion: previous.rows[0]?.payload.occasion ?? null },
       idempotencyKey: `look-retry:${input.idempotencyKey}`,
     });
     await client.query('UPDATE remote_image_jobs SET look_id=$1 WHERE id=$2', [
@@ -769,11 +789,12 @@ export async function executeInspirationJob(
       character_sheet_id: string;
       exact_item_ids: string[];
       category_constraints: SupportedCategory[];
+      quality: Look['quality'];
       model: string;
       planned_concept: LookConcept | null;
       state: string;
     }>(
-      `UPDATE looks SET state=CASE WHEN planned_concept IS NULL THEN 'planning' ELSE 'generating' END,started_at=COALESCE(started_at,now()) WHERE id=$1 AND account_id=$2 AND state IN ('queued','planning','generating') RETURNING character_sheet_id,exact_item_ids,category_constraints,model,planned_concept,state`,
+      `UPDATE looks SET state=CASE WHEN planned_concept IS NULL THEN 'planning' ELSE 'generating' END,started_at=COALESCE(started_at,now()) WHERE id=$1 AND account_id=$2 AND state IN ('queued','planning','generating') RETURNING character_sheet_id,exact_item_ids,category_constraints,model,quality,planned_concept,state`,
       [id, job.accountId],
     );
     const row = started.rows[0];
@@ -878,11 +899,15 @@ export async function executeInspirationJob(
         readAsset(database, storage, job.accountId, asset),
       ),
     );
+    const referenceAssetId = (job.payload as { referenceAssetId?: string }).referenceAssetId;
+    if (referenceAssetId) refs.unshift(await readAsset(database, storage, job.accountId, referenceAssetId));
     const result = await provider.generateComposite({
       references: refs,
-      prompt: lookPrompt(concept, selected, character.rows[0].note),
+      prompt: referenceAssetId
+        ? 'Recreate the first reference image with improved detail as one photorealistic 4:5 image. Preserve its composition, pose, outfit, person, lighting and background. The second reference shows the same person and is only for identity detail. References after the second show the garments and are only for fabric and construction detail. Do not change the scene or add garments, text, watermarks or collage panels.'
+        : lookPrompt(concept, selected, character.rows[0].note),
       model: row.model,
-      quality: 'medium',
+      quality: row.quality,
       size: '1024x1280',
       signal: controller.signal,
     });

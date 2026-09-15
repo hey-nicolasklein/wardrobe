@@ -170,7 +170,7 @@ export const createWardrobeItemRequestSchema = z
 export const enqueueGenerationRequestSchema = z
   .object({
     wardrobeItemId: opaqueIdSchema,
-    quality: generationQualitySchema.default('high'),
+    quality: generationQualitySchema.default('low'),
     size: generationSizeSchema.default('816x816'),
     // When true the completed image is adopted as the Wardrobe Item's current
     // Shelf Image without a keep/reject review step.
@@ -264,6 +264,8 @@ export const createLookRequestSchema = z
     categories: z.array(supportedCategorySchema).max(9).default([]),
     occasion: z.enum(['night-out', 'party', 'business', 'casual']).nullable().optional(),
     parentLookId: opaqueIdSchema.nullable().default(null),
+    quality: generationQualitySchema.default('low'),
+    preserveComposition: z.boolean().default(false),
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();
