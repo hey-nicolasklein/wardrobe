@@ -266,6 +266,7 @@ export const createLookRequestSchema = z
     parentLookId: opaqueIdSchema.nullable().default(null),
     quality: generationQualitySchema.default('low'),
     preserveComposition: z.boolean().default(false),
+    completeWithWardrobe: z.boolean().default(true),
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();

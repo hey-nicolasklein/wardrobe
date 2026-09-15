@@ -1399,6 +1399,7 @@ dialog:not([open])::backdrop {
   text-transform: none;
 }
 .state-toggle {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1412,7 +1413,12 @@ dialog:not([open])::backdrop {
 }
 .state-toggle input {
   position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
   opacity: 0;
+  cursor: pointer;
 }
 .toggle-control {
   position: relative;
@@ -2139,7 +2145,14 @@ dialog:has(#look-composer) .sheet-body {
 #look-composer .select-item img { padding: 8px; border: 0; transition: background-color 150ms ease; }
 #look-composer .select-item input:checked + img { border: 0; background: #dfe8d2; }
 #look-composer .select-item span { padding: 3px 4px; }
-.composer-more { margin-top: 24px; }
+.composer-completion-options { margin-top: 24px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.composer-completion { margin: 0; border: 0; border-radius: 0; }
+.composer-completion > span:first-child { display: grid; gap: 3px; }
+.composer-completion strong { font-size: 13px; }
+.composer-completion small { color: var(--muted); font-size: 11px; line-height: 16px; }
+.composer-completion:has(input:disabled) { opacity: 0.55; }
+.composer-completion-options .composer-more { margin: 0; padding: 0 13px; border-top: 1px solid var(--line); }
+.composer-completion-options .composer-more[open] { padding-bottom: 13px; }
 .composer-more summary { display: flex; align-items: center; gap: 8px; cursor: pointer; min-height: 44px; font-size: 13px; }
 .composer-more summary::after { content: '+'; margin-left: auto; }
 .composer-more[open] summary::after { content: '−'; }

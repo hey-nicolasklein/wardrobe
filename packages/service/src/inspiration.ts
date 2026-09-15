@@ -450,6 +450,16 @@ export function normalizeAutomaticLookItems(
   return result;
 }
 
+export function candidatesForLookPlan<T extends { id: string }>(
+  candidates: T[],
+  exactItemIds: string[],
+  completeWithWardrobe: boolean,
+) {
+  if (completeWithWardrobe) return candidates;
+  const exact = new Set(exactItemIds);
+  return candidates.filter((item) => exact.has(item.id));
+}
+
 export async function listLooks(database: Database, accountId: string): Promise<Look[]> {
   const rows = await database.query<LookRow>(
     `SELECT ${lookColumns} FROM looks l LEFT JOIN look_items li ON li.look_id=l.id LEFT JOIN wardrobe_items wi ON wi.id=li.wardrobe_item_id AND wi.deleted_at IS NULL WHERE l.account_id=$1 AND l.deleted_at IS NULL GROUP BY l.id ORDER BY l.created_at DESC`,
@@ -467,9 +477,11 @@ export async function createLook(
     parentLookId: string | null;
     quality?: Look['quality'];
     preserveComposition?: boolean;
+    completeWithWardrobe?: boolean;
     idempotencyKey: string;
   },
 ) {
+  const completeWithWardrobe = input.completeWithWardrobe ?? true;
   const request = {
     exactItemIds: input.exactItemIds,
     categories: input.categories,
@@ -477,6 +489,7 @@ export async function createLook(
     parentLookId: input.parentLookId,
     quality: input.quality ?? 'low',
     preserveComposition: input.preserveComposition ?? false,
+    completeWithWardrobe,
   };
   return withTransaction(database, async (client) => {
     const prior = await replay<{ jobId: string; lookId: string }>(
@@ -523,6 +536,11 @@ export async function createLook(
       input.accountId,
       exactIds.length > 0 || input.categories.length > 0,
     );
+    if (!completeWithWardrobe && !exactIds.length)
+      throw new InspirationValidationError(
+        'item-required',
+        'Wähle mindestens ein Stück aus, bevor das Bildmodell den Look ergänzt.',
+      );
     if (!exactIds.length && !input.categories.length && !hasCore(candidates.rows))
       throw new InspirationValidationError(
         'core-outfit-required',
@@ -532,6 +550,11 @@ export async function createLook(
       throw new InspirationValidationError(
         'item-not-eligible',
         'Mindestens ein gewähltes Stück hat kein aktives Katalogbild.',
+      );
+    if (!completeWithWardrobe && input.categories.length)
+      throw new InspirationValidationError(
+        'categories-require-wardrobe',
+        'Kategorien können nur mit Stücken aus dem Schrank ergänzt werden.',
       );
     for (const category of input.categories)
       if (!candidates.rows.some((row) => row.category === category))
@@ -561,7 +584,7 @@ export async function createLook(
     const jobId = await enqueueJob(client, {
       accountId: input.accountId,
       kind: 'generate-look',
-      payload: { lookId, occasion: input.occasion ?? null, ...(preserved ? { referenceAssetId: preserved.assetId } : {}) },
+      payload: { lookId, occasion: input.occasion ?? null, completeWithWardrobe, ...(preserved ? { referenceAssetId: preserved.assetId } : {}) },
       idempotencyKey: `look:${input.idempotencyKey}`,
     });
     await client.query('UPDATE remote_image_jobs SET look_id=$1 WHERE id=$2', [lookId, jobId]);
@@ -593,7 +616,7 @@ export async function retryLook(
         'look-not-retryable',
         'Dieser Look kann nicht erneut versucht werden.',
       );
-    const previous = await client.query<{ payload: { occasion?: string | null; referenceAssetId?: string } }>(
+    const previous = await client.query<{ payload: { occasion?: string | null; referenceAssetId?: string; completeWithWardrobe?: boolean } }>(
       `SELECT payload FROM remote_image_jobs WHERE look_id=$1 AND account_id=$2 ORDER BY created_at DESC LIMIT 1`,
       [input.lookId, input.accountId],
     );
@@ -709,12 +732,20 @@ const characterPrompt = (note: string | null) =>
   `Create one high-quality 9:16 identity Character Sheet of the same person shown in all reference photos, laid out as two rows of three views each. Top row: three large close-ups of the face in this exact left-to-right order: face turned slightly towards the left, direct front-facing view looking into the camera, face turned slightly towards the right. The left and right views must be subtle three-quarter views that show both eyes and the far cheek, not full side profiles, and must show opposite sides of the face. Bottom row: three full-body views in the same slightly-left, front-facing, slightly-right order, with the face at the same subtle angle. Never show a full profile, a three-quarter rear angle, or the back of the person. Use neutral fitted clothing, consistent soft studio lighting, and a plain background. Preserve identity, body proportions, skin, hair, and stable features${note ? `. Stable details: ${note}` : ''}. No text, labels, callouts, collage borders, decoration, or watermark.`;
 const refinementPrompt = (note: string | null, instruction: string) =>
   `The first reference image is an existing 9:16 identity Character Sheet. The remaining reference photos show the same real person and are the ground truth for identity. Redraw the sheet with the same layout, the same views in the same positions, the same neutral fitted clothing, lighting, and plain background. Correct only this: ${instruction}. Keep every other region identical to the first reference and preserve identity, body proportions, skin, and hair. If it does not already show a row of three face close-ups above a row of three full-body views, rebuild it into that layout. In each row, use this exact left-to-right order: face turned slightly towards the left, direct front-facing view looking into the camera, face turned slightly towards the right. The left and right views must be subtle three-quarter views that show both eyes and the far cheek, not full side profiles, and must show opposite sides of the face${note ? `. Stable details: ${note}` : ''}. No text, labels, callouts, collage borders, decoration, or watermark.`;
-function lookPrompt(
+export function lookPrompt(
   concept: LookConcept,
   items: Array<{ name: string; category: string; colors: string[] }>,
   identityNote: string | null,
+  completeWithWardrobe: boolean,
 ) {
-  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} Each remaining reference is one garment shown as a side-by-side reference: the clean generated shelf view is on the left and the cropped original photo is on the right. Use both views together for that one garment. Treat the original photo as the ground truth for colors, material, texture, construction, and distinctive details; use the shelf view to clarify its complete silhouette. Create one photorealistic 4:5 iPhone-style snapshot as if a friend naturally photographed the referenced person while ${concept.activity}, in ${concept.scene}. Mood: ${concept.mood}. ${concept.framing} framing. The person must not look directly at the camera. Dress the person in exactly these referenced major garments: ${items.map((i) => `${i.name} (${i.category}; ${i.colors.join(', ')})`).join('; ')}. Every selected garment must be fully visible and faithful to its reference. Do not invent other major garments; plain incidental basics such as socks are allowed. Avoid selfies, posed portraits, illustrations, runway staging, extreme editorial styling, text, watermarks, and collages in the output. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
+  const garments = items.map((i) => `${i.name} (${i.category}; ${i.colors.join(', ')})`).join('; ');
+  const garmentInstruction = completeWithWardrobe
+    ? `Dress the person in exactly these referenced major garments: ${garments}.`
+    : `Dress the person in these referenced garments: ${garments}.`;
+  const completion = completeWithWardrobe
+    ? 'Do not invent other major garments; plain incidental basics such as socks are allowed.'
+    : 'Complete the outfit with coherent unreferenced garments where needed. Do not replace, restyle, hide, or obscure any referenced garment.';
+  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} Each remaining reference is one garment shown as a side-by-side reference: the clean generated shelf view is on the left and the cropped original photo is on the right. Use both views together for that one garment. Treat the original photo as the ground truth for colors, material, texture, construction, and distinctive details; use the shelf view to clarify its complete silhouette. Create one photorealistic 4:5 iPhone-style snapshot as if a friend naturally photographed the referenced person while ${concept.activity}, in ${concept.scene}. Mood: ${concept.mood}. ${concept.framing} framing. The person must not look directly at the camera. ${garmentInstruction} Every referenced garment must be fully visible and faithful to its reference. ${completion} Avoid selfies, posed portraits, illustrations, runway staging, extreme editorial styling, text, watermarks, and collages in the output. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
 }
 
 export async function executeInspirationJob(
@@ -798,6 +829,8 @@ export async function executeInspirationJob(
     if (job.kind !== 'generate-look')
       throw new CatalogJobError('internal', 'Unsupported inspiration job.', false);
     const id = (job.payload as { lookId: string }).lookId;
+    const completeWithWardrobe =
+      (job.payload as { completeWithWardrobe?: boolean }).completeWithWardrobe ?? true;
     const started = await database.query<{
       character_sheet_id: string;
       exact_item_ids: string[];
@@ -840,8 +873,13 @@ export async function executeInspirationJob(
       );
       itemIds = links.rows.map((r) => r.wardrobe_item_id);
     } else {
+      const planningCandidates = candidatesForLookPlan(
+        candidates.rows,
+        row.exact_item_ids,
+        completeWithWardrobe,
+      );
       const planned = await provider.planLook({
-        candidates: candidates.rows.map((i) => ({
+        candidates: planningCandidates.map((i) => ({
           id: i.id,
           metadata: {
             name: i.name,
@@ -863,7 +901,7 @@ export async function executeInspirationJob(
       concept = planned.concept;
       itemIds = normalizeAutomaticLookItems(
         planned.itemIds,
-        candidates.rows,
+        planningCandidates,
         row.exact_item_ids,
       );
       const plannedItems = candidates.rows.filter((item) => itemIds.includes(item.id));
@@ -945,7 +983,7 @@ export async function executeInspirationJob(
       references: refs,
       prompt: referenceAssetId
         ? 'Recreate the first reference image with improved detail as one photorealistic 4:5 image. Preserve its composition, pose, outfit, person, lighting and background. The second reference shows the same person and is only for identity detail. References after the second show the garments and are only for fabric and construction detail. Do not change the scene or add garments, text, watermarks or collage panels.'
-        : lookPrompt(concept, selected, character.rows[0].note),
+        : lookPrompt(concept, selected, character.rows[0].note, completeWithWardrobe),
       model: row.model,
       quality: row.quality,
       size: '1024x1280',

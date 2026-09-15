@@ -289,7 +289,7 @@ test(
       assert.deepEqual(queued.rows[0], {
         kind: 'generate-look',
         look_id: first.lookId,
-        payload: { lookId: first.lookId, occasion: 'party' },
+        payload: { lookId: first.lookId, occasion: 'party', completeWithWardrobe: true },
       });
       await database.query("UPDATE looks SET state='failed' WHERE id=$1", [first.lookId]);
       const retried = await retryLook(database, {
@@ -298,7 +298,11 @@ test(
       const retryJob = await database.query<{ payload: unknown }>(
         'SELECT payload FROM remote_image_jobs WHERE id=$1', [retried.jobId],
       );
-      assert.deepEqual(retryJob.rows[0]?.payload, { lookId: first.lookId, occasion: 'party' });
+      assert.deepEqual(retryJob.rows[0]?.payload, {
+        lookId: first.lookId,
+        occasion: 'party',
+        completeWithWardrobe: true,
+      });
       await assert.rejects(
         createLook(database, {
           ...command,

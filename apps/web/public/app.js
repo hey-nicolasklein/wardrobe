@@ -900,7 +900,10 @@ function openLookComposer(preselected = []) {
         <div class="composer-filter-chips" role="group" aria-label="Stücke nach Kategorie filtern">${[['', 'Alle'], ...Object.entries(categories).filter(([value]) => eligible.some((item) => item.metadata.category === value))].map(([value, label]) => `<button type="button" data-composer-filter="${value}" aria-pressed="${!value}">${label}</button>`).join('')}</div>
         <div class="composer-items">${eligible.map((item) => `<label class="select-item"><input type="checkbox" name="item" value="${item.id}" ${preselected.includes(item.id) ? 'checked' : ''}><img src="${preview(item)}" alt="" loading="lazy"><span>${esc(item.metadata.name)}</span></label>`).join('')}</div>
         <p id="composer-empty" class="muted" hidden></p>
-        <details class="composer-more"><summary>${icon('filter')} Kategorien vorgeben</summary><div class="composer-categories">${Object.entries(categories).map(([value, label]) => `<label><input type="checkbox" name="category" value="${value}"> ${label}</label>`).join('')}</div></details>
+        <div class="composer-completion-options">
+          <label class="state-toggle composer-completion"><span><strong>Mit Schrankstücken ergänzen</strong><small id="composer-completion-help">FORM wählt passende weitere Stücke aus deinem Schrank.</small></span><input type="checkbox" id="composer-complete-with-wardrobe" checked><span class="toggle-control" aria-hidden="true"></span></label>
+          <details class="composer-more"><summary>${icon('filter')} Kategorien vorgeben</summary><div class="composer-categories">${Object.entries(categories).map(([value, label]) => `<label><input type="checkbox" name="category" value="${value}"> ${label}</label>`).join('')}</div></details>
+        </div>
       </div>
       <section class="composer-preview" aria-label="Deine Auswahl als Flat Lay" hidden><div class="composer-preview-head"><button type="button" class="text-button" id="composer-back">${icon('arrow')} Weiter auswählen</button><p>Damit starten wir. FORM ergänzt den Rest.</p></div><div id="composer-board"></div><div class="composer-piece" id="composer-piece" aria-live="polite"><p>Tippe ein Stück an, um es aus der Auswahl zu nehmen.</p></div></section>
       <div class="composer-footer"><button type="button" class="composer-tray" id="composer-tray" aria-label="Auswahl als Flat Lay ansehen" aria-expanded="false" hidden><span class="composer-tray-copy"><strong>Damit starten wir</strong><span>Auswahl ansehen ${icon('arrow')}</span></span><span class="composer-tray-items"></span></button><div class="composer-summary"><span id="composer-summary" role="status"></span><button type="button" class="text-button" id="composer-reset" aria-label="Auswahl leeren">Leeren</button></div><button class="primary" type="submit">Look erstellen</button></div>
@@ -979,12 +982,20 @@ function openLookComposer(preselected = []) {
   };
   const updateSelection = () => {
     const count = itemInputs.filter((input) => input.checked).length;
+    const completionInput = $('#composer-complete-with-wardrobe');
+    if (!count && !completionInput.checked) completionInput.checked = true;
+    completionInput.disabled = !count;
+    const completeWithWardrobe = completionInput.checked;
     const categoryCount = categoryInputs.filter((input) => input.checked).length;
+    $('.composer-more', form).hidden = !completeWithWardrobe;
+    $('#composer-completion-help').textContent = completeWithWardrobe
+      ? 'FORM wählt passende weitere Stücke aus deinem Schrank.'
+      : 'Das Bildmodell ergänzt fehlende Kleidung, ohne weitere Schrankstücke zu verwenden.';
     $('#composer-count').textContent = `${count} ausgewählt`;
     $('#composer-selected-only').setAttribute('aria-label', `${count} ausgewählte Stücke anzeigen`);
     const occasionLabel = { 'night-out': 'zum Ausgehen', party: 'für die nächste Party', casual: 'als Casual Look' }[occasion];
     const summary = count
-      ? `${count} ${count === 1 ? 'Stück' : 'Stücke'} + neue Kombinationen${categoryCount ? ` · ${categoryCount} Kategorien` : ''}`
+      ? `${count} ${count === 1 ? 'Stück' : 'Stücke'}${completeWithWardrobe ? ' + Schrank' : ' + freie Ergänzung'}${categoryCount ? ` · ${categoryCount} Kategorien` : ''}`
       : categoryCount ? `${categoryCount} Kategorien vorgegeben` : 'FORM kombiniert für dich';
     $('#composer-summary').textContent = summary + (occasionLabel ? ` ${occasionLabel}` : '');
     form.querySelectorAll('[data-occasion]').forEach((button) => {
@@ -1012,6 +1023,11 @@ function openLookComposer(preselected = []) {
     if (from && destination) flyGarment(gridImage, from, paintedRect(destination, ratio));
     if (selectedOnly) filterItems();
   });
+  $('#composer-complete-with-wardrobe').onchange = (event) => {
+    if (!event.currentTarget.checked)
+      categoryInputs.forEach((input) => { input.checked = false; });
+    updateSelection();
+  };
   $('#composer-search').oninput = filterItems;
   form.querySelectorAll('[data-composer-filter]').forEach((button) => {
     button.onclick = () => {
@@ -1043,6 +1059,7 @@ function openLookComposer(preselected = []) {
     $('#composer-search').value = '';
     itemCategory = '';
     selectedPiece = null;
+    $('#composer-complete-with-wardrobe').checked = true;
     form.querySelectorAll('[data-composer-filter]').forEach((chip) => {
       chip.setAttribute('aria-pressed', String(!chip.dataset.composerFilter));
     });
@@ -1060,6 +1077,7 @@ function openLookComposer(preselected = []) {
         exactItemIds: data.getAll('item'),
         categories: data.getAll('category'),
         occasion: occasion || null,
+        completeWithWardrobe: $('#composer-complete-with-wardrobe').checked,
         parentLookId: null,
         quality: preferredQuality('feed'),
         idempotencyKey,

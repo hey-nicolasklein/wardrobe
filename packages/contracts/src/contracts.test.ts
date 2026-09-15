@@ -204,8 +204,16 @@ test('keeps Character Sheet and Look creation constrained and strict', () => {
       parentLookId: null,
       quality: 'low',
       preserveComposition: false,
+      completeWithWardrobe: true,
       idempotencyKey: 'look-command-0123456789',
     },
+  );
+  assert.equal(
+    createLookRequestSchema.parse({
+      completeWithWardrobe: false,
+      idempotencyKey: 'look-command-0123456789',
+    }).completeWithWardrobe,
+    false,
   );
   assert.equal(
     createLookRequestSchema.safeParse({

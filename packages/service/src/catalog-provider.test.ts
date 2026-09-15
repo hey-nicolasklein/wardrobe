@@ -77,6 +77,9 @@ test('uses strict Responses output and clamps detection boxes', async () => {
       /Treat screenshots and product grids as multiple pictured instances/,
     );
     assert.match(prompt ?? '', /exclude captions, controls, cards, background, and other garments/);
+    assert.match(prompt ?? '', /Include the brand and product model.*clearly identifiable/);
+    assert.match(prompt ?? '', /Nike Air Max 95/);
+    assert.match(prompt ?? '', /Do not guess them when uncertain/);
     assert.match(prompt ?? '', /exactly 100 pixels wide and 200 pixels high/);
   } finally {
     globalThis.fetch = originalFetch;
