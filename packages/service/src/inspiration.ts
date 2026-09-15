@@ -10,7 +10,10 @@ import {
 } from './catalog.js';
 import { CatalogProviderError, type CatalogProvider } from './catalog-provider.js';
 import type { Database, DatabaseClient } from './database.js';
-import { createGarmentReferenceCollage } from './garment-reference-collage.js';
+import {
+  createGarmentReferenceCollage,
+  writeGarmentReferenceDebugGallery,
+} from './garment-reference-collage.js';
 import { withTransaction } from './database.js';
 import { enqueueJob, type RemoteImageJob } from './jobs.js';
 import { collageModel, createIdentityCollage } from './identity-collage.js';
@@ -22,7 +25,7 @@ export const characterSheetPromptVersion = 'identity-sheet-v4';
 export const characterSheetRefinePromptVersion = 'identity-sheet-refine-v3';
 export const lookModel = 'gpt-image-2.5-flare';
 export const lookPlannerModel = 'gpt-5.4-mini';
-export const lookPromptVersion = 'candid-iphone-identity-v2';
+export const lookPromptVersion = 'candid-iphone-identity-v3';
 
 type CharacterRow = {
   id: string;
@@ -917,6 +920,23 @@ export async function executeInspirationJob(
       ]);
       return createGarmentReferenceCollage(shelfImage, originalImage);
     }));
+    const debugDirectory = process.env.FORM_GARMENT_REFERENCE_DEBUG_DIR;
+    if (debugDirectory) {
+      try {
+        const files = await writeGarmentReferenceDebugGallery({
+          directory: debugDirectory,
+          lookId: id,
+          garments: selected.map((item, index) => ({
+            id: item.id,
+            name: item.name,
+            collage: garmentReferences[index]!,
+          })),
+        });
+        console.log(`Garment reference collages for look ${id}: ${files.join(', ')}`);
+      } catch (error) {
+        console.error(`Could not write garment reference collages for look ${id}.`, error);
+      }
+    }
     const refs = [identityReference, ...garmentReferences];
     const referenceAssetId = (job.payload as { referenceAssetId?: string }).referenceAssetId;
     if (referenceAssetId)
