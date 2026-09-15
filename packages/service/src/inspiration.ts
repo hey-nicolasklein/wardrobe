@@ -10,6 +10,7 @@ import {
 } from './catalog.js';
 import { CatalogProviderError, type CatalogProvider } from './catalog-provider.js';
 import type { Database, DatabaseClient } from './database.js';
+import { createGarmentReferenceCollage } from './garment-reference-collage.js';
 import { withTransaction } from './database.js';
 import { enqueueJob, type RemoteImageJob } from './jobs.js';
 import { collageModel, createIdentityCollage } from './identity-collage.js';
@@ -386,8 +387,17 @@ async function candidateItems(
     colors: string[];
     notes: string | null;
     asset_id: string;
+    original_asset_id: string;
   }>(
-    `SELECT i.id,i.name,i.category,i.colors,i.notes,v.transparent_asset_id AS asset_id FROM wardrobe_items i JOIN shelf_image_versions v ON v.id=i.current_shelf_image_version_id WHERE i.account_id=$1 AND i.deleted_at IS NULL AND i.state ${deliberate ? "IN ('owning','wanting')" : "='owning'"} ORDER BY i.created_at`,
+    `SELECT i.id,i.name,i.category,i.colors,i.notes,
+       v.transparent_asset_id AS asset_id,
+       COALESCE(a.reference_asset_id,sp.asset_id) AS original_asset_id
+     FROM wardrobe_items i
+     JOIN shelf_image_versions v ON v.id=i.current_shelf_image_version_id
+     JOIN generation_attempts a ON a.id=v.generation_attempt_id
+     JOIN source_photos sp ON sp.id=i.source_photo_id
+     WHERE i.account_id=$1 AND i.deleted_at IS NULL AND i.state ${deliberate ? "IN ('owning','wanting')" : "='owning'"}
+     ORDER BY i.created_at`,
     [accountId],
   );
 }
@@ -701,7 +711,7 @@ function lookPrompt(
   items: Array<{ name: string; category: string; colors: string[] }>,
   identityNote: string | null,
 ) {
-  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} The remaining references show the garments to wear. Create one photorealistic 4:5 iPhone-style snapshot as if a friend naturally photographed the referenced person while ${concept.activity}, in ${concept.scene}. Mood: ${concept.mood}. ${concept.framing} framing. The person must not look directly at the camera. Dress the person in exactly these referenced major garments: ${items.map((i) => `${i.name} (${i.category}; ${i.colors.join(', ')})`).join('; ')}. Every selected garment must be fully visible and faithful to its reference. Do not invent other major garments; plain incidental basics such as socks are allowed. Avoid selfies, posed portraits, illustrations, runway staging, extreme editorial styling, text, watermarks, and collages. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
+  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} Each remaining reference is one garment shown as a side-by-side reference: the clean generated shelf view is on the left and the cropped original photo is on the right. Use both views together for that one garment. Treat the original photo as the ground truth for colors, material, texture, construction, and distinctive details; use the shelf view to clarify its complete silhouette. Create one photorealistic 4:5 iPhone-style snapshot as if a friend naturally photographed the referenced person while ${concept.activity}, in ${concept.scene}. Mood: ${concept.mood}. ${concept.framing} framing. The person must not look directly at the camera. Dress the person in exactly these referenced major garments: ${items.map((i) => `${i.name} (${i.category}; ${i.colors.join(', ')})`).join('; ')}. Every selected garment must be fully visible and faithful to its reference. Do not invent other major garments; plain incidental basics such as socks are allowed. Avoid selfies, posed portraits, illustrations, runway staging, extreme editorial styling, text, watermarks, and collages in the output. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
 }
 
 export async function executeInspirationJob(
@@ -894,13 +904,23 @@ export async function executeInspirationJob(
       .sort((a, b) => itemIds.indexOf(a.id) - itemIds.indexOf(b.id));
     if (!character.rows[0]?.asset_id || selected.length !== itemIds.length)
       throw new CatalogJobError('internal', 'Look references are no longer available.', false);
-    const refs = await Promise.all(
-      [character.rows[0].asset_id, ...selected.map((i) => i.asset_id)].map((asset) =>
-        readAsset(database, storage, job.accountId, asset),
-      ),
+    const identityReference = await readAsset(
+      database,
+      storage,
+      job.accountId,
+      character.rows[0].asset_id,
     );
+    const garmentReferences = await Promise.all(selected.map(async (item) => {
+      const [shelfImage, originalImage] = await Promise.all([
+        readAsset(database, storage, job.accountId, item.asset_id),
+        readAsset(database, storage, job.accountId, item.original_asset_id),
+      ]);
+      return createGarmentReferenceCollage(shelfImage, originalImage);
+    }));
+    const refs = [identityReference, ...garmentReferences];
     const referenceAssetId = (job.payload as { referenceAssetId?: string }).referenceAssetId;
-    if (referenceAssetId) refs.unshift(await readAsset(database, storage, job.accountId, referenceAssetId));
+    if (referenceAssetId)
+      refs.unshift(await readAsset(database, storage, job.accountId, referenceAssetId));
     const result = await provider.generateComposite({
       references: refs,
       prompt: referenceAssetId

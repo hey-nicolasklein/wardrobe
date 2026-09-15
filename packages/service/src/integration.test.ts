@@ -80,7 +80,11 @@ test('photo collages cost zero and become the first reference for a priced feed 
         assert.equal(request.quality, 'low');
         assert.deepEqual(Buffer.from(request.references[0]!), collageBytes);
         assert.equal(request.references.length, 2);
+        const garmentReference = await sharp(request.references[1]!).metadata();
+        assert.equal(garmentReference.width, 1024);
+        assert.equal(garmentReference.height, 512);
         assert.match(request.prompt, /collage of cropped original photos/);
+        assert.match(request.prompt, /side-by-side reference/);
         assert.match(request.prompt, /braunes Haar/);
         referenceChecked = true;
         return { requestId: 'look-collage', pngBytes: await sharp(collageBytes).resize(1024, 1280).png().toBuffer(), usage: { textInputTokens: 10, imageInputTokens: 200, outputTokens: 30, serviceTier: 'default', raw: { fixture: true } } };
