@@ -61,6 +61,8 @@ export interface CatalogProvider {
   }): Promise<DetectionProviderResult>;
   generate(input: {
     referenceJpeg: Uint8Array;
+    previousShelfImage?: Uint8Array;
+    feedback?: string | null;
     metadata: ItemMetadata;
     model: string;
     quality: GenerationQuality;
@@ -183,7 +185,7 @@ Return layered garments and small accessories separately. Do not infer hidden it
 For every bounding box, locate the outermost visible pixels of exactly one garment. Use a tight box with at most 2% padding and exclude captions, controls, cards, background, and other garments. Use original image pixels in the standard order top, left, bottom, right. Top and bottom are pixel rows from 0 to ${pixelHeight}. Left and right are pixel columns from 0 to ${pixelWidth}. The origin is the image's top-left corner. Before responding, verify that the center of each box lies on its named garment and that the box does not group multiple pictured instances.`;
 }
 
-export const shelfImagePromptVersion = 'laid-flat-v4';
+export const shelfImagePromptVersion = 'laid-flat-v6';
 
 // Recorded on every attempt, so older rows keep the model that produced them.
 // Flare emits 1536 output tokens against gpt-image-2's 6143 for the same
@@ -191,12 +193,19 @@ export const shelfImagePromptVersion = 'laid-flat-v4';
 // the flat chroma key more reliably on fuzzy edges.
 export const shelfImageModel = 'gpt-image-2.5-flare';
 
-export function buildShelfImagePrompt(metadata: ItemMetadata): string {
+export function buildShelfImagePrompt(
+  metadata: ItemMetadata,
+  refinement?: { feedback?: string | null },
+): string {
   const presentation =
     metadata.category === 'shoes'
       ? 'For a pair of shoes, show both shoes. Place the right shoe upright on its sole, facing upward in the composition so its top and opening are visible. Place the left shoe immediately to its left, laid on its outer side to show its side profile. Keep both shoes fully visible, at the same scale, and naturally paired.'
       : 'Present the garment laid flat, viewed straight from above, centered, with generous even padding.';
+  const referenceGuidance = refinement
+    ? `\nCORRECTION TASK\n- The first image is the original source and is the ground truth for the garment.\n- The second image is the earlier catalog render. It contains a known defect and must not be copied unchanged.\n- The user reports this defect: "${refinement.feedback || 'The earlier render is not faithful enough to the original source.'}"\n- Compare the reported area or property directly with the original source, then visibly correct it in the new image. A result that repeats the reported defect has failed the task.\n- Preserve unaffected parts of the earlier layout only after making the requested correction. Never preserve an earlier-render detail that conflicts with the source.\n- The feedback identifies what to inspect. It does not permit a new garment design. The original source wins every conflict.\n`
+    : '';
   return `Create a faithful e-commerce catalog presentation from the source image.
+${referenceGuidance}
 
 SUBJECT
 - Show only the complete empty garment: ${metadata.name} (${metadata.category}; reviewed colors: ${metadata.colors.join(', ')}).
@@ -419,6 +428,8 @@ export class OpenAICatalogProvider implements CatalogProvider {
 
   async generate(input: {
     referenceJpeg: Uint8Array;
+    previousShelfImage?: Uint8Array;
+    feedback?: string | null;
     metadata: ItemMetadata;
     model: string;
     quality: GenerationQuality;
@@ -426,13 +437,19 @@ export class OpenAICatalogProvider implements CatalogProvider {
     promptVersion: string;
     signal?: AbortSignal;
   }): Promise<GenerationProviderResult> {
-    if (input.promptVersion !== shelfImagePromptVersion) {
+    if (!['laid-flat-v4', 'laid-flat-v5', shelfImagePromptVersion].includes(input.promptVersion)) {
       throw new CatalogProviderError('validation', 'Unknown Shelf Image prompt version.', false);
     }
     const form = new FormData();
     form.set('model', input.model);
-    form.set('image', new Blob([input.referenceJpeg], { type: 'image/jpeg' }), 'reference.jpg');
-    form.set('prompt', buildShelfImagePrompt(input.metadata));
+    if (input.previousShelfImage) {
+      form.append('image[]', new Blob([input.referenceJpeg], { type: 'image/jpeg' }), 'reference.jpg');
+      const { mimeType, extension } = supportedImageType(input.previousShelfImage);
+      form.append('image[]', new Blob([input.previousShelfImage], { type: mimeType }), `previous-shelf-image.${extension}`);
+    } else {
+      form.set('image', new Blob([input.referenceJpeg], { type: 'image/jpeg' }), 'reference.jpg');
+    }
+    form.set('prompt', buildShelfImagePrompt(input.metadata, input.previousShelfImage ? { feedback: input.feedback } : undefined));
     form.set('quality', input.quality);
     form.set('size', input.size);
     form.set('output_format', 'png');

@@ -175,6 +175,7 @@ export const enqueueGenerationRequestSchema = z
     // When true the completed image is adopted as the Wardrobe Item's current
     // Shelf Image without a keep/reject review step.
     autoKeep: z.boolean().default(true),
+    feedback: z.string().trim().min(1).max(1_000).nullable().default(null),
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();

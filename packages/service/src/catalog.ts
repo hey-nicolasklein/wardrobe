@@ -265,6 +265,8 @@ type GenerationInputRow = {
   quality: GenerationQuality;
   output_size: '816x816';
   prompt_version: string;
+  parent_transparent_asset_id: string | null;
+  refinement_instruction: string | null;
   bounding_box: NormalizedBoundingBox | null;
   reference_asset_id: string | null;
   keyed_asset_id: string | null;
@@ -342,9 +344,13 @@ async function executeGeneration(
        attempts.quality, attempts.output_size, attempts.prompt_version,
        attempts.reference_asset_id, attempts.keyed_asset_id,
        attempts.transparent_asset_id, attempts.provider_request_id,
+       attempts.refinement_instruction,
+       parent_versions.transparent_asset_id AS parent_transparent_asset_id,
        proposals.bounding_box
      FROM generation_attempts attempts
      LEFT JOIN detection_proposals proposals ON proposals.id = attempts.detection_proposal_id
+     LEFT JOIN shelf_image_versions parent_versions
+       ON parent_versions.id = attempts.parent_shelf_image_version_id
      WHERE attempts.id = $1 AND attempts.account_id = $2`,
     [payload.generationAttemptId, job.accountId],
   );
@@ -407,6 +413,10 @@ async function executeGeneration(
     try {
       result = await provider.generate({
         referenceJpeg: reference,
+        previousShelfImage: input.parent_transparent_asset_id
+          ? await readAsset(database, storage, job.accountId, input.parent_transparent_asset_id)
+          : undefined,
+        feedback: input.refinement_instruction,
         metadata: input.reviewed_metadata,
         model: input.model,
         quality: input.quality,

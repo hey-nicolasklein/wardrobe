@@ -739,6 +739,7 @@ test(
         wardrobeItemId: item.id,
         quality: 'low',
         size: '816x816',
+        feedback: 'Farbe stimmt nicht',
         idempotencyKey: 'pipeline-generation-command-0002',
       });
       await assert.rejects(
@@ -770,9 +771,12 @@ test(
         reference_asset_id: string;
         keyed_asset_id: string;
         transparent_asset_id: string | null;
+        parent_shelf_image_version_id: string;
+        refinement_instruction: string;
       }>(
         `SELECT provider_request_id, text_input_tokens, cost_microunits,
-         reference_asset_id, keyed_asset_id, transparent_asset_id
+         reference_asset_id, keyed_asset_id, transparent_asset_id,
+         parent_shelf_image_version_id, refinement_instruction
        FROM generation_attempts WHERE id = $1`,
         [failedGeneration.generationAttemptId],
       );
@@ -782,6 +786,14 @@ test(
       assert.ok(billedFailure.rows[0]?.reference_asset_id);
       assert.ok(billedFailure.rows[0]?.keyed_asset_id);
       assert.equal(billedFailure.rows[0]?.transparent_asset_id, null);
+      assert.equal(
+        billedFailure.rows[0]?.parent_shelf_image_version_id,
+        (await database.query<{ id: string }>(
+          `SELECT id FROM shelf_image_versions WHERE generation_attempt_id = $1`,
+          [automaticGeneration.generationAttemptId],
+        )).rows[0]?.id,
+      );
+      assert.equal(billedFailure.rows[0]?.refinement_instruction, 'Farbe stimmt nicht');
     } finally {
       storage.client.destroy();
       await database.end();

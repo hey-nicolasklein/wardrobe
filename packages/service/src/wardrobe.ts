@@ -72,6 +72,8 @@ type GenerationAttemptRow = {
   quality: GenerationAttempt['quality'];
   output_size: GenerationAttempt['size'];
   prompt_version: string;
+  parent_shelf_image_version_id: string | null;
+  refinement_instruction: string | null;
   keyed_asset_id: string | null;
   transparent_asset_id: string | null;
   provider_request_id: string | null;
@@ -144,6 +146,8 @@ function mapGenerationAttempt(row: GenerationAttemptRow): GenerationAttempt {
     quality: row.quality,
     size: row.output_size,
     promptVersion: row.prompt_version,
+    parentShelfImageVersionId: row.parent_shelf_image_version_id,
+    feedback: row.refinement_instruction,
     keyedAssetId: row.keyed_asset_id,
     transparentAssetId: row.transparent_asset_id,
     providerRequestId: row.provider_request_id,
@@ -197,7 +201,8 @@ function mapShelfImageVersion(row: ShelfImageVersionRow): ShelfImageVersion {
 const itemColumns = `id, source_photo_id, state, status, name, category, colors, notes,
   current_shelf_image_version_id, record_version, created_at, updated_at`;
 const attemptColumns = `id, wardrobe_item_id, source_photo_id, detection_proposal_id, state,
-  reviewed_metadata, model, quality, output_size, prompt_version, keyed_asset_id,
+  reviewed_metadata, model, quality, output_size, prompt_version, parent_shelf_image_version_id,
+  refinement_instruction, keyed_asset_id,
   transparent_asset_id, provider_request_id, text_input_tokens, image_input_tokens,
   output_tokens, service_tier, pricing_effective_date::text AS pricing_effective_date,
   text_input_cost_microunits,
@@ -573,6 +578,7 @@ export async function enqueueShelfImageGeneration(
     quality: GenerationQuality;
     size: '816x816';
     autoKeep?: boolean;
+    feedback?: string | null;
     idempotencyKey: string;
   },
 ): Promise<{ jobId: string; generationAttemptId: string }> {
@@ -581,6 +587,7 @@ export async function enqueueShelfImageGeneration(
     quality: input.quality,
     size: input.size,
     autoKeep: input.autoKeep ?? true,
+    feedback: input.feedback ?? null,
   };
   return withTransaction(database, async (client) => {
     const replay = await beginCommand<{ jobId: string; generationAttemptId: string }>(client, {
@@ -607,8 +614,9 @@ export async function enqueueShelfImageGeneration(
     await client.query(
       `INSERT INTO generation_attempts (
          id, account_id, wardrobe_item_id, source_photo_id, detection_proposal_id,
-         state, reviewed_metadata, model, quality, output_size, prompt_version, auto_keep
-       ) VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10, $11)`,
+         state, reviewed_metadata, model, quality, output_size, prompt_version, auto_keep,
+         parent_shelf_image_version_id, refinement_instruction
+       ) VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         generationAttemptId,
         input.accountId,
@@ -621,6 +629,8 @@ export async function enqueueShelfImageGeneration(
         input.size,
         shelfImagePromptVersion,
         input.autoKeep ?? true,
+        row.current_shelf_image_version_id,
+        input.feedback ?? null,
       ],
     );
     const jobId = await enqueueJob(client, {

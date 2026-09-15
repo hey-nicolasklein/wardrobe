@@ -10,9 +10,9 @@ function preferredQuality(kind) {
     return qualityLevels.includes(value) ? value : 'low';
   } catch { return 'low'; }
 }
-function qualityControl(id, label, value, minimum = 0) {
+function qualityControl(id, label, value, minimum = 0, note = '') {
   const index = Math.max(minimum, qualityLevels.indexOf(value));
-  return `<fieldset class="quality-control" id="${id}"><legend>${label}</legend><div class="quality-options">${qualityLevels.map((quality, option) => `<label class="quality-option"><input type="radio" name="${id}" value="${quality}" ${option === index ? 'checked' : ''} ${option < minimum ? 'disabled' : ''}><span>${qualityLabels[option]}</span></label>`).join('')}</div></fieldset>`;
+  return `<fieldset class="quality-control" id="${id}"><legend>${label}</legend>${note ? `<p class="note quality-note">${note}</p>` : ''}<div class="quality-options">${qualityLevels.map((quality, option) => `<label class="quality-option"><input type="radio" name="${id}" value="${quality}" ${option === index ? 'checked' : ''} ${option < minimum ? 'disabled' : ''}><span>${qualityLabels[option]}</span></label>`).join('')}</div></fieldset>`;
 }
 function wireQuality(id, saveKind) {
   const control = $(`#${id}`);
@@ -1455,12 +1455,13 @@ function renderDetail(id, detail, mode, { refresh = false, scrollTop = null }) {
       return `<button class="version${current ? ' current' : ''}" data-version="${v.id}" ${current ? 'disabled' : ''}><span class="version-frame"><img data-asset="${v.transparentAssetId}" alt="Gespeichertes Katalogbild">${v.quality === 'high' ? '<span class="version-tag">HQ</span>' : ''}</span><span>${current ? 'Aktuelles Bild' : 'Dieses Bild verwenden'}</span></button>`;
     })
     .join('');
+  const hasShelfImage = Boolean(i.currentShelfImageVersionId);
   const body =
     mode === 'edit'
       ? `<form id="edit-item">${fields(i.metadata, i.state)}<button class="primary" style="margin-top:20px" type="submit">Änderungen speichern</button></form><button class="text-button" id="cancel-edit">Abbrechen</button>`
       : `<dl class="facts"><div><dt>Gehört in</dt><dd>${collections[i.state]}</dd></div>${i.metadata.notes ? `<div><dt>Notizen</dt><dd>${esc(i.metadata.notes)}</dd></div>` : ''}</dl><button class="secondary" id="edit-details">Details bearbeiten</button>
   <button class="primary" id="inspire-item" style="margin-top:10px">Inspiration erstellen</button>
-  <div class="rule"></div>${running ? '<div class="note generating"><p><span class="spinner"></span>Dein Bild wird erstellt. Du kannst weiter durch deinen Schrank stöbern.</p><button class="text-button" id="check-generation">Status aktualisieren</button></div>' : `<h3>Katalogbilder</h3><p class="muted">${failed ? 'Der letzte Versuch ist fehlgeschlagen. ' : ''}Ein neues Bild wird automatisch verwendet, ein älteres kannst du jederzeit wieder auswählen.</p><div class="versions"><button class="version add-version" id="generate" aria-label="Katalogbild erstellen …"><span class="version-frame">${icon('plus')}</span><span>Neues Bild …</span></button>${versionTiles}<button class="version source-version" id="source"><span class="version-frame"><img id="source-tile" src="${sourcePreview(i)}" alt="" aria-hidden="true"></span><span>Originalfoto ansehen</span></button></div>`}
+  <div class="rule"></div>${running ? '<div class="note generating"><p><span class="spinner"></span>Dein Bild wird erstellt. Du kannst weiter durch deinen Schrank stöbern.</p><button class="text-button" id="check-generation">Status aktualisieren</button></div>' : `<h3>Katalogbilder</h3><p class="muted">${failed ? 'Der letzte Versuch ist fehlgeschlagen. ' : ''}Ein neues Bild wird automatisch verwendet, ein älteres kannst du jederzeit wieder auswählen.</p><div class="versions"><button class="version add-version" id="generate" aria-label="${hasShelfImage ? 'Katalogbild verbessern' : 'Katalogbild erstellen'} …"><span class="version-frame">${icon('plus')}</span><span>${hasShelfImage ? 'Bild verbessern' : 'Neues Bild'} …</span></button>${versionTiles}<button class="version source-version" id="source"><span class="version-frame"><img id="source-tile" src="${sourcePreview(i)}" alt="" aria-hidden="true"></span><span>Originalfoto ansehen</span></button></div>`}
   <div class="rule"></div><div class="stack"><button class="secondary" id="archive">${i.state === 'archived' ? 'Zurück in den Schrank' : 'Ins Archiv legen'}</button><button class="text-button" id="delete">Stück endgültig löschen …</button></div>`;
   const title = mode === 'edit' ? 'Stück bearbeiten' : 'Dein Stück';
   // The gallery only depends on the pictures, not on the mode or the metadata
@@ -1519,12 +1520,25 @@ function renderDetail(id, detail, mode, { refresh = false, scrollTop = null }) {
       // which is usually scrolled down at the catalog images.
       const offset = $('#sheet').scrollTop;
       showSheet(
-        'Katalogbild erstellen',
-        `<h2>Nur für dieses Stück.</h2><p>Das neue Katalogbild wird automatisch verwendet. Ein älteres Bild kannst du jederzeit wieder auswählen.</p><div class="note">Höhere Qualität kostet mehr. Abgerechnet wird nach tatsächlichem Verbrauch.</div>${qualityControl('item-quality', 'Bildqualität', preferredQuality('wardrobe'))}<button class="primary" id="confirm-generate">Ein kostenpflichtiges Bild anfordern</button><button class="text-button" id="cancel-generate">Abbrechen</button>`,
+        hasShelfImage ? 'Katalogbild verbessern' : 'Katalogbild erstellen',
+        `<h2>${hasShelfImage ? 'Was soll besser werden?' : 'Nur für dieses Stück.'}</h2><p>${hasShelfImage ? 'FORM nutzt das Originalfoto und dein aktuelles Katalogbild als Vorlagen.' : 'Das neue Katalogbild wird automatisch verwendet.'} Ein älteres Bild kannst du jederzeit wieder auswählen.</p>${hasShelfImage ? '<div class="feedback-options"><span class="feedback-label">Dein Hinweis <span class="muted">optional</span></span><div class="feedback-suggestions" aria-label="Vorschläge"><button type="button" data-feedback="Proportionen stimmen nicht" aria-pressed="false">Proportionen stimmen nicht</button><button type="button" data-feedback="Farbe stimmt nicht" aria-pressed="false">Farbe stimmt nicht</button><button type="button" data-feedback="Details fehlen" aria-pressed="false">Details fehlen</button><button type="button" id="other-feedback" aria-pressed="false">Other</button></div><label id="custom-feedback" hidden>Eigener Hinweis<textarea id="generation-feedback" maxlength="1000" placeholder="Beschreibe, was am aktuellen Bild nicht stimmt"></textarea></label></div>' : ''}${qualityControl('item-quality', 'Bildqualität', preferredQuality('wardrobe'), 0, 'Höhere Qualität kostet mehr. Abgerechnet wird nach tatsächlichem Verbrauch.')}<button class="primary" id="confirm-generate">Ein kostenpflichtiges Bild anfordern</button><button class="text-button" id="cancel-generate">Abbrechen</button>`,
       );
       $('#cancel-generate').onclick = () =>
         openDetail(id, 'view', { cached: true, scrollTop: offset });
       wireQuality('item-quality');
+      document.querySelectorAll('[data-feedback]').forEach((suggestion) => {
+        suggestion.onclick = () => {
+          const selected = suggestion.getAttribute('aria-pressed') === 'true';
+          suggestion.setAttribute('aria-pressed', String(!selected));
+        };
+      });
+      if ($('#other-feedback'))
+        $('#other-feedback').onclick = (event) => {
+          const selected = event.currentTarget.getAttribute('aria-pressed') === 'true';
+          event.currentTarget.setAttribute('aria-pressed', String(!selected));
+          $('#custom-feedback').hidden = selected;
+          if (!selected) $('#generation-feedback').focus();
+        };
       const generationKey = key();
       $('#confirm-generate').onclick = (e) =>
         action(e.currentTarget, async () => {
@@ -1533,6 +1547,14 @@ function renderDetail(id, detail, mode, { refresh = false, scrollTop = null }) {
             quality: selectedQuality('item-quality'),
             size: '816x816',
             autoKeep: true,
+            feedback: [
+              ...document.querySelectorAll('[data-feedback][aria-pressed="true"]'),
+            ].map((suggestion) => suggestion.dataset.feedback)
+              .concat($('#other-feedback')?.getAttribute('aria-pressed') === 'true'
+                ? $('#generation-feedback').value.trim()
+                : [])
+              .filter(Boolean)
+              .join('. ') || null,
             idempotencyKey: generationKey,
           });
           await refreshItems();

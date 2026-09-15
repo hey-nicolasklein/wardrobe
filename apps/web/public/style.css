@@ -242,6 +242,37 @@ h3 {
   color: white;
   border-color: var(--green);
 }
+.feedback-options {
+  margin-top: 20px;
+}
+.feedback-label {
+  display: block;
+  margin-bottom: 9px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.feedback-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.feedback-suggestions button {
+  min-height: 40px;
+  padding: 9px 14px;
+  border-radius: 22px;
+  background: #eeede7;
+  font-size: 12px;
+}
+.feedback-suggestions button[aria-pressed='true'] {
+  background: var(--green);
+  color: white;
+}
+#custom-feedback {
+  margin-top: 14px;
+}
+#custom-feedback textarea {
+  margin-top: 7px;
+}
 .section-row {
   display: flex;
   align-items: center;
@@ -1839,6 +1870,7 @@ dialog:not([open])::backdrop {
 }
 .quality-control { margin: 20px 0; padding: 0; border: 0; }
 .quality-control legend { margin-bottom: 9px; font-size: 14px; }
+.quality-note { margin: 0 0 10px; }
 .quality-options { display: grid; grid-template-columns: repeat(3, 1fr); padding: 3px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface, #fff); }
 .quality-option { position: relative; margin: 0; }
 .quality-option input { position: absolute; opacity: 0; pointer-events: none; }

@@ -173,6 +173,50 @@ test('sends one requested quality and requires the provider usage ledger', async
   }
 });
 
+test('sends the source and earlier Shelf Image with upgrade feedback', async () => {
+  const originalFetch = globalThis.fetch;
+  let form: FormData | undefined;
+  globalThis.fetch = async (_input, init) => {
+    form = init?.body as FormData;
+    return Response.json({
+      id: 'upgrade_fixture',
+      service_tier: 'default',
+      data: [{ b64_json: Buffer.from('png fixture').toString('base64') }],
+      usage: {
+        input_tokens: 13,
+        input_tokens_details: { text_tokens: 5, image_tokens: 8 },
+        output_tokens: 21,
+      },
+    });
+  };
+  try {
+    const source = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+    const earlier = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    await new OpenAICatalogProvider('test-key').generate({
+      referenceJpeg: source,
+      previousShelfImage: earlier,
+      feedback: 'Farbe stimmt nicht',
+      metadata,
+      model: 'gpt-image-2',
+      quality: 'high',
+      size: '816x816',
+      promptVersion: shelfImagePromptVersion,
+    });
+
+    const references = form?.getAll('image[]') as File[];
+    assert.deepEqual(references.map((file) => file.name), [
+      'reference.jpg',
+      'previous-shelf-image.png',
+    ]);
+    assert.match(String(form?.get('prompt')), /Farbe stimmt nicht/);
+    assert.match(String(form?.get('prompt')), /original source.*ground truth/i);
+    assert.match(String(form?.get('prompt')), /must not be copied unchanged/i);
+    assert.match(String(form?.get('prompt')), /visibly correct it/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('orders identity before garments and sends custom inspiration dimensions', async () => {
   const originalFetch = globalThis.fetch;
   let form: FormData | undefined;

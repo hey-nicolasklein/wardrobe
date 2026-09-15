@@ -141,6 +141,8 @@ export const generationAttemptSchema = z
     quality: generationQualitySchema,
     size: generationSizeSchema,
     promptVersion: z.string().min(1).max(64),
+    parentShelfImageVersionId: opaqueIdSchema.nullable(),
+    feedback: z.string().min(1).max(1_000).nullable(),
     keyedAssetId: opaqueIdSchema.nullable(),
     transparentAssetId: opaqueIdSchema.nullable(),
     providerRequestId: z.string().min(1).max(255).nullable(),

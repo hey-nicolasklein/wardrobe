@@ -67,6 +67,7 @@ test('defaults paid generation to low quality at 816 square', () => {
   assert.equal(request.quality, 'low');
   assert.equal(request.size, '816x816');
   assert.equal(request.autoKeep, true);
+  assert.equal(request.feedback, null);
   assert.equal(
     enqueueGenerationRequestSchema.parse({
       wardrobeItemId: id,
@@ -75,6 +76,15 @@ test('defaults paid generation to low quality at 816 square', () => {
     }).autoKeep,
     true,
   );
+});
+
+test('accepts feedback for a Shelf Image upgrade', () => {
+  const request = enqueueGenerationRequestSchema.parse({
+    wardrobeItemId: id,
+    feedback: 'Proportionen stimmen nicht. Details fehlen.',
+    idempotencyKey: 'upgrade-command-0123456789',
+  });
+  assert.equal(request.feedback, 'Proportionen stimmen nicht. Details fehlen.');
 });
 
 test('requires an offline-safe edit command to change at least one field', () => {
