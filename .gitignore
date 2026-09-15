@@ -19,3 +19,6 @@ apps/mobile/
 # Die Vergleichsbilder sind 17 MB Einwegmaterial und bleiben lokal.
 # Die Zahlen und Beobachtungen stehen im README daneben.
 docs/model-comparison/*/
+
+# Opt-in local gallery of garment collages sent to look generation.
+apps/web/public/debug/

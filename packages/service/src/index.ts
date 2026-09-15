@@ -5,6 +5,7 @@ export * from './catalog.js';
 export * from './config.js';
 export * from './database.js';
 export * from './fixtures.js';
+export * from './garment-reference-collage.js';
 export * from './health.js';
 export * from './jobs.js';
 export * from './inspiration.js';

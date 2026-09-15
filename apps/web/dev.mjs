@@ -3,6 +3,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 
 const apiOrigin = process.env.FORM_API_ORIGIN ?? 'http://127.0.0.1:4143';
+const port = Number(process.env.FORM_WEB_PORT ?? 8081);
 const app = new Hono();
 
 app.all('/v1/*', proxyApi);
@@ -22,5 +23,5 @@ function proxyApi(context) {
   });
 }
 
-serve({ fetch: app.fetch, hostname: '0.0.0.0', port: 8081 });
-console.log('FORM PWA dev server listening on http://0.0.0.0:8081');
+serve({ fetch: app.fetch, hostname: '0.0.0.0', port });
+console.log(`FORM PWA dev server listening on http://0.0.0.0:${port}`);
