@@ -74,7 +74,15 @@ test('photo collages cost zero and become the first reference for a priced feed 
     const concept = { activity: 'walking', scene: 'a quiet street', mood: 'relaxed', framing: 'full-body' as const };
     const look = await createLook(database, { accountId: input.accountId, exactItemIds: [fixtureIds.readyItem], categories: [], parentLookId: null, idempotencyKey: 'collage-integration-look-0001' });
     let referenceChecked = false;
+    const detectedBox = { x: 250, y: 220, width: 500, height: 400 };
     const lookProvider = Object.assign(provider, {
+      detect: async (request: { targets?: Array<{ id: string }> }) => {
+        assert.deepEqual(request.targets?.map((item) => item.id), [fixtureIds.readyItem]);
+        return { requestId: 'look-detection', detections: [
+          { id: fixtureIds.readyItem, name: 'Jacket', category: 'jacket' as const, colors: ['red'], boundingBox: detectedBox },
+          { id: 'unrelated-item', name: 'Hat', category: 'hat' as const, colors: ['red'], boundingBox: detectedBox },
+        ] };
+      },
       planLook: async () => ({ requestId: 'plan-collage', itemIds: [fixtureIds.readyItem], concept }),
       generateComposite: async (request: { references: Uint8Array[]; prompt: string; quality: string }) => {
         assert.equal(request.quality, 'low');
@@ -95,6 +103,7 @@ test('photo collages cost zero and become the first reference for a priced feed 
     const feed = await listLooks(database, input.accountId);
     assert.equal(feed[0]!.characterSheetId, sheet.id);
     assert.equal(feed[0]!.state, 'ready');
+    assert.deepEqual(feed[0]!.itemBoundingBoxes, [{ wardrobeItemId: fixtureIds.readyItem, boundingBox: detectedBox }]);
     assert.equal(feed[0]!.costMicrounits, 500);
     const costs = await generationCosts(database, input.accountId);
     assert.equal(costs.characterSheetTotalMicrounits, 0);
@@ -123,12 +132,15 @@ test('photo collages cost zero and become the first reference for a priced feed 
         assert.deepEqual(Buffer.from(request.references[1]!), collageBytes);
         assert.match(request.prompt, /Preserve its composition/);
         upgradeChecked = true;
+        lookProvider.detect = async () => { throw new Error('Detection unavailable'); };
         return { requestId: 'upgraded-look', pngBytes: await sharp(collageBytes).resize(1024, 1280).png().toBuffer(), usage: { textInputTokens: 10, imageInputTokens: 200, outputTokens: 30, serviceTier: 'default', raw: { fixture: true } } };
       },
     });
     await executeInspirationJob(database, storage, upgradeProvider, makeJob(retry.jobId, 'generate-look', retryPayload), config);
     assert.ok(upgradeChecked);
-    assert.equal((await listLooks(database, input.accountId)).filter((entry) => entry.state === 'ready').length, 2);
+    const upgradedFeed = await listLooks(database, input.accountId);
+    assert.equal(upgradedFeed.filter((entry) => entry.state === 'ready').length, 2);
+    assert.deepEqual(upgradedFeed.find((entry) => entry.id === upgraded.lookId)!.itemBoundingBoxes, []);
   } finally {
     storage.client.destroy();
     await database.end();

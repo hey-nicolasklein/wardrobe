@@ -607,73 +607,52 @@ async function shareFlatLay(look, download = false) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
   toast('Flat Lay heruntergeladen');
 }
-/* Plätze am Körper der Person, als Prozent von der Bildmitte aus: x zählt gegen
-   die Breite der Karte, y gegen ihre Höhe. Die Mitte bleibt frei, damit die
-   Person zwischen ihren Stücken stehen bleibt. */
-const lookAnchors = {
-  chestLeft: [-27, -23],
-  chestRight: [27, -23],
-  waistLeft: [-33, 2],
-  waistRight: [33, 2],
-  legsRight: [27, 22],
-  legsLeft: [-27, 22],
-  head: [0, -40],
-  feet: [0, 41],
+// Fallback regions for older fits and items that detection could not locate.
+// Upload detection boxes describe a different photo and cannot be reused here.
+const lookBodyRegions = {
+  hat: [40, 5, 20, 15],
+  scarf: [39, 22, 22, 22],
+  top: [32, 24, 36, 32],
+  jacket: [27, 22, 46, 38],
+  dress: [30, 24, 40, 61],
+  bag: [57, 43, 22, 24],
+  pants: [35, 53, 30, 37],
+  skirt: [32, 51, 36, 27],
+  shoes: [33, 87, 34, 10],
 };
-/* Wunschplätze je Kategorie, vom besten zum nächstbesten. Die Reihenfolge der
-   Vergabe entscheidet bei Streit, deshalb steht sie fest: von Kopf bis Fuß. */
-const lookAnchorWishes = {
-  hat: ['head', 'chestRight', 'chestLeft'],
-  top: ['chestLeft', 'chestRight', 'waistLeft'],
-  dress: ['chestLeft', 'chestRight', 'legsLeft'],
-  jacket: ['chestRight', 'waistRight', 'chestLeft'],
-  scarf: ['waistLeft', 'head', 'chestLeft'],
-  pants: ['legsRight', 'legsLeft', 'waistRight'],
-  skirt: ['legsRight', 'legsLeft', 'waistRight'],
-  bag: ['waistRight', 'legsRight', 'waistLeft'],
-  shoes: ['feet', 'legsLeft', 'legsRight'],
-};
-const lookPlacementOrder = Object.keys(lookAnchorWishes);
-/* Verteilt die Stücke eines Looks um die Person. Jede Kategorie bekommt ihren
-   Platz am Körper, ohne Oberteil rückt die Jacke auf dessen Stelle. Sind mehr
-   Stücke da als Anker, landet der Rest auf einem weiten Ring – das kommt bei
-   einem Outfit praktisch nicht vor, soll aber nicht stapeln.
-   `--item-order` treibt den Versatz, die Stücke erscheinen also von oben nach
-   unten. Wenige Stücke dürfen den freien Raum nutzen; mit jedem weiteren Stück
-   werden sie kleiner, damit die Anordnung im Bild bleibt. */
-function lookItemPositions(categories) {
-  const free = new Set(Object.keys(lookAnchors));
-  const wishesFor = (category) =>
-    category === 'jacket' && !categories.includes('top')
-      ? ['chestLeft', ...lookAnchorWishes.jacket]
-      : lookAnchorWishes[category] || [];
-  const size =
-    {
-      1: 66,
-      2: 56,
-      3: 48,
-      4: 42,
-      5: 36,
-      6: 32,
-    }[categories.length] || 28;
+function lookItemPositions(categories, boxes = []) {
+  const count = categories.length;
+  if (!count) return [];
+  // Keep whole item squares inside a 4% inset, with a gap between rows.
+  // Two pieces get their own row; fuller looks share rows.
+  const columns = count <= 2 ? 1 : count <= 6 ? 2 : 3;
+  const rows = Math.ceil(count / columns);
+  const gap = 3;
+  const rowHeight = (92 - gap * (rows - 1)) / rows;
+  const cellWidth = (92 - gap * (columns - 1)) / columns;
   const styles = [];
   [...categories.keys()]
-    .sort(
-      (a, b) =>
-        lookPlacementOrder.indexOf(categories[a]) - lookPlacementOrder.indexOf(categories[b]),
-    )
+    .sort((a, b) => {
+      const regionA = lookBodyRegions[categories[a]] || lookBodyRegions.top;
+      const regionB = lookBodyRegions[categories[b]] || lookBodyRegions.top;
+      return regionA[1] + regionA[3] / 2 - regionB[1] - regionB[3] / 2;
+    })
     .forEach((index, rank) => {
-      const anchor = wishesFor(categories[index]).find((name) => free.has(name)) || [...free][0];
-      free.delete(anchor);
-      const angle = (rank / categories.length) * Math.PI * 2;
-      const [x, y] = lookAnchors[anchor] || [Math.cos(angle) * 38, Math.sin(angle) * 30];
-      // Square items on a 4:5 card, with a 4% inset on every edge.
-      const maxX = 46 - size / 2;
-      const maxY = 46 - size * 0.4;
-      const boundedX = Math.max(-maxX, Math.min(maxX, x));
-      const boundedY = Math.max(-maxY, Math.min(maxY, y));
-      styles[index] =
-        `--item-x:${boundedX.toFixed(2)}%;--item-y:${boundedY.toFixed(2)}%;--item-size:${size}%;--item-order:${rank};--item-count:${categories.length};`;
+      const row = Math.floor(rank / columns);
+      const column = rank % columns;
+      const inRow = Math.min(columns, count - row * columns);
+      const size = Math.min(inRow === 1 ? 82 : cellWidth, rowHeight * 1.25);
+      const x = inRow === 1
+        ? count === 2 ? (row === 0 ? 4 + size / 2 : 96 - size / 2) : 50
+        : 4 + cellWidth / 2 + column * (cellWidth + gap);
+      const y = 4 + rowHeight / 2 + row * (rowHeight + gap);
+      const box = boxes[index];
+      const [bx, by, bw, bh] = box
+        ? [box.x / 10, box.y / 10, box.width / 10, box.height / 10]
+        : lookBodyRegions[categories[index]] || lookBodyRegions.top;
+      // Uniform scaling keeps garment proportions intact as it leaves the body.
+      const scale = Math.min(bw / size, bh * 1.25 / size, 0.9);
+      styles[index] = `--item-x:${x.toFixed(2)}%;--item-y:${y.toFixed(2)}%;--item-size:${size.toFixed(2)}%;--item-origin-x:${bx + bw / 2}%;--item-origin-y:${by + bh / 2}%;--item-origin-scale:${scale.toFixed(3)};--item-order:${rank};--item-count:${count};`;
     });
   return styles;
 }
@@ -735,7 +714,10 @@ function renderLookCard(look) {
     lookViews.delete(look.id);
     return `<article class="look-card developing-look" data-look="${look.id}">${garments.length ? flatLayMarkup(garments) : '<div class="look-planning-art" aria-hidden="true">' + icon('closet') + '</div>'}<div class="look-progress" role="status"><span class="spinner"></span><div><strong>${look.state === 'generating' ? 'Dein Outfit steht.' : 'FORM kombiniert für dich.'}</strong><p>${look.state === 'generating' ? 'Das getragene Bild entsteht gerade.' : garments.length ? 'Diese Stücke sind dabei. FORM ergänzt den Rest.' : 'Deine Stücke erscheinen hier, sobald der Look zusammengestellt ist.'}</p></div></div></article>`;
   }
-  const positions = lookItemPositions(garments.map((item) => item.metadata?.category || 'top'));
+  const positions = lookItemPositions(
+    garments.map((item) => item.metadata?.category || 'top'),
+    garments.map((item) => look.itemBoundingBoxes?.find((entry) => entry.wardrobeItemId === item.id)?.boundingBox),
+  );
   const flat = lookViews.get(look.id) === 'flat';
   return `<article class="look-card ready-look ${flat ? 'is-flat' : ''}" data-look="${look.id}"><div class="look-toolbar"><div class="look-view-switch" role="group" aria-label="Look-Ansicht"><button type="button" data-look-view="worn" aria-pressed="${!flat}">Getragen</button><button type="button" data-look-view="flat" aria-pressed="${flat}">Gelegt</button></div><button class="look-more" data-look-menu="${look.id}" aria-label="Aktionen für Look">${icon('more')}</button></div><div class="look-stage"><button class="look-photo" data-toggle-look="${look.id}" aria-label="Getragene Stücke anzeigen" aria-pressed="false" ${flat ? 'hidden' : ''}><img class="fade" data-asset="${look.assetId}" alt="Generierter persönlicher Look" loading="lazy" decoding="async"></button><div class="look-flat-view" ${flat ? '' : 'hidden'}>${garments.length ? flatLayMarkup(garments) : '<p class="flat-empty">Die Stücke dieses Looks sind nicht mehr verfügbar.</p>'}</div><div class="look-items" data-look-items="${look.id}" hidden>${garments.map((item, index) => {
       const name = item.metadata?.name || 'Kleidungsstück nicht mehr verfügbar';
@@ -771,7 +753,7 @@ function animateWornPhoto(photo) {
   });
 }
 /* Opens or closes the item overlay of a look card. The overlay stays in the DOM
-   while the pieces fly back into the middle, so it is only hidden once the
+   while the pieces return to their positions on the body, so it is only hidden once the
    staggered exit has finished — otherwise invisible buttons would still be
    tappable. */
 function toggleLookReveal(card, open) {
@@ -798,7 +780,7 @@ function toggleLookReveal(card, open) {
 /* Total time the exit takes: the last item's stagger plus its own transition. */
 function lookRevealDuration(overlay) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return 0;
-  return 340 + Math.max(overlay.children.length - 1, 0) * 45;
+  return 420 + Math.max(overlay.children.length - 1, 0) * 35;
 }
 function wireLookCards() {
   document.querySelectorAll('[data-look-view]').forEach((button) => {

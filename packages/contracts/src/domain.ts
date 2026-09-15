@@ -236,6 +236,10 @@ export const lookSchema = z
     state: lookStateSchema,
     assetId: opaqueIdSchema.nullable(),
     wardrobeItemIds: z.array(opaqueIdSchema),
+    itemBoundingBoxes: z.array(z.object({
+      wardrobeItemId: opaqueIdSchema,
+      boundingBox: normalizedBoundingBoxSchema,
+    }).strict()).default([]),
     characterSheetId: opaqueIdSchema,
     parentLookId: opaqueIdSchema.nullable(),
     concept: lookConceptSchema.nullable(),

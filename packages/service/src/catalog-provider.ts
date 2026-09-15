@@ -55,6 +55,7 @@ export type GenerationProviderResult = {
 export interface CatalogProvider {
   detect(input: {
     jpegBytes: Uint8Array;
+    targets?: Array<{ id: string; name: string; category: string; colors: string[] }>;
     model: string;
     signal?: AbortSignal;
   }): Promise<DetectionProviderResult>;
@@ -91,6 +92,7 @@ const detectionOutputSchema = z
     detections: z.array(
       z
         .object({
+          wardrobeItemId: z.string().optional(),
           name: z.string(),
           category: z.enum([
             'top',
@@ -117,7 +119,7 @@ const detectionOutputSchema = z
   })
   .strict();
 
-function detectionJsonSchema(pixelWidth: number, pixelHeight: number) {
+function detectionJsonSchema(pixelWidth: number, pixelHeight: number, targetIds?: string[]) {
   return {
     type: 'object',
     properties: {
@@ -126,6 +128,7 @@ function detectionJsonSchema(pixelWidth: number, pixelHeight: number) {
         items: {
           type: 'object',
           properties: {
+            ...(targetIds ? { wardrobeItemId: { type: 'string', enum: targetIds } } : {}),
             name: { type: 'string' },
             category: {
               type: 'string',
@@ -160,7 +163,7 @@ function detectionJsonSchema(pixelWidth: number, pixelHeight: number) {
               additionalProperties: false,
             },
           },
-          required: ['name', 'category', 'colors', 'boundingBox'],
+          required: ['name', 'category', 'colors', 'boundingBox', ...(targetIds ? ['wardrobeItemId'] : [])],
           additionalProperties: false,
         },
       },
@@ -311,6 +314,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
 
   async detect(input: {
     jpegBytes: Uint8Array;
+    targets?: Array<{ id: string; name: string; category: string; colors: string[] }>;
     model: string;
     signal?: AbortSignal;
   }): Promise<DetectionProviderResult> {
@@ -342,7 +346,8 @@ export class OpenAICatalogProvider implements CatalogProvider {
               content: [
                 {
                   type: 'input_text',
-                  text: detectionPrompt(pixelWidth, pixelHeight),
+                  text: detectionPrompt(pixelWidth, pixelHeight) + (input.targets
+                    ? ` This is a generated outfit photo. Locate only these wardrobe items: ${JSON.stringify(input.targets)}. Match each visible item by its description, category and colors, and return its exact wardrobeItemId. Return at most one box per wardrobeItemId, enclosing both shoes for a pair. Omit an item if hidden, absent or uncertain. Ignore all other clothing and people.` : ''),
                 },
                 {
                   type: 'input_image',
@@ -357,7 +362,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
               type: 'json_schema',
               name: 'garment_detections',
               strict: true,
-              schema: detectionJsonSchema(pixelWidth, pixelHeight),
+              schema: detectionJsonSchema(pixelWidth, pixelHeight, input.targets?.map((item) => item.id)),
             },
           },
         }),
@@ -396,7 +401,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
     }
     const detections = parsed.detections.map((detection) =>
       garmentDetectionSchema.parse({
-        id: randomUUID(),
+        id: input.targets ? detection.wardrobeItemId : randomUUID(),
         name: detection.name.trim().slice(0, 80),
         category: detection.category,
         colors: detection.colors

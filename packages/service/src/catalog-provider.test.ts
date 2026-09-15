@@ -86,6 +86,32 @@ test('uses strict Responses output and clamps detection boxes', async () => {
   }
 });
 
+test('localizes known look items with stable wardrobe IDs', async () => {
+  const originalFetch = globalThis.fetch;
+  const target = { id: 'look-jacket-0001', ...metadata };
+  globalThis.fetch = async (_input, init) => {
+    const body = JSON.parse(String(init?.body));
+    const itemSchema = body.text.format.schema.properties.detections.items;
+    assert.deepEqual(itemSchema.properties.wardrobeItemId.enum, [target.id]);
+    assert.ok(itemSchema.required.includes('wardrobeItemId'));
+    assert.match(body.input[0].content[0].text, /Omit an item if hidden, absent or uncertain/);
+    return Response.json({ id: 'localized', status: 'completed', output: [{ content: [{
+      type: 'output_text', text: JSON.stringify({ detections: [{
+        wardrobeItemId: target.id, name: target.name, category: target.category,
+        colors: target.colors, boundingBox: { left: 256, top: 320, right: 768, bottom: 640 },
+      }] }),
+    }] }] });
+  };
+  try {
+    const jpegBytes = await sharp({ create: { width: 1024, height: 1280, channels: 3, background: '#fff' } }).jpeg().toBuffer();
+    const result = await new OpenAICatalogProvider('test-key').detect({ jpegBytes, targets: [target], model: 'gpt-5.4-mini' });
+    assert.equal(result.detections[0]?.id, target.id);
+    assert.deepEqual(result.detections[0]?.boundingBox, { x: 250, y: 250, width: 500, height: 250 });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('sends one requested quality and requires the provider usage ledger', async () => {
   const originalFetch = globalThis.fetch;
   let form: FormData | undefined;

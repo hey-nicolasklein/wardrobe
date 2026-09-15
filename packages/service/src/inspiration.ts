@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
+import sharp from 'sharp';
+
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import type { CharacterSheet, Look, LookConcept, SupportedCategory } from '@form/contracts';
 
@@ -61,13 +63,14 @@ type LookRow = {
   created_at: Date;
   finished_at: Date | null;
   wardrobe_item_ids: string[];
+  item_bounding_boxes: Look['itemBoundingBoxes'];
 };
 
 const characterColumns = `id, state, reference_asset_ids, note, parent_character_sheet_id,
   refinement_instruction, asset_id, active, model, quality,
   output_size, provider_request_id, cost_microunits, failure_category, created_at, finished_at`;
 const lookColumns = `l.id, l.state, l.asset_id, l.character_sheet_id, l.parent_look_id,
-  l.planned_concept, l.model, l.quality, l.output_size, l.provider_request_id,
+  l.item_bounding_boxes, l.planned_concept, l.model, l.quality, l.output_size, l.provider_request_id,
   l.cost_microunits, l.failure_category, l.created_at, l.finished_at,
   COALESCE(array_agg(li.wardrobe_item_id ORDER BY li.ordinal) FILTER (WHERE li.wardrobe_item_id IS NOT NULL), '{}') AS wardrobe_item_ids`;
 
@@ -94,6 +97,7 @@ const mapLook = (row: LookRow): Look => ({
   state: row.state,
   assetId: row.asset_id,
   wardrobeItemIds: row.wardrobe_item_ids,
+  itemBoundingBoxes: row.item_bounding_boxes,
   characterSheetId: row.character_sheet_id,
   parentLookId: row.parent_look_id,
   concept: row.planned_concept,
@@ -998,10 +1002,28 @@ export async function executeInspirationJob(
       1024,
       1280,
     );
+    // Detection is best effort: never regenerate a paid image because localization failed.
+    let itemBoundingBoxes: Look['itemBoundingBoxes'] = [];
+    try {
+      const localized = await provider.detect({
+        jpegBytes: await sharp(result.pngBytes).jpeg({ quality: 90 }).toBuffer(),
+        targets: selected.map(({ id, name, category, colors }) => ({ id, name, category, colors })),
+        model: lookPlannerModel,
+        signal: AbortSignal.timeout(30_000),
+      });
+      const seen = new Set<string>();
+      itemBoundingBoxes = localized.detections.flatMap((detection) => {
+        if (!itemIds.includes(detection.id) || seen.has(detection.id)) return [];
+        seen.add(detection.id);
+        return [{ wardrobeItemId: detection.id, boundingBox: detection.boundingBox }];
+      });
+    } catch (error) {
+      console.warn('Look item detection failed; using category origins.', { lookId: id, error });
+    }
     const cost = calculateCostMicrounits(result.usage, config.pricing);
     await database.query(
-      `UPDATE looks SET state='ready',asset_id=$3,provider_request_id=$4,provider_usage=$5,cost_microunits=$6,finished_at=now() WHERE id=$1 AND account_id=$2`,
-      [id, job.accountId, assetId, result.requestId, JSON.stringify(result.usage.raw), cost],
+      `UPDATE looks SET state='ready',asset_id=$3,provider_request_id=$4,provider_usage=$5,cost_microunits=$6,item_bounding_boxes=$7,finished_at=now() WHERE id=$1 AND account_id=$2`,
+      [id, job.accountId, assetId, result.requestId, JSON.stringify(result.usage.raw), cost, JSON.stringify(itemBoundingBoxes)],
     );
   } finally {
     clearTimeout(timer);

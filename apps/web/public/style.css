@@ -395,31 +395,26 @@ h3 {
   pointer-events: none;
   z-index: 1;
 }
-/* Ruhezustand: klein, leicht gekippt und in der Mitte des Fotos gestapelt – dort
-   steht die Person, die Stücke wandern beim Tippen von ihr weg an ihre Stelle am
-   Körper. Die Verzögerung ist beim Einklappen umgekehrt, damit das zuletzt
-   erschienene Stück zuerst zurückkehrt. Keine Kachel und kein Schatten: die
-   Katalogbilder sind freigestellt und sollen direkt auf dem Foto liegen. */
+/* Items travel from the worn region into inset rows. Reverse the stagger on
+   closing so they settle back onto the body in the opposite order. */
 .look-items button {
-  pointer-events: auto;
+  pointer-events: none;
   position: absolute;
   width: var(--item-size, 34%);
   aspect-ratio: 1;
   padding: 0;
-  top: 50%;
-  left: 50%;
+  top: var(--item-origin-y, 50%);
+  left: var(--item-origin-x, 50%);
   translate: -50% -50%;
-  scale: 0.3;
-  rotate: -14deg;
+  scale: var(--item-origin-scale, 0.3);
   opacity: 0;
   background: none;
   transition:
-    top 0.34s var(--pop),
-    left 0.34s var(--pop),
-    scale 0.34s var(--pop),
-    rotate 0.34s var(--pop),
-    opacity 0.3s ease;
-  transition-delay: calc((var(--item-count, 1) - 1 - var(--item-order, 0)) * 45ms);
+    top 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    left 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    scale 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.24s ease;
+  transition-delay: calc((var(--item-count, 1) - 1 - var(--item-order, 0)) * 35ms);
 }
 .look-items img {
   width: 100%;
@@ -432,12 +427,13 @@ h3 {
   opacity: 0.76;
 }
 .revealed .look-items button {
-  top: calc(50% + var(--item-y));
-  left: calc(50% + var(--item-x));
+  top: var(--item-y);
+  left: var(--item-x);
   scale: 1;
-  rotate: 0deg;
+  pointer-events: auto;
+  transition-duration: 0.56s, 0.56s, 0.56s, 0.28s;
   opacity: 1;
-  transition-delay: calc(var(--item-order, 0) * 45ms);
+  transition-delay: calc(var(--item-order, 0) * 35ms);
 }
 /* Beim Antippen federt das Stück kurz ein, bevor die Detailansicht öffnet. */
 .look-items button:active {
