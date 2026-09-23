@@ -909,8 +909,9 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
         errorPayload('authentication', 'authentication-required', 'Session required.'),
         401,
       );
+    const week = context.req.query('week') || undefined;
     return context.json({
-      costs: await generationCosts(database, authenticated.session.id),
+      costs: await generationCosts(database, authenticated.session.id, week),
     });
   });
 

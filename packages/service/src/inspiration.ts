@@ -530,14 +530,21 @@ export async function deleteLook(database: Database, input: { accountId: string;
   );
   if (!result.rowCount) throw new OwnedResourceNotFoundError();
 }
-export async function generationCosts(database: Database, accountId: string) {
+export async function generationCosts(database: Database, accountId: string, week?: string) {
+  const timeFilter = weekToRange(week);
+  const params: (string | Date)[] = [accountId];
+  let dateClause = '';
+  if (timeFilter) {
+    params.push(timeFilter.start, timeFilter.end);
+    dateClause = ' AND created_at >= $2 AND created_at < $3';
+  }
   const result = await database.query<{
     look_total: string;
     successful: string;
     character_total: string;
   }>(
-    `SELECT COALESCE((SELECT sum(cost_microunits) FROM looks WHERE account_id=$1),0) look_total,COALESCE((SELECT count(*) FROM looks WHERE account_id=$1 AND state='ready'),0) successful,COALESCE((SELECT sum(cost_microunits) FROM character_sheets WHERE account_id=$1),0) character_total`,
-    [accountId],
+    `SELECT COALESCE((SELECT sum(cost_microunits) FROM looks WHERE account_id=$1${dateClause}),0) look_total,COALESCE((SELECT count(*) FROM looks WHERE account_id=$1 AND state='ready'${dateClause}),0) successful,COALESCE((SELECT sum(cost_microunits) FROM character_sheets WHERE account_id=$1${dateClause}),0) character_total`,
+    params,
   );
   const r = result.rows[0]!;
   const total = Number(r.look_total),
@@ -548,6 +555,23 @@ export async function generationCosts(database: Database, accountId: string) {
     averageSuccessfulLookMicrounits: successful ? Math.round(total / successful) : 0,
     characterSheetTotalMicrounits: Number(r.character_total),
   };
+}
+
+function weekToRange(week?: string): { start: Date; end: Date } | null {
+  if (!week) return null;
+  const match = week.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const weekNum = Number(match[2]);
+  if (weekNum < 1 || weekNum > 53) return null;
+  // ISO week: week 1 contains the year's first Thursday.
+  // Jan 4 is always in week 1. Find the Monday of week 1, then offset.
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const dayOfWeek = jan4.getUTCDay() || 7; // Mon=1 … Sun=7
+  const week1Monday = new Date(Date.UTC(year, 0, 4 - dayOfWeek + 1));
+  const start = new Date(week1Monday.getTime() + (weekNum - 1) * 7 * 86400000);
+  const end = new Date(start.getTime() + 7 * 86400000);
+  return { start, end };
 }
 
 export class InspirationValidationError extends Error {

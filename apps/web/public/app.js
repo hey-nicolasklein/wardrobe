@@ -155,6 +155,31 @@ const money = (micros) =>
     minimumFractionDigits: 3,
     maximumFractionDigits: 3,
   }).format(micros / 1e6);
+function isoWeek(date = new Date()) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNum = Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+function offsetWeek(week, delta) {
+  const [, y, w] = week.match(/^(\d{4})-W(\d{2})$/);
+  const jan4 = new Date(Date.UTC(Number(y), 0, 4));
+  const dow = jan4.getUTCDay() || 7;
+  const week1Monday = new Date(Date.UTC(Number(y), 0, 4 - dow + 1));
+  const monday = new Date(week1Monday.getTime() + (Number(w) - 1 + delta) * 7 * 86400000);
+  return isoWeek(monday);
+}
+function weekLabel(week) {
+  const [, y, w] = week.match(/^(\d{4})-W(\d{2})$/);
+  const jan4 = new Date(Date.UTC(Number(y), 0, 4));
+  const dow = jan4.getUTCDay() || 7;
+  const week1Monday = new Date(Date.UTC(Number(y), 0, 4 - dow + 1));
+  const monday = new Date(week1Monday.getTime() + (Number(w) - 1) * 7 * 86400000);
+  const sunday = new Date(monday.getTime() + 6 * 86400000);
+  const fmt = (d) => d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' });
+  return `${fmt(monday)} – ${fmt(sunday)}`;
+}
 // Images carrying `.fade` start transparent and fade in once they have pixels.
 // Anything already in the browser cache reports `complete` synchronously and
 // skips the transition, so a re-render never flashes a picture back in.
@@ -2213,7 +2238,7 @@ async function importManual(draft, form) {
 }
 function renderSettings() {
   shell(
-    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><div class="character-section-heading"><div><h3>Personenreferenzen</h3><p>Dein Abbild für persönliche Looks.</p></div></div><div id="character-settings">${characterSettingsMarkup()}</div><button class="primary" id="new-character">Neue Fotocollage</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Personenreferenzen werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
+    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><div class="character-section-heading"><div><h3>Personenreferenzen</h3><p>Dein Abbild für persönliche Looks.</p></div></div><div id="character-settings">${characterSettingsMarkup()}</div><button class="primary" id="new-character">Neue Fotocollage</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-week-nav" class="cost-week-nav"><button id="cost-week-prev" aria-label="Vorherige Woche">${icon('arrow')}</button><span id="cost-week-label"></span><button id="cost-week-next" class="cost-week-next" aria-label="Nächste Woche">${icon('arrow')}</button></div><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Personenreferenzen werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
   );
   $('#new-character').onclick = openCharacterSetup;
   $('#cost-settings').closest('section').insertAdjacentHTML('afterend', `<section class="panel"><h3>Bildqualität</h3><p>Standard für neue Bilder auf diesem Gerät. Höhere Qualität kostet mehr. Einzelne Bilder kannst du später in höherer Qualität neu erstellen.</p>${qualityControl('feed-quality', 'Feed', preferredQuality('feed'))}${qualityControl('wardrobe-quality', 'Schrank', preferredQuality('wardrobe'))}</section>`);
@@ -2262,23 +2287,51 @@ function characterSettingsMarkup() {
     ? `${pending && pending.id !== current.id ? characterCurrentCard(pending, true) : ''}${characterCurrentCard(current)}${past.length ? `<button class="secondary" id="character-history">Frühere Versionen · ${past.length}</button>` : ''}`
     : '<p class="muted">Noch nicht eingerichtet.</p>';
 }
+let costWeek = isoWeek();
+let costLoadId = 0;
+async function loadCostData(initial) {
+  const el = $('#cost-settings');
+  if (!el) return;
+  if (initial) el.innerHTML = '<div class="loading"><span class="spinner"></span></div>';
+  const now = isoWeek();
+  $('#cost-week-label').textContent = costWeek === now ? 'Diese Woche' : weekLabel(costWeek);
+  $('#cost-week-next').disabled = costWeek >= now;
+  const id = ++costLoadId;
+  try {
+    const costData = await api(`/generation-costs?week=${costWeek}`);
+    if (id !== costLoadId || !$('#cost-settings')) return;
+    el.innerHTML = costSettingsMarkup(costData.costs, characterSheets.length);
+    animateCostGauge(el);
+  } catch (error) {
+    if (id !== costLoadId) return;
+    el.innerHTML = `<p class="error">${esc(error.message)}</p>`;
+  }
+}
+function wireCostWeekNav() {
+  $('#cost-week-prev').onclick = () => { costWeek = offsetWeek(costWeek, -1); loadCostData(); };
+  $('#cost-week-next').onclick = () => {
+    if (costWeek >= isoWeek()) return;
+    costWeek = offsetWeek(costWeek, 1);
+    loadCostData();
+  };
+}
 async function loadSettingsData() {
   try {
-    const [sheets, costData] = await Promise.all([
+    const [sheets] = await Promise.all([
       api('/character-sheets'),
-      api('/generation-costs'),
     ]);
     characterSheets = sheets.characterSheets;
     if (!$('#character-settings')) return;
     $('#character-settings').innerHTML = characterSettingsMarkup();
-    $('#cost-settings').innerHTML = costSettingsMarkup(costData.costs, characterSheets.length);
-    animateCostGauge($('#cost-settings'));
     wireCharacterCards($('#character-settings'));
     if ($('#character-history')) $('#character-history').onclick = openCharacterHistory;
   } catch (error) {
     if ($('#character-settings'))
       $('#character-settings').innerHTML = `<p class="error">${esc(error.message)}</p>`;
   }
+  costWeek = isoWeek();
+  wireCostWeekNav();
+  loadCostData(true);
 }
 const COST_ARC_PATH = 'M 18 98 A 82 82 0 0 1 182 98';
 const COST_ARC_LENGTH = Math.PI * 82;

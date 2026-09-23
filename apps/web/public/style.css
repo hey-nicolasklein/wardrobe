@@ -2391,6 +2391,13 @@ dialog:has(#look-composer) .sheet-body {
   .flat-garment:active img { transform: scale(0.96); }
 }
 
+.cost-week-nav { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 0; }
+.cost-week-nav span { font-size: 14px; font-variant-numeric: tabular-nums; }
+.cost-week-nav button { appearance: none; background: none; border: none; padding: 8px; color: inherit; cursor: pointer; border-radius: 8px; }
+.cost-week-nav button:active { background: var(--line); }
+.cost-week-nav button:disabled { opacity: 0.25; pointer-events: none; }
+.cost-week-nav .cost-week-next .icon { transform: scaleX(-1); }
+
 /* Generierungskosten: ein halber Ring, in dem die beiden Quellen nebeneinander
    liegen. Die Summe steht in seiner Öffnung, die Aufschlüsselung darunter. */
 .cost-gauge { position: relative; max-width: 300px; margin: 10px auto 0; }
