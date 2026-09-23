@@ -237,14 +237,6 @@ export const createCharacterSheetRequestSchema = z
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();
-// The parent's rendered sheet takes the first of the four reference slots.
-export const refineCharacterSheetRequestSchema = z
-  .object({
-    referenceAssetIds: z.array(opaqueIdSchema).min(1).max(3),
-    instruction: z.string().trim().min(1).max(1_000),
-    idempotencyKey: idempotencyKeySchema,
-  })
-  .strict();
 export const activateCharacterSheetRequestSchema = z
   .object({
     idempotencyKey: idempotencyKeySchema,

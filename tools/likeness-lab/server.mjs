@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { OpenAICatalogProvider } from '../../packages/service/src/catalog-provider.ts';
-import { characterSheetModel } from '../../packages/service/src/inspiration.ts';
+import { lookModel as imageModel } from '../../packages/service/src/inspiration.ts';
 import { characterPrompt, refinementPrompt, characterSheetPromptVersion, characterSheetRefinePromptVersion, fitPrompt, fitPromptVersion, boardFitPrompt } from './prompts.mjs';
 
 import { makePhotoBoard } from './photo-board.mjs';
@@ -43,7 +43,7 @@ async function body(req) {
 async function generate(run, references) {
   try {
     run.step = 'provider'; await save(run);
-    const result = await provider.generateComposite({ references, prompt: run.prompt, model: characterSheetModel, quality: run.quality, size: run.size, signal: AbortSignal.timeout(Number(process.env.OPENAI_REQUEST_TIMEOUT_MS || 180000)) });
+    const result = await provider.generateComposite({ references, prompt: run.prompt, model: imageModel, quality: run.quality, size: run.size, signal: AbortSignal.timeout(Number(process.env.OPENAI_REQUEST_TIMEOUT_MS || 180000)) });
     run.step = 'save'; await save(run);
     await writeFile(join(output, `${run.id}.png`), result.pngBytes);
     Object.assign(run, { status: 'ready', step: 'review', requestId: result.requestId, usage: result.usage, image: `/output/${run.id}.png` });
@@ -65,7 +65,7 @@ createServer(async (req, res) => {
       if (start < 0 || end < 0) throw Error('Cannot locate production photo preparation.');
       return send(200, source.slice(start, end), 'text/javascript');
     }
-    if (req.method === 'GET' && url.pathname === '/api/state') return send(200, { files, wardrobe, runs: [...runs.values()].reverse(), busy, configured: Boolean(process.env.OPENAI_API_KEY), model: characterSheetModel, version: characterSheetPromptVersion });
+    if (req.method === 'GET' && url.pathname === '/api/state') return send(200, { files, wardrobe, runs: [...runs.values()].reverse(), busy, configured: Boolean(process.env.OPENAI_API_KEY), model: imageModel, version: characterSheetPromptVersion });
     if (req.method === 'POST' && url.pathname === '/api/board') {
       const data = await body(req);
       if (!Array.isArray(data.references) || data.references.length < 1 || data.references.length > 8) throw Error('Choose 1–8 reference photos.');
@@ -122,7 +122,7 @@ createServer(async (req, res) => {
       const identityCount = references.length;
       for (const item of clothing) references.push(await readFile(join(output, 'wardrobe', `${item.id}.png`)));
       const baseline = fit ? (boardMode ? boardFitPrompt : fitPrompt)(data.references.length, clothing, data.scene, data.note) : parent ? refinementPrompt(data.note || null, data.instruction || 'Correct the facial likeness using the real photos.') : characterPrompt(data.note || null);
-      const run = { id, mode: fit ? 'fit' : 'sheet', identityLayout: boardMode ? 'board' : 'separate', board: boardMode ? `/output/${id}-board.png` : null, clothing: clothing.map((item, i) => ({...item, image: `/output/${id}-garment-${i}.png`})), scene: data.scene || '', label: String(data.label || 'Untitled comparison').slice(0, 100), createdAt: new Date().toISOString(), status: 'running', step: 'prepared', parent: parent?.id || null, prompt: data.prompt, baseline, variant: data.prompt !== baseline, note: data.note, instruction: data.instruction, model: characterSheetModel, quality: fit ? 'medium' : 'high', size: fit ? '1024x1280' : '864x1536', version: fit ? (boardMode ? 'photo-board-fit-v1' : fitPromptVersion) : parent ? characterSheetRefinePromptVersion : characterSheetPromptVersion, references: evidence };
+      const run = { id, mode: fit ? 'fit' : 'sheet', identityLayout: boardMode ? 'board' : 'separate', board: boardMode ? `/output/${id}-board.png` : null, clothing: clothing.map((item, i) => ({...item, image: `/output/${id}-garment-${i}.png`})), scene: data.scene || '', label: String(data.label || 'Untitled comparison').slice(0, 100), createdAt: new Date().toISOString(), status: 'running', step: 'prepared', parent: parent?.id || null, prompt: data.prompt, baseline, variant: data.prompt !== baseline, note: data.note, instruction: data.instruction, model: imageModel, quality: fit ? 'medium' : 'high', size: fit ? '1024x1280' : '864x1536', version: fit ? (boardMode ? 'photo-board-fit-v1' : fitPromptVersion) : parent ? characterSheetRefinePromptVersion : characterSheetPromptVersion, references: evidence };
       if (busy) return send(409, { error: 'A generation is already running.' });
       busy = true;
       try {

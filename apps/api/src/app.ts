@@ -7,7 +7,6 @@ import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import {
   completeSourceUploadRequestSchema,
   createCharacterSheetRequestSchema,
-  refineCharacterSheetRequestSchema,
   activateCharacterSheetRequestSchema,
   createLookRequestSchema,
   retryLookRequestSchema,
@@ -62,7 +61,6 @@ import {
   InspirationValidationError,
   listCharacterSheets,
   listLooks,
-  refineCharacterSheet,
   retryLook,
   removeCharacterSheet,
 } from '@form/service';
@@ -755,43 +753,6 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
         201,
       );
     } catch (error) {
-      const mapped = wardrobeError(error);
-      if (mapped) return context.json(mapped.payload, mapped.status);
-      throw error;
-    }
-  });
-
-  app.post('/v1/character-sheets/:characterSheetId/refine', async (context) => {
-    const authenticated = await currentSession(context);
-    if (!authenticated)
-      return context.json(
-        errorPayload('authentication', 'authentication-required', 'Session required.'),
-        401,
-      );
-    const parsed = refineCharacterSheetRequestSchema.safeParse(
-      await context.req.json().catch(() => null),
-    );
-    if (!parsed.success)
-      return context.json(
-        errorPayload(
-          'validation',
-          'invalid-refinement',
-          'Wähle ein bis drei neue Fotos und beschreibe, was sich ändern soll.',
-        ),
-        400,
-      );
-    try {
-      return context.json(
-        await refineCharacterSheet(database, {
-          accountId: authenticated.session.id,
-          characterSheetId: context.req.param('characterSheetId'),
-          ...parsed.data,
-        }),
-        202,
-      );
-    } catch (error) {
-      if (error instanceof InspirationValidationError)
-        return context.json(errorPayload('conflict', error.code, error.message), 409);
       const mapped = wardrobeError(error);
       if (mapped) return context.json(mapped.payload, mapped.status);
       throw error;

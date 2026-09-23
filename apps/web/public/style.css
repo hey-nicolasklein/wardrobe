@@ -833,9 +833,9 @@ legend {
   font-size: 28px;
   line-height: 1.15;
 }
-#activate-character + #refine-character,
+#activate-character + #new-character-collage,
 #activate-character + #remove-character,
-#refine-character + #remove-character {
+#new-character-collage + #remove-character {
   margin-top: 12px;
 }
 .character-details-title {

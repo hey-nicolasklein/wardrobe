@@ -29,7 +29,6 @@ import {
   resetFixtures,
   listLooks,
   listCharacterSheets,
-  refineCharacterSheet,
   removeCharacterSheet,
 } from './index.js';
 
@@ -50,7 +49,7 @@ test('photo collages cost zero and become the first reference for a priced feed 
     const created = await createCharacterSheet(database, input);
     assert.deepEqual(await createCharacterSheet(database, input), created);
     await assert.rejects(createCharacterSheet(database, { ...input, accountId: fixtureIds.emptyAccount }));
-    const makeJob = (id: string, kind: 'generate-character-sheet' | 'generate-look', payload: unknown) => ({
+    const makeJob = (id: string, kind: 'generate-look', payload: unknown) => ({
       id, accountId: input.accountId, kind, payload, wardrobeItemId: null, generationAttemptId: null,
       attempts: 1, maxAttempts: 3, leaseExpiresAt: new Date(Date.now() + 60_000),
     });
@@ -63,7 +62,6 @@ test('photo collages cost zero and become the first reference for a priced feed 
     assert.equal(sheet.costMicrounits, 0);
     assert.equal(sheet.providerRequestId, null);
     assert.equal(sheet.assetId, fixtureIds.sourceAsset);
-    await assert.rejects(refineCharacterSheet(database, { accountId: input.accountId, characterSheetId: sheet.id, referenceAssetIds: [fixtureIds.sourceAsset], instruction: 'change face', idempotencyKey: 'collage-refinement-refused-0001' }), /Fotocollage/);
     const asset = (await database.query<{ object_key: string; object_version_id: string; pixel_width: number; pixel_height: number }>('SELECT object_key,object_version_id,pixel_width,pixel_height FROM private_assets WHERE id=$1', [sheet.assetId])).rows[0]!;
     // The reference remains the uploaded collage asset; no 864×1536 sheet is
     // rendered or written as a replacement.
@@ -321,84 +319,6 @@ test(
           accountId: fixtureIds.emptyAccount,
         }),
         /Character Sheet/,
-      );
-    } finally {
-      storage.client.destroy();
-      await database.end();
-    }
-  },
-);
-
-test(
-  'a refinement builds on the parent render and leaves the active sheet alone',
-  { skip: !enabled },
-  async () => {
-    const database = createDatabase(readDatabaseConfig());
-    const storage = createPrivateObjectStorage(readObjectStorageConfig());
-    try {
-      await migrateDatabase(database);
-      await ensurePrivateBucket(storage);
-      await resetFixtures(database, storage);
-      const parentId = randomUUID();
-      await database.query(
-        `INSERT INTO character_sheets (
-        id, account_id, reference_asset_ids, note, state, asset_id, active,
-        model, quality, output_size, prompt_version, finished_at
-      ) VALUES ($1, $2, $3, 'braunes Haar', 'ready', $4, true, 'fixture', 'high', '864x1536', 'fixture', now())`,
-        [
-          parentId,
-          fixtureIds.populatedAccount,
-          [fixtureIds.transparentAssetOne],
-          fixtureIds.transparentAssetTwo,
-        ],
-      );
-      const command = {
-        accountId: fixtureIds.populatedAccount,
-        characterSheetId: parentId,
-        referenceAssetIds: [fixtureIds.transparentAssetOne],
-        instruction: 'Die Rückansicht zeigt die falsche Frisur.',
-        idempotencyKey: randomUUID(),
-      };
-      const first = await refineCharacterSheet(database, command);
-      assert.deepEqual(await refineCharacterSheet(database, command), first);
-
-      const sheets = await listCharacterSheets(database, fixtureIds.populatedAccount);
-      const child = sheets.find((sheet) => sheet.id === first.characterSheetId);
-      assert.equal(child?.parentCharacterSheetId, parentId);
-      assert.equal(child?.refinementInstruction, command.instruction);
-      // The parent render leads the references and its stable details carry over.
-      assert.deepEqual(child?.referenceAssetIds, [
-        fixtureIds.transparentAssetTwo,
-        fixtureIds.transparentAssetOne,
-      ]);
-      assert.equal(child?.note, 'braunes Haar');
-      assert.equal(child?.active, false);
-      assert.equal(sheets.find((sheet) => sheet.id === parentId)?.active, true);
-
-      const queued = await database.query<{ kind: string; character_sheet_id: string }>(
-        'SELECT kind, character_sheet_id FROM remote_image_jobs WHERE id = $1',
-        [first.jobId],
-      );
-      assert.deepEqual(queued.rows[0], {
-        kind: 'generate-character-sheet',
-        character_sheet_id: first.characterSheetId,
-      });
-
-      await assert.rejects(
-        refineCharacterSheet(database, {
-          ...command,
-          characterSheetId: first.characterSheetId,
-          idempotencyKey: randomUUID(),
-        }),
-        /fertiges Character Sheet/,
-      );
-      await assert.rejects(
-        refineCharacterSheet(database, {
-          ...command,
-          accountId: fixtureIds.emptyAccount,
-          idempotencyKey: randomUUID(),
-        }),
-        /does not exist/,
       );
     } finally {
       storage.client.destroy();

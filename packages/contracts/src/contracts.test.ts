@@ -10,7 +10,6 @@ import {
   detectionProposalsResponseSchema,
   enqueueGenerationRequestSchema,
   garmentDetectionSchema,
-  refineCharacterSheetRequestSchema,
   signInRequestSchema,
   updateWardrobeItemRequestSchema,
   wardrobeItemDetailResponseSchema,
@@ -175,31 +174,6 @@ test('keeps Character Sheet and Look creation constrained and strict', () => {
   assert.equal(
     createCharacterSheetRequestSchema.safeParse({
       referenceAssetIds: [id, id],
-      idempotencyKey: 'character-command-0123456789',
-    }).success,
-    false,
-  );
-  assert.equal(
-    refineCharacterSheetRequestSchema.safeParse({
-      referenceAssetIds: [id],
-      instruction: 'Fix the back view',
-      idempotencyKey: 'character-command-0123456789',
-    }).success,
-    true,
-  );
-  // The parent sheet occupies the fourth reference slot, and a refinement needs a target.
-  assert.equal(
-    refineCharacterSheetRequestSchema.safeParse({
-      referenceAssetIds: [id, id, id, id],
-      instruction: 'Fix the back view',
-      idempotencyKey: 'character-command-0123456789',
-    }).success,
-    false,
-  );
-  assert.equal(
-    refineCharacterSheetRequestSchema.safeParse({
-      referenceAssetIds: [id],
-      instruction: '  ',
       idempotencyKey: 'character-command-0123456789',
     }).success,
     false,

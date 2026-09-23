@@ -22,9 +22,6 @@ import { collageModel, createIdentityCollage } from './identity-collage.js';
 import { IdempotencyConflictError, OwnedResourceNotFoundError } from './media.js';
 import type { PrivateObjectStorage } from './storage.js';
 
-export const characterSheetModel = 'gpt-image-2.5-flare';
-export const characterSheetPromptVersion = 'identity-sheet-v4';
-export const characterSheetRefinePromptVersion = 'identity-sheet-refine-v3';
 export const lookModel = 'gpt-image-2.5-flare';
 export const lookPlannerModel = 'gpt-5.4-mini';
 export const lookPromptVersion = 'candid-iphone-identity-v3';
@@ -34,8 +31,6 @@ type CharacterRow = {
   state: CharacterSheet['state'];
   reference_asset_ids: string[];
   note: string | null;
-  parent_character_sheet_id: string | null;
-  refinement_instruction: string | null;
   asset_id: string | null;
   active: boolean;
   model: string;
@@ -66,8 +61,7 @@ type LookRow = {
   item_bounding_boxes: Look['itemBoundingBoxes'];
 };
 
-const characterColumns = `id, state, reference_asset_ids, note, parent_character_sheet_id,
-  refinement_instruction, asset_id, active, model, quality,
+const characterColumns = `id, state, reference_asset_ids, note, asset_id, active, model, quality,
   output_size, provider_request_id, cost_microunits, failure_category, created_at, finished_at`;
 const lookColumns = `l.id, l.state, l.asset_id, l.character_sheet_id, l.parent_look_id,
   l.item_bounding_boxes, l.planned_concept, l.model, l.quality, l.output_size, l.provider_request_id,
@@ -79,8 +73,6 @@ const mapCharacter = (row: CharacterRow): CharacterSheet => ({
   state: row.state,
   referenceAssetIds: row.reference_asset_ids,
   note: row.note,
-  parentCharacterSheetId: row.parent_character_sheet_id,
-  refinementInstruction: row.refinement_instruction,
   assetId: row.asset_id,
   active: row.active,
   model: row.model,
@@ -168,46 +160,6 @@ async function assertOwnedAssets(client: DatabaseClient, accountId: string, asse
   if (owned.rowCount !== assetIds.length) throw new OwnedResourceNotFoundError();
 }
 
-// Writes the sheet row and its generation job. Callers validate the references first.
-// A non-null instruction marks the row as a refinement of `parentCharacterSheetId`.
-async function queueCharacterSheet(
-  client: DatabaseClient,
-  input: {
-    accountId: string;
-    referenceAssetIds: string[];
-    note: string | null;
-    parentCharacterSheetId: string | null;
-    instruction: string | null;
-    idempotencyKey: string;
-  },
-) {
-  const characterSheetId = randomUUID();
-  await client.query(
-    `INSERT INTO character_sheets(id,account_id,reference_asset_ids,note,parent_character_sheet_id,refinement_instruction,state,model,quality,output_size,prompt_version) VALUES($1,$2,$3,$4,$5,$6,'queued',$7,'high','864x1536',$8)`,
-    [
-      characterSheetId,
-      input.accountId,
-      input.referenceAssetIds,
-      input.note,
-      input.parentCharacterSheetId,
-      input.instruction,
-      input.instruction === null ? collageModel : characterSheetModel,
-      input.instruction === null ? collageModel : characterSheetRefinePromptVersion,
-    ],
-  );
-  const jobId = await enqueueJob(client, {
-    accountId: input.accountId,
-    kind: 'generate-character-sheet',
-    payload: { characterSheetId },
-    idempotencyKey: `character:${input.idempotencyKey}`,
-  });
-  await client.query('UPDATE remote_image_jobs SET character_sheet_id=$1 WHERE id=$2', [
-    characterSheetId,
-    jobId,
-  ]);
-  return { jobId, characterSheetId };
-}
-
 export async function createCharacterSheet(
   database: Database,
   input: {
@@ -263,74 +215,6 @@ export async function createCharacterSheet(
   });
 }
 
-// Renders a new sheet from a finished one plus fresh photos, so a promising identity can be
-// corrected instead of started over. Each round carries the parent render into the next
-// generation, which is how the reference set grows past the four images one call accepts.
-// The result stays inactive until it is activated, so a worse angle cannot replace a working sheet.
-export async function refineCharacterSheet(
-  database: Database,
-  input: {
-    accountId: string;
-    characterSheetId: string;
-    referenceAssetIds: string[];
-    instruction: string;
-    idempotencyKey: string;
-  },
-) {
-  const request = {
-    characterSheetId: input.characterSheetId,
-    referenceAssetIds: input.referenceAssetIds,
-    instruction: input.instruction,
-  };
-  return withTransaction(database, async (client) => {
-    const prior = await replay<{ jobId: string; characterSheetId: string }>(
-      client,
-      input.accountId,
-      input.idempotencyKey,
-      'refine-character-sheet',
-      request,
-    );
-    if (prior) return prior;
-    const found = await client.query<{
-      state: CharacterSheet['state'];
-      asset_id: string | null;
-      note: string | null;
-      model: string;
-    }>(
-      `SELECT state, asset_id, note, model FROM character_sheets
-       WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL`,
-      [input.characterSheetId, input.accountId],
-    );
-    const parent = found.rows[0];
-    if (!parent) throw new OwnedResourceNotFoundError();
-    if (parent.state !== 'ready' || !parent.asset_id)
-      throw new InspirationValidationError(
-        'character-sheet-not-refinable',
-        'Nur ein fertiges Character Sheet kann verfeinert werden.',
-      );
-    if (parent.model === collageModel)
-      throw new InspirationValidationError('character-sheet-not-refinable', 'Erstelle für eine Fotocollage eine neue Auswahl mit passenden Ausschnitten.');
-    await assertOwnedAssets(client, input.accountId, input.referenceAssetIds);
-    const body = await queueCharacterSheet(client, {
-      accountId: input.accountId,
-      // The parent render leads so the model reads it as the sheet to edit.
-      referenceAssetIds: [parent.asset_id, ...input.referenceAssetIds],
-      note: parent.note,
-      parentCharacterSheetId: input.characterSheetId,
-      instruction: input.instruction,
-      idempotencyKey: input.idempotencyKey,
-    });
-    await remember(
-      client,
-      input.accountId,
-      input.idempotencyKey,
-      'refine-character-sheet',
-      request,
-      body,
-    );
-    return body;
-  });
-}
 export async function activateCharacterSheet(
   database: Database,
   input: { accountId: string; characterSheetId: string },
@@ -732,10 +616,6 @@ async function writeAsset(
   );
   return id;
 }
-const characterPrompt = (note: string | null) =>
-  `Create one high-quality 9:16 identity Character Sheet of the same person shown in all reference photos, laid out as two rows of three views each. Top row: three large close-ups of the face in this exact left-to-right order: face turned slightly towards the left, direct front-facing view looking into the camera, face turned slightly towards the right. The left and right views must be subtle three-quarter views that show both eyes and the far cheek, not full side profiles, and must show opposite sides of the face. Bottom row: three full-body views in the same slightly-left, front-facing, slightly-right order, with the face at the same subtle angle. Never show a full profile, a three-quarter rear angle, or the back of the person. Use neutral fitted clothing, consistent soft studio lighting, and a plain background. Preserve identity, body proportions, skin, hair, and stable features${note ? `. Stable details: ${note}` : ''}. No text, labels, callouts, collage borders, decoration, or watermark.`;
-const refinementPrompt = (note: string | null, instruction: string) =>
-  `The first reference image is an existing 9:16 identity Character Sheet. The remaining reference photos show the same real person and are the ground truth for identity. Redraw the sheet with the same layout, the same views in the same positions, the same neutral fitted clothing, lighting, and plain background. Correct only this: ${instruction}. Keep every other region identical to the first reference and preserve identity, body proportions, skin, and hair. If it does not already show a row of three face close-ups above a row of three full-body views, rebuild it into that layout. In each row, use this exact left-to-right order: face turned slightly towards the left, direct front-facing view looking into the camera, face turned slightly towards the right. The left and right views must be subtle three-quarter views that show both eyes and the far cheek, not full side profiles, and must show opposite sides of the face${note ? `. Stable details: ${note}` : ''}. No text, labels, callouts, collage borders, decoration, or watermark.`;
 export function lookPrompt(
   concept: LookConcept,
   items: Array<{ name: string; category: string; colors: string[] }>,
@@ -780,23 +660,13 @@ export async function executeInspirationJob(
       const refs = await Promise.all(
         row.reference_asset_ids.map((asset) => readAsset(database, storage, job.accountId, asset)),
       );
-      // Legacy queued collage jobs remain replayable. New collages are ready as
+      // Only legacy queued collage jobs still reach this branch. New collages are ready as
       // soon as their single, finished collage asset is saved.
-      const result = row.model === collageModel ? {
+      const result = {
         pngBytes: await createIdentityCollage(refs),
         requestId: null,
         usage: { textInputTokens: 0, imageInputTokens: 0, outputTokens: 0, serviceTier: 'default', raw: { method: collageModel } },
-      } : await provider.generateComposite({
-        references: refs,
-        prompt:
-          row.refinement_instruction === null
-            ? characterPrompt(row.note)
-            : refinementPrompt(row.note, row.refinement_instruction),
-        model: row.model,
-        quality: 'high',
-        size: '864x1536',
-        signal: controller.signal,
-      });
+      };
       const assetId = await writeAsset(
         database,
         storage,
@@ -816,11 +686,6 @@ export async function executeInspirationJob(
         JSON.stringify(result.usage.raw),
         cost,
       ];
-      // A refinement waits for an explicit activation so it can be compared against its parent.
-      if (row.refinement_instruction !== null) {
-        await database.query(`${finish} WHERE id=$1 AND account_id=$2`, params);
-        return;
-      }
       await withTransaction(database, async (client) => {
         await client.query(
           'UPDATE character_sheets SET active=false WHERE account_id=$1 AND active',

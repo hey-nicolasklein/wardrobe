@@ -207,9 +207,6 @@ export const characterSheetSchema = z
     state: characterSheetStateSchema,
     referenceAssetIds: z.array(opaqueIdSchema).min(1).max(4),
     note: z.string().trim().max(1_000).nullable(),
-    // Set together: a refinement re-renders its parent sheet with the instruction applied.
-    parentCharacterSheetId: opaqueIdSchema.nullable(),
-    refinementInstruction: z.string().trim().max(1_000).nullable(),
     assetId: opaqueIdSchema.nullable(),
     active: z.boolean(),
     model: z.string().min(1).max(64),
