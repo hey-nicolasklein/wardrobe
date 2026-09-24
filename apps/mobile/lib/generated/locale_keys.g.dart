@@ -2,7 +2,7 @@
 
 // ignore_for_file: constant_identifier_names
 
-abstract class LocaleKeys {
+abstract class  LocaleKeys {
   static const appName = 'appName';
   static const feed = 'feed';
   static const wardrobe = 'wardrobe';
@@ -160,4 +160,13 @@ abstract class LocaleKeys {
   static const intake_restartRequired = 'intake.restartRequired';
   static const intake_localSaveFailed = 'intake.localSaveFailed';
   static const intake = 'intake';
+  static const visual_colorFilter = 'visual.colorFilter';
+  static const visual_wardrobeEyebrow = 'visual.wardrobeEyebrow';
+  static const visual_wardrobeHeading = 'visual.wardrobeHeading';
+  static const visual_collectedCount = 'visual.collectedCount';
+  static const visual_searchHint = 'visual.searchHint';
+  static const visual_recentFirst = 'visual.recentFirst';
+  static const visual_wardrobeTab = 'visual.wardrobeTab';
+  static const visual = 'visual';
+
 }

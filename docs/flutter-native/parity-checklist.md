@@ -64,18 +64,23 @@ endpoint correctly produces the incompatibility screen.
 
 ## Visual parity
 
-- [ ] `V` One Dart token source mirrors the PWA colors, type scale, serif,
-      spacing, radii, and motion curves.
-- [ ] `V` The theme removes ripples, elevation, surface tint, and tonal M3
-      colors while keeping native transitions, back-swipe, and system pickers.
-- [ ] `V` Shared FORM components exist for tab bar, header, buttons, chips,
-      search, inputs, image cards, empty and error states, sheets, and dialogs.
-- [ ] `V` Shell and foundation access states match the PWA.
-- [ ] `V` Wardrobe grid, filters, search, and empty states match the PWA.
-- [ ] `V` Item detail, editing, generation, versions, and archive match the PWA.
+- [x] `V` One Dart token source mirrors the PWA colors, type scale, serif,
+      spacing, radii, and motion curves (`form_tokens.dart`).
+- [x] `V` The theme removes ripples, elevation, surface tint, and tonal M3
+      colors while keeping native transitions, back-swipe, and system pickers
+      (`form_theme.dart`). Screen-level screenshot acceptance is still pending.
+- [x] `V` Shared FORM components exist for tab bar, header, buttons, chips,
+      search, inputs, image cards, empty and notice states, sheets, and native
+      confirmations (`form_components.dart`, bundled tab SVGs in `form_icon.dart`).
+- [ ] `V` Shell and foundation access states match the PWA (screenshot pair pending).
+- [ ] `V` Wardrobe grid, filters, search, and empty states match the PWA
+      (screenshot pair pending).
+- [ ] `V` Item detail, editing, generation, versions, and archive match the PWA
+      (screenshot pair pending; item routes use root `FormSheetPage` /
+      `ModalBottomSheetRoute` with drag dismissal).
 - [ ] `V` Intake capture, drafts, progress, detection, proposals, and manual path
-      match the PWA.
-- [ ] `V` `visual-guide.md` documents tokens, components, and the comparison
+      match the PWA (screenshot pair pending).
+- [x] `V` `visual-guide.md` documents tokens, components, and the comparison
       routine.
 - [ ] `L4` Feed, composer, and look screens match the PWA.
 - [ ] `C5` Character-reference setup, crop, collage, and detail match the PWA.

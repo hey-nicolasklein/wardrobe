@@ -4,12 +4,14 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
+import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/wardrobe/item_cubit.dart';
 import 'package:form_mobile/features/wardrobe/item_edit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
+import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
 class ItemPage extends StatelessWidget {
@@ -60,6 +62,43 @@ class _ItemViewState extends State<_ItemView> {
     super.dispose();
   }
 
+  Future<void> _openEdit(
+    BuildContext context,
+    ItemCubit cubit,
+    WardrobeItem item,
+  ) async {
+    final changes = await showFormSheet<ItemEdit>(
+      context: context,
+      builder: (sheetContext) => FormSheet(
+        title: context.tr(LocaleKeys.editItem),
+        child: _EditItem(item: item),
+      ),
+    );
+    if (changes != null && context.mounted) {
+      await cubit.edit(changes);
+    }
+  }
+
+  Future<void> _openGenerate(
+    BuildContext context,
+    ItemCubit cubit,
+    ItemDetail detail,
+  ) async {
+    final hasShelf = detail.currentImage != null;
+    final command = await showFormSheet<ItemCommand>(
+      context: context,
+      builder: (sheetContext) => FormSheet(
+        title: context.tr(
+          hasShelf ? LocaleKeys.improveImage : LocaleKeys.generateImage,
+        ),
+        child: _GenerateItem(detail: detail),
+      ),
+    );
+    if (command != null && context.mounted) {
+      await cubit.execute(command);
+    }
+  }
+
   @override
   Widget build(
     BuildContext context,
@@ -82,46 +121,84 @@ class _ItemViewState extends State<_ItemView> {
         final online =
             context.watch<ConnectionCubit>().state == ConnectionStatus.ready;
         final enabled = online && state.canStartCommand;
+        final title = context.tr(LocaleKeys.itemDetails);
         return Scaffold(
+          backgroundColor: FormTokens.paper,
           appBar: AppBar(
-            title: Text(
-              detail?.wardrobeItem.metadata.name ??
-                  context.tr(LocaleKeys.itemDetails),
-            ),
+            automaticallyImplyLeading: false,
+            title: Text(title),
             actions: [
               IconButton(
-                tooltip: context.tr(LocaleKeys.refresh),
                 onPressed: state.busy ? null : cubit.refresh,
+                tooltip: context.tr(LocaleKeys.refresh),
                 icon: const Icon(Icons.refresh),
               ),
+              IconButton(
+                onPressed: () => context.pop(),
+                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                style: IconButton.styleFrom(
+                  backgroundColor: FormTokens.field,
+                ),
+                icon: const Icon(Icons.close),
+              ),
+              const SizedBox(width: 12),
             ],
           ),
           body: detail == null
               ? Center(
                   child: state.busy
-                      ? const CircularProgressIndicator.adaptive()
-                      : Text(context.tr(LocaleKeys.unavailable)),
+                      ? const CircularProgressIndicator(color: FormTokens.green)
+                      : Text(
+                          context.tr(LocaleKeys.unavailable),
+                          style: FormTokens.body,
+                        ),
                 )
               : RefreshIndicator(
                   onRefresh: cubit.refresh,
                   child: ListView(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(
+                      FormTokens.gutter,
+                      8,
+                      FormTokens.gutter,
+                      32,
+                    ),
                     children: [
-                      if (state.busy) const LinearProgressIndicator(),
+                      if (state.busy)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 12),
+                          child: LinearProgressIndicator(
+                            color: FormTokens.green,
+                            backgroundColor: FormTokens.line,
+                          ),
+                        ),
                       if (state.stale || !online)
-                        Text(context.tr(LocaleKeys.wardrobeStale)),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: FormNotice(
+                            text: context.tr(LocaleKeys.wardrobeStale),
+                          ),
+                        ),
                       if (state.failure != null)
-                        Text(context.tr(LocaleKeys.itemActionFailed)),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: FormNotice(
+                            text: context.tr(LocaleKeys.itemActionFailed),
+                            error: true,
+                          ),
+                        ),
                       if (state.pending != null && !state.busy)
-                        FilledButton.tonal(
-                          onPressed: online && state.canMutate
-                              ? () => cubit.execute(state.pending!)
-                              : null,
-                          child: Text(context.tr(LocaleKeys.retryCommand)),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: FilledButton.tonal(
+                            onPressed: online && state.canMutate
+                                ? () => cubit.execute(state.pending!)
+                                : null,
+                            child: Text(context.tr(LocaleKeys.retryCommand)),
+                          ),
                         ),
                       if (detail.currentImage != null)
-                        SizedBox(
-                          height: 320,
+                        FormImageCard(
+                          aspectRatio: 1,
                           child: CachedMedia(
                             identity: detail.currentImage!.transparentAssetId,
                             online: online && !state.stale,
@@ -131,198 +208,316 @@ class _ItemViewState extends State<_ItemView> {
                         context.tr(
                           'categories.${detail.wardrobeItem.metadata.category}',
                         ),
-                        style: Theme.of(context).textTheme.titleLarge,
+                        style: FormTokens.eyebrow,
                       ),
-                      Text(detail.wardrobeItem.metadata.colors.join(', ')),
+                      const SizedBox(height: 6),
                       Text(
-                        context.tr('collection.${detail.wardrobeItem.state}'),
+                        detail.wardrobeItem.metadata.name,
+                        style: FormTokens.heading,
                       ),
-                      if (detail.wardrobeItem.metadata.notes != null)
+                      if (detail.wardrobeItem.metadata.colors.isNotEmpty)
                         Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(detail.wardrobeItem.metadata.notes!),
+                          padding: const EdgeInsets.only(top: 9),
+                          child: Wrap(
+                            spacing: 7,
+                            runSpacing: 7,
+                            children: [
+                              for (final color
+                                  in detail.wardrobeItem.metadata.colors)
+                                _ItemColorSwatch(label: color),
+                            ],
+                          ),
                         ),
-                      Text(
-                        context.tr(
-                          'itemStatus.'
-                          "${detail.wardrobeItem.status.replaceAll('-', '_')}",
+                      if (detail.wardrobeItem.status != 'ready')
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            context.tr(
+                              'itemStatus.'
+                              '${detail.wardrobeItem.status.replaceAll(
+                                '-',
+                                '_',
+                              )}',
+                            ),
+                            style: FormTokens.small,
+                          ),
+                        ),
+                      const SizedBox(height: 18),
+                      FormPanel(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _FactRow(
+                              label: context.tr(LocaleKeys.collectionState),
+                              value: context.tr(
+                                'collection.${detail.wardrobeItem.state}',
+                              ),
+                            ),
+                            if (detail.wardrobeItem.metadata.notes != null)
+                              _FactRow(
+                                label: context.tr(LocaleKeys.notes),
+                                value: detail.wardrobeItem.metadata.notes!,
+                              ),
+                          ],
                         ),
                       ),
                       if (detail.generating)
-                        ListTile(
-                          leading: const CircularProgressIndicator.adaptive(),
-                          title: Text(context.tr(LocaleKeys.generationRunning)),
-                          subtitle: Text(
-                            context.tr(LocaleKeys.generationRefresh),
-                          ),
-                        ),
-                      if (detail.generationAttempts.firstOrNull?.state ==
-                          'failed')
-                        Text(context.tr(LocaleKeys.generationFailed)),
-                      FilledButton.tonal(
-                        onPressed: enabled
-                            ? () async {
-                                final changes =
-                                    await showModalBottomSheet<ItemEdit>(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      useSafeArea: true,
-                                      builder: (_) =>
-                                          _EditItem(item: detail.wardrobeItem),
-                                    );
-                                if (changes != null && context.mounted) {
-                                  await cubit.edit(changes);
-                                }
-                              }
-                            : null,
-                        child: Text(context.tr(LocaleKeys.editItem)),
-                      ),
-                      FilledButton(
-                        onPressed: online && state.canGenerate
-                            ? () async {
-                                final command =
-                                    await showModalBottomSheet<ItemCommand>(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      useSafeArea: true,
-                                      builder: (_) =>
-                                          _GenerateItem(detail: detail),
-                                    );
-                                if (command != null && context.mounted) {
-                                  await cubit.execute(command);
-                                }
-                              }
-                            : null,
-                        child: Text(
-                          context.tr(
-                            detail.currentImage == null
-                                ? LocaleKeys.generateImage
-                                : LocaleKeys.improveImage,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        context.tr(LocaleKeys.sourcePhoto),
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      SizedBox(
-                        height: 280,
-                        child: CachedMedia(
-                          identity: detail.sourcePhoto.assetId,
-                          online: online && !state.stale,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        context.tr(LocaleKeys.imageVersions),
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      for (final version in detail.shelfImageVersions)
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: FormPanel(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                SizedBox(
-                                  height: 180,
-                                  child: CachedMedia(
-                                    identity: version.transparentAssetId,
-                                    online: online && !state.stale,
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 2, right: 12),
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: FormTokens.green,
+                                    ),
                                   ),
                                 ),
-                                Text(
-                                  [
-                                    DateFormat.yMMMd(
-                                      context.locale.languageCode,
-                                    ).format(version.keptAt),
-                                    context.tr('quality.${version.quality}'),
-                                  ].join(' · '),
-                                ),
-                                TextButton(
-                                  onPressed:
-                                      online && state.canRestore(version.id)
-                                      ? () => cubit.restore(version.id)
-                                      : null,
-                                  child: Text(
-                                    context.tr(
-                                      version.id ==
-                                              detail
-                                                  .wardrobeItem
-                                                  .currentShelfImageVersionId
-                                          ? LocaleKeys.currentImage
-                                          : LocaleKeys.restoreImage,
-                                    ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        context.tr(
+                                          LocaleKeys.generationRunning,
+                                        ),
+                                        style: FormTokens.body.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        context.tr(
+                                          LocaleKeys.generationRefresh,
+                                        ),
+                                        style: FormTokens.small,
+                                      ),
+                                      TextButton(
+                                        onPressed: state.busy
+                                            ? null
+                                            : cubit.refresh,
+                                        child: Text(
+                                          context.tr(LocaleKeys.refresh),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
                           ),
                         ),
-                      const Divider(),
+                      if (detail.generationAttempts.firstOrNull?.state ==
+                          'failed')
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: FormNotice(
+                            text: context.tr(LocaleKeys.generationFailed),
+                            error: true,
+                          ),
+                        ),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: enabled
+                              ? () => _openEdit(
+                                  context,
+                                  cubit,
+                                  detail.wardrobeItem,
+                                )
+                              : null,
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(50),
+                            backgroundColor: FormTokens.field,
+                            foregroundColor: FormTokens.green,
+                            side: BorderSide.none,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                FormTokens.cardRadius,
+                              ),
+                            ),
+                          ),
+                          child: Text(context.tr(LocaleKeys.editItem)),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: online && state.canGenerate
+                              ? () => _openGenerate(context, cubit, detail)
+                              : null,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(50),
+                            backgroundColor: FormTokens.green,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                FormTokens.cardRadius,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            context.tr(
+                              detail.currentImage == null
+                                  ? LocaleKeys.generateImage
+                                  : LocaleKeys.improveImage,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const _FormRule(),
+                      Text(
+                        context.tr(LocaleKeys.imageVersions),
+                        style: FormTokens.body.copyWith(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        context.tr(LocaleKeys.generationExplanation),
+                        style: FormTokens.small,
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 188,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          padding: EdgeInsets.zero,
+                          itemCount: detail.shelfImageVersions.length + 1,
+                          separatorBuilder: (_, _) => const SizedBox(width: 12),
+                          itemBuilder: (context, index) {
+                            if (index == 0) {
+                              return _VersionAddTile(
+                                label: context.tr(
+                                  detail.currentImage == null
+                                      ? LocaleKeys.generateImage
+                                      : LocaleKeys.improveImage,
+                                ),
+                                onTap: online && state.canGenerate
+                                    ? () =>
+                                          _openGenerate(context, cubit, detail)
+                                    : null,
+                              );
+                            }
+                            final version =
+                                detail.shelfImageVersions[index - 1];
+                            final current =
+                                version.id ==
+                                detail.wardrobeItem.currentShelfImageVersionId;
+                            return _VersionTile(
+                              version: version,
+                              current: current,
+                              online: online,
+                              canRestore: state.canRestore(version.id),
+                              onRestore: () => cubit.restore(version.id),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        context.tr(LocaleKeys.sourcePhoto),
+                        style: FormTokens.body.copyWith(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      FormImageCard(
+                        aspectRatio: 4 / 5,
+                        child: CachedMedia(
+                          identity: detail.sourcePhoto.assetId,
+                          online: online && !state.stale,
+                        ),
+                      ),
+                      const _FormRule(),
                       if (detail.wardrobeItem.state == 'archived') ...[
                         for (final target in ['owning', 'wanting'])
-                          TextButton(
-                            onPressed: enabled
-                                ? () => cubit.move(target)
-                                : null,
-                            child: Text(
-                              context.tr(
-                                LocaleKeys.restoreTo,
-                                namedArgs: {
-                                  'state': context.tr('collection.$target'),
-                                },
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: enabled
+                                    ? () => cubit.move(target)
+                                    : null,
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(50),
+                                  backgroundColor: FormTokens.field,
+                                  foregroundColor: FormTokens.green,
+                                  side: BorderSide.none,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      FormTokens.cardRadius,
+                                    ),
+                                  ),
+                                ),
+                                child: Text(
+                                  context.tr(
+                                    LocaleKeys.restoreTo,
+                                    namedArgs: {
+                                      'state': context.tr('collection.$target'),
+                                    },
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                       ] else
-                        TextButton(
-                          onPressed: enabled
-                              ? () => cubit.move('archived')
-                              : null,
-                          child: Text(context.tr(LocaleKeys.archiveItem)),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: enabled
+                                  ? () => cubit.move('archived')
+                                  : null,
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(50),
+                                backgroundColor: FormTokens.field,
+                                foregroundColor: FormTokens.green,
+                                side: BorderSide.none,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    FormTokens.cardRadius,
+                                  ),
+                                ),
+                              ),
+                              child: Text(context.tr(LocaleKeys.archiveItem)),
+                            ),
+                          ),
                         ),
                       TextButton(
                         onPressed: enabled
                             ? () async {
-                                final confirmed =
-                                    await showAdaptiveDialog<bool>(
-                                      context: context,
-                                      builder: (dialogContext) =>
-                                          AlertDialog.adaptive(
-                                            title: Text(
-                                              context.tr(LocaleKeys.deleteItem),
-                                            ),
-                                            content: Text(
-                                              context.tr(
-                                                LocaleKeys.deleteItemConfirm,
-                                              ),
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () =>
-                                                    dialogContext.pop(false),
-                                                child: Text(
-                                                  context.tr(LocaleKeys.cancel),
-                                                ),
-                                              ),
-                                              TextButton(
-                                                onPressed: () =>
-                                                    dialogContext.pop(true),
-                                                child: Text(
-                                                  context.tr(
-                                                    LocaleKeys.deleteItem,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                    );
-                                if ((confirmed ?? false) && context.mounted) {
+                                final confirmed = await confirmFormAction(
+                                  context: context,
+                                  title: context.tr(LocaleKeys.deleteItem),
+                                  message: context.tr(
+                                    LocaleKeys.deleteItemConfirm,
+                                  ),
+                                  confirmLabel: context.tr(
+                                    LocaleKeys.deleteItem,
+                                  ),
+                                );
+                                if (confirmed && context.mounted) {
                                   await cubit.delete();
                                 }
                               }
                             : null,
+                        style: TextButton.styleFrom(
+                          foregroundColor: FormTokens.green,
+                          minimumSize: const Size.fromHeight(44),
+                        ),
                         child: Text(context.tr(LocaleKeys.deleteItem)),
                       ),
                     ],
@@ -332,6 +527,235 @@ class _ItemViewState extends State<_ItemView> {
       },
     ),
   );
+}
+
+class _FactRow extends StatelessWidget {
+  const _FactRow({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: FormTokens.small.copyWith(
+              fontSize: 11,
+              letterSpacing: 0.6,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: FormTokens.body.copyWith(height: 1.45),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FormRule extends StatelessWidget {
+  const _FormRule();
+
+  @override
+  Widget build(BuildContext context) => const Padding(
+    padding: EdgeInsets.symmetric(vertical: 25),
+    child: Divider(color: FormTokens.line, height: 1, thickness: 1),
+  );
+}
+
+class _ItemColorSwatch extends StatelessWidget {
+  const _ItemColorSwatch({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 18,
+        height: 18,
+        decoration: BoxDecoration(
+          color: FormTokens.colorForName(label),
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0x1F4D5545)),
+        ),
+      ),
+      const SizedBox(width: 6),
+      Text(label, style: FormTokens.small.copyWith(color: FormTokens.ink)),
+    ],
+  );
+}
+
+class _VersionAddTile extends StatelessWidget {
+  const _VersionAddTile({required this.label, this.onTap});
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    enabled: onTap != null,
+    label: label,
+    child: SizedBox(
+      width: 128,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                height: 140,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: FormTokens.line),
+                ),
+                child: const Icon(Icons.add, color: FormTokens.green, size: 26),
+              ),
+              const SizedBox(height: 9),
+              Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: FormTokens.small.copyWith(color: FormTokens.ink),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _VersionTile extends StatelessWidget {
+  const _VersionTile({
+    required this.version,
+    required this.current,
+    required this.online,
+    required this.canRestore,
+    required this.onRestore,
+  });
+
+  final ShelfImageVersion version;
+  final bool current;
+  final bool online;
+  final bool canRestore;
+  final VoidCallback onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    final actionLabel = context.tr(
+      current ? LocaleKeys.currentImage : LocaleKeys.restoreImage,
+    );
+    return Semantics(
+      button: true,
+      selected: current,
+      enabled: canRestore,
+      label: actionLabel,
+      child: SizedBox(
+        width: 128,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: canRestore ? onRestore : null,
+            borderRadius: BorderRadius.circular(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: ColoredBox(
+                        color: FormTokens.field,
+                        child: SizedBox(
+                          height: 140,
+                          width: 128,
+                          child: CachedMedia(
+                            identity: version.transparentAssetId,
+                            online: online,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (current)
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: FormTokens.green,
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (version.quality == 'high')
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: const Color(0xCCFFFFFF),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
+                            child: Text(
+                              'HQ',
+                              style: FormTokens.small.copyWith(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: FormTokens.ink,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  [
+                    DateFormat.yMMMd(context.locale.languageCode).format(
+                      version.keptAt,
+                    ),
+                    context.tr('quality.${version.quality}'),
+                  ].join(' · '),
+                  style: FormTokens.small.copyWith(
+                    color: current ? FormTokens.green : FormTokens.ink,
+                    fontWeight: current ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+                Text(
+                  actionLabel,
+                  style: FormTokens.small.copyWith(
+                    color: current ? FormTokens.green : FormTokens.muted,
+                    fontWeight: current ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _EditItem extends StatefulWidget {
@@ -362,105 +786,98 @@ class _EditItemState extends State<_EditItem> {
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.fromLTRB(
-      20,
-      20,
-      20,
-      20 + MediaQuery.viewInsetsOf(context).bottom,
-    ),
-    child: SingleChildScrollView(
-      child: Form(
-        key: _form,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              context.tr(LocaleKeys.editItem),
-              style: Theme.of(context).textTheme.titleLarge,
+  Widget build(BuildContext context) => SingleChildScrollView(
+    child: Form(
+      key: _form,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextFormField(
+            controller: _name,
+            maxLength: 80,
+            decoration: InputDecoration(
+              labelText: context.tr(LocaleKeys.itemName),
             ),
-            TextFormField(
-              controller: _name,
-              maxLength: 80,
-              decoration: InputDecoration(
-                labelText: context.tr(LocaleKeys.itemName),
-              ),
-              validator: (v) => !ItemMetadata.validName(v ?? '')
-                  ? context.tr(LocaleKeys.requiredField)
-                  : null,
+            validator: (v) => !ItemMetadata.validName(v ?? '')
+                ? context.tr(LocaleKeys.requiredField)
+                : null,
+          ),
+          DropdownButtonFormField<String>(
+            initialValue: _category,
+            validator: (value) => value == null
+                ? context.tr(LocaleKeys.chooseSupportedCategory)
+                : null,
+            decoration: InputDecoration(
+              labelText: context.tr(LocaleKeys.category),
             ),
-            DropdownButtonFormField<String>(
-              initialValue: _category,
-              validator: (value) => value == null
-                  ? context.tr(LocaleKeys.chooseSupportedCategory)
-                  : null,
-              decoration: InputDecoration(
-                labelText: context.tr(LocaleKeys.category),
-              ),
-              items: [
-                for (final c in supportedCategories)
-                  DropdownMenuItem(
-                    value: c,
-                    child: Text(context.tr('categories.$c')),
+            items: [
+              for (final c in supportedCategories)
+                DropdownMenuItem(
+                  value: c,
+                  child: Text(context.tr('categories.$c')),
+                ),
+            ],
+            onChanged: (v) => setState(() => _category = v),
+          ),
+          TextFormField(
+            controller: _colors,
+            decoration: InputDecoration(
+              labelText: context.tr(LocaleKeys.itemColors),
+            ),
+            validator: (v) => ItemEdit.validColors(v ?? '')
+                ? null
+                : context.tr(LocaleKeys.invalidColors),
+          ),
+          TextFormField(
+            controller: _notes,
+            maxLength: 2000,
+            minLines: 2,
+            maxLines: 5,
+            decoration: InputDecoration(
+              labelText: context.tr(LocaleKeys.notes),
+            ),
+          ),
+          DropdownButtonFormField<String>(
+            initialValue: _state,
+            decoration: InputDecoration(
+              labelText: context.tr(LocaleKeys.collectionState),
+            ),
+            items: [
+              for (final s in itemStates)
+                DropdownMenuItem(
+                  value: s,
+                  child: Text(context.tr('collection.$s')),
+                ),
+            ],
+            onChanged: (v) => setState(() => _state = v!),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: () {
+              if (_form.currentState!.validate()) {
+                context.pop(
+                  ItemEdit(
+                    name: _name.text,
+                    category: _category!,
+                    colors: _colors.text,
+                    notes: _notes.text,
+                    state: _state,
                   ),
-              ],
-              onChanged: (v) => setState(() => _category = v),
+                );
+              }
+            },
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+              backgroundColor: FormTokens.green,
             ),
-            TextFormField(
-              controller: _colors,
-              decoration: InputDecoration(
-                labelText: context.tr(LocaleKeys.itemColors),
-              ),
-              validator: (v) => ItemEdit.validColors(v ?? '')
-                  ? null
-                  : context.tr(LocaleKeys.invalidColors),
-            ),
-            TextFormField(
-              controller: _notes,
-              maxLength: 2000,
-              minLines: 2,
-              maxLines: 5,
-              decoration: InputDecoration(
-                labelText: context.tr(LocaleKeys.notes),
-              ),
-            ),
-            DropdownButtonFormField<String>(
-              initialValue: _state,
-              decoration: InputDecoration(
-                labelText: context.tr(LocaleKeys.collectionState),
-              ),
-              items: [
-                for (final s in itemStates)
-                  DropdownMenuItem(
-                    value: s,
-                    child: Text(context.tr('collection.$s')),
-                  ),
-              ],
-              onChanged: (v) => setState(() => _state = v!),
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () {
-                if (_form.currentState!.validate()) {
-                  context.pop(
-                    ItemEdit(
-                      name: _name.text,
-                      category: _category!,
-                      colors: _colors.text,
-                      notes: _notes.text,
-                      state: _state,
-                    ),
-                  );
-                }
-              },
-              child: Text(context.tr(LocaleKeys.save)),
-            ),
-            TextButton(
-              onPressed: () => context.pop(),
-              child: Text(context.tr(LocaleKeys.cancel)),
-            ),
-          ],
-        ),
+            child: Text(context.tr(LocaleKeys.save)),
+          ),
+          TextButton(
+            onPressed: () => context.pop(),
+            child: Text(context.tr(LocaleKeys.cancel)),
+          ),
+        ],
       ),
     ),
   );
@@ -484,36 +901,46 @@ class _GenerateItemState extends State<_GenerateItem> {
   }
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.fromLTRB(
-      20,
-      20,
-      20,
-      20 + MediaQuery.viewInsetsOf(context).bottom,
-    ),
-    child: SingleChildScrollView(
+  Widget build(BuildContext context) {
+    final hasShelf = widget.detail.currentImage != null;
+    return SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(context.tr(LocaleKeys.generationExplanation)),
-          if (widget.detail.currentImage != null) ...[
+          Text(
+            context.tr(LocaleKeys.generationExplanation),
+            style: FormTokens.body,
+          ),
+          if (hasShelf) ...[
+            const SizedBox(height: 20),
+            Text(
+              context.tr(LocaleKeys.customFeedback),
+              style: FormTokens.body.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 9),
             Wrap(
               spacing: 8,
+              runSpacing: 8,
               children: [
                 for (final suggestion in ['proportions', 'color', 'details'])
-                  FilterChip(
-                    label: Text(context.tr('feedback.$suggestion')),
+                  _FeedbackChip(
+                    label: context.tr('feedback.$suggestion'),
                     selected: _suggestions.contains(suggestion),
-                    onSelected: (selected) => setState(() {
-                      if (selected) {
-                        _suggestions.add(suggestion);
-                      } else {
+                    onTap: () => setState(() {
+                      if (_suggestions.contains(suggestion)) {
                         _suggestions.remove(suggestion);
+                      } else {
+                        _suggestions.add(suggestion);
                       }
                     }),
                   ),
               ],
             ),
+            const SizedBox(height: 14),
             TextField(
               controller: _feedback,
               maxLength: 800,
@@ -524,16 +951,19 @@ class _GenerateItemState extends State<_GenerateItem> {
               ),
             ),
           ],
-          SegmentedButton<String>(
-            segments: [
+          const SizedBox(height: 20),
+          Text(
+            context.tr('quality.low'),
+            style: FormTokens.body.copyWith(fontSize: 14),
+          ),
+          const SizedBox(height: 9),
+          FormChoiceChips(
+            options: {
               for (final quality in qualities)
-                ButtonSegment(
-                  value: quality,
-                  label: Text(context.tr('quality.$quality')),
-                ),
-            ],
-            selected: {_quality},
-            onSelectionChanged: (v) => setState(() => _quality = v.single),
+                quality: context.tr('quality.$quality'),
+            },
+            selected: _quality,
+            onSelected: (value) => setState(() => _quality = value),
           ),
           const SizedBox(height: 16),
           FilledButton(
@@ -550,6 +980,10 @@ class _GenerateItemState extends State<_GenerateItem> {
                 ),
               );
             },
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+              backgroundColor: FormTokens.green,
+            ),
             child: Text(context.tr(LocaleKeys.requestPaidImage)),
           ),
           TextButton(
@@ -557,6 +991,38 @@ class _GenerateItemState extends State<_GenerateItem> {
             child: Text(context.tr(LocaleKeys.cancel)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FeedbackChip extends StatelessWidget {
+  const _FeedbackChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: selected ? FormTokens.green : const Color(0xFFEEEDE7),
+    borderRadius: BorderRadius.circular(22),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        child: Text(
+          label,
+          style: FormTokens.body.copyWith(
+            fontSize: 12,
+            color: selected ? Colors.white : FormTokens.ink,
+          ),
+        ),
       ),
     ),
   );

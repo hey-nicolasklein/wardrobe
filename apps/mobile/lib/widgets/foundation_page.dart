@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/collection_counts_cubit.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
+import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/cached_resource.dart';
 import 'package:form_mobile/repository/collection_counts_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
+import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
 class FoundationPage extends StatelessWidget {
@@ -18,7 +20,10 @@ class FoundationPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final feed = collection == Collection.feed;
     return Scaffold(
-      appBar: AppBar(title: Text(context.tr(LocaleKeys.appName))),
+      appBar: FormPageHeader(
+        title: context.tr(LocaleKeys.appName),
+        wordmark: true,
+      ),
       body:
           BlocSelector<
             CollectionCountsCubit,
@@ -53,34 +58,25 @@ class FoundationPage extends StatelessWidget {
                   },
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(32),
+                    padding: const EdgeInsets.all(FormTokens.gutter),
                     children: [
                       if (state.refreshing) const LinearProgressIndicator(),
                       if (state.stale && count != null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 32),
-                          child: Text(context.tr(LocaleKeys.stale)),
+                          child: FormNotice(text: context.tr(LocaleKeys.stale)),
                         ),
-                      const SizedBox(height: 48),
-                      Icon(
-                        feed
-                            ? Icons.auto_awesome_outlined
-                            : Icons.checkroom_outlined,
-                        size: 56,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        context.tr(
+                      FormEmptyState(
+                        title: context.tr(
                           feed
                               ? LocaleKeys.feedTitle
                               : LocaleKeys.wardrobeTitle,
                         ),
-                        style: Theme.of(context).textTheme.headlineMedium,
-                        textAlign: TextAlign.center,
+                        message: text,
+                        icon: feed
+                            ? Icons.auto_awesome_outlined
+                            : Icons.checkroom_outlined,
                       ),
-                      const SizedBox(height: 24),
-                      Text(text, textAlign: TextAlign.center),
                       const SizedBox(height: 16),
                       Text(
                         context.tr(LocaleKeys.dataStatusBody),
@@ -112,9 +108,9 @@ class DataStatusPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(context.tr(LocaleKeys.dataStatus))),
+    appBar: FormPageHeader(title: context.tr(LocaleKeys.dataStatus)),
     body: Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(FormTokens.gutter),
       child: Text(context.tr(LocaleKeys.dataStatusBody)),
     ),
   );

@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/collection_counts_cubit.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
+import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
+import 'package:form_mobile/widgets/form_components.dart';
 
 class ConnectionGate extends StatelessWidget {
   const ConnectionGate({required this.child, super.key});
@@ -57,18 +59,25 @@ class ConnectionGate extends StatelessWidget {
           Offstage(offstage: !showShell, child: child),
           if (!showShell)
             Scaffold(
-              appBar: AppBar(title: Text(context.tr(LocaleKeys.appName))),
+              appBar: FormPageHeader(
+                title: context.tr(LocaleKeys.appName),
+                wordmark: true,
+              ),
               body: SafeArea(
                 child: Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(32),
+                    padding: const EdgeInsets.all(FormTokens.gutter),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (status == ConnectionStatus.checking)
                           const CircularProgressIndicator.adaptive()
                         else
-                          const Icon(Icons.cloud_off_outlined, size: 48),
+                          const Icon(
+                            Icons.cloud_off_outlined,
+                            size: 45,
+                            color: FormTokens.emptyIcon,
+                          ),
                         const SizedBox(height: 24),
                         Text(
                           context.tr(title),
@@ -77,7 +86,13 @@ class ConnectionGate extends StatelessWidget {
                         ),
                         if (body != null) ...[
                           const SizedBox(height: 16),
-                          Text(context.tr(body), textAlign: TextAlign.center),
+                          Text(
+                            context.tr(body),
+                            style: FormTokens.body.copyWith(
+                              color: FormTokens.muted,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
                           const SizedBox(height: 24),
                           if (status != ConnectionStatus.configurationRequired)
                             FilledButton(

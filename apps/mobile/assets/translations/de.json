@@ -164,5 +164,14 @@
     },
     "restartRequired": "Der Fotozugriff ist in diesem laufenden Build nicht verfügbar. Beende die App und starte einen neuen Build. Hot Reload reicht nicht aus.",
     "localSaveFailed": "Das Foto konnte auf diesem Gerät nicht gespeichert werden. Prüfe den freien Speicher und versuche es erneut."
+  },
+  "visual": {
+    "colorFilter": "Farbe",
+    "wardrobeEyebrow": "Weniger suchen. Lieber tragen.",
+    "wardrobeHeading": "Dein Schrank.",
+    "collectedCount": "{count} Stücke gesammelt.",
+    "searchHint": "Name, Farbe oder Notiz",
+    "recentFirst": "Zuletzt hinzugefügt",
+    "wardrobeTab": "Schrank"
   }
 }

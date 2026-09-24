@@ -1,37 +1,33 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
 import 'package:form_mobile/features/intake/intake_page.dart';
 import 'package:form_mobile/features/settings/settings_page.dart';
 import 'package:form_mobile/features/wardrobe/item_page.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_page.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
+import 'package:form_mobile/widgets/form_components.dart';
 import 'package:form_mobile/widgets/foundation_page.dart';
 import 'package:go_router/go_router.dart';
 
+final _rootNavigatorKey = GlobalKey<NavigatorState>();
+
 GoRouter createRouter() => GoRouter(
+  navigatorKey: _rootNavigatorKey,
   initialLocation: '/feed',
   overridePlatformDefaultLocation: true,
   routes: [
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => Scaffold(
         body: shell,
-        bottomNavigationBar: NavigationBar(
+        bottomNavigationBar: FormTabBar(
           selectedIndex: shell.currentIndex,
-          onDestinationSelected: (index) => shell.goBranch(index),
-          destinations: [
-            NavigationDestination(
-              icon: const Icon(Icons.auto_awesome_outlined),
-              label: context.tr(LocaleKeys.feed),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.checkroom_outlined),
-              label: context.tr(LocaleKeys.wardrobe),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.tune_outlined),
-              label: context.tr(LocaleKeys.settings),
-            ),
+          onSelected: (index) => shell.goBranch(index),
+          labels: [
+            context.tr(LocaleKeys.feed),
+            context.tr(LocaleKeys.visual_wardrobeTab),
+            context.tr(LocaleKeys.settings),
           ],
         ),
       ),
@@ -59,8 +55,11 @@ GoRouter createRouter() => GoRouter(
                 GoRoute(path: 'intake', builder: (_, _) => const IntakePage()),
                 GoRoute(
                   path: 'items/:id',
-                  builder: (_, state) =>
-                      ItemPage(id: state.pathParameters['id']!),
+                  parentNavigatorKey: _rootNavigatorKey,
+                  pageBuilder: (_, state) => FormSheetPage(
+                    key: state.pageKey,
+                    child: ItemPage(id: state.pathParameters['id']!),
+                  ),
                 ),
                 GoRoute(
                   path: 'status',
@@ -83,8 +82,11 @@ GoRouter createRouter() => GoRouter(
                   routes: [
                     GoRoute(
                       path: 'items/:id',
-                      builder: (_, state) =>
-                          ItemPage(id: state.pathParameters['id']!),
+                      parentNavigatorKey: _rootNavigatorKey,
+                      pageBuilder: (_, state) => FormSheetPage(
+                        key: state.pageKey,
+                        child: ItemPage(id: state.pathParameters['id']!),
+                      ),
                     ),
                   ],
                 ),
@@ -96,3 +98,25 @@ GoRouter createRouter() => GoRouter(
     ),
   ],
 );
+
+class FormSheetPage extends Page<void> {
+  const FormSheetPage({required this.child, super.key});
+  final Widget child;
+
+  @override
+  Route<void> createRoute(BuildContext context) => ModalBottomSheetRoute<void>(
+    settings: this,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    sheetAnimationStyle: AnimationStyle(
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : FormTokens.sheetDuration,
+      reverseDuration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : FormTokens.sheetDuration,
+    ),
+    builder: (_) => FractionallySizedBox(heightFactor: 0.94, child: child),
+  );
+}
