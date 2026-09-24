@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:form_mobile/repository/overview_repository.dart';
+import 'package:form_mobile/repository/collection_counts_repository.dart';
 import 'package:form_mobile/widgets/foundation_page.dart';
 
 class WardrobePage extends StatelessWidget {

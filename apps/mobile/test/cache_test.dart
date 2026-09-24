@@ -4,10 +4,10 @@ import 'package:dio/dio.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:form_mobile/app/overview_cubit.dart';
+import 'package:form_mobile/app/collection_counts_cubit.dart';
 import 'package:form_mobile/models/cached_resource.dart';
 import 'package:form_mobile/repository/cached_repository.dart';
-import 'package:form_mobile/repository/overview_repository.dart';
+import 'package:form_mobile/repository/collection_counts_repository.dart';
 import 'package:form_mobile/services/app_database.dart';
 import 'package:form_mobile/services/form_api.dart';
 
@@ -84,8 +84,8 @@ void main() {
           .customSelect('PRAGMA user_version')
           .getSingle();
       expect(version.read<int>('user_version'), 1);
-      final first = OverviewRepository(database, null, 'server-a');
-      final second = OverviewRepository(database, null, 'server-b');
+      final first = CollectionCountsRepository(database, null, 'server-a');
+      final second = CollectionCountsRepository(database, null, 'server-b');
       await first.collection(Collection.feed).writeCache(0);
       expect(await first.collection(Collection.feed).readCache(), 0);
       expect(await first.collection(Collection.wardrobe).readCache(), isNull);
@@ -120,9 +120,9 @@ void main() {
       );
       final api = FormApi(Dio()..httpClientAdapter = adapter);
       addTearDown(api.close);
-      final repository = OverviewRepository(database, api, 'server-a');
+      final repository = CollectionCountsRepository(database, api, 'server-a');
       await repository.collection(Collection.feed).writeCache(1);
-      final cubit = OverviewCubit(repository);
+      final cubit = CollectionCountsCubit(repository);
       addTearDown(cubit.close);
       await cubit.loadCache();
       expect(cubit.state[Collection.feed]!.value, 1);

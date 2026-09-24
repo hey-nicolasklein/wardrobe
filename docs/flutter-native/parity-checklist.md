@@ -46,7 +46,7 @@ scaffold audit, the exact manual validation sequence, and generation commands.
   additive `/v1/meta` API route reports contract version through the existing
   public proxy. API verification passes. Deployment is awaiting explicit approval.
 - Cached content in F1 means collection counts on thin shell pages. The full
-  record/image views remain W2/L4. `CachedRepository`, `OverviewCubit`, and
+  record/image views remain W2/L4. `CachedRepository`, `CollectionCountsCubit`, and
   `cache_test.dart` cover cached-first loading, request-authoritative availability,
   empty/loaded states, failed refresh preservation, and read-only stale state.
 - Foreground return rechecks access and refreshes the active destination. Both

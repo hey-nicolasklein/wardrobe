@@ -1,5 +1,6 @@
 import 'package:form_mobile/services/form_api.dart';
 
+/// Checks API contract compatibility and access to the personal account.
 class ServerRepository {
   const ServerRepository(this._api);
 

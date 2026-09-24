@@ -1,6 +1,8 @@
 import 'package:form_mobile/models/cached_resource.dart';
 import 'package:form_mobile/services/form_api.dart';
 
+/// Emits cached data before refreshing it and retains it when the server is
+/// unavailable.
 class CachedRepository<T> {
   const CachedRepository({
     required this.readCache,

@@ -1,5 +1,6 @@
 import 'package:form_mobile/services/app_database.dart';
 
+/// Persists the language override and validates supported language codes.
 class PreferencesRepository {
   const PreferencesRepository(this._database);
 

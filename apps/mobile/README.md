@@ -66,7 +66,7 @@ and protection flag. Actual media downloads and eviction belong to slice 2.
 Repositories own network and cache access. `CachedRepository` emits cached values
 before refreshing and preserves them only on availability failures. Authentication
 and contract failures hide cached content. Request outcomes determine connectivity.
-The two top-level summaries share `OverviewCubit` for startup and foreground
+The two top-level summaries share `CollectionCountsCubit` for startup and foreground
 coordination. Feature-specific state will remain route-scoped in later slices.
 
 The flavor setup follows [Flutter's native flavor configuration](https://docs.flutter.dev/deployment/flavors-ios).

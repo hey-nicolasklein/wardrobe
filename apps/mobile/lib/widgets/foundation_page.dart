@@ -1,11 +1,11 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:form_mobile/app/collection_counts_cubit.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
-import 'package:form_mobile/app/overview_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/cached_resource.dart';
-import 'package:form_mobile/repository/overview_repository.dart';
+import 'package:form_mobile/repository/collection_counts_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
 import 'package:go_router/go_router.dart';
 
@@ -21,7 +21,7 @@ class FoundationPage extends StatelessWidget {
       appBar: AppBar(title: Text(context.tr(LocaleKeys.appName))),
       body:
           BlocSelector<
-            OverviewCubit,
+            CollectionCountsCubit,
             Map<Collection, CachedResource<int>>,
             CachedResource<int>
           >(

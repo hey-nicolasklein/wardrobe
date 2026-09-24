@@ -1,16 +1,17 @@
 import 'package:bloc/bloc.dart';
 import 'package:form_mobile/models/cached_resource.dart';
-import 'package:form_mobile/repository/overview_repository.dart';
+import 'package:form_mobile/repository/collection_counts_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
 
-class OverviewCubit extends Cubit<Map<Collection, CachedResource<int>>> {
-  OverviewCubit(this._repository)
+class CollectionCountsCubit
+    extends Cubit<Map<Collection, CachedResource<int>>> {
+  CollectionCountsCubit(this._repository)
     : super({
         for (final collection in Collection.values)
           collection: const CachedResource(refreshing: true),
       });
 
-  final OverviewRepository _repository;
+  final CollectionCountsRepository _repository;
   final Set<Collection> _refreshing = {};
 
   Future<void> loadCache() async {

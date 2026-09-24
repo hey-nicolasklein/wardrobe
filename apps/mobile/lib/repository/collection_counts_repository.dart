@@ -5,8 +5,9 @@ import 'package:form_mobile/services/form_api.dart';
 
 enum Collection { feed, wardrobe }
 
-class OverviewRepository {
-  const OverviewRepository(this._database, this._api, this._scope);
+/// Fetches Feed and Wardrobe counts and caches them separately for each server.
+class CollectionCountsRepository {
+  const CollectionCountsRepository(this._database, this._api, this._scope);
 
   final AppDatabase _database;
   final FormApi? _api;

@@ -3,14 +3,14 @@ import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:form_mobile/app/collection_counts_cubit.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/connection_gate.dart';
 import 'package:form_mobile/app/form_theme.dart';
-import 'package:form_mobile/app/overview_cubit.dart';
 import 'package:form_mobile/features/settings/language_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/navigation/app_router.dart';
-import 'package:form_mobile/repository/overview_repository.dart';
+import 'package:form_mobile/repository/collection_counts_repository.dart';
 import 'package:go_router/go_router.dart';
 
 class FormApp extends StatefulWidget {
@@ -35,19 +35,19 @@ class _FormAppState extends State<FormApp> {
   }
 
   Future<void> _sync(ConnectionStatus status) async {
-    final overview = context.read<OverviewCubit>();
+    final collectionCounts = context.read<CollectionCountsCubit>();
     if (status == ConnectionStatus.ready) {
       final initial = !_hasLoaded;
       _hasLoaded = true;
       final path = _router.routeInformationProvider.value.uri.path;
       await Future.wait([
         if (initial || path.startsWith('/feed'))
-          overview.refresh(Collection.feed),
+          collectionCounts.refresh(Collection.feed),
         if (initial || path.startsWith('/wardrobe'))
-          overview.refresh(Collection.wardrobe),
+          collectionCounts.refresh(Collection.wardrobe),
       ]);
     } else if (status == ConnectionStatus.unavailable) {
-      overview.markUnavailable();
+      collectionCounts.markUnavailable();
     }
   }
 
