@@ -86,7 +86,8 @@
     "shoes": "Shoes",
     "bag": "Bag",
     "hat": "Hat",
-    "scarf": "Scarf"
+    "scarf": "Scarf",
+    "accessory": "Accessories"
   },
   "collection": {
     "all": "All",
@@ -127,5 +128,7 @@
     "needs_review": "Needs review",
     "ready": "Ready",
     "failed": "Failed"
-  }
+  },
+  "wardrobeInvalidResponse": "The wardrobe response could not be read. The server is reachable, but its item data is incompatible with this app.",
+  "chooseSupportedCategory": "Choose a supported category to save this legacy item."
 }

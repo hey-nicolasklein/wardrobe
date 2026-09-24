@@ -3,7 +3,7 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'wardrobe.g.dart';
 
-const categories = [
+const supportedCategories = [
   'top',
   'jacket',
   'pants',
@@ -14,6 +14,7 @@ const categories = [
   'hat',
   'scarf',
 ];
+const List<String> categories = [...supportedCategories, 'accessory'];
 const itemStates = ['owning', 'wanting', 'archived'];
 const itemStatuses = [
   'detecting',

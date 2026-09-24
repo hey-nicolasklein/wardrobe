@@ -10,6 +10,31 @@ import 'package:form_mobile/services/app_database.dart';
 import 'support/wardrobe_fixtures.dart';
 
 void main() {
+  test('legacy accessory items remain readable without changing category', () {
+    final json = itemJson();
+    (json['metadata'] as Map<String, dynamic>)['category'] = 'accessory';
+    final item = WardrobeItem.fromJson(json);
+    expect(item.metadata.category, 'accessory');
+    expect(item.toJson(), json);
+    expect(
+      const WardrobeFilter(categories: {'accessory'}).apply(
+        [CachedItem(item, null)],
+        archived: false,
+        categoryLabels: {'accessory': 'Accessoires'},
+      ),
+      hasLength(1),
+    );
+    expect(
+      () => ItemEdit(
+        name: 'Accessory',
+        category: 'accessory',
+        colors: 'blue',
+        notes: '',
+        state: 'owning',
+      ),
+      throwsFormatException,
+    );
+  });
   test('DTO collections and nested command payloads are immutable', () {
     final detail = ItemDetail.fromJson(detailJson());
     expect(detail.shelfImageVersions.clear, throwsUnsupportedError);

@@ -90,6 +90,7 @@ abstract class LocaleKeys {
   static const categories_bag = 'categories.bag';
   static const categories_hat = 'categories.hat';
   static const categories_scarf = 'categories.scarf';
+  static const categories_accessory = 'categories.accessory';
   static const categories = 'categories';
   static const collection_all = 'collection.all';
   static const collection_owning = 'collection.owning';
@@ -125,4 +126,6 @@ abstract class LocaleKeys {
   static const itemStatus_ready = 'itemStatus.ready';
   static const itemStatus_failed = 'itemStatus.failed';
   static const itemStatus = 'itemStatus';
+  static const wardrobeInvalidResponse = 'wardrobeInvalidResponse';
+  static const chooseSupportedCategory = 'chooseSupportedCategory';
 }

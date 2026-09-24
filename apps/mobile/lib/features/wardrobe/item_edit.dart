@@ -13,6 +13,9 @@ class ItemEdit {
          'colors': parseColors(colors),
          'notes': notes.trim().isEmpty ? null : notes.trim(),
        }) {
+    if (!supportedCategories.contains(category)) {
+      throw const FormatException('Choose a supported category');
+    }
     if (!itemStates.contains(state)) {
       throw const FormatException('Invalid state');
     }

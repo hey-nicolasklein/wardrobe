@@ -86,7 +86,8 @@
     "shoes": "Schuhe",
     "bag": "Tasche",
     "hat": "Mütze / Hut",
-    "scarf": "Schal"
+    "scarf": "Schal",
+    "accessory": "Accessoires"
   },
   "collection": {
     "all": "Alle",
@@ -127,5 +128,7 @@
     "needs_review": "Prüfung ausstehend",
     "ready": "Bereit",
     "failed": "Fehlgeschlagen"
-  }
+  },
+  "wardrobeInvalidResponse": "Die Kleiderschrank-Daten konnten nicht gelesen werden. Der Server ist erreichbar, aber die Daten passen nicht zum erwarteten Format.",
+  "chooseSupportedCategory": "Wähle eine unterstützte Kategorie, um dieses ältere Stück zu speichern."
 }

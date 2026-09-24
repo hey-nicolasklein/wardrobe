@@ -348,7 +348,10 @@ class _EditItemState extends State<_EditItem> {
     text: widget.item.metadata.colors.join(', '),
   );
   late final _notes = TextEditingController(text: widget.item.metadata.notes);
-  late String _category = widget.item.metadata.category;
+  late String? _category =
+      supportedCategories.contains(widget.item.metadata.category)
+      ? widget.item.metadata.category
+      : null;
   late String _state = widget.item.state;
   @override
   void dispose() {
@@ -388,17 +391,20 @@ class _EditItemState extends State<_EditItem> {
             ),
             DropdownButtonFormField<String>(
               initialValue: _category,
+              validator: (value) => value == null
+                  ? context.tr(LocaleKeys.chooseSupportedCategory)
+                  : null,
               decoration: InputDecoration(
                 labelText: context.tr(LocaleKeys.category),
               ),
               items: [
-                for (final c in categories)
+                for (final c in supportedCategories)
                   DropdownMenuItem(
                     value: c,
                     child: Text(context.tr('categories.$c')),
                   ),
               ],
-              onChanged: (v) => setState(() => _category = v!),
+              onChanged: (v) => setState(() => _category = v),
             ),
             TextFormField(
               controller: _colors,
@@ -439,7 +445,7 @@ class _EditItemState extends State<_EditItem> {
                   context.pop(
                     ItemEdit(
                       name: _name.text,
-                      category: _category,
+                      category: _category!,
                       colors: _colors.text,
                       notes: _notes.text,
                       state: _state,

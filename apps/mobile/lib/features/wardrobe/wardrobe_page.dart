@@ -71,22 +71,23 @@ class _WardrobePageState extends State<WardrobePage> {
                 sliver: SliverList.list(
                   children: [
                     if (state.loading) const LinearProgressIndicator(),
-                    if (state.stale)
+                    if (state.stale && state.items != null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Text(context.tr(LocaleKeys.wardrobeStale)),
                       ),
                     if (state.failure != null)
-                      Text(context.tr(LocaleKeys.wardrobeRefreshFailed)),
-                    Text(
-                      context.tr(
-                        LocaleKeys.itemCount,
-                        namedArgs: {
-                          'shown': '${items.length}',
-                          'total': '$count',
-                        },
+                      Text(context.tr(state.failureKey)),
+                    if (state.items != null)
+                      Text(
+                        context.tr(
+                          LocaleKeys.itemCount,
+                          namedArgs: {
+                            'shown': '${items.length}',
+                            'total': '$count',
+                          },
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _search,
@@ -200,7 +201,7 @@ class _WardrobePageState extends State<WardrobePage> {
                         state.items == null
                             ? (state.loading
                                   ? LocaleKeys.checking
-                                  : LocaleKeys.unavailable)
+                                  : state.failureKey)
                             : filter.isFiltered
                             ? LocaleKeys.filteredEmpty
                             : LocaleKeys.wardrobeEmpty,

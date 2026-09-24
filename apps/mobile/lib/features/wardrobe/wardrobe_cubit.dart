@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
+import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
 
@@ -18,6 +19,12 @@ class WardrobeState {
   final bool loading;
   final bool stale;
   final ApiFailure? failure;
+  String get failureKey => switch (failure) {
+    ApiFailure.incompatible => LocaleKeys.wardrobeInvalidResponse,
+    ApiFailure.missingSession => LocaleKeys.missingSession,
+    ApiFailure.rejected => LocaleKeys.rejected,
+    ApiFailure.unavailable || null => LocaleKeys.unavailable,
+  };
 }
 
 class WardrobeCubit extends Cubit<WardrobeState> {

@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:form_mobile/features/wardrobe/item_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
+import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/media_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
@@ -18,6 +19,16 @@ import 'support/fake_server.dart';
 import 'support/wardrobe_fixtures.dart';
 
 void main() {
+  test('invalid response is distinct from network failure', () {
+    expect(
+      const WardrobeState(failure: ApiFailure.incompatible).failureKey,
+      LocaleKeys.wardrobeInvalidResponse,
+    );
+    expect(
+      const WardrobeState(failure: ApiFailure.unavailable).failureKey,
+      LocaleKeys.unavailable,
+    );
+  });
   late AppDatabase database;
   late Directory directory;
   late WardrobeRepository repository;
