@@ -4,8 +4,8 @@ This checklist is the single source of truth for Stage 1 coverage against PWA
 baseline `68b421bc4c047e03bf8f9c3a1d3a5f04fadcb341`.
 
 Ownership tags map each item to its delivery slice: `F1` Foundation, `W2`
-Wardrobe, `I3` Intake, `L4` Feed and Looks, `C5` Character References, and `S6`
-Settings and parity closure.
+Wardrobe, `I3` Intake, `V` Visual alignment (Slice 3.5), `L4` Feed and Looks, `C5` Character
+References, and `S6` Settings and parity closure.
 
 Mark an item complete only when its behavior exists in Flutter and its required
 unit tests pass. Add a short note or source link beside any intentional baseline
@@ -18,7 +18,8 @@ deviation before marking it complete.
       load ignored local API configuration.
 - [x] `F1` iOS 16 and Android API 29 are the minimum versions.
 - [x] `F1` Both platforms are locked to portrait.
-- [x] `F1` The light FORM theme carries the PWA's visual identity.
+- [x] `F1` The light FORM theme carries the PWA's visual identity. Colors only.
+      Full visual parity moves to the `V` items.
 - [x] `F1` Feed, Wardrobe, and Settings use independent persistent router stacks.
 - [x] `F1` A cold launch opens Feed without restoring a modal flow.
 - [x] `F1` German and English initialize from the device locale with German
@@ -60,6 +61,25 @@ Native compilation: both iOS simulator flavors and the Android development APK
 build. Manual iOS validation remains Nico's next step. The hosted backend is
 unchanged until deployment is explicitly approved, so its current missing metadata
 endpoint correctly produces the incompatibility screen.
+
+## Visual parity
+
+- [ ] `V` One Dart token source mirrors the PWA colors, type scale, serif,
+      spacing, radii, and motion curves.
+- [ ] `V` The theme removes ripples, elevation, surface tint, and tonal M3
+      colors while keeping native transitions, back-swipe, and system pickers.
+- [ ] `V` Shared FORM components exist for tab bar, header, buttons, chips,
+      search, inputs, image cards, empty and error states, sheets, and dialogs.
+- [ ] `V` Shell and foundation access states match the PWA.
+- [ ] `V` Wardrobe grid, filters, search, and empty states match the PWA.
+- [ ] `V` Item detail, editing, generation, versions, and archive match the PWA.
+- [ ] `V` Intake capture, drafts, progress, detection, proposals, and manual path
+      match the PWA.
+- [ ] `V` `visual-guide.md` documents tokens, components, and the comparison
+      routine.
+- [ ] `L4` Feed, composer, and look screens match the PWA.
+- [ ] `C5` Character-reference setup, crop, collage, and detail match the PWA.
+- [ ] `S6` Settings, cost presentation, and reset match the PWA.
 
 ## Wardrobe and archive
 
