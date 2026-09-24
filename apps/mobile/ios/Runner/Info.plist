@@ -71,6 +71,10 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>FORM uses the camera to add clothing photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>FORM uses selected photos to add clothing.</string>
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
 </dict>

@@ -7,7 +7,9 @@ import 'package:form_mobile/models/server_info.dart';
 enum ApiFailure { unavailable, missingSession, incompatible, rejected }
 
 class FormApiException implements Exception {
-  const FormApiException(this.failure);
+  const FormApiException(this.failure, {this.code});
+
+  final String? code;
 
   final ApiFailure failure;
 }
@@ -38,7 +40,36 @@ class FormApi {
       }
       return data;
     } on DioException catch (error) {
-      throw FormApiException(mapFailure(error));
+      throw exception(error);
+    }
+  }
+
+  static FormApiException exception(DioException error) {
+    final data = error.response?.data;
+    final body = data is Map<String, dynamic> ? data['error'] : null;
+    return FormApiException(
+      mapFailure(error),
+      code: body is Map<String, dynamic> && body['code'] is String
+          ? body['code'] as String
+          : null,
+    );
+  }
+
+  Future<void> upload(
+    String url,
+    Uint8List bytes,
+    Map<String, dynamic> headers,
+    void Function(int, int) progress,
+  ) async {
+    try {
+      await _dio.put<Object?>(
+        url,
+        data: Stream.value(bytes),
+        options: Options(headers: {...headers, 'Content-Length': bytes.length}),
+        onSendProgress: progress,
+      );
+    } on DioException catch (error) {
+      throw exception(error);
     }
   }
 
@@ -108,7 +139,7 @@ class FormApi {
       }
       return response.data! as Map<String, dynamic>;
     } on DioException catch (error) {
-      throw FormApiException(mapFailure(error));
+      throw exception(error);
     }
   }
 
@@ -120,7 +151,7 @@ class FormApi {
       );
       return Uint8List.fromList(response.data!);
     } on DioException catch (error) {
-      throw FormApiException(mapFailure(error));
+      throw exception(error);
     }
   }
 

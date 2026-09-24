@@ -49,6 +49,13 @@ class _WardrobePageState extends State<WardrobePage> {
           .where((r) => (r.item.state == 'archived') == archived)
           .length;
       return Scaffold(
+        floatingActionButton: archived
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: () => context.push('/wardrobe/intake'),
+                icon: const Icon(Icons.add),
+                label: Text(context.tr(LocaleKeys.intake_title)),
+              ),
         appBar: AppBar(
           title: Text(
             context.tr(archived ? LocaleKeys.archive : LocaleKeys.wardrobe),

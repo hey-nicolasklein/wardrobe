@@ -1,8 +1,8 @@
-# FORM mobile, slices 1–2
+# FORM mobile, slices 1–3
 
 Flutter 3.44.9, iOS 16+, Android 10+. The app includes the native shell, connection gate, language selection, persistent
-tab stacks, and the wardrobe lifecycle. Intake, Feed/Looks, and character references
-remain in the following slices.
+tab stacks, the wardrobe lifecycle, and durable clothing intake. Feed/Looks and
+character references remain in the following slices.
 
 ## Run here
 
@@ -107,3 +107,44 @@ No Expo code was used as a behavior or implementation reference.
 The repository specifications arrived under `docs/flutter-native` during the
 implementation. The implementation was reconciled with `01-foundation.md`,
 including cache primitives, media index, safe Bloc observation, and F1 evidence.
+
+## Clothing intake
+
+Wardrobe → Add opens camera or multi-photo library selection. Native plugin changes
+require stopping and rebuilding the app. Hot reload and hot restart cannot link new
+photo plugins. A missing plugin now displays a dedicated rebuild message.
+
+Schema v3 adds server-scoped intake records without replacing wardrobe snapshots.
+Prepared JPEGs live in application support, outside the downloaded-media LRU cache.
+The iOS support directory is excluded from backup and Android backup is disabled.
+Each draft is persisted before network work. Completion, detection, item creation,
+and catalog generation retain command keys and frozen save payloads on retry.
+Expired upload intents are replaced only after completion confirms missing bytes.
+
+The shared intake Bloc serializes commands and survives route changes. It stops
+issuing work in the background and polls detection only on the visible intake route.
+Discard stops further commands after an in-flight request settles. Existing items
+and server jobs remain. Partial saves retain item and generation checkpoints.
+Finished drafts are removed after wardrobe refresh succeeds. Startup cleans orphan
+files and resumes interrupted local deletion. Automatic images default to Low,
+with the persisted `wardrobe-quality` preference reserved for Settings in slice 6.
+
+Manual device checks for Nico:
+
+1. Fully rebuild and launch Development. Select multiple photos, including an
+   oriented JPEG and an HEIC. Capture a rear-camera photo on a physical iPhone.
+2. Confirm local previews, sequential progress, aligned boxes, cropped proposals,
+   batch ownership, individual overrides, and selection before saving.
+3. Deny camera permission and follow the Settings recovery. Try an oversized or
+   invalid file alongside valid photos and confirm valid drafts remain.
+4. Interrupt upload and save, kill/reopen the app, then retry. Confirm saved items
+   and image jobs are not duplicated. Leave intake and return during detection.
+5. Disconnect networking. Existing drafts remain visible and server actions are
+   disabled. Reconnect and retry. Discard a draft and check other drafts remain.
+6. Exercise empty/failed detection and validated manual entry. Confirm successful
+   saves appear in Wardrobe with automatic catalog generation.
+
+Unit coverage uses synthetic photos, fake API responses, and temporary SQLite.
+iOS simulator and Android development builds compile. HEIC decoding, camera,
+permission prompts, and end-to-end device behavior still need manual acceptance.
+Presentation alignment for slices 1–3 belongs to slice 3.5.

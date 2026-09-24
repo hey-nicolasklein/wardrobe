@@ -84,7 +84,7 @@ void main() {
       final version = await database
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.read<int>('user_version'), 2);
+      expect(version.read<int>('user_version'), 3);
       final first = CollectionCountsRepository(database, null, 'server-a');
       final second = CollectionCountsRepository(database, null, 'server-b');
       await first.collection(Collection.feed).writeCache(0);

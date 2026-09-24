@@ -9,16 +9,20 @@ import 'package:form_mobile/app/app_config.dart';
 import 'package:form_mobile/app/collection_counts_cubit.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/safe_bloc_observer.dart';
+import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/settings/language_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/repository/collection_counts_repository.dart';
+import 'package:form_mobile/repository/intake_repository.dart';
 import 'package:form_mobile/repository/media_repository.dart';
 import 'package:form_mobile/repository/preferences_repository.dart';
 import 'package:form_mobile/repository/server_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/services/app_database.dart';
 import 'package:form_mobile/services/form_api.dart';
+import 'package:form_mobile/services/photo_preparation.dart';
 import 'package:form_mobile/utils/initial_language.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
 Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
@@ -64,6 +68,28 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
   );
   final wardrobe = WardrobeCubit(wardrobeRepository);
   await wardrobe.loadCache();
+  final support = await getApplicationSupportDirectory();
+  final intakeRepository = IntakeRepository(
+    database,
+    api,
+    uri?.toString() ?? '',
+    Directory('${support.path}/intake'),
+    PhotoPreparation(),
+    wardrobeRepository.refreshAndNotify,
+  );
+  final intake = IntakeBloc(intakeRepository)
+    ..add(const IntakeEvent(IntakeAction.restore));
+  if (Platform.isAndroid) {
+    final lost = await ImagePicker().retrieveLostData();
+    if (lost.files != null) {
+      intake.add(
+        IntakeEvent(
+          IntakeAction.add,
+          paths: lost.files!.map((f) => f.path).toList(),
+        ),
+      );
+    }
+  }
   final app = await builder();
 
   runApp(
@@ -96,6 +122,7 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
           BlocProvider(create: (_) => ConnectionCubit(server)),
           BlocProvider(create: (_) => collectionCounts),
           BlocProvider(create: (_) => wardrobe),
+          BlocProvider(create: (_) => intake),
           BlocProvider(create: (_) => LanguageCubit(preferences, language)),
         ],
         child: EasyLocalization(

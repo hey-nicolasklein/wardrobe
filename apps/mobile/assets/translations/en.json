@@ -130,5 +130,39 @@
     "failed": "Failed"
   },
   "wardrobeInvalidResponse": "The wardrobe response could not be read. The server is reachable, but its item data is incompatible with this app.",
-  "chooseSupportedCategory": "Choose a supported category to save this legacy item."
+  "chooseSupportedCategory": "Choose a supported category to save this legacy item.",
+  "intake": {
+    "title": "Add clothing",
+    "intro": "Choose the pieces you want to add from your photos.",
+    "camera": "Take a photo",
+    "library": "Choose photos",
+    "cost": "Photo analysis and automatic catalog images use OpenAI and incur costs. Server jobs continue after you leave.",
+    "offline": "Drafts are saved on this device. Connect to upload, analyze, or save.",
+    "permission": "Allow camera or photo access in system settings, then try again.",
+    "openSettings": "Open settings",
+    "invalidPhoto": "This photo could not be prepared. Choose a supported image under 25 MB.",
+    "fileSize": "Choose a photo no larger than 25 MB.",
+    "failed": "This step failed. Your draft is saved. Try again.",
+    "discard": "Discard draft",
+    "discardBody": "Remove this local draft and photo? Items already saved and server jobs remain.",
+    "batchOwning": "Own all selected pieces",
+    "save": "Add selected pieces",
+    "created": "Item saved. Catalog image still pending.",
+    "enqueued": "Catalog image queued",
+    "manual": "No clothing was detected. Enter the item details to continue.",
+    "validation": "Check this field.",
+    "phases": {
+      "local": "Ready to upload",
+      "uploading": "Uploading photo",
+      "uploaded": "Photo uploaded",
+      "detecting": "Analyzing photo",
+      "ready": "Choose your pieces",
+      "manual": "Add details",
+      "saving": "Saving pieces",
+      "finished": "Updating wardrobe",
+      "discarded": "Discarded"
+    },
+    "restartRequired": "Photo access is not available in this running build. Stop the app and launch a fresh build. Hot reload is not sufficient.",
+    "localSaveFailed": "The photo could not be saved on this device. Check free storage and try again."
+  }
 }

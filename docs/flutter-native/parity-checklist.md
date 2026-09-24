@@ -143,27 +143,45 @@ Implemented in `apps/mobile`, with manual iOS steps in its `README.md`.
 
 ## Clothing intake
 
-- [ ] `I3` The Add action opens the intake flow from Wardrobe.
-- [ ] `I3` The camera captures one rear-camera photo.
-- [ ] `I3` The photo library selects multiple photos.
-- [ ] `I3` Inputs enforce the 25 MB baseline limit.
-- [ ] `I3` Orientation and HEIC/HEIF normalization produce JPEG quality 0.92 with
+- [x] `I3` The Add action opens the intake flow from Wardrobe.
+- [x] `I3` The camera captures one rear-camera photo.
+- [x] `I3` The photo library selects multiple photos.
+- [x] `I3` Inputs enforce the 25 MB baseline limit.
+- [x] `I3` Orientation and HEIC/HEIF normalization produce JPEG quality 0.92 with
       a maximum long edge of 2,400 pixels.
-- [ ] `I3` Local previews appear before upload completes.
-- [ ] `I3` Photos upload sequentially with per-photo progress and failure state.
-- [ ] `I3` Draft metadata and protected local files survive app restarts.
-- [ ] `I3` Drafts remain visible offline while upload, analysis, and save actions
+- [x] `I3` Local previews appear before upload completes.
+- [x] `I3` Photos upload sequentially with per-photo progress and failure state.
+- [x] `I3` Draft metadata and protected local files survive app restarts.
+- [x] `I3` Drafts remain visible offline while upload, analysis, and save actions
       remain disabled.
-- [ ] `I3` Detection starts after upload and polls only while the app is active.
-- [ ] `I3` Detection boxes align to the normalized 1,000-unit coordinate frame.
-- [ ] `I3` Each proposal has a cropped preview and selection state.
-- [ ] `I3` Batch Owning or Wanting state can be overridden per proposal.
-- [ ] `I3` Selected proposals save idempotently and enqueue their default catalog
+- [x] `I3` Detection starts after upload and polls only while the app is active.
+- [x] `I3` Detection boxes align to the normalized 1,000-unit coordinate frame.
+- [x] `I3` Each proposal has a cropped preview and selection state.
+- [x] `I3` Batch Owning or Wanting state can be overridden per proposal.
+- [x] `I3` Selected proposals save idempotently and enqueue their default catalog
       images exactly once.
-- [ ] `I3` Failed or empty detection falls back to validated manual metadata.
-- [ ] `I3` A draft can be explicitly discarded with its protected files removed.
-- [ ] `I3` Server-owned work survives leaving intake and refreshes on foreground
+- [x] `I3` Failed or empty detection falls back to validated manual metadata.
+- [x] `I3` A draft can be explicitly discarded with its protected files removed.
+- [x] `I3` Server-owned work survives leaving intake and refreshes on foreground
       return without background polling.
+
+### I3 evidence and validation handoff
+
+Implemented in `apps/mobile/lib/features/intake`, `IntakeRepository`,
+`PhotoPreparation`, and Drift schema v3. Generated intake DTOs preserve normalized
+geometry and per-command checkpoints. Draft files are stored outside the media
+cache and survive downloaded-cache clearing. Sequential Bloc events freeze save
+payloads, retain partial item/generation results, and reuse keys after restart.
+Polling follows route visibility and foreground state. Discard prevents subsequent
+commands and cleans protected local files without canceling server-owned work.
+
+Unit tests cover dimensions and limits, EXIF normalization, box/crop geometry,
+SQLite reopen for every phase, schema migration, retries and lost responses,
+partial saves, manual validation, selection/ownership, offline gating, polling,
+cancellation, orphan cleanup, and missing native plugin recovery. Analysis and
+all 75 unit tests pass. iOS simulator and Android development builds compile. The mobile
+README records the manual iOS acceptance steps. Native HEIC/camera/permission
+behavior remains for device acceptance. Slice 3.5 owns visual alignment.
 
 ## Feed browsing
 

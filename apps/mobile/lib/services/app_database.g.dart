@@ -1262,6 +1262,265 @@ class WardrobeRecordsCompanion extends UpdateCompanion<WardrobeRecord> {
   }
 }
 
+class $IntakeRecordsTable extends IntakeRecords
+    with TableInfo<$IntakeRecordsTable, IntakeRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $IntakeRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _scopeMeta = const VerificationMeta('scope');
+  @override
+  late final GeneratedColumn<String> scope = GeneratedColumn<String>(
+    'scope',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _draftJsonMeta = const VerificationMeta(
+    'draftJson',
+  );
+  @override
+  late final GeneratedColumn<String> draftJson = GeneratedColumn<String>(
+    'draft_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [scope, id, draftJson];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'intake_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<IntakeRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('scope')) {
+      context.handle(
+        _scopeMeta,
+        scope.isAcceptableOrUnknown(data['scope']!, _scopeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scopeMeta);
+    }
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('draft_json')) {
+      context.handle(
+        _draftJsonMeta,
+        draftJson.isAcceptableOrUnknown(data['draft_json']!, _draftJsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_draftJsonMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {scope, id};
+  @override
+  IntakeRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return IntakeRecord(
+      scope: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scope'],
+      )!,
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      draftJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}draft_json'],
+      )!,
+    );
+  }
+
+  @override
+  $IntakeRecordsTable createAlias(String alias) {
+    return $IntakeRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class IntakeRecord extends DataClass implements Insertable<IntakeRecord> {
+  final String scope;
+  final String id;
+  final String draftJson;
+  const IntakeRecord({
+    required this.scope,
+    required this.id,
+    required this.draftJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['scope'] = Variable<String>(scope);
+    map['id'] = Variable<String>(id);
+    map['draft_json'] = Variable<String>(draftJson);
+    return map;
+  }
+
+  IntakeRecordsCompanion toCompanion(bool nullToAbsent) {
+    return IntakeRecordsCompanion(
+      scope: Value(scope),
+      id: Value(id),
+      draftJson: Value(draftJson),
+    );
+  }
+
+  factory IntakeRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return IntakeRecord(
+      scope: serializer.fromJson<String>(json['scope']),
+      id: serializer.fromJson<String>(json['id']),
+      draftJson: serializer.fromJson<String>(json['draftJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'scope': serializer.toJson<String>(scope),
+      'id': serializer.toJson<String>(id),
+      'draftJson': serializer.toJson<String>(draftJson),
+    };
+  }
+
+  IntakeRecord copyWith({String? scope, String? id, String? draftJson}) =>
+      IntakeRecord(
+        scope: scope ?? this.scope,
+        id: id ?? this.id,
+        draftJson: draftJson ?? this.draftJson,
+      );
+  IntakeRecord copyWithCompanion(IntakeRecordsCompanion data) {
+    return IntakeRecord(
+      scope: data.scope.present ? data.scope.value : this.scope,
+      id: data.id.present ? data.id.value : this.id,
+      draftJson: data.draftJson.present ? data.draftJson.value : this.draftJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('IntakeRecord(')
+          ..write('scope: $scope, ')
+          ..write('id: $id, ')
+          ..write('draftJson: $draftJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(scope, id, draftJson);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is IntakeRecord &&
+          other.scope == this.scope &&
+          other.id == this.id &&
+          other.draftJson == this.draftJson);
+}
+
+class IntakeRecordsCompanion extends UpdateCompanion<IntakeRecord> {
+  final Value<String> scope;
+  final Value<String> id;
+  final Value<String> draftJson;
+  final Value<int> rowid;
+  const IntakeRecordsCompanion({
+    this.scope = const Value.absent(),
+    this.id = const Value.absent(),
+    this.draftJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  IntakeRecordsCompanion.insert({
+    required String scope,
+    required String id,
+    required String draftJson,
+    this.rowid = const Value.absent(),
+  }) : scope = Value(scope),
+       id = Value(id),
+       draftJson = Value(draftJson);
+  static Insertable<IntakeRecord> custom({
+    Expression<String>? scope,
+    Expression<String>? id,
+    Expression<String>? draftJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (scope != null) 'scope': scope,
+      if (id != null) 'id': id,
+      if (draftJson != null) 'draft_json': draftJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  IntakeRecordsCompanion copyWith({
+    Value<String>? scope,
+    Value<String>? id,
+    Value<String>? draftJson,
+    Value<int>? rowid,
+  }) {
+    return IntakeRecordsCompanion(
+      scope: scope ?? this.scope,
+      id: id ?? this.id,
+      draftJson: draftJson ?? this.draftJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (scope.present) {
+      map['scope'] = Variable<String>(scope.value);
+    }
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (draftJson.present) {
+      map['draft_json'] = Variable<String>(draftJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('IntakeRecordsCompanion(')
+          ..write('scope: $scope, ')
+          ..write('id: $id, ')
+          ..write('draftJson: $draftJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1273,6 +1532,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $WardrobeRecordsTable wardrobeRecords = $WardrobeRecordsTable(
     this,
   );
+  late final $IntakeRecordsTable intakeRecords = $IntakeRecordsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1282,6 +1542,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     collectionSummaries,
     mediaCacheEntries,
     wardrobeRecords,
+    intakeRecords,
   ];
 }
 
@@ -2080,6 +2341,177 @@ typedef $$WardrobeRecordsTableProcessedTableManager =
       WardrobeRecord,
       PrefetchHooks Function()
     >;
+typedef $$IntakeRecordsTableCreateCompanionBuilder =
+    IntakeRecordsCompanion Function({
+      required String scope,
+      required String id,
+      required String draftJson,
+      Value<int> rowid,
+    });
+typedef $$IntakeRecordsTableUpdateCompanionBuilder =
+    IntakeRecordsCompanion Function({
+      Value<String> scope,
+      Value<String> id,
+      Value<String> draftJson,
+      Value<int> rowid,
+    });
+
+class $$IntakeRecordsTableFilterComposer
+    extends Composer<_$AppDatabase, $IntakeRecordsTable> {
+  $$IntakeRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get draftJson => $composableBuilder(
+    column: $table.draftJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$IntakeRecordsTableOrderingComposer
+    extends Composer<_$AppDatabase, $IntakeRecordsTable> {
+  $$IntakeRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get draftJson => $composableBuilder(
+    column: $table.draftJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$IntakeRecordsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $IntakeRecordsTable> {
+  $$IntakeRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get scope =>
+      $composableBuilder(column: $table.scope, builder: (column) => column);
+
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get draftJson =>
+      $composableBuilder(column: $table.draftJson, builder: (column) => column);
+}
+
+class $$IntakeRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $IntakeRecordsTable,
+          IntakeRecord,
+          $$IntakeRecordsTableFilterComposer,
+          $$IntakeRecordsTableOrderingComposer,
+          $$IntakeRecordsTableAnnotationComposer,
+          $$IntakeRecordsTableCreateCompanionBuilder,
+          $$IntakeRecordsTableUpdateCompanionBuilder,
+          (
+            IntakeRecord,
+            BaseReferences<_$AppDatabase, $IntakeRecordsTable, IntakeRecord>,
+          ),
+          IntakeRecord,
+          PrefetchHooks Function()
+        > {
+  $$IntakeRecordsTableTableManager(_$AppDatabase db, $IntakeRecordsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$IntakeRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$IntakeRecordsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$IntakeRecordsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> scope = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<String> draftJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => IntakeRecordsCompanion(
+                scope: scope,
+                id: id,
+                draftJson: draftJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String scope,
+                required String id,
+                required String draftJson,
+                Value<int> rowid = const Value.absent(),
+              }) => IntakeRecordsCompanion.insert(
+                scope: scope,
+                id: id,
+                draftJson: draftJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$IntakeRecordsTable, IntakeRecord>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $IntakeRecordsTable,
+                    IntakeRecord
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$IntakeRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $IntakeRecordsTable,
+      IntakeRecord,
+      $$IntakeRecordsTableFilterComposer,
+      $$IntakeRecordsTableOrderingComposer,
+      $$IntakeRecordsTableAnnotationComposer,
+      $$IntakeRecordsTableCreateCompanionBuilder,
+      $$IntakeRecordsTableUpdateCompanionBuilder,
+      (
+        IntakeRecord,
+        BaseReferences<_$AppDatabase, $IntakeRecordsTable, IntakeRecord>,
+      ),
+      IntakeRecord,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2092,4 +2524,6 @@ class $AppDatabaseManager {
       $$MediaCacheEntriesTableTableManager(_db, _db.mediaCacheEntries);
   $$WardrobeRecordsTableTableManager get wardrobeRecords =>
       $$WardrobeRecordsTableTableManager(_db, _db.wardrobeRecords);
+  $$IntakeRecordsTableTableManager get intakeRecords =>
+      $$IntakeRecordsTableTableManager(_db, _db.intakeRecords);
 }

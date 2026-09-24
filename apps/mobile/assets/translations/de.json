@@ -130,5 +130,39 @@
     "failed": "Fehlgeschlagen"
   },
   "wardrobeInvalidResponse": "Die Kleiderschrank-Daten konnten nicht gelesen werden. Der Server ist erreichbar, aber die Daten passen nicht zum erwarteten Format.",
-  "chooseSupportedCategory": "Wähle eine unterstützte Kategorie, um dieses ältere Stück zu speichern."
+  "chooseSupportedCategory": "Wähle eine unterstützte Kategorie, um dieses ältere Stück zu speichern.",
+  "intake": {
+    "title": "Kleidung hinzufügen",
+    "intro": "Wähle auf deinen Fotos die Stücke für deinen Schrank aus.",
+    "camera": "Foto aufnehmen",
+    "library": "Fotos auswählen",
+    "cost": "Analyse und automatische Katalogbilder werden mit OpenAI erstellt und sind kostenpflichtig. Serveraufträge laufen nach dem Verlassen weiter.",
+    "offline": "Entwürfe sind auf diesem Gerät gespeichert. Verbinde dich zum Hochladen, Analysieren und Speichern.",
+    "permission": "Erlaube den Kamera- oder Fotozugriff in den Systemeinstellungen und versuche es erneut.",
+    "openSettings": "Einstellungen öffnen",
+    "invalidPhoto": "Dieses Foto konnte nicht vorbereitet werden. Wähle ein unterstütztes Bild unter 25 MB.",
+    "fileSize": "Wähle ein Foto mit höchstens 25 MB.",
+    "failed": "Dieser Schritt ist fehlgeschlagen. Dein Entwurf ist gespeichert. Versuche es erneut.",
+    "discard": "Entwurf verwerfen",
+    "discardBody": "Diesen lokalen Entwurf samt Foto entfernen? Bereits gespeicherte Stücke und Serveraufträge bleiben erhalten.",
+    "batchOwning": "Alle ausgewählten Stücke besitze ich",
+    "save": "Ausgewählte Stücke hinzufügen",
+    "created": "Stück gespeichert. Katalogbild noch ausstehend.",
+    "enqueued": "Katalogbild beauftragt",
+    "manual": "Keine Kleidung erkannt. Gib die Angaben zum Stück ein.",
+    "validation": "Bitte prüfe dieses Feld.",
+    "phases": {
+      "local": "Bereit zum Hochladen",
+      "uploading": "Foto wird hochgeladen",
+      "uploaded": "Foto hochgeladen",
+      "detecting": "Foto wird analysiert",
+      "ready": "Wähle deine Stücke",
+      "manual": "Angaben ergänzen",
+      "saving": "Stücke werden gespeichert",
+      "finished": "Schrank wird aktualisiert",
+      "discarded": "Verworfen"
+    },
+    "restartRequired": "Der Fotozugriff ist in diesem laufenden Build nicht verfügbar. Beende die App und starte einen neuen Build. Hot Reload reicht nicht aus.",
+    "localSaveFailed": "Das Foto konnte auf diesem Gerät nicht gespeichert werden. Prüfe den freien Speicher und versuche es erneut."
+  }
 }

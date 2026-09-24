@@ -7,6 +7,7 @@ import 'package:form_mobile/app/collection_counts_cubit.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/connection_gate.dart';
 import 'package:form_mobile/app/form_theme.dart';
+import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/settings/language_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -29,16 +30,32 @@ class _FormAppState extends State<FormApp> {
   @override
   void initState() {
     super.initState();
+    _router.routeInformationProvider.addListener(_intakeVisibility);
     _lifecycle = AppLifecycleListener(
-      onStateChange: (state) => context.read<WardrobeCubit>().setForeground(
-        foreground: state == AppLifecycleState.resumed,
-      ),
+      onStateChange: (state) {
+        context.read<WardrobeCubit>().setForeground(
+          foreground: state == AppLifecycleState.resumed,
+        );
+        context.read<IntakeBloc>().availability(
+          foreground: state == AppLifecycleState.resumed,
+        );
+      },
       onResume: () => unawaited(context.read<ConnectionCubit>().check()),
     );
     unawaited(context.read<ConnectionCubit>().check());
   }
 
+  void _intakeVisibility() {
+    context.read<IntakeBloc>().availability(
+      visible:
+          _router.routeInformationProvider.value.uri.path == '/wardrobe/intake',
+    );
+  }
+
   Future<void> _sync(ConnectionStatus status) async {
+    context.read<IntakeBloc>().availability(
+      online: status == ConnectionStatus.ready,
+    );
     final collectionCounts = context.read<CollectionCountsCubit>();
     if (status == ConnectionStatus.ready) {
       final initial = !_hasLoaded;
@@ -63,6 +80,7 @@ class _FormAppState extends State<FormApp> {
   @override
   void dispose() {
     _lifecycle.dispose();
+    _router.routeInformationProvider.removeListener(_intakeVisibility);
     _router.dispose();
     super.dispose();
   }

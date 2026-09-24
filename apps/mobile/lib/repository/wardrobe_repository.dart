@@ -145,6 +145,11 @@ class WardrobeRepository {
     return records;
   }
 
+  Future<void> refreshAndNotify() async {
+    await refresh();
+    _changes.add(null);
+  }
+
   Future<void> _prefetch(List<CachedItem> records) async {
     for (final record in records) {
       await media.load(

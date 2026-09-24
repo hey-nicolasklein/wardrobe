@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
+import 'package:form_mobile/features/intake/intake_page.dart';
 import 'package:form_mobile/features/settings/settings_page.dart';
 import 'package:form_mobile/features/wardrobe/item_page.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_page.dart';
@@ -55,6 +56,7 @@ GoRouter createRouter() => GoRouter(
               path: '/wardrobe',
               builder: (_, _) => const WardrobePage(),
               routes: [
+                GoRoute(path: 'intake', builder: (_, _) => const IntakePage()),
                 GoRoute(
                   path: 'items/:id',
                   builder: (_, state) =>

@@ -5,16 +5,21 @@ version: 0.1.0+1
 environment:
   sdk: ^3.12.0
 dependencies:
+  app_settings: ^9.0.0
   bloc: ^9.0.0
+  bloc_concurrency: ^0.3.0
   dio: ^5.9.0
   drift: ^2.32.0
   easy_localization: ^3.0.8
   flutter:
     sdk: flutter
   flutter_bloc: ^9.1.0
+  flutter_image_compress: ^2.5.1
   flutter_localizations:
     sdk: flutter
   go_router: ^17.0.0
+  image: ^4.10.1
+  image_picker: ^1.2.3
   json_annotation: ^4.12.0
   path: ^1.9.1
   path_provider: ^2.1.5

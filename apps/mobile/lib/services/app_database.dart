@@ -47,12 +47,22 @@ class WardrobeRecords extends Table {
   Set<Column<Object>> get primaryKey => {scope, id};
 }
 
+class IntakeRecords extends Table {
+  TextColumn get scope => text()();
+  TextColumn get id => text()();
+  TextColumn get draftJson => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {scope, id};
+}
+
 @DriftDatabase(
   tables: [
     Preferences,
     CollectionSummaries,
     MediaCacheEntries,
     WardrobeRecords,
+    IntakeRecords,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -68,13 +78,14 @@ class AppDatabase extends _$AppDatabase {
   );
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
       if (from < 2) await m.createTable(wardrobeRecords);
+      if (from < 3) await m.createTable(intakeRecords);
     },
   );
 
