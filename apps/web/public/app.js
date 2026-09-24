@@ -152,9 +152,10 @@ const money = (micros) =>
   new Intl.NumberFormat('de-DE', {
     style: 'currency',
     currency: 'USD',
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 3,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(micros / 1e6);
+const imageCost = (micros) => `${(micros / 10_000).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} US-Cent`;
 function isoWeek(date = new Date()) {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -782,8 +783,8 @@ async function shareFlatLay(look, download = false) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
   toast('Flat Lay heruntergeladen');
 }
-// Fallback regions for older fits and items that detection could not locate.
-// Upload detection boxes describe a different photo and cannot be reused here.
+// Approximate body regions anchor the reveal animation without another paid
+// vision request after a look has already been generated.
 const lookBodyRegions = {
   hat: [40, 5, 20, 15],
   scarf: [39, 22, 22, 22],
@@ -795,7 +796,7 @@ const lookBodyRegions = {
   skirt: [32, 51, 36, 27],
   shoes: [33, 87, 34, 10],
 };
-function lookItemPositions(categories, boxes = []) {
+function lookItemPositions(categories) {
   const count = categories.length;
   if (!count) return [];
   // Keep whole item squares inside a 4% inset, with a gap between rows.
@@ -821,10 +822,7 @@ function lookItemPositions(categories, boxes = []) {
         ? count === 2 ? (row === 0 ? 4 + size / 2 : 96 - size / 2) : 50
         : 4 + cellWidth / 2 + column * (cellWidth + gap);
       const y = 4 + rowHeight / 2 + row * (rowHeight + gap);
-      const box = boxes[index];
-      const [bx, by, bw, bh] = box
-        ? [box.x / 10, box.y / 10, box.width / 10, box.height / 10]
-        : lookBodyRegions[categories[index]] || lookBodyRegions.top;
+      const [bx, by, bw, bh] = lookBodyRegions[categories[index]] || lookBodyRegions.top;
       // Uniform scaling keeps garment proportions intact as it leaves the body.
       const scale = Math.min(bw / size, bh * 1.25 / size, 0.9);
       styles[index] = `--item-x:${x.toFixed(2)}%;--item-y:${y.toFixed(2)}%;--item-size:${size.toFixed(2)}%;--item-origin-x:${bx + bw / 2}%;--item-origin-y:${by + bh / 2}%;--item-origin-scale:${scale.toFixed(3)};--item-order:${rank};--item-count:${count};`;
@@ -889,10 +887,7 @@ function renderLookCard(look) {
     lookViews.delete(look.id);
     return `<article class="look-card developing-look" data-look="${look.id}">${garments.length ? flatLayMarkup(garments) : '<div class="look-planning-art" aria-hidden="true">' + icon('closet') + '</div>'}<div class="look-progress" role="status"><span class="spinner"></span><div><strong>${look.state === 'generating' ? 'Dein Outfit steht.' : 'FORM kombiniert für dich.'}</strong><p>${look.state === 'generating' ? 'Das getragene Bild entsteht gerade.' : garments.length ? 'Diese Stücke sind dabei. FORM ergänzt den Rest.' : 'Deine Stücke erscheinen hier, sobald der Look zusammengestellt ist.'}</p></div></div></article>`;
   }
-  const positions = lookItemPositions(
-    garments.map((item) => item.metadata?.category || 'top'),
-    garments.map((item) => look.itemBoundingBoxes?.find((entry) => entry.wardrobeItemId === item.id)?.boundingBox),
-  );
+  const positions = lookItemPositions(garments.map((item) => item.metadata?.category || 'top'));
   const flat = lookViews.get(look.id) === 'flat';
   return `<article class="look-card ready-look ${flat ? 'is-flat' : ''}" data-look="${look.id}"><div class="look-toolbar"><div class="look-view-switch" role="group" aria-label="Look-Ansicht"><button type="button" data-look-view="worn" aria-pressed="${!flat}">Getragen</button><button type="button" data-look-view="flat" aria-pressed="${flat}">Gelegt</button></div><button class="look-more" data-look-menu="${look.id}" aria-label="Aktionen für Look">${icon('more')}</button></div><div class="look-stage"><button class="look-photo" data-toggle-look="${look.id}" aria-label="Getragene Stücke anzeigen" aria-pressed="false" ${flat ? 'hidden' : ''}><img class="fade" data-asset="${look.assetId}" alt="Generierter persönlicher Look" loading="lazy" decoding="async"></button><div class="look-flat-view" ${flat ? '' : 'hidden'}>${garments.length ? flatLayMarkup(garments) : '<p class="flat-empty">Die Stücke dieses Looks sind nicht mehr verfügbar.</p>'}</div><div class="look-items" data-look-items="${look.id}" hidden>${garments.map((item, index) => {
       const name = item.metadata?.name || 'Kleidungsstück nicht mehr verfügbar';
@@ -1070,6 +1065,7 @@ function openLookComposer(preselected = []) {
     'Look erstellen',
     `<form id="look-composer">
       <div class="composer-scroll">
+        ${qualityControl('composer-feed-quality', 'Bildqualität', preferredQuality('feed'), 0, 'Direkt im Test wählen. Höhere Qualität kostet mehr.')}
         <div class="composer-presets" role="group" aria-label="Anlass">${presets.map((preset) => `<button type="button" data-occasion="${preset.value}" aria-pressed="${!preset.value}">${icon(preset.icon)}<span>${preset.name}</span></button>`).join('')}</div>
         <div class="composer-picker-heading"><h3>Was kombinieren wir?</h3><button type="button" class="composer-icon-button" id="composer-selected-only" aria-label="Nur ausgewählte Stücke anzeigen" aria-pressed="false">${icon('check')}<span id="composer-count" aria-live="polite">0 ausgewählt</span></button></div>
         <div class="composer-search"><label class="composer-search-field"><span class="sr-only">Stücke suchen</span>${icon('search')}<input type="search" id="composer-search" placeholder="Stück, Farbe …"></label></div>
@@ -1086,6 +1082,7 @@ function openLookComposer(preselected = []) {
     </form>`,
   );
   const form = $('#look-composer');
+  wireQuality('composer-feed-quality');
   const itemInputs = [...form.querySelectorAll('input[name=item]')];
   const categoryInputs = [...form.querySelectorAll('input[name=category]')];
   let selectedOnly = false;
@@ -1255,7 +1252,7 @@ function openLookComposer(preselected = []) {
         occasion: occasion || null,
         completeWithWardrobe: $('#composer-complete-with-wardrobe').checked,
         parentLookId: null,
-        quality: preferredQuality('feed'),
+        quality: selectedQuality('composer-feed-quality'),
         idempotencyKey,
       });
       rememberLookStart(created.lookId, data.getAll('item'));
@@ -1318,7 +1315,7 @@ function openLookMenu(id) {
   $('#look-details').onclick = () =>
     showSheet(
       'Look Details',
-      `<dl class="facts"><div><dt>Konzept</dt><dd>${esc(look.concept ? `${look.concept.activity}, ${look.concept.scene}` : '–')}</dd></div><div><dt>Erstellt</dt><dd>${new Date(look.createdAt).toLocaleString('de-DE')}</dd></div><div><dt>Modell</dt><dd>${esc(look.model)} · ${look.quality} · ${look.size}</dd></div><div><dt>Personenreferenz</dt><dd>${esc(look.characterSheetId)}</dd></div><div><dt>Stücke</dt><dd>${look.wardrobeItemIds.map((id) => esc(items.find((i) => i.id === id)?.metadata.name || id)).join(', ')}</dd></div></dl>`,
+      `<dl class="facts"><div><dt>Konzept</dt><dd>${esc(look.concept ? `${look.concept.activity}, ${look.concept.scene}` : '–')}</dd></div><div><dt>Erstellt</dt><dd>${new Date(look.createdAt).toLocaleString('de-DE')}</dd></div><div><dt>Modell</dt><dd>${esc(look.model)} · ${look.quality} · ${look.size}</dd></div><div><dt>Personenreferenz</dt><dd>${esc(look.characterSheetId)}</dd></div><div><dt>Stücke</dt><dd>${look.wardrobeItemIds.map((id) => esc(items.find((i) => i.id === id)?.metadata.name || id)).join(', ')}</dd></div>${look.costMicrounits !== null ? `<div><dt>Bildgenerierung</dt><dd>${imageCost(look.costMicrounits)}</dd></div>` : ''}</dl>`,
     );
   $('#download-look').onclick = () => {
     const anchor = document.createElement('a');
@@ -1346,6 +1343,11 @@ function fields(
   metadata = { name: '', category: 'top', colors: [], notes: null },
   state = 'owning',
 ) {
+  const stateOptions = [
+    ['owning', 'Mein Schrank'],
+    ['wanting', 'Wunschliste'],
+    ...(state === 'archived' ? [['archived', 'Archiv']] : []),
+  ];
   return `<label>Name<input name="name" required maxlength="80" value="${esc(metadata.name)}" placeholder="Zum Beispiel: Grünes Leinenhemd"></label><div class="inline"><label>Kategorie<select name="category">${Object.entries(
     categories,
   )
@@ -1355,7 +1357,7 @@ function fields(
     )
     .join(
       '',
-    )}</select></label><label>Gehört in<select name="state"><option value="owning" ${state === 'owning' ? 'selected' : ''}>Mein Schrank</option><option value="wanting" ${state === 'wanting' ? 'selected' : ''}>Wunschliste</option>${state === 'archived' ? '<option value="archived" selected>Archiv</option>' : ''}</select></label></div><label>Farben<input name="colors" required value="${esc(metadata.colors.join(', '))}" placeholder="Zum Beispiel: Grün, Weiß"></label><label>Notizen <span class="muted">optional</span><textarea name="notes" maxlength="2000" placeholder="Passform, Marke oder womit du es gern trägst">${esc(metadata.notes || '')}</textarea></label>`;
+    )}</select></label><fieldset class="state-choice${state === 'archived' ? ' state-choice-archived' : ''}"><legend>Gehört in</legend><div class="state-choice-options">${stateOptions.map(([value, label]) => `<label><input type="radio" name="state" value="${value}" ${state === value ? 'checked' : ''}><span>${label}</span></label>`).join('')}</div></fieldset></div><label>Farben<input name="colors" required value="${esc(metadata.colors.join(', '))}" placeholder="Zum Beispiel: Grün, Weiß"></label><label>Notizen <span class="muted">optional</span><textarea name="notes" maxlength="2000" placeholder="Passform, Marke oder womit du es gern trägst">${esc(metadata.notes || '')}</textarea></label>`;
 }
 function readFields(form) {
   const f = new FormData(form);
@@ -1650,10 +1652,14 @@ function renderDetail(id, detail, mode, { refresh = false, scrollTop = null }) {
     })
     .join('');
   const hasShelfImage = Boolean(i.currentShelfImageVersionId);
+  const collectionControl =
+    i.state === 'archived'
+      ? `<dl class="facts"><div><dt>Gehört in</dt><dd>${collections.archived}</dd></div></dl>`
+      : `<section class="detail-state" aria-label="Sammlung"><span class="detail-state-label" aria-live="polite">${collections[i.state]}</span><div class="detail-state-options" role="group" aria-label="Sammlung wählen"><button type="button" data-item-state="owning" aria-label="Mein Schrank" title="Mein Schrank" aria-pressed="${i.state === 'owning'}">${icon('closet')}</button><button type="button" data-item-state="wanting" aria-label="Wunschliste" title="Wunschliste" aria-pressed="${i.state === 'wanting'}">${icon('heart')}</button></div></section>`;
   const body =
     mode === 'edit'
       ? `<form id="edit-item">${fields(i.metadata, i.state)}<button class="primary" style="margin-top:20px" type="submit">Änderungen speichern</button></form><button class="text-button" id="cancel-edit">Abbrechen</button>`
-      : `<dl class="facts"><div><dt>Gehört in</dt><dd>${collections[i.state]}</dd></div>${i.metadata.notes ? `<div><dt>Notizen</dt><dd>${esc(i.metadata.notes)}</dd></div>` : ''}</dl><button class="secondary" id="edit-details">Details bearbeiten</button>
+      : `${collectionControl}${i.metadata.notes ? `<dl class="facts"><div><dt>Notizen</dt><dd>${esc(i.metadata.notes)}</dd></div></dl>` : ''}<button class="secondary" id="edit-details">Details bearbeiten</button>
   <button class="primary" id="inspire-item" style="margin-top:10px">Inspiration erstellen</button>
   <div class="rule"></div>${running ? '<div class="note generating"><p><span class="spinner"></span>Dein Bild wird erstellt. Du kannst weiter durch deinen Schrank stöbern.</p><button class="text-button" id="check-generation">Status aktualisieren</button></div>' : `<h3>Katalogbilder</h3><p class="muted">${failed ? 'Der letzte Versuch ist fehlgeschlagen. ' : ''}Ein neues Bild wird automatisch verwendet, ein älteres kannst du jederzeit wieder auswählen.</p><div class="versions"><button class="version add-version" id="generate" aria-label="${hasShelfImage ? 'Katalogbild verbessern' : 'Katalogbild erstellen'} …"><span class="version-frame">${icon('plus')}</span><span>${hasShelfImage ? 'Bild verbessern' : 'Neues Bild'} …</span></button>${versionTiles}<button class="version source-version" id="source"><span class="version-frame"><img id="source-tile" src="${sourcePreview(i)}" alt="" aria-hidden="true"></span><span>Originalfoto ansehen</span></button></div>`}
   <div class="rule"></div><div class="stack"><button class="secondary" id="archive">${i.state === 'archived' ? 'Zurück in den Schrank' : 'Ins Archiv legen'}</button><button class="text-button" id="delete">Stück endgültig löschen …</button></div>`;
@@ -1689,6 +1695,34 @@ function renderDetail(id, detail, mode, { refresh = false, scrollTop = null }) {
   });
   if ($('#edit-details'))
     $('#edit-details').onclick = () => openDetail(id, 'edit', { cached: true });
+  document.querySelectorAll('[data-item-state]').forEach(
+    (button) =>
+      (button.onclick = () =>
+        action(button, async () => {
+          const state = button.dataset.itemState;
+          if (state === i.state) return;
+          const control = button.closest('.detail-state');
+          const buttons = control.querySelectorAll('[data-item-state]');
+          buttons.forEach((option) => { option.disabled = true; });
+          control.setAttribute('aria-busy', 'true');
+          try {
+            const { wardrobeItem } = await api(`/wardrobe-items/${id}`, { state, ...command() }, 'PATCH');
+            // Keep the object captured by the other detail actions current, including its version.
+            Object.assign(i, wardrobeItem);
+            if (detailCache?.id === id) Object.assign(detailCache.detail.wardrobeItem, wardrobeItem);
+            items = items.map((item) => item.id === id ? { ...item, ...wardrobeItem } : item);
+            buttons.forEach((option) => {
+              option.setAttribute('aria-pressed', String(option.dataset.itemState === i.state));
+            });
+            $('.detail-state-label', control).textContent = collections[i.state];
+            render();
+            toast(state === 'owning' ? 'In deinen Schrank verschoben' : 'Zur Wunschliste hinzugefügt');
+          } finally {
+            control.removeAttribute('aria-busy');
+            buttons.forEach((option) => { option.disabled = false; });
+          }
+        })),
+  );
   if ($('#inspire-item')) $('#inspire-item').onclick = () => openLookComposer([id]);
   if ($('#cancel-edit')) $('#cancel-edit').onclick = () => openDetail(id, 'view', { cached: true });
   if ($('#edit-item'))
@@ -2300,7 +2334,7 @@ async function loadCostData(initial) {
   try {
     const costData = await api(`/generation-costs?week=${costWeek}`);
     if (id !== costLoadId || !$('#cost-settings')) return;
-    el.innerHTML = costSettingsMarkup(costData.costs, characterSheets.length);
+    el.innerHTML = costSettingsMarkup(costData.costs);
     animateCostGauge(el);
   } catch (error) {
     if (id !== costLoadId) return;
@@ -2363,7 +2397,7 @@ function costArcSpans(values, total, gap) {
 /* Ein halber Ring statt einer Liste: die beiden Quellen liegen nebeneinander,
    die Summe steht in der Öffnung, die Aufschlüsselung darunter. Mittelpunkt
    (100, 98), Radius 82 – die Bogenlänge daraus ist die Rechengrundlage. */
-function costSettingsMarkup(costs, sheetCount) {
+function costSettingsMarkup(costs) {
   const parts = [
     {
       label: 'Looks',
@@ -2372,32 +2406,52 @@ function costSettingsMarkup(costs, sheetCount) {
       note: `${costs.successfulLookCount} fertig`,
     },
     {
-      label: 'Personenreferenzen',
-      color: 'var(--cost-sheets)',
-      value: Math.max(costs.characterSheetTotalMicrounits, 0),
-      note: `${sheetCount} ${sheetCount === 1 ? 'Version' : 'Versionen'} · Fotocollagen kostenlos`,
+      label: 'Katalogbilder',
+      color: 'var(--cost-wardrobe)',
+      value: Math.max(costs.wardrobeTotalMicrounits, 0),
+      note: `${costs.wardrobeRequestCount} ${costs.wardrobeRequestCount === 1 ? 'Bild' : 'Bilder'}`,
+    },
+    {
+      label: 'Erkennung',
+      color: 'var(--cost-detection)',
+      value: Math.max(costs.detectionTotalMicrounits, 0),
+      note: `${costs.detectionRequestCount} ${costs.detectionRequestCount === 1 ? 'Foto' : 'Fotos'}`,
     },
   ];
   const total = parts.reduce((sum, part) => sum + part.value, 0);
-  // Die Lücke trennt die Bögen nur, wenn wirklich beide zu sehen sind – sonst
+  // Die Lücke trennt die Bögen nur, wenn mehrere zu sehen sind – sonst
   // würde sie den einzigen Bogen verkürzen.
-  const gap = parts.every((part) => part.value) ? 4 : 0;
-  const spans = costArcSpans(parts.map((part) => part.value), total, gap);
+  const visiblePartCount = parts.filter((part) => part.value).length;
+  const gap = visiblePartCount > 1 ? 4 : 0;
+  const spans = costArcSpans(
+    parts.map((part) => part.value),
+    total,
+    gap * Math.max(visiblePartCount - 1, 0),
+  );
   // Der letzte Anteil bekommt den Rest auf 100, damit zweimal Aufrunden nicht
   // 101 % ergibt.
   let remaining = 100;
   let cursor = 0;
+  let remainingVisible = visiblePartCount;
+  const lastVisibleIndex = parts.reduce((last, part, index) => (part.value ? index : last), -1);
   const drawn = parts.map((part, index) => {
-    const share = !total ? null : index === parts.length - 1 ? remaining : Math.round((part.value / total) * 100);
+    const share = !total
+      ? null
+      : index === lastVisibleIndex
+        ? remaining
+        : Math.round((part.value / total) * 100);
     if (share !== null) remaining -= share;
     const arc = part.value
       ? `<path class="cost-arc" style="--cost-color:${part.color}" d="${COST_ARC_PATH}" stroke-width="${COST_ARC_WIDTH}" ${costArcDash(cursor, spans[index])}></path>`
       : '';
-    if (part.value) cursor += spans[index] + gap;
+    if (part.value) {
+      remainingVisible--;
+      cursor += spans[index] + (remainingVisible ? gap : 0);
+    }
     return { ...part, arc, share };
   });
-  const reading = `Insgesamt ${money(total)} erzeugt, davon ${drawn.map((part) => `${part.label} ${money(part.value)}`).join(' und ')}.`;
-  return `<div class="cost-gauge"><svg class="cost-dial" viewBox="0 0 200 106" role="img" aria-label="${esc(reading)}"><path class="cost-track" d="${COST_ARC_PATH}" stroke-width="${COST_ARC_WIDTH}" ${costArcDash(0, COST_ARC_LENGTH)}></path>${drawn.map((part) => part.arc).join('')}</svg><div class="cost-total"><strong>${money(total)}</strong><span>Gesamt erzeugt</span></div></div><ul class="cost-legend">${drawn
+  const reading = `Insgesamt ${money(total)} angefallen, davon ${drawn.map((part) => `${part.label} ${money(part.value)}`).join(', ')}.`;
+  return `<div class="cost-gauge"><svg class="cost-dial" viewBox="0 0 200 106" role="img" aria-label="${esc(reading)}"><path class="cost-track" d="${COST_ARC_PATH}" stroke-width="${COST_ARC_WIDTH}" ${costArcDash(0, COST_ARC_LENGTH)}></path>${drawn.map((part) => part.arc).join('')}</svg><div class="cost-total"><strong>${money(total)}</strong><span>Gesamtkosten</span></div></div><ul class="cost-legend">${drawn
     .map(
       (part) =>
         `<li><span class="cost-dot" style="background:${part.color}"></span><span class="cost-legend-name">${part.label}<em>${esc(part.note)}</em></span><span class="cost-legend-value">${money(part.value)}<em>${part.share === null ? '–' : `${part.share} %`}</em></span></li>`,

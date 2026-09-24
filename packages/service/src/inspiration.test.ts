@@ -5,6 +5,7 @@ import {
   candidatesForLookPlan,
   lookPrompt,
   normalizeAutomaticLookItems,
+  recentForLookPlan,
 } from './inspiration.js';
 
 const candidates = [
@@ -36,6 +37,17 @@ test('explicit selections are retained while automatic duplicates are removed', 
   );
 });
 
+test('recency history never asks the planner to avoid a mandated item', () => {
+  const concept = { activity: 'walking', scene: 'a street', framing: 'full-body', mood: 'calm' } as const;
+  assert.deepEqual(
+    recentForLookPlan(
+      [{ ids: ['top-one', 'pants', 'bag'], planned_concept: concept }],
+      ['top-one', 'pants'],
+    ),
+    [{ itemIds: ['bag'], concept }],
+  );
+});
+
 test('image-model completion exposes only the selected wardrobe items to planning', () => {
   const items = candidates.map(([id, category]) => ({ id, category }));
   assert.deepEqual(
@@ -58,4 +70,21 @@ test('image-model completion allows unreferenced garments without weakening refe
   assert.match(freePrompt, /Do not replace, restyle, hide, or obscure any referenced garment/);
   assert.doesNotMatch(freePrompt, /exactly these referenced major garments/);
   assert.match(lookPrompt(concept, item, null, true), /Do not invent other major garments/);
+});
+
+test('look prompts describe the ordered garment board for multiple pieces', () => {
+  const concept = {
+    activity: 'walking',
+    scene: 'a quiet street',
+    mood: 'relaxed',
+    framing: 'full-body' as const,
+  };
+  const items = [
+    { name: 'Blue shirt', category: 'top', colors: ['blue'] },
+    { name: 'Black trousers', category: 'pants', colors: ['black'] },
+  ];
+  const combined = lookPrompt(concept, items, null, true);
+  assert.match(combined, /ordered board/);
+  assert.match(combined, /1\. Blue shirt; 2\. Black trousers/);
+  assert.doesNotMatch(lookPrompt(concept, items.slice(0, 1), null, true), /ordered board/);
 });

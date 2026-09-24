@@ -32,8 +32,18 @@ export type CatalogPricing = {
   imageOutputMicrodollarsPerMillion: number;
 };
 
+export type DetectionPricing = {
+  model: string;
+  effectiveDate: string;
+  inputMicrodollarsPerMillion: number;
+  cachedInputMicrodollarsPerMillion: number;
+  cacheWriteInputMicrodollarsPerMillion: number;
+  outputMicrodollarsPerMillion: number;
+};
+
 export type CatalogExecutionConfig = {
   pricing: CatalogPricing;
+  detectionPricing: DetectionPricing;
   requestTimeoutMs: number;
 };
 
@@ -232,6 +242,13 @@ async function executeDetection(
     if (completed.rows[0]) return;
     throw new CatalogJobError('internal', 'The detection attempt cannot be started.', false);
   }
+  if (started.rows[0].model !== config.detectionPricing.model) {
+    throw new CatalogJobError(
+      'internal',
+      `Detection pricing is not configured for ${started.rows[0].model}.`,
+      false,
+    );
+  }
   const assetId = await sourceAssetId(database, job.accountId, payload.sourcePhotoId);
   const sourceBytes = await readAsset(database, storage, job.accountId, assetId);
   const normalized = await normalizeSourceForProvider(sourceBytes);
@@ -243,16 +260,44 @@ async function executeDetection(
       model: started.rows[0].model,
       signal: controller.signal,
     });
+    const cost = calculateDetectionCostLedger(result.usage, config.detectionPricing);
     await recordDetectionProposals(database, {
       accountId: job.accountId,
       sourcePhotoId: payload.sourcePhotoId,
       detections: result.detections,
     });
-    await database.query(
+    const completed = await database.query(
       `UPDATE detection_attempts SET state = 'succeeded', provider_request_id = $3,
-         finished_at = now() WHERE id = $1 AND account_id = $2 AND state = 'processing'`,
-      [payload.detectionAttemptId, job.accountId, result.requestId],
+         input_tokens = $4, cached_input_tokens = $5, cache_write_input_tokens = $6,
+         output_tokens = $7, reasoning_tokens = $8, service_tier = $9,
+         pricing_effective_date = $10, captured_rates = $11, provider_usage = $12,
+         input_cost_microunits = $13, cached_input_cost_microunits = $14,
+         cache_write_input_cost_microunits = $15, output_cost_microunits = $16,
+         cost_microunits = $17, finished_at = now()
+       WHERE id = $1 AND account_id = $2 AND state = 'processing'`,
+      [
+        payload.detectionAttemptId,
+        job.accountId,
+        result.requestId,
+        result.usage.inputTokens,
+        result.usage.cachedInputTokens,
+        result.usage.cacheWriteInputTokens,
+        result.usage.outputTokens,
+        result.usage.reasoningTokens,
+        result.usage.serviceTier,
+        config.detectionPricing.effectiveDate,
+        JSON.stringify(config.detectionPricing),
+        JSON.stringify(result.usage.raw),
+        cost.inputMicrounits,
+        cost.cachedInputMicrounits,
+        cost.cacheWriteInputMicrounits,
+        cost.outputMicrounits,
+        cost.totalMicrounits,
+      ],
     );
+    if (completed.rowCount !== 1) {
+      throw new CatalogJobError('internal', 'Detection usage could not be persisted.', false);
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -276,6 +321,53 @@ type GenerationInputRow = {
 
 function componentCost(tokens: number, rate: number): number {
   return Number((BigInt(tokens) * BigInt(rate) + 999_999n) / 1_000_000n);
+}
+
+export function calculateDetectionCostLedger(
+  usage: {
+    inputTokens: number;
+    cachedInputTokens: number;
+    cacheWriteInputTokens: number;
+    outputTokens: number;
+  },
+  pricing: DetectionPricing,
+) {
+  const uncachedInputTokens =
+    usage.inputTokens - usage.cachedInputTokens - usage.cacheWriteInputTokens;
+  if (uncachedInputTokens < 0) {
+    throw new CatalogJobError('internal', 'Detection input token details are inconsistent.', false);
+  }
+  const inputMicrounits = componentCost(
+    uncachedInputTokens,
+    pricing.inputMicrodollarsPerMillion,
+  );
+  const cachedInputMicrounits = componentCost(
+    usage.cachedInputTokens,
+    pricing.cachedInputMicrodollarsPerMillion,
+  );
+  const cacheWriteInputMicrounits = componentCost(
+    usage.cacheWriteInputTokens,
+    pricing.cacheWriteInputMicrodollarsPerMillion,
+  );
+  const outputMicrounits = componentCost(
+    usage.outputTokens,
+    pricing.outputMicrodollarsPerMillion,
+  );
+  const totalMicrounits =
+    inputMicrounits +
+    cachedInputMicrounits +
+    cacheWriteInputMicrounits +
+    outputMicrounits;
+  if (!Number.isSafeInteger(totalMicrounits)) {
+    throw new CatalogJobError('internal', 'The detection cost is out of range.', false);
+  }
+  return {
+    inputMicrounits,
+    cachedInputMicrounits,
+    cacheWriteInputMicrounits,
+    outputMicrounits,
+    totalMicrounits,
+  };
 }
 
 export function calculateCostLedger(

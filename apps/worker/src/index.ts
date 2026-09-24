@@ -31,6 +31,20 @@ const workerId = `worker-${randomUUID()}`;
 const provider = new OpenAICatalogProvider(config.OPENAI_API_KEY, config.OPENAI_API_BASE_URL);
 const executionConfig = {
   requestTimeoutMs: config.OPENAI_REQUEST_TIMEOUT_MS,
+  detectionPricing: {
+    // These rates are the pinned Luna rate card below. Refuse a differently
+    // configured model before making a paid request rather than misprice it.
+    model: 'gpt-5.6-luna',
+    effectiveDate: config.OPENAI_DETECTION_PRICING_EFFECTIVE_DATE,
+    inputMicrodollarsPerMillion:
+      config.OPENAI_DETECTION_INPUT_RATE_MICRODOLLARS_PER_MILLION,
+    cachedInputMicrodollarsPerMillion:
+      config.OPENAI_DETECTION_CACHED_INPUT_RATE_MICRODOLLARS_PER_MILLION,
+    cacheWriteInputMicrodollarsPerMillion:
+      config.OPENAI_DETECTION_CACHE_WRITE_RATE_MICRODOLLARS_PER_MILLION,
+    outputMicrodollarsPerMillion:
+      config.OPENAI_DETECTION_OUTPUT_RATE_MICRODOLLARS_PER_MILLION,
+  },
   pricing: {
     effectiveDate: config.OPENAI_PRICING_EFFECTIVE_DATE,
     textInputMicrodollarsPerMillion: config.OPENAI_IMAGE_TEXT_INPUT_RATE_MICRODOLLARS_PER_MILLION,

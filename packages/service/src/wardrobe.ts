@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { DeleteObjectsCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
 import type {
+  DetectionAttempt,
   DetectionProposal,
   GarmentDetection,
   GenerationAttempt,
@@ -343,25 +344,35 @@ export async function listDetectionProposals(
 export async function getLatestDetectionAttempt(
   database: Queryable,
   input: { accountId: string; sourcePhotoId: string },
-): Promise<{
-  id: string;
-  sourcePhotoId: string;
-  state: 'queued' | 'processing' | 'succeeded' | 'failed';
-  model: string;
-  failureCategory: string | null;
-  createdAt: string;
-  finishedAt: string | null;
-} | null> {
+): Promise<DetectionAttempt | null> {
   const result = await database.query<{
     id: string;
     source_photo_id: string;
     state: 'queued' | 'processing' | 'succeeded' | 'failed';
     model: string;
+    provider_request_id: string | null;
+    input_tokens: number | null;
+    cached_input_tokens: number | null;
+    cache_write_input_tokens: number | null;
+    output_tokens: number | null;
+    reasoning_tokens: number | null;
+    service_tier: string | null;
+    pricing_effective_date: string | null;
+    input_cost_microunits: string | null;
+    cached_input_cost_microunits: string | null;
+    cache_write_input_cost_microunits: string | null;
+    output_cost_microunits: string | null;
+    cost_microunits: string | null;
     failure_category: string | null;
     created_at: Date;
     finished_at: Date | null;
   }>(
-    `SELECT id, source_photo_id, state, model, failure_category, created_at, finished_at
+    `SELECT id, source_photo_id, state, model, provider_request_id, input_tokens,
+       cached_input_tokens, cache_write_input_tokens, output_tokens, reasoning_tokens,
+       service_tier, pricing_effective_date::text AS pricing_effective_date,
+       input_cost_microunits, cached_input_cost_microunits,
+       cache_write_input_cost_microunits, output_cost_microunits, cost_microunits,
+       failure_category, created_at, finished_at
      FROM detection_attempts
      WHERE source_photo_id = $1 AND account_id = $2
      ORDER BY created_at DESC, id DESC LIMIT 1`,
@@ -374,6 +385,40 @@ export async function getLatestDetectionAttempt(
         sourcePhotoId: row.source_photo_id,
         state: row.state,
         model: row.model,
+        providerRequestId: row.provider_request_id,
+        costMicrounits: row.cost_microunits === null ? null : Number(row.cost_microunits),
+        usage:
+          row.input_tokens === null ||
+          row.cached_input_tokens === null ||
+          row.cache_write_input_tokens === null ||
+          row.output_tokens === null ||
+          row.reasoning_tokens === null ||
+          row.service_tier === null
+            ? null
+            : {
+                inputTokens: row.input_tokens,
+                cachedInputTokens: row.cached_input_tokens,
+                cacheWriteInputTokens: row.cache_write_input_tokens,
+                outputTokens: row.output_tokens,
+                reasoningTokens: row.reasoning_tokens,
+                serviceTier: row.service_tier,
+              },
+        costBreakdown:
+          row.input_cost_microunits === null ||
+          row.cached_input_cost_microunits === null ||
+          row.cache_write_input_cost_microunits === null ||
+          row.output_cost_microunits === null ||
+          row.cost_microunits === null ||
+          row.pricing_effective_date === null
+            ? null
+            : {
+                inputMicrounits: Number(row.input_cost_microunits),
+                cachedInputMicrounits: Number(row.cached_input_cost_microunits),
+                cacheWriteInputMicrounits: Number(row.cache_write_input_cost_microunits),
+                outputMicrounits: Number(row.output_cost_microunits),
+                totalMicrounits: Number(row.cost_microunits),
+                pricingEffectiveDate: row.pricing_effective_date,
+              },
         failureCategory: row.failure_category,
         createdAt: row.created_at.toISOString(),
         finishedAt: row.finished_at?.toISOString() ?? null,

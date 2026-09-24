@@ -7,11 +7,17 @@ import test from 'node:test';
 import sharp from 'sharp';
 
 import {
+  createGarmentReferenceBoard,
   createGarmentReferenceCollage,
   garmentReferenceCollageHeight,
   garmentReferenceCollageWidth,
   writeGarmentReferenceDebugGallery,
 } from './garment-reference-collage.js';
+
+async function dimensions(bytes: Uint8Array) {
+  const metadata = await sharp(bytes).metadata();
+  return { width: metadata.width, height: metadata.height };
+}
 
 test('combines shelf and original images into one stable side-by-side reference', async () => {
   const shelf = await sharp({
@@ -31,9 +37,9 @@ test('combines shelf and original images into one stable side-by-side reference'
     const offset = (y * info.width + x) * info.channels;
     return Array.from(data.subarray(offset, offset + 3));
   };
-  assert.deepEqual(pixel(255, 256), [225, 20, 40]);
-  assert.deepEqual(pixel(768, 256), [24, 59, 223]);
-  assert.deepEqual(pixel(511, 256), [209, 209, 204]);
+  assert.deepEqual(pixel(127, 128), [225, 20, 40]);
+  assert.deepEqual(pixel(384, 128), [24, 59, 223]);
+  assert.deepEqual(pixel(255, 128), [209, 209, 204]);
 });
 
 test('writes an inspectable debug gallery without database storage', async () => {
@@ -53,4 +59,13 @@ test('writes an inspectable debug gallery without database storage', async () =>
   const gallery = await readFile(path.join(directory, 'index.html'), 'utf8');
   assert.match(gallery, /Look look&lt;&amp;&gt;/);
   assert.match(gallery, /Red Shirt &lt;Special&gt;/);
+});
+
+test('bundles garment references into one capped board', async () => {
+  const source = await sharp({
+    create: { width: 256, height: 512, channels: 3, background: '#e11428' },
+  }).png().toBuffer();
+  const collage = await createGarmentReferenceCollage(source, source);
+  const board = await createGarmentReferenceBoard([collage, collage, collage, collage, collage, collage]);
+  assert.deepEqual(await dimensions(board), { width: 512, height: 384 });
 });

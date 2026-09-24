@@ -27,7 +27,7 @@ test('live OpenAI detection and image edit endpoints accept the production contr
 
   const detection = await provider.detect({
     jpegBytes: source,
-    model: process.env.OPENAI_DETECTION_MODEL ?? 'gpt-5.4-mini',
+    model: process.env.OPENAI_DETECTION_MODEL ?? 'gpt-5.6-luna',
   });
   assert.ok(detection.requestId);
   assert.ok(detection.detections.length > 0, 'Live detection returned no wearable proposal.');

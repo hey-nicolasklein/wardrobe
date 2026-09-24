@@ -10,9 +10,9 @@ The website provides batch photo intake, editable saved drafts, optional multi-i
 
 The deployed image pricing configuration used `1` for every microdollar-per-million rate. Existing generation costs therefore are not trustworthy. Historical ledgers are left intact and the UI labels the old tiny totals as invalid.
 
-The official pricing page, checked on 2026-09-06, lists GPT Image 2 at $5 per million text input tokens, $8 per million image input tokens and $30 per million image output tokens. The corrected runtime values are 5000000, 8000000 and 30000000 microdollars per million tokens. Source: https://developers.openai.com/api/docs/pricing
+The official pricing page, checked on 2026-09-23, lists GPT Image 2.5 at $5 per million text input tokens, $8 per million image input tokens and $30 per million image output tokens. GPT-5.6 Luna costs $0.20 per million uncached input tokens, $0.02 per million cached input tokens and $1.20 per million output tokens; cache writes cost 1.25 times the uncached input rate. Runtime configuration captures these rates with every paid request. Sources: https://developers.openai.com/api/docs/pricing and https://developers.openai.com/api/docs/models/gpt-5.6-luna
 
-Applying those rates to the existing saved usage yields $0.011413 to $0.018946 per low-quality image. This is a retrospective estimate at current standard rates, not an invoice reconciliation or a guaranteed future price. It excludes separate detection calls. The private API rejects higher-quality requests. Photo-only intake has no provider cost. Detection and generation each require an explicit user action; uploading does not enqueue either.
+Applying the image rates to older saved usage yielded $0.011413 to $0.018946 per low-quality image. This is a retrospective estimate, not an invoice reconciliation or a guaranteed future price. New garment detections store their complete Responses usage, captured rate card and component costs. The weekly cost view includes feed images, catalog images and garment detection. Photo-only intake has no provider cost; detection and generation each require an explicit user action.
 
 ## Verification
 

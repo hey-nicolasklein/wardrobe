@@ -33,3 +33,12 @@ export async function createIdentityCollage(references: Buffer[]) {
   return sharp({ create: { width: collageWidth, height: collageHeight, channels: 3, background: '#ffffff' } })
     .composite(tiles).png().toBuffer();
 }
+
+/** Shrinks the approved reference without cropping or enlarging it. */
+export function compactIdentityReference(reference: Uint8Array) {
+  return sharp(reference, { failOn: 'error', limitInputPixels: 40_000_000 })
+    .rotate()
+    .resize(432, 768, { fit: 'inside', withoutEnlargement: true })
+    .png()
+    .toBuffer();
+}

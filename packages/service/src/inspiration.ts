@@ -1,9 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import sharp from 'sharp';
-
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import type { CharacterSheet, Look, LookConcept, SupportedCategory } from '@form/contracts';
+import type {
+  CharacterSheet,
+  Look,
+  LookConcept,
+  SupportedCategory,
+} from '@form/contracts';
 
 import {
   calculateCostMicrounits,
@@ -14,13 +17,15 @@ import { CatalogProviderError, type CatalogProvider } from './catalog-provider.j
 import type { Database, DatabaseClient } from './database.js';
 import {
   createGarmentReferenceCollage,
+  createGarmentReferenceBoard,
   writeGarmentReferenceDebugGallery,
 } from './garment-reference-collage.js';
 import { withTransaction } from './database.js';
 import { enqueueJob, type RemoteImageJob } from './jobs.js';
-import { collageModel, createIdentityCollage } from './identity-collage.js';
+import { collageModel, compactIdentityReference, createIdentityCollage } from './identity-collage.js';
 import { IdempotencyConflictError, OwnedResourceNotFoundError } from './media.js';
 import type { PrivateObjectStorage } from './storage.js';
+import sharp from 'sharp';
 
 export const lookModel = 'gpt-image-2.5-flare';
 export const lookPlannerModel = 'gpt-5.4-mini';
@@ -51,20 +56,23 @@ type LookRow = {
   planned_concept: LookConcept | null;
   model: string;
   quality: Look['quality'];
-  output_size: '1024x1280';
+  output_size: '1024x1280' | '768x960';
   provider_request_id: string | null;
   cost_microunits: string | null;
   failure_category: string | null;
   created_at: Date;
   finished_at: Date | null;
   wardrobe_item_ids: string[];
-  item_bounding_boxes: Look['itemBoundingBoxes'];
 };
 
 const characterColumns = `id, state, reference_asset_ids, note, asset_id, active, model, quality,
   output_size, provider_request_id, cost_microunits, failure_category, created_at, finished_at`;
 const lookColumns = `l.id, l.state, l.asset_id, l.character_sheet_id, l.parent_look_id,
-  l.item_bounding_boxes, l.planned_concept, l.model, l.quality, l.output_size, l.provider_request_id,
+  l.planned_concept, l.model, l.quality,
+  COALESCE(pa.pixel_width::text || 'x' || pa.pixel_height::text,
+    CASE WHEN (SELECT payload->>'outputSize' FROM remote_image_jobs rj WHERE rj.look_id=l.id ORDER BY rj.created_at DESC LIMIT 1) = '768x960'
+      THEN '768x960' ELSE '1024x1280' END) AS output_size,
+  l.provider_request_id,
   l.cost_microunits, l.failure_category, l.created_at, l.finished_at,
   COALESCE(array_agg(li.wardrobe_item_id ORDER BY li.ordinal) FILTER (WHERE li.wardrobe_item_id IS NOT NULL), '{}') AS wardrobe_item_ids`;
 
@@ -89,7 +97,6 @@ const mapLook = (row: LookRow): Look => ({
   state: row.state,
   assetId: row.asset_id,
   wardrobeItemIds: row.wardrobe_item_ids,
-  itemBoundingBoxes: row.item_bounding_boxes,
   characterSheetId: row.character_sheet_id,
   parentLookId: row.parent_look_id,
   concept: row.planned_concept,
@@ -103,6 +110,8 @@ const mapLook = (row: LookRow): Look => ({
   finishedAt: row.finished_at?.toISOString() ?? null,
 });
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+// Looks render at a reduced size. Older looks keep their stored 1024x1280.
+const lookOutputSize = '768x960' as const;
 
 async function replay<T>(
   client: DatabaseClient,
@@ -348,9 +357,24 @@ export function candidatesForLookPlan<T extends { id: string }>(
   return candidates.filter((item) => exact.has(item.id));
 }
 
+// History handed to the planner as combinations to avoid. Mandated items are
+// stripped out: otherwise "avoid recent combinations" fights "exact item IDs are
+// mandatory" once the same pinned items were worn before, and the planner drops
+// them, which fails the plan. Scene and mood stay avoidable through the concept.
+export function recentForLookPlan(
+  recent: Array<{ ids: string[]; planned_concept: LookConcept | null }>,
+  exactItemIds: string[],
+) {
+  const exact = new Set(exactItemIds);
+  return recent.map((look) => ({
+    itemIds: look.ids.filter((itemId) => !exact.has(itemId)),
+    concept: look.planned_concept,
+  }));
+}
+
 export async function listLooks(database: Database, accountId: string): Promise<Look[]> {
   const rows = await database.query<LookRow>(
-    `SELECT ${lookColumns} FROM looks l LEFT JOIN look_items li ON li.look_id=l.id LEFT JOIN wardrobe_items wi ON wi.id=li.wardrobe_item_id AND wi.deleted_at IS NULL WHERE l.account_id=$1 AND l.deleted_at IS NULL GROUP BY l.id ORDER BY l.created_at DESC`,
+    `SELECT ${lookColumns} FROM looks l LEFT JOIN private_assets pa ON pa.id=l.asset_id LEFT JOIN look_items li ON li.look_id=l.id LEFT JOIN wardrobe_items wi ON wi.id=li.wardrobe_item_id AND wi.deleted_at IS NULL WHERE l.account_id=$1 AND l.deleted_at IS NULL GROUP BY l.id, pa.pixel_width, pa.pixel_height ORDER BY l.created_at DESC`,
     [accountId],
   );
   return rows.rows.map(mapLook);
@@ -451,6 +475,8 @@ export async function createLook(
           `Für ${category} fehlt ein nutzbares Stück mit aktivem Katalogbild.`,
         );
     const lookId = randomUUID();
+    // The legacy column is constrained to 1024x1280. The job payload records the
+    // requested size; ready looks report the actual dimensions of their asset.
     await client.query(
       `INSERT INTO looks(id,account_id,character_sheet_id,parent_look_id,state,exact_item_ids,category_constraints,model,quality,output_size,prompt_version,planned_concept) VALUES($1,$2,$3,$4,'queued',$5,$6,$7,$9,'1024x1280',$8,$10)`,
       [
@@ -472,7 +498,13 @@ export async function createLook(
     const jobId = await enqueueJob(client, {
       accountId: input.accountId,
       kind: 'generate-look',
-      payload: { lookId, occasion: input.occasion ?? null, completeWithWardrobe, ...(preserved ? { referenceAssetId: preserved.assetId } : {}) },
+      payload: {
+        lookId,
+        occasion: input.occasion ?? null,
+        completeWithWardrobe,
+        outputSize: lookOutputSize,
+        ...(preserved ? { referenceAssetId: preserved.assetId } : {}),
+      },
       idempotencyKey: `look:${input.idempotencyKey}`,
     });
     await client.query('UPDATE remote_image_jobs SET look_id=$1 WHERE id=$2', [lookId, jobId]);
@@ -542,8 +574,19 @@ export async function generationCosts(database: Database, accountId: string, wee
     look_total: string;
     successful: string;
     character_total: string;
+    wardrobe_total: string;
+    wardrobe_requests: string;
+    detection_total: string;
+    detection_requests: string;
   }>(
-    `SELECT COALESCE((SELECT sum(cost_microunits) FROM looks WHERE account_id=$1${dateClause}),0) look_total,COALESCE((SELECT count(*) FROM looks WHERE account_id=$1 AND state='ready'${dateClause}),0) successful,COALESCE((SELECT sum(cost_microunits) FROM character_sheets WHERE account_id=$1${dateClause}),0) character_total`,
+    `SELECT
+       COALESCE((SELECT sum(cost_microunits) FROM looks WHERE account_id=$1${dateClause}),0) look_total,
+       COALESCE((SELECT count(*) FROM looks WHERE account_id=$1 AND state='ready'${dateClause}),0) successful,
+       COALESCE((SELECT sum(cost_microunits) FROM character_sheets WHERE account_id=$1${dateClause}),0) character_total,
+       COALESCE((SELECT sum(cost_microunits) FROM generation_attempts WHERE account_id=$1${dateClause}),0) wardrobe_total,
+       COALESCE((SELECT count(*) FROM generation_attempts WHERE account_id=$1 AND cost_microunits IS NOT NULL${dateClause}),0) wardrobe_requests,
+       COALESCE((SELECT sum(cost_microunits) FROM detection_attempts WHERE account_id=$1${dateClause}),0) detection_total,
+       COALESCE((SELECT count(*) FROM detection_attempts WHERE account_id=$1 AND cost_microunits IS NOT NULL${dateClause}),0) detection_requests`,
     params,
   );
   const r = result.rows[0]!;
@@ -554,6 +597,10 @@ export async function generationCosts(database: Database, accountId: string, wee
     successfulLookCount: successful,
     averageSuccessfulLookMicrounits: successful ? Math.round(total / successful) : 0,
     characterSheetTotalMicrounits: Number(r.character_total),
+    wardrobeTotalMicrounits: Number(r.wardrobe_total),
+    wardrobeRequestCount: Number(r.wardrobe_requests),
+    detectionTotalMicrounits: Number(r.detection_total),
+    detectionRequestCount: Number(r.detection_requests),
   };
 }
 
@@ -653,7 +700,17 @@ export function lookPrompt(
   const completion = completeWithWardrobe
     ? 'Do not invent other major garments; plain incidental basics such as socks are allowed.'
     : 'Complete the outfit with coherent unreferenced garments where needed. Do not replace, restyle, hide, or obscure any referenced garment.';
-  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} Each remaining reference is one garment shown as a side-by-side reference: the clean generated shelf view is on the left and the cropped original photo is on the right. Use both views together for that one garment. Treat the original photo as the ground truth for colors, material, texture, construction, and distinctive details; use the shelf view to clarify its complete silhouette. Create one photorealistic 4:5 iPhone-style snapshot as if a friend naturally photographed the referenced person while ${concept.activity}, in ${concept.scene}. Mood: ${concept.mood}. ${concept.framing} framing. The person must not look directly at the camera. ${garmentInstruction} Every referenced garment must be fully visible and faithful to its reference. ${completion} Avoid selfies, posed portraits, illustrations, runway staging, extreme editorial styling, text, watermarks, and collages in the output. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
+  const pairing = 'Each view pairs the clean generated shelf view on the left with the cropped original photo on the right. Treat the original photo as the ground truth for colors, material, texture, construction, and distinctive details; use the shelf view to clarify its complete silhouette.';
+  const garmentReferences = items.length > 1
+    ? `The final garment reference is one ordered board. Its cells are row-major, from left to right and then top to bottom, matching this garment order: ${items.map((item, index) => `${index + 1}. ${item.name}`).join('; ')}. ${pairing} Use each cell only for its matching garment.`
+    : `The final reference shows the garment. ${pairing}`;
+  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} ${garmentReferences} Create one photorealistic 4:5 iPhone-style snapshot as if a friend naturally photographed the referenced person while ${concept.activity}, in ${concept.scene}. Mood: ${concept.mood}. ${concept.framing} framing. The person must not look directly at the camera. ${garmentInstruction} Every referenced garment must be fully visible and faithful to its reference. ${completion} Avoid selfies, posed portraits, illustrations, runway staging, extreme editorial styling, text, watermarks, and collages in the output. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
+}
+
+async function imageDimensions(bytes: Uint8Array, expected: '1024x1280' | '768x960') {
+  const metadata = await sharp(bytes, { failOn: 'error' }).metadata().catch(() => null);
+  if (metadata?.width && metadata.height) return { width: metadata.width, height: metadata.height };
+  throw new CatalogJobError('internal', `Generated Look image has no readable dimensions (expected ${expected}).`, false);
 }
 
 export async function executeInspirationJob(
@@ -724,6 +781,7 @@ export async function executeInspirationJob(
     const id = (job.payload as { lookId: string }).lookId;
     const completeWithWardrobe =
       (job.payload as { completeWithWardrobe?: boolean }).completeWithWardrobe ?? true;
+    const outputSize = (job.payload as { outputSize?: '1024x1280' | '768x960' }).outputSize ?? lookOutputSize;
     const started = await database.query<{
       character_sheet_id: string;
       exact_item_ids: string[];
@@ -781,10 +839,7 @@ export async function executeInspirationJob(
             notes: i.notes,
           },
         })),
-        recent: recent.rows.map((r) => ({
-          itemIds: r.ids,
-          concept: r.planned_concept,
-        })),
+        recent: recentForLookPlan(recent.rows, row.exact_item_ids),
         exactItemIds: row.exact_item_ids,
         categories: row.category_constraints,
         occasion: (job.payload as { occasion?: string | null }).occasion ?? null,
@@ -838,11 +893,8 @@ export async function executeInspirationJob(
       .sort((a, b) => itemIds.indexOf(a.id) - itemIds.indexOf(b.id));
     if (!character.rows[0]?.asset_id || selected.length !== itemIds.length)
       throw new CatalogJobError('internal', 'Look references are no longer available.', false);
-    const identityReference = await readAsset(
-      database,
-      storage,
-      job.accountId,
-      character.rows[0].asset_id,
+    const identityReference = await compactIdentityReference(
+      await readAsset(database, storage, job.accountId, character.rows[0].asset_id),
     );
     const garmentReferences = await Promise.all(selected.map(async (item) => {
       const [shelfImage, originalImage] = await Promise.all([
@@ -868,51 +920,34 @@ export async function executeInspirationJob(
         console.error(`Could not write garment reference collages for look ${id}.`, error);
       }
     }
-    const refs = [identityReference, ...garmentReferences];
+    const refs = [identityReference, await createGarmentReferenceBoard(garmentReferences)];
     const referenceAssetId = (job.payload as { referenceAssetId?: string }).referenceAssetId;
     if (referenceAssetId)
       refs.unshift(await readAsset(database, storage, job.accountId, referenceAssetId));
     const result = await provider.generateComposite({
       references: refs,
       prompt: referenceAssetId
-        ? 'Recreate the first reference image with improved detail as one photorealistic 4:5 image. Preserve its composition, pose, outfit, person, lighting and background. The second reference shows the same person and is only for identity detail. References after the second show the garments and are only for fabric and construction detail. Do not change the scene or add garments, text, watermarks or collage panels.'
+        ? `Recreate the first reference image with improved detail as one photorealistic 4:5 image. Preserve its composition, pose, outfit, person, lighting and background. The second reference shows the same person and is only for identity detail. ${selected.length > 1 ? 'The final reference is an ordered garment board whose cells match the garments in the requested order. Each cell contains a paired shelf view and original garment photo.' : 'The final reference shows the garment and is only for fabric and construction detail.'} Do not change the scene or add garments, text, watermarks or collage panels.`
         : lookPrompt(concept, selected, character.rows[0].note, completeWithWardrobe),
       model: row.model,
       quality: row.quality,
-      size: '1024x1280',
+      size: outputSize,
       signal: controller.signal,
     });
+    const dimensions = await imageDimensions(result.pngBytes, outputSize);
     const assetId = await writeAsset(
       database,
       storage,
       job.accountId,
       'look',
       result.pngBytes,
-      1024,
-      1280,
+      dimensions.width,
+      dimensions.height,
     );
-    // Detection is best effort: never regenerate a paid image because localization failed.
-    let itemBoundingBoxes: Look['itemBoundingBoxes'] = [];
-    try {
-      const localized = await provider.detect({
-        jpegBytes: await sharp(result.pngBytes).jpeg({ quality: 90 }).toBuffer(),
-        targets: selected.map(({ id, name, category, colors }) => ({ id, name, category, colors })),
-        model: lookPlannerModel,
-        signal: AbortSignal.timeout(30_000),
-      });
-      const seen = new Set<string>();
-      itemBoundingBoxes = localized.detections.flatMap((detection) => {
-        if (!itemIds.includes(detection.id) || seen.has(detection.id)) return [];
-        seen.add(detection.id);
-        return [{ wardrobeItemId: detection.id, boundingBox: detection.boundingBox }];
-      });
-    } catch (error) {
-      console.warn('Look item detection failed; using category origins.', { lookId: id, error });
-    }
     const cost = calculateCostMicrounits(result.usage, config.pricing);
     await database.query(
-      `UPDATE looks SET state='ready',asset_id=$3,provider_request_id=$4,provider_usage=$5,cost_microunits=$6,item_bounding_boxes=$7,finished_at=now() WHERE id=$1 AND account_id=$2`,
-      [id, job.accountId, assetId, result.requestId, JSON.stringify(result.usage.raw), cost, JSON.stringify(itemBoundingBoxes)],
+      `UPDATE looks SET state='ready',asset_id=$3,provider_request_id=$4,provider_usage=$5,cost_microunits=$6,finished_at=now() WHERE id=$1 AND account_id=$2`,
+      [id, job.accountId, assetId, result.requestId, JSON.stringify(result.usage.raw), cost],
     );
   } finally {
     clearTimeout(timer);

@@ -82,6 +82,30 @@ export const detectionAttemptSchema = z
     sourcePhotoId: opaqueIdSchema,
     state: z.enum(['queued', 'processing', 'succeeded', 'failed']),
     model: z.string().min(1).max(64),
+    providerRequestId: z.string().min(1).max(255).nullable(),
+    costMicrounits: z.number().int().nonnegative().nullable(),
+    usage: z
+      .object({
+        inputTokens: z.number().int().nonnegative(),
+        cachedInputTokens: z.number().int().nonnegative(),
+        cacheWriteInputTokens: z.number().int().nonnegative(),
+        outputTokens: z.number().int().nonnegative(),
+        reasoningTokens: z.number().int().nonnegative(),
+        serviceTier: z.string().min(1).max(64),
+      })
+      .strict()
+      .nullable(),
+    costBreakdown: z
+      .object({
+        inputMicrounits: z.number().int().nonnegative(),
+        cachedInputMicrounits: z.number().int().nonnegative(),
+        cacheWriteInputMicrounits: z.number().int().nonnegative(),
+        outputMicrounits: z.number().int().nonnegative(),
+        totalMicrounits: z.number().int().nonnegative(),
+        pricingEffectiveDate: z.iso.date(),
+      })
+      .strict()
+      .nullable(),
     failureCategory: z.string().min(1).max(80).nullable(),
     createdAt: timestampSchema,
     finishedAt: timestampSchema.nullable(),
@@ -229,22 +253,19 @@ export const lookConceptSchema = z
     mood: z.string().trim().min(1).max(200),
   })
   .strict();
+export const lookSizeSchema = z.enum(['1024x1280', '768x960']);
 export const lookSchema = z
   .object({
     id: opaqueIdSchema,
     state: lookStateSchema,
     assetId: opaqueIdSchema.nullable(),
     wardrobeItemIds: z.array(opaqueIdSchema),
-    itemBoundingBoxes: z.array(z.object({
-      wardrobeItemId: opaqueIdSchema,
-      boundingBox: normalizedBoundingBoxSchema,
-    }).strict()).default([]),
     characterSheetId: opaqueIdSchema,
     parentLookId: opaqueIdSchema.nullable(),
     concept: lookConceptSchema.nullable(),
     model: z.string().min(1).max(64),
     quality: generationQualitySchema,
-    size: z.literal('1024x1280'),
+    size: lookSizeSchema,
     providerRequestId: z.string().min(1).max(255).nullable(),
     costMicrounits: z.number().int().nonnegative().nullable(),
     failureCategory: z.string().min(1).max(80).nullable(),
@@ -259,6 +280,10 @@ export const generationCostSummarySchema = z
     successfulLookCount: z.number().int().nonnegative(),
     averageSuccessfulLookMicrounits: z.number().int().nonnegative(),
     characterSheetTotalMicrounits: z.number().int().nonnegative(),
+    wardrobeTotalMicrounits: z.number().int().nonnegative(),
+    wardrobeRequestCount: z.number().int().nonnegative(),
+    detectionTotalMicrounits: z.number().int().nonnegative(),
+    detectionRequestCount: z.number().int().nonnegative(),
   })
   .strict();
 

@@ -36,6 +36,17 @@ export class CatalogProviderError extends Error {
 export type DetectionProviderResult = {
   requestId: string;
   detections: GarmentDetection[];
+  usage: DetectionUsage;
+};
+
+export type DetectionUsage = {
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteInputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  serviceTier: string;
+  raw: unknown;
 };
 
 export type GenerationUsage = {
@@ -55,7 +66,6 @@ export type GenerationProviderResult = {
 export interface CatalogProvider {
   detect(input: {
     jpegBytes: Uint8Array;
-    targets?: Array<{ id: string; name: string; category: string; colors: string[] }>;
     model: string;
     signal?: AbortSignal;
   }): Promise<DetectionProviderResult>;
@@ -84,7 +94,7 @@ export interface CatalogProvider {
     prompt: string;
     model: string;
     quality: GenerationQuality;
-    size: '864x1536' | '1024x1280';
+    size: '864x1536' | '1024x1280' | '768x960';
     signal?: AbortSignal;
   }): Promise<GenerationProviderResult>;
 }
@@ -94,7 +104,6 @@ const detectionOutputSchema = z
     detections: z.array(
       z
         .object({
-          wardrobeItemId: z.string().optional(),
           name: z.string(),
           category: z.enum([
             'top',
@@ -121,7 +130,7 @@ const detectionOutputSchema = z
   })
   .strict();
 
-function detectionJsonSchema(pixelWidth: number, pixelHeight: number, targetIds?: string[]) {
+function detectionJsonSchema() {
   return {
     type: 'object',
     properties: {
@@ -130,7 +139,6 @@ function detectionJsonSchema(pixelWidth: number, pixelHeight: number, targetIds?
         items: {
           type: 'object',
           properties: {
-            ...(targetIds ? { wardrobeItemId: { type: 'string', enum: targetIds } } : {}),
             name: { type: 'string' },
             category: {
               type: 'string',
@@ -156,16 +164,16 @@ function detectionJsonSchema(pixelWidth: number, pixelHeight: number, targetIds?
             boundingBox: {
               type: 'object',
               properties: {
-                top: { type: 'integer', minimum: 0, maximum: pixelHeight - 1 },
-                left: { type: 'integer', minimum: 0, maximum: pixelWidth - 1 },
-                bottom: { type: 'integer', minimum: 1, maximum: pixelHeight },
-                right: { type: 'integer', minimum: 1, maximum: pixelWidth },
+                top: { type: 'integer', minimum: 0, maximum: 999 },
+                left: { type: 'integer', minimum: 0, maximum: 999 },
+                bottom: { type: 'integer', minimum: 1, maximum: 1000 },
+                right: { type: 'integer', minimum: 1, maximum: 1000 },
               },
               required: ['top', 'left', 'bottom', 'right'],
               additionalProperties: false,
             },
           },
-          required: ['name', 'category', 'colors', 'boundingBox', ...(targetIds ? ['wardrobeItemId'] : [])],
+          required: ['name', 'category', 'colors', 'boundingBox'],
           additionalProperties: false,
         },
       },
@@ -175,14 +183,14 @@ function detectionJsonSchema(pixelWidth: number, pixelHeight: number, targetIds?
   } as const;
 }
 
-function detectionPrompt(pixelWidth: number, pixelHeight: number) {
-  return `This image is exactly ${pixelWidth} pixels wide and ${pixelHeight} pixels high. Identify every distinct visible clothing item and wearable accessory in it.
+function detectionPrompt() {
+  return `Identify every distinct visible clothing item and wearable accessory in this image.
 
 Treat screenshots and product grids as multiple pictured instances. Return each separately pictured garment as its own proposal, even when the same product appears more than once. Never merge a main product image with thumbnails, recommendations, captions, or controls.
 
 Return layered garments and small accessories separately. Do not infer hidden items or return materials, tags, notes, masks, or polygons. Propose a concise visible-pixel-supported name and color list. Include the brand and product model in the name when they are clearly identifiable from visible logos, text, or distinctive design features, for example "Nike Air Max 95". Do not guess them when uncertain. Write every name in title case, capitalizing each meaningful word, for example "Black Wide-Leg Pants" or "Oversized Black Jacket with Faux-Fur Leopard Collar". Use category unsupported for a visible wearable outside the supported categories.
 
-For every bounding box, locate the outermost visible pixels of exactly one garment. Use a tight box with at most 2% padding and exclude captions, controls, cards, background, and other garments. Use original image pixels in the standard order top, left, bottom, right. Top and bottom are pixel rows from 0 to ${pixelHeight}. Left and right are pixel columns from 0 to ${pixelWidth}. The origin is the image's top-left corner. Before responding, verify that the center of each box lies on its named garment and that the box does not group multiple pictured instances.`;
+For every bounding box, locate the outermost visible pixels of exactly one garment. Use a tight box with at most 2% padding and exclude captions, controls, cards, background, and other garments. Return normalized integer coordinates in the standard order top, left, bottom, right, where the image spans 0 to 1000 on both axes and the origin is the top-left corner. Before responding, verify that the center of each box lies on its named garment and that the box does not group multiple pictured instances.`;
 }
 
 export const shelfImagePromptVersion = 'laid-flat-v6';
@@ -231,13 +239,11 @@ OUTPUT
 
 function clampBox(
   box: z.infer<typeof detectionOutputSchema>['detections'][number]['boundingBox'],
-  pixelWidth: number,
-  pixelHeight: number,
 ): NormalizedBoundingBox {
-  const x = Math.max(0, Math.min(999, Math.round((box.left / pixelWidth) * 1_000)));
-  const y = Math.max(0, Math.min(999, Math.round((box.top / pixelHeight) * 1_000)));
-  const right = Math.max(x + 1, Math.min(1_000, Math.round((box.right / pixelWidth) * 1_000)));
-  const bottom = Math.max(y + 1, Math.min(1_000, Math.round((box.bottom / pixelHeight) * 1_000)));
+  const x = Math.max(0, Math.min(999, Math.round(box.left)));
+  const y = Math.max(0, Math.min(999, Math.round(box.top)));
+  const right = Math.max(x + 1, Math.min(1_000, Math.round(box.right)));
+  const bottom = Math.max(y + 1, Math.min(1_000, Math.round(box.bottom)));
   const width = right - x;
   const height = bottom - y;
   return { x, y, width, height };
@@ -323,17 +329,23 @@ export class OpenAICatalogProvider implements CatalogProvider {
 
   async detect(input: {
     jpegBytes: Uint8Array;
-    targets?: Array<{ id: string; name: string; category: string; colors: string[] }>;
     model: string;
     signal?: AbortSignal;
   }): Promise<DetectionProviderResult> {
-    const metadata = await sharp(input.jpegBytes).metadata();
-    const pixelWidth = metadata.width;
-    const pixelHeight = metadata.height;
-    if (!pixelWidth || !pixelHeight) {
+    let preparedImage: Buffer;
+    try {
+      // Keep the image below the high-detail patch ceiling ourselves. The
+      // model returns normalized coordinates, so this resize cannot skew the
+      // boxes later applied to the original upload.
+      preparedImage = await sharp(input.jpegBytes, { failOn: 'error' })
+        .rotate()
+        .resize({ width: 1_600, height: 1_600, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 92, chromaSubsampling: '4:4:4' })
+        .toBuffer();
+    } catch {
       throw new CatalogProviderError(
         'validation',
-        'The source image dimensions could not be read.',
+        'The source image could not be prepared for detection.',
         false,
       );
     }
@@ -349,29 +361,31 @@ export class OpenAICatalogProvider implements CatalogProvider {
         body: JSON.stringify({
           model: input.model,
           store: false,
+          reasoning: { effort: 'none' },
+          max_output_tokens: 3_000,
           input: [
             {
               role: 'user',
               content: [
                 {
                   type: 'input_text',
-                  text: detectionPrompt(pixelWidth, pixelHeight) + (input.targets
-                    ? ` This is a generated outfit photo. Locate only these wardrobe items: ${JSON.stringify(input.targets)}. Match each visible item by its description, category and colors, and return its exact wardrobeItemId. Return at most one box per wardrobeItemId, enclosing both shoes for a pair. Omit an item if hidden, absent or uncertain. Ignore all other clothing and people.` : ''),
+                  text: detectionPrompt(),
                 },
                 {
                   type: 'input_image',
-                  image_url: `data:image/jpeg;base64,${Buffer.from(input.jpegBytes).toString('base64')}`,
+                  image_url: `data:image/jpeg;base64,${preparedImage.toString('base64')}`,
                   detail: 'high',
                 },
               ],
             },
           ],
           text: {
+            verbosity: 'low',
             format: {
               type: 'json_schema',
               name: 'garment_detections',
               strict: true,
-              schema: detectionJsonSchema(pixelWidth, pixelHeight, input.targets?.map((item) => item.id)),
+              schema: detectionJsonSchema(),
             },
           },
         }),
@@ -388,10 +402,24 @@ export class OpenAICatalogProvider implements CatalogProvider {
       id?: string;
       output_text?: string;
       status?: string;
+      service_tier?: string;
       output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+      usage?: {
+        input_tokens?: number;
+        input_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+        output_tokens?: number;
+        output_tokens_details?: { reasoning_tokens?: number };
+      };
     };
     if (raw.status && raw.status !== 'completed') {
       throw new CatalogProviderError('validation', 'OpenAI detection did not complete.', false);
+    }
+    if (raw.usage?.input_tokens === undefined || raw.usage.output_tokens === undefined) {
+      throw new CatalogProviderError(
+        'accounting',
+        'OpenAI returned detections without the required usage ledger.',
+        false,
+      );
     }
     let parsed;
     try {
@@ -410,19 +438,28 @@ export class OpenAICatalogProvider implements CatalogProvider {
     }
     const detections = parsed.detections.map((detection) =>
       garmentDetectionSchema.parse({
-        id: input.targets ? detection.wardrobeItemId : randomUUID(),
+        id: randomUUID(),
         name: detection.name.trim().slice(0, 80),
         category: detection.category,
         colors: detection.colors
           .map((color) => color.trim().slice(0, 32))
           .filter(Boolean)
           .slice(0, 6),
-        boundingBox: clampBox(detection.boundingBox, pixelWidth, pixelHeight),
+        boundingBox: clampBox(detection.boundingBox),
       }),
     );
     return {
       requestId: raw.id ?? response.headers.get('x-request-id') ?? randomUUID(),
       detections,
+      usage: {
+        inputTokens: raw.usage.input_tokens,
+        cachedInputTokens: raw.usage.input_tokens_details?.cached_tokens ?? 0,
+        cacheWriteInputTokens: raw.usage.input_tokens_details?.cache_write_tokens ?? 0,
+        outputTokens: raw.usage.output_tokens,
+        reasoningTokens: raw.usage.output_tokens_details?.reasoning_tokens ?? 0,
+        serviceTier: raw.service_tier ?? 'default',
+        raw: raw.usage,
+      },
     };
   }
 
@@ -553,7 +590,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
         body: JSON.stringify({
           model: input.model,
           store: false,
-          input: `Plan one coherent candid outfit photograph. Exact item IDs are mandatory. Satisfy every requested category. Build a complete outfit around the exact items, adding complementary pieces from the candidates. For pieces you add automatically, choose at most one top, at most one jacket, and at most one lower-body piece (pants or skirt). A dress replaces the top and lower-body piece; a jacket may be layered over either. Do not select alternative garments in the same slot. Match the requested occasion in both clothing and scene when provided. Avoid recent combinations and situations. Do not use weather, season or location context. Candidates: ${JSON.stringify(input.candidates)}. Exact: ${JSON.stringify(input.exactItemIds)}. Categories: ${JSON.stringify(input.categories)}. Occasion: ${JSON.stringify(input.occasion ?? null)}. Recent: ${JSON.stringify(input.recent)}.`,
+          input: `Plan one coherent candid outfit photograph. Exact item IDs are mandatory. Satisfy every requested category. Build a complete outfit around the exact items, adding complementary pieces from the candidates. For pieces you add automatically, choose at most one top, at most one jacket, and at most one lower-body piece (pants or skirt). A dress replaces the top and lower-body piece; a jacket may be layered over either. Do not select alternative garments in the same slot. Match the requested occasion in both clothing and scene when provided. Avoid recent combinations and situations, but never at the cost of an exact item: the exact items always stay in the outfit, and you vary the added pieces, scene, activity and mood instead. Do not use weather, season or location context. Candidates: ${JSON.stringify(input.candidates)}. Exact: ${JSON.stringify(input.exactItemIds)}. Categories: ${JSON.stringify(input.categories)}. Occasion: ${JSON.stringify(input.occasion ?? null)}. Recent: ${JSON.stringify(input.recent)}.`,
           text: {
             format: {
               type: 'json_schema',
@@ -596,17 +633,24 @@ export class OpenAICatalogProvider implements CatalogProvider {
         .strict()
         .parse(JSON.parse(text));
       const allowed = new Set(input.candidates.map(({ id }) => id));
-      if (
-        parsed.itemIds.some((id) => !allowed.has(id)) ||
-        input.exactItemIds.some((id) => !parsed.itemIds.includes(id))
-      )
-        throw new Error();
+      const unknown = parsed.itemIds.filter((id) => !allowed.has(id));
+      const missing = input.exactItemIds.filter((id) => !parsed.itemIds.includes(id));
+      if (unknown.length || missing.length)
+        throw new Error(
+          `plan rejected: ${missing.length} mandated item(s) missing, ${unknown.length} unknown id(s)`,
+        );
       return {
         requestId: raw.id ?? response.headers.get('x-request-id') ?? randomUUID(),
         ...parsed,
       };
-    } catch {
-      throw new CatalogProviderError('validation', 'OpenAI returned an invalid Look plan.', false);
+    } catch (error) {
+      // Retryable: the model occasionally drops a mandated item, and a second
+      // sample usually satisfies the constraint.
+      throw new CatalogProviderError(
+        'validation',
+        `OpenAI returned an invalid Look plan (${(error as Error).message || 'unparseable response'}).`,
+        true,
+      );
     }
   }
 
@@ -615,7 +659,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
     prompt: string;
     model: string;
     quality: GenerationQuality;
-    size: '864x1536' | '1024x1280';
+    size: '864x1536' | '1024x1280' | '768x960';
     signal?: AbortSignal;
   }): Promise<GenerationProviderResult> {
     const form = new FormData();

@@ -31,6 +31,7 @@ import {
   listCharacterSheets,
   removeCharacterSheet,
 } from './index.js';
+import { compactIdentityReference } from './identity-collage.js';
 
 const enabled = process.env.FORM_RUN_SERVICE_INTEGRATION === 'true';
 
@@ -40,6 +41,11 @@ test('photo collages cost zero and become the first reference for a priced feed 
   const config = { requestTimeoutMs: 10_000, pricing: {
     effectiveDate: '2026-08-03', textInputMicrodollarsPerMillion: 1_000_000,
     imageInputMicrodollarsPerMillion: 2_000_000, imageOutputMicrodollarsPerMillion: 3_000_000,
+  }, detectionPricing: {
+    model: 'gpt-5.6-luna', effectiveDate: '2026-07-30',
+    inputMicrodollarsPerMillion: 200_000, cachedInputMicrodollarsPerMillion: 20_000,
+    cacheWriteInputMicrodollarsPerMillion: 250_000,
+    outputMicrodollarsPerMillion: 1_200_000,
   } };
   try {
     await migrateDatabase(database);
@@ -72,28 +78,20 @@ test('photo collages cost zero and become the first reference for a priced feed 
     const concept = { activity: 'walking', scene: 'a quiet street', mood: 'relaxed', framing: 'full-body' as const };
     const look = await createLook(database, { accountId: input.accountId, exactItemIds: [fixtureIds.readyItem], categories: [], parentLookId: null, idempotencyKey: 'collage-integration-look-0001' });
     let referenceChecked = false;
-    const detectedBox = { x: 250, y: 220, width: 500, height: 400 };
     const lookProvider = Object.assign(provider, {
-      detect: async (request: { targets?: Array<{ id: string }> }) => {
-        assert.deepEqual(request.targets?.map((item) => item.id), [fixtureIds.readyItem]);
-        return { requestId: 'look-detection', detections: [
-          { id: fixtureIds.readyItem, name: 'Jacket', category: 'jacket' as const, colors: ['red'], boundingBox: detectedBox },
-          { id: 'unrelated-item', name: 'Hat', category: 'hat' as const, colors: ['red'], boundingBox: detectedBox },
-        ] };
-      },
       planLook: async () => ({ requestId: 'plan-collage', itemIds: [fixtureIds.readyItem], concept }),
       generateComposite: async (request: { references: Uint8Array[]; prompt: string; quality: string }) => {
         assert.equal(request.quality, 'low');
-        assert.deepEqual(Buffer.from(request.references[0]!), collageBytes);
+        assert.ok(Buffer.from(request.references[0]!).equals(await compactIdentityReference(collageBytes)));
         assert.equal(request.references.length, 2);
         const garmentReference = await sharp(request.references[1]!).metadata();
-        assert.equal(garmentReference.width, 1024);
-        assert.equal(garmentReference.height, 512);
+        assert.equal(garmentReference.width, 512);
+        assert.equal(garmentReference.height, 256);
         assert.match(request.prompt, /collage of cropped original photos/);
-        assert.match(request.prompt, /side-by-side reference/);
+        assert.match(request.prompt, /shelf view on the left/);
         assert.match(request.prompt, /braunes Haar/);
         referenceChecked = true;
-        return { requestId: 'look-collage', pngBytes: await sharp(collageBytes).resize(1024, 1280).png().toBuffer(), usage: { textInputTokens: 10, imageInputTokens: 200, outputTokens: 30, serviceTier: 'default', raw: { fixture: true } } };
+        return { requestId: 'look-collage', pngBytes: await sharp(collageBytes).resize(768, 960).png().toBuffer(), usage: { textInputTokens: 10, imageInputTokens: 200, outputTokens: 30, serviceTier: 'default', raw: { fixture: true } } };
       },
     });
     await executeInspirationJob(database, storage, lookProvider, makeJob(look.jobId, 'generate-look', { lookId: look.lookId }), config);
@@ -101,11 +99,14 @@ test('photo collages cost zero and become the first reference for a priced feed 
     const feed = await listLooks(database, input.accountId);
     assert.equal(feed[0]!.characterSheetId, sheet.id);
     assert.equal(feed[0]!.state, 'ready');
-    assert.deepEqual(feed[0]!.itemBoundingBoxes, [{ wardrobeItemId: fixtureIds.readyItem, boundingBox: detectedBox }]);
     assert.equal(feed[0]!.costMicrounits, 500);
     const costs = await generationCosts(database, input.accountId);
     assert.equal(costs.characterSheetTotalMicrounits, 0);
     assert.equal(costs.lookTotalMicrounits, 500);
+    assert.equal(costs.wardrobeTotalMicrounits, 36_000);
+    assert.equal(costs.wardrobeRequestCount, 3);
+    assert.equal(costs.detectionTotalMicrounits, 0);
+    assert.equal(costs.detectionRequestCount, 0);
     assert.equal(feed[0]!.quality, 'low');
     const upgradeCommand = { accountId: input.accountId, exactItemIds: [], categories: [], parentLookId: look.lookId, quality: 'high' as const, preserveComposition: true, idempotencyKey: randomUUID() };
     const upgraded = await createLook(database, upgradeCommand);
@@ -126,19 +127,18 @@ test('photo collages cost zero and become the first reference for a priced feed 
       generateComposite: async (request: { references: Uint8Array[]; prompt: string; quality: string }) => {
         assert.equal(request.quality, 'high');
         assert.equal(request.references.length, 3);
-        assert.deepEqual(Buffer.from(request.references[0]!), await sharp(collageBytes).resize(1024, 1280).png().toBuffer());
-        assert.deepEqual(Buffer.from(request.references[1]!), collageBytes);
+        assert.ok(Buffer.from(request.references[0]!).equals(await sharp(collageBytes).resize(768, 960).png().toBuffer()));
+        assert.ok(Buffer.from(request.references[1]!).equals(await compactIdentityReference(collageBytes)));
         assert.match(request.prompt, /Preserve its composition/);
         upgradeChecked = true;
-        lookProvider.detect = async () => { throw new Error('Detection unavailable'); };
-        return { requestId: 'upgraded-look', pngBytes: await sharp(collageBytes).resize(1024, 1280).png().toBuffer(), usage: { textInputTokens: 10, imageInputTokens: 200, outputTokens: 30, serviceTier: 'default', raw: { fixture: true } } };
+        return { requestId: 'upgraded-look', pngBytes: await sharp(collageBytes).resize(768, 960).png().toBuffer(), usage: { textInputTokens: 10, imageInputTokens: 200, outputTokens: 30, serviceTier: 'default', raw: { fixture: true } } };
       },
     });
     await executeInspirationJob(database, storage, upgradeProvider, makeJob(retry.jobId, 'generate-look', retryPayload), config);
     assert.ok(upgradeChecked);
     const upgradedFeed = await listLooks(database, input.accountId);
     assert.equal(upgradedFeed.filter((entry) => entry.state === 'ready').length, 2);
-    assert.deepEqual(upgradedFeed.find((entry) => entry.id === upgraded.lookId)!.itemBoundingBoxes, []);
+
   } finally {
     storage.client.destroy();
     await database.end();
@@ -299,7 +299,8 @@ test(
       assert.deepEqual(queued.rows[0], {
         kind: 'generate-look',
         look_id: first.lookId,
-        payload: { lookId: first.lookId, occasion: 'party', completeWithWardrobe: true },
+        payload: { lookId: first.lookId, occasion: 'party', completeWithWardrobe: true,
+          outputSize: '768x960' },
       });
       await database.query("UPDATE looks SET state='failed' WHERE id=$1", [first.lookId]);
       const retried = await retryLook(database, {
@@ -308,11 +309,7 @@ test(
       const retryJob = await database.query<{ payload: unknown }>(
         'SELECT payload FROM remote_image_jobs WHERE id=$1', [retried.jobId],
       );
-      assert.deepEqual(retryJob.rows[0]?.payload, {
-        lookId: first.lookId,
-        occasion: 'party',
-        completeWithWardrobe: true,
-      });
+      assert.deepEqual(retryJob.rows[0]?.payload, queued.rows[0]!.payload);
       await assert.rejects(
         createLook(database, {
           ...command,
@@ -449,7 +446,7 @@ test(
         .toBuffer();
       const provider = new ReplayCatalogProvider([
         {
-          key: 'detect:gpt-5.4-mini',
+          key: 'detect:gpt-5.6-luna',
           detection: {
             requestId: 'replay-detection-request',
             detections: [
@@ -461,6 +458,15 @@ test(
                 boundingBox: { x: 100, y: 100, width: 700, height: 700 },
               },
             ],
+            usage: {
+              inputTokens: 100,
+              cachedInputTokens: 10,
+              cacheWriteInputTokens: 20,
+              outputTokens: 50,
+              reasoningTokens: 0,
+              serviceTier: 'default',
+              raw: { fixture: 'detection' },
+            },
           },
         },
         {
@@ -480,6 +486,14 @@ test(
       ]);
       const executionConfig = {
         requestTimeoutMs: 10_000,
+        detectionPricing: {
+          model: 'gpt-5.6-luna',
+          effectiveDate: '2026-07-30',
+          inputMicrodollarsPerMillion: 200_000,
+          cachedInputMicrodollarsPerMillion: 20_000,
+          cacheWriteInputMicrodollarsPerMillion: 250_000,
+          outputMicrodollarsPerMillion: 1_200_000,
+        },
         pricing: {
           effectiveDate: '2026-08-03',
           textInputMicrodollarsPerMillion: 1_000_000,
@@ -490,7 +504,7 @@ test(
       const detection = await enqueueSourcePhotoDetection(database, {
         accountId: fixtureIds.populatedAccount,
         sourcePhotoId,
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         idempotencyKey: 'pipeline-detection-command-0001',
       });
       await executeCatalogJob(
@@ -512,6 +526,36 @@ test(
           leaseExpiresAt: new Date(Date.now() + 60_000),
         },
         executionConfig,
+      );
+      const detectionLedger = await database.query<{
+        model: string;
+        input_tokens: number;
+        cached_input_tokens: number;
+        cache_write_input_tokens: number;
+        output_tokens: number;
+        reasoning_tokens: number;
+        cost_microunits: string;
+      }>(
+        `SELECT model, input_tokens, cached_input_tokens, cache_write_input_tokens,
+           output_tokens, reasoning_tokens, cost_microunits
+         FROM detection_attempts WHERE id = $1`,
+        [detection.detectionAttemptId],
+      );
+      assert.deepEqual(detectionLedger.rows[0], {
+        model: 'gpt-5.6-luna',
+        input_tokens: 100,
+        cached_input_tokens: 10,
+        cache_write_input_tokens: 20,
+        output_tokens: 50,
+        reasoning_tokens: 0,
+        cost_microunits: '80',
+      });
+      await assert.rejects(
+        database.query(
+          'UPDATE detection_attempts SET cost_microunits = 81 WHERE id = $1',
+          [detection.detectionAttemptId],
+        ),
+        /detection usage ledger is immutable/,
       );
       const item = await createWardrobeItemFromDetection(database, {
         accountId: fixtureIds.populatedAccount,

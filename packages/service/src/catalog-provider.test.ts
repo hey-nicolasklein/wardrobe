@@ -9,7 +9,11 @@ import {
   ReplayCatalogProvider,
   shelfImagePromptVersion,
 } from './catalog-provider.js';
-import { calculateCostMicrounits, catalogFixtureCoverage } from './catalog.js';
+import {
+  calculateCostMicrounits,
+  calculateDetectionCostLedger,
+  catalogFixtureCoverage,
+} from './catalog.js';
 
 const metadata = {
   name: 'Red overshirt',
@@ -26,6 +30,13 @@ test('uses strict Responses output and clamps detection boxes', async () => {
     return Response.json({
       id: 'resp_fixture',
       status: 'completed',
+      service_tier: 'default',
+      usage: {
+        input_tokens: 2_500,
+        input_tokens_details: { cached_tokens: 100, cache_write_tokens: 200 },
+        output_tokens: 120,
+        output_tokens_details: { reasoning_tokens: 0 },
+      },
       output: [
         {
           content: [
@@ -37,7 +48,7 @@ test('uses strict Responses output and clamps detection boxes', async () => {
                     name: 'Red overshirt',
                     category: 'jacket',
                     colors: ['red'],
-                    boundingBox: { top: 2, left: 90, bottom: 82, right: 120 },
+                    boundingBox: { top: 10, left: 900, bottom: 410, right: 1000 },
                   },
                 ],
               }),
@@ -49,13 +60,13 @@ test('uses strict Responses output and clamps detection boxes', async () => {
   };
   try {
     const jpegBytes = await sharp({
-      create: { width: 100, height: 200, channels: 3, background: '#ffffff' },
+      create: { width: 2400, height: 3200, channels: 3, background: '#ffffff' },
     })
       .jpeg()
       .toBuffer();
     const result = await new OpenAICatalogProvider('test-key').detect({
       jpegBytes,
-      model: 'gpt-5.4-mini',
+      model: 'gpt-5.6-luna',
     });
     assert.equal(result.requestId, 'resp_fixture');
     assert.deepEqual(result.detections[0]?.boundingBox, {
@@ -64,9 +75,25 @@ test('uses strict Responses output and clamps detection boxes', async () => {
       width: 100,
       height: 400,
     });
+    assert.deepEqual(result.usage, {
+      inputTokens: 2_500,
+      cachedInputTokens: 100,
+      cacheWriteInputTokens: 200,
+      outputTokens: 120,
+      reasoningTokens: 0,
+      serviceTier: 'default',
+      raw: {
+        input_tokens: 2_500,
+        input_tokens_details: { cached_tokens: 100, cache_write_tokens: 200 },
+        output_tokens: 120,
+        output_tokens_details: { reasoning_tokens: 0 },
+      },
+    });
     const format = (requestBody?.text as { format: { strict: boolean; schema: unknown } }).format;
     assert.equal(format.strict, true);
     assert.equal((format.schema as { additionalProperties: boolean }).additionalProperties, false);
+    assert.deepEqual(requestBody?.reasoning, { effort: 'none' });
+    assert.equal(requestBody?.max_output_tokens, 3_000);
     const prompt = (
       requestBody?.input as Array<{
         content: Array<{ type: string; text?: string }>;
@@ -80,33 +107,36 @@ test('uses strict Responses output and clamps detection boxes', async () => {
     assert.match(prompt ?? '', /Include the brand and product model.*clearly identifiable/);
     assert.match(prompt ?? '', /Nike Air Max 95/);
     assert.match(prompt ?? '', /Do not guess them when uncertain/);
-    assert.match(prompt ?? '', /exactly 100 pixels wide and 200 pixels high/);
+    assert.match(prompt ?? '', /normalized integer coordinates/);
+    const imageInput = (
+      requestBody?.input as Array<{
+        content: Array<{ type: string; image_url?: string }>;
+      }>
+    )[0]?.content.find(({ type }) => type === 'input_image')?.image_url;
+    const prepared = Buffer.from(imageInput?.split(',')[1] ?? '', 'base64');
+    const preparedMetadata = await sharp(prepared).metadata();
+    assert.equal(preparedMetadata.width, 1200);
+    assert.equal(preparedMetadata.height, 1600);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test('localizes known look items with stable wardrobe IDs', async () => {
+test('requires the detection usage ledger', async () => {
   const originalFetch = globalThis.fetch;
-  const target = { id: 'look-jacket-0001', ...metadata };
-  globalThis.fetch = async (_input, init) => {
-    const body = JSON.parse(String(init?.body));
-    const itemSchema = body.text.format.schema.properties.detections.items;
-    assert.deepEqual(itemSchema.properties.wardrobeItemId.enum, [target.id]);
-    assert.ok(itemSchema.required.includes('wardrobeItemId'));
-    assert.match(body.input[0].content[0].text, /Omit an item if hidden, absent or uncertain/);
-    return Response.json({ id: 'localized', status: 'completed', output: [{ content: [{
-      type: 'output_text', text: JSON.stringify({ detections: [{
-        wardrobeItemId: target.id, name: target.name, category: target.category,
-        colors: target.colors, boundingBox: { left: 256, top: 320, right: 768, bottom: 640 },
-      }] }),
-    }] }] });
-  };
+  globalThis.fetch = async () => Response.json({
+    id: 'missing-usage',
+    status: 'completed',
+    output: [{ content: [{ type: 'output_text', text: '{"detections":[]}' }] }],
+  });
   try {
-    const jpegBytes = await sharp({ create: { width: 1024, height: 1280, channels: 3, background: '#fff' } }).jpeg().toBuffer();
-    const result = await new OpenAICatalogProvider('test-key').detect({ jpegBytes, targets: [target], model: 'gpt-5.4-mini' });
-    assert.equal(result.detections[0]?.id, target.id);
-    assert.deepEqual(result.detections[0]?.boundingBox, { x: 250, y: 250, width: 500, height: 250 });
+    const jpegBytes = await sharp({
+      create: { width: 100, height: 100, channels: 3, background: '#fff' },
+    }).jpeg().toBuffer();
+    await assert.rejects(
+      new OpenAICatalogProvider('test-key').detect({ jpegBytes, model: 'gpt-5.6-luna' }),
+      (error: unknown) => error instanceof CatalogProviderError && error.category === 'accounting',
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -254,6 +284,14 @@ test('orders identity before garments and sends custom inspiration dimensions', 
       ['image/jpeg', 'image/png', 'image/webp'],
     );
     assert.deepEqual(Buffer.from(await references[0]!.arrayBuffer()), jpeg);
+    await new OpenAICatalogProvider('test-key').generateComposite({
+      references: [jpeg, png],
+      prompt: 'compact look',
+      model: 'gpt-image-2.5-flare',
+      quality: 'low',
+      size: '768x960',
+    });
+    assert.equal(form?.get('size'), '768x960');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -299,6 +337,34 @@ test('replay outputs are isolated and cost arithmetic stays integer', async () =
   assert.ok(catalogFixtureCoverage.includes('high-quality'));
 });
 
+test('prices each detection token class at its captured rate', () => {
+  assert.deepEqual(
+    calculateDetectionCostLedger(
+      {
+        inputTokens: 100,
+        cachedInputTokens: 10,
+        cacheWriteInputTokens: 20,
+        outputTokens: 50,
+      },
+      {
+        model: 'gpt-5.6-luna',
+        effectiveDate: '2026-07-30',
+        inputMicrodollarsPerMillion: 200_000,
+        cachedInputMicrodollarsPerMillion: 20_000,
+        cacheWriteInputMicrodollarsPerMillion: 250_000,
+        outputMicrodollarsPerMillion: 1_200_000,
+      },
+    ),
+    {
+      inputMicrounits: 14,
+      cachedInputMicrounits: 1,
+      cacheWriteInputMicrounits: 5,
+      outputMicrounits: 60,
+      totalMicrounits: 80,
+    },
+  );
+});
+
 test('classifies transient and non-retryable provider failures', async () => {
   const originalFetch = globalThis.fetch;
   const jpegBytes = await sharp({
@@ -315,7 +381,7 @@ test('classifies transient and non-retryable provider failures', async () => {
     await assert.rejects(
       new OpenAICatalogProvider('test-key').detect({
         jpegBytes,
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
       }),
       (error: unknown) =>
         error instanceof CatalogProviderError && error.category === 'rate-limit' && error.retryable,
@@ -333,7 +399,7 @@ test('classifies transient and non-retryable provider failures', async () => {
     await assert.rejects(
       new OpenAICatalogProvider('test-key').detect({
         jpegBytes,
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
       }),
       (error: unknown) =>
         error instanceof CatalogProviderError &&
@@ -367,10 +433,14 @@ test('look planning includes the occasion while keeping exact items mandatory', 
     assert.match(prompt, /Occasion: "party"/);
     assert.match(prompt, /Exact: \["chosen"\]/);
     assert.deepEqual(result.itemIds, ['chosen', 'complement']);
+    // Dropping a mandated item is a bad sample, not a permanent failure.
     await assert.rejects(provider.planLook({
       candidates: [{ id: 'chosen', metadata }, { id: 'complement', metadata }, { id: 'missing', metadata }],
       recent: [], exactItemIds: ['missing'], categories: [], occasion: 'business', model: 'fixture',
-    }), /invalid Look plan/);
+    }), (error) =>
+      error instanceof CatalogProviderError &&
+      error.retryable &&
+      /1 mandated item\(s\) missing/.test(error.message));
   } finally {
     globalThis.fetch = originalFetch;
   }

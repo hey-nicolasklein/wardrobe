@@ -203,7 +203,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
   const lifetimeSeconds = resolved.sessionLifetimeSeconds ?? 60 * 60 * 24 * 30;
   const secureCookies = resolved.secureCookies ?? true;
   const publicOrigin = resolved.publicOrigin;
-  const detectionModel = resolved.detectionModel ?? 'gpt-5.4-mini';
+  const detectionModel = resolved.detectionModel ?? 'gpt-5.6-luna';
 
   function publicUrl(path: string, requestUrl: string): URL {
     return new URL(path, publicOrigin ?? requestUrl);

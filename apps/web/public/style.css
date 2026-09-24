@@ -14,7 +14,8 @@
      Papier abgesetzt, dass die Karte als eigener Block liest. */
   --card-chrome: #e9e8dc;
   --cost-looks: #344d3f;
-  --cost-sheets: #9aab7d;
+  --cost-wardrobe: #667f61;
+  --cost-detection: #c39a62;
   --paper: #fff;
   --serif: ui-serif, Georgia, serif;
   /* Überschwingende Kurve: Elemente schießen leicht über ihr Ziel hinaus und
@@ -1441,6 +1442,110 @@ dialog:not([open])::backdrop {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+.state-choice {
+  min-width: 0;
+  margin: 16px 0 7px;
+  padding: 0;
+  border: 0;
+}
+.state-choice legend {
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.state-choice-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  margin-top: 7px;
+  padding: 3px;
+  border-radius: 12px;
+  background: #eaece5;
+}
+.state-choice-archived .state-choice-options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.state-choice-options label {
+  position: relative;
+  display: block;
+  margin: 0;
+  min-width: 0;
+  cursor: pointer;
+}
+.state-choice-options input {
+  position: absolute;
+  opacity: 0;
+}
+.state-choice-options span {
+  display: grid;
+  min-height: 42px;
+  place-items: center;
+  padding: 7px 5px;
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  transition: background 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+}
+.state-choice-options input:checked + span {
+  background: white;
+  box-shadow: 0 1px 3px #2429231a;
+  color: var(--green);
+}
+.state-choice-options input:focus-visible + span {
+  outline: 3px solid #869b7e;
+  outline-offset: 2px;
+}
+.detail-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 4px 0 20px;
+}
+.detail-state-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.detail-state-options {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #eaece5;
+}
+.detail-state-options button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  transition: background 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+}
+.detail-state-options .icon {
+  width: 20px;
+  height: 20px;
+}
+.detail-state-options button[aria-pressed='true'] {
+  background: var(--green);
+  box-shadow: 0 2px 5px #2429231a;
+  color: white;
+}
+.detail-state-options button:disabled {
+  opacity: 0.7;
+}
+@media (prefers-reduced-motion: reduce) {
+  .detail-state-options button {
+    transition: none;
+  }
 }
 .rule {
   height: 1px;
