@@ -189,6 +189,11 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     context.json({ service: 'form-api', status: 'ready', contractVersion }),
   );
 
+  app.get('/v1/meta', (context) => {
+    context.header('Cache-Control', 'no-store');
+    return context.json({ service: 'form-api', contractVersion });
+  });
+
   app.get('/health/live', (context) => context.json({ service: 'form-api', status: 'alive' }));
 
   app.get('/health/ready', async (context) => {

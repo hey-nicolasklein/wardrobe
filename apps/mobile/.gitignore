@@ -1,0 +1,10 @@
+.dart_tool/
+.fvm/
+.idea/
+build/
+*.iml
+.flutter-plugins-dependencies
+.env*
+!.env.example
+coverage/
+ios/Flutter/Signing.local.xcconfig

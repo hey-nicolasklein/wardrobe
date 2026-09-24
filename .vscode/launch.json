@@ -1,0 +1,31 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FORM \u00b7 Development",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/apps/mobile",
+      "program": "${workspaceFolder}/apps/mobile/lib/main.dart",
+      "toolArgs": [
+        "--flavor",
+        "development",
+        "--dart-define-from-file",
+        ".env.development.json"
+      ]
+    },
+    {
+      "name": "FORM \u00b7 Production",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/apps/mobile",
+      "program": "${workspaceFolder}/apps/mobile/lib/main.dart",
+      "toolArgs": [
+        "--flavor",
+        "production",
+        "--dart-define-from-file",
+        ".env.production.json"
+      ]
+    }
+  ]
+}
