@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/collection_counts_cubit.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
+import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 
 class ConnectionGate extends StatelessWidget {
@@ -39,9 +40,11 @@ class ConnectionGate extends StatelessWidget {
         ),
         ConnectionStatus.ready => (LocaleKeys.connected, null),
       };
-      final hasCache = context.watch<CollectionCountsCubit>().state.values.any(
-        (value) => value.value != null,
-      );
+      final hasCache =
+          context.watch<WardrobeCubit>().state.items != null ||
+          context.watch<CollectionCountsCubit>().state.values.any(
+            (value) => value.value != null,
+          );
       final showShell =
           status == ConnectionStatus.ready ||
           (hasCache &&

@@ -1,0 +1,70 @@
+Map<String, dynamic> itemJson({
+  String id = 'wardrobe-item-0001',
+  String state = 'owning',
+  int version = 3,
+}) => {
+  'id': id,
+  'sourcePhotoId': 'source-photo-0001',
+  'state': state,
+  'status': 'ready',
+  'metadata': {
+    'name': 'Linen shirt',
+    'category': 'top',
+    'colors': ['navy', 'weiß'],
+    'notes': 'Summer',
+  },
+  'currentShelfImageVersionId': 'shelf-version-01',
+  'recordVersion': version,
+  'createdAt': '2026-09-01T10:00:00.000Z',
+  'updatedAt': '2026-09-02T10:00:00.000Z',
+};
+
+Map<String, dynamic> detailJson({
+  String generation = 'kept',
+  int version = 3,
+}) => {
+  'wardrobeItem': itemJson(version: version),
+  'sourcePhoto': {
+    'id': 'source-photo-0001',
+    'assetId': 'source-asset-0001',
+    'createdAt': '2026-09-01T10:00:00.000Z',
+  },
+  'shelfImageVersions': [
+    {
+      'id': 'shelf-version-01',
+      'wardrobeItemId': 'wardrobe-item-0001',
+      'generationAttemptId': 'generation-00001',
+      'keyedAssetId': 'keyed-asset-0001',
+      'transparentAssetId': 'transparent-0001',
+      'quality': 'low',
+      'size': '816x816',
+      'promptVersion': '1',
+      'keptAt': '2026-09-02T10:00:00.000Z',
+    },
+  ],
+  'generationAttempts': [
+    {
+      'id': 'generation-00001',
+      'wardrobeItemId': 'wardrobe-item-0001',
+      'sourcePhotoId': 'source-photo-0001',
+      'detectionProposalId': null,
+      'state': generation,
+      'reviewedMetadata': itemJson()['metadata'],
+      'model': 'test-model',
+      'quality': 'low',
+      'size': '816x816',
+      'promptVersion': '1',
+      'parentShelfImageVersionId': null,
+      'feedback': null,
+      'keyedAssetId': 'keyed-asset-0001',
+      'transparentAssetId': 'transparent-0001',
+      'providerRequestId': null,
+      'costMicrounits': null,
+      'usage': null,
+      'costBreakdown': null,
+      'failureCategory': generation == 'failed' ? 'provider' : null,
+      'createdAt': '2026-09-02T10:00:00.000Z',
+      'finishedAt': null,
+    },
+  ],
+};

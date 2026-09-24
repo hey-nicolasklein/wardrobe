@@ -1,8 +1,8 @@
-# FORM mobile, slice 1
+# FORM mobile, slices 1–2
 
-Flutter 3.44.9, iOS 16+, Android 10+. This slice contains the native shell,
-connection gate, language selection, persistent tab stacks, and cached collection
-counts. Clothing, images, looks, and editing arrive in the following slices.
+Flutter 3.44.9, iOS 16+, Android 10+. The app includes the native shell, connection gate, language selection, persistent
+tab stacks, and the wardrobe lifecycle. Intake, Feed/Looks, and character references
+remain in the following slices.
 
 ## Run here
 
@@ -33,18 +33,42 @@ machine already has that ignored signing file. The flavor determines the bundle
 identifier and environment. Production requires HTTPS. Development permits a
 local HTTP API. Configuration contains only the API URL, never a password.
 
-## Validate this slice
+## Validate wardrobe on iOS
 
-1. Launch online. Feed and Wardrobe show empty or loaded counts from your server.
-2. Open **Data status** in each tab and **Private server** in Settings. Switch
-   between tabs and verify that each nested page stays open.
-3. Change the language in Settings. Restart and verify it persists and opens Feed.
-4. After a successful load, disconnect Tailscale and return to the app. Cached
-   counts stay visible with a read-only stale indicator. Reconnect and pull to
-   refresh. A first launch without cache shows a blocking connection state.
-5. Verify that no item creation, edit, deletion, or reset controls exist yet.
+1. Launch online and open Wardrobe. Check the recency order, Owning/Wanting,
+   category and color combinations, localized search, counts, and filter reset.
+2. Open an item and let its images load. Edit metadata and collection state.
+   Return to the grid and verify the server's result appears.
+3. Request a catalog image, select quality, and add improvement feedback when
+   an image exists. Refresh to see durable server progress and automatic adoption.
+   Leave/reopen the item while processing. Restore an older image afterward.
+4. Archive an item. Open Settings → Archive and restore it to Owning or Wanting.
+   Confirm deletion only with an item you intend to delete.
+5. After synchronization, disconnect the server. Cached grid items, opened
+   details, and downloaded media remain available. Mutations are disabled.
+   Refresh failure preserves the saved content. Reconnect and refresh to resume.
+6. Switch German/English and restart. Check persisted language and the Feed
+   cold-start destination. Independent branch stacks survive tab switches.
 
-No automated widget, integration, golden, or end-to-end tests are included.
+Nico performs device validation. Automated coverage remains unit tests only.
+Checks use in-memory SQLite and synthetic HTTP responses, without wardrobe data
+or a running API. No production access is needed.
+
+## Wardrobe implementation
+
+`WardrobeRepository` owns versioned item/detail snapshots and authoritative
+commands. `WardrobeCubit` coordinates the shared active/archive collection and
+startup/foreground refresh. Item state is route-scoped in `ItemCubit`.
+A failed uncertain command retains its key for an explicit retry after a successful
+refresh. Generation runs on the server and refreshes every three seconds while work is
+running and the app is in the foreground, manually, or on foreground return.
+Polling stops when the app leaves the foreground.
+
+Media uses the existing preview endpoint for the grid and signed asset downloads
+for full images. The 200 MiB file cache has server-scoped identities, access-time
+indexing, LRU eviction, and a protection flag for drafts/active operations.
+`MediaRepository.clearDownloaded()` is the primitive for the later Settings UI.
+Previously downloaded bytes can be read offline until evicted or cleared.
 
 ## Local checks and generation
 
@@ -59,9 +83,9 @@ fvm flutter test
 ```
 
 Commit generated DTOs, Drift code, localization keys, and `pubspec.lock` together
-with their sources. The schema is version 1: preferences, server-scoped collection
-summaries, and a media index with immutable asset identity, byte size, access time,
-and protection flag. Actual media downloads and eviction belong to slice 2.
+with their sources. Schema version 2 adds server-scoped item/detail snapshots to the foundation
+tables. The migration preserves existing preferences, summaries, and protected
+media. DTOs are generated with required fields and checked parsing.
 
 Repositories own network and cache access. `CachedRepository` emits cached values
 before refreshing and preserves them only on availability failures. Authentication

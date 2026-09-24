@@ -37,7 +37,24 @@ class MediaCacheEntries extends Table {
   Set<Column<Object>> get primaryKey => {scope, assetId};
 }
 
-@DriftDatabase(tables: [Preferences, CollectionSummaries, MediaCacheEntries])
+class WardrobeRecords extends Table {
+  TextColumn get scope => text()();
+  TextColumn get id => text()();
+  TextColumn get itemJson => text()();
+  TextColumn get detailJson => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {scope, id};
+}
+
+@DriftDatabase(
+  tables: [
+    Preferences,
+    CollectionSummaries,
+    MediaCacheEntries,
+    WardrobeRecords,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
@@ -51,7 +68,15 @@ class AppDatabase extends _$AppDatabase {
   );
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      if (from < 2) await m.createTable(wardrobeRecords);
+    },
+  );
 
   Future<String?> preference(String key) async => (await (select(
     preferences,

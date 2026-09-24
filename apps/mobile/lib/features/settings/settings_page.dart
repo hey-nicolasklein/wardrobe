@@ -48,6 +48,12 @@ class SettingsPage extends StatelessWidget {
         ),
         const Divider(),
         ListTile(
+          leading: const Icon(Icons.archive_outlined),
+          title: Text(context.tr(LocaleKeys.archive)),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => context.push('/settings/archive'),
+        ),
+        ListTile(
           leading: const Icon(Icons.dns_outlined),
           title: Text(context.tr(LocaleKeys.server)),
           trailing: const Icon(Icons.chevron_right),

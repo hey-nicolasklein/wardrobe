@@ -8,6 +8,7 @@ import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/connection_gate.dart';
 import 'package:form_mobile/app/form_theme.dart';
 import 'package:form_mobile/features/settings/language_cubit.dart';
+import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/navigation/app_router.dart';
 import 'package:form_mobile/repository/collection_counts_repository.dart';
@@ -29,6 +30,9 @@ class _FormAppState extends State<FormApp> {
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(
+      onStateChange: (state) => context.read<WardrobeCubit>().setForeground(
+        foreground: state == AppLifecycleState.resumed,
+      ),
       onResume: () => unawaited(context.read<ConnectionCubit>().check()),
     );
     unawaited(context.read<ConnectionCubit>().check());
@@ -43,11 +47,16 @@ class _FormAppState extends State<FormApp> {
       await Future.wait([
         if (initial || path.startsWith('/feed'))
           collectionCounts.refresh(Collection.feed),
-        if (initial || path.startsWith('/wardrobe'))
+        if (initial ||
+            path.startsWith('/wardrobe') ||
+            path.startsWith('/settings/archive')) ...[
           collectionCounts.refresh(Collection.wardrobe),
+          context.read<WardrobeCubit>().refresh(),
+        ],
       ]);
     } else if (status == ConnectionStatus.unavailable) {
       collectionCounts.markUnavailable();
+      context.read<WardrobeCubit>().markUnavailable();
     }
   }
 

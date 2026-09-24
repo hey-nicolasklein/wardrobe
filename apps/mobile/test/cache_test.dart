@@ -65,7 +65,7 @@ void main() {
   });
 
   test(
-    'schema v1 persists isolated collection summaries and media index',
+    'schema v2 persists isolated summaries, wardrobe and media',
     () async {
       final database = AppDatabase(NativeDatabase.memory());
       addTearDown(database.close);
@@ -78,12 +78,13 @@ void main() {
           'preferences',
           'collection_summaries',
           'media_cache_entries',
+          'wardrobe_records',
         ]),
       );
       final version = await database
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.read<int>('user_version'), 1);
+      expect(version.read<int>('user_version'), 2);
       final first = CollectionCountsRepository(database, null, 'server-a');
       final second = CollectionCountsRepository(database, null, 'server-b');
       await first.collection(Collection.feed).writeCache(0);

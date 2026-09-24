@@ -63,38 +63,63 @@ endpoint correctly produces the incompatibility screen.
 
 ## Wardrobe and archive
 
-- [ ] `W2` Active items appear in a responsive image grid ordered by recency.
-- [ ] `W2` All, Owning, and Wanting filters match the baseline.
-- [ ] `W2` Category filters support every contract category.
-- [ ] `W2` Color-family filters match the baseline family mappings.
-- [ ] `W2` Category and color filters combine correctly.
-- [ ] `W2` Search covers names, localized category labels, colors, and notes.
-- [ ] `W2` Active filter chips can be removed individually or reset together.
-- [ ] `W2` Loading, empty, filtered-empty, populated, generating, failed, stale,
+- [x] `W2` Active items appear in a responsive image grid ordered by recency.
+- [x] `W2` All, Owning, and Wanting filters match the baseline.
+- [x] `W2` Category filters support every contract category.
+- [x] `W2` Color-family filters match the baseline family mappings.
+- [x] `W2` Category and color filters combine correctly.
+- [x] `W2` Search covers names, localized category labels, colors, and notes.
+- [x] `W2` Active filter chips can be removed individually or reset together.
+- [x] `W2` Loading, empty, filtered-empty, populated, generating, failed, stale,
       and offline states are represented.
-- [ ] `W2` Pull-to-refresh updates the cache without discarding usable stale data
+- [x] `W2` Pull-to-refresh updates the cache without discarding usable stale data
       after a failure.
-- [ ] `W2` Grid thumbnails are prefetched and available offline after caching.
-- [ ] `W2` Settings opens the archive and archived items can be restored.
+- [x] `W2` Grid thumbnails are prefetched and available offline after caching.
+- [x] `W2` Settings opens the archive and archived items can be restored.
 
 ## Item details and lifecycle
 
-- [ ] `W2` Details show name, category, colors, notes, and collection state.
-- [ ] `W2` Details show the current catalog image and original source photo.
+- [x] `W2` Details show name, category, colors, notes, and collection state.
+- [x] `W2` Details show the current catalog image and original source photo.
 - [ ] `L4` Details include the item's appearances in ready looks.
-- [ ] `W2` Cached details and media remain browseable offline.
-- [ ] `W2` Online editing validates and saves metadata.
-- [ ] `W2` Online editing moves items between Owning and Wanting.
+- [x] `W2` Cached details and media remain browseable offline.
+- [x] `W2` Online editing validates and saves metadata.
+- [x] `W2` Online editing moves items between Owning and Wanting.
 - [ ] `L4` Inspiration opens the look composer with the item preselected.
-- [ ] `W2` Running catalog generation shows durable progress and manual refresh.
-- [ ] `W2` New catalog generation supports Low, Medium, and High quality.
-- [ ] `W2` Catalog improvement accepts baseline suggestions and free text.
-- [ ] `W2` Successful new catalog images are adopted automatically.
-- [ ] `W2` Immutable catalog versions are shown and an older version can be
+- [x] `W2` Running catalog generation shows durable progress and manual refresh.
+- [x] `W2` New catalog generation supports Low, Medium, and High quality.
+- [x] `W2` Catalog improvement accepts baseline suggestions and free text.
+- [x] `W2` Successful new catalog images are adopted automatically.
+- [x] `W2` Immutable catalog versions are shown and an older version can be
       restored.
-- [ ] `W2` Items can be archived and restored online.
-- [ ] `W2` Permanent deletion uses a native confirmation and updates the cache
+- [x] `W2` Items can be archived and restored online.
+- [x] `W2` Permanent deletion uses a native confirmation and updates the cache
       after server success.
+
+### W2 evidence and validation handoff
+
+Implemented in `apps/mobile`, with manual iOS steps in its `README.md`.
+
+- `WardrobePage`, `WardrobeFilter`, and `WardrobeCubit` cover the responsive grid,
+  baseline recency and color families, combined filters, localized search, counts,
+  empty states, cached startup, pull refresh, archive, and foreground updates.
+- `ItemPage`, `ItemEdit`, and `ItemCubit` cover metadata validation, collection
+  changes, source/catalog media, quality and feedback, foreground-only generation
+  refresh, history restoration, archive, and confirmed permanent deletion.
+- Checked, immutable DTOs preserve record versions and asset identifiers. Drift
+  schema v2 persists item/detail snapshots and preserves foundation data on upgrade.
+- Successful mutations update the authoritative snapshot and notify the collection
+  directly. Failed requests preserve usable cached content. Uncertain command
+  retries reuse their idempotency key and block competing new commands.
+- `MediaRepository` prefetches versioned thumbnails and downloads full assets on
+  demand, with a 200 MiB LRU budget, protected files, immediate offline reads, and
+  a downloaded-cache clear primitive for S6. Cache availability is bounded by
+  eviction and explicit clearing. Details are cached when opened.
+- Unit tests cover parsing/serialization, immutable mappings, filters, generation
+  state and foreground polling, stale refresh, mutation cache updates, retry keys,
+  media indexing/access/eviction/protection, and the v1-to-v2 migration.
+- Validation: `fvm flutter analyze` passes and all 49 unit tests pass. No API or
+  PWA changes were needed. Manual iOS verification remains with Nico.
 
 ## Clothing intake
 

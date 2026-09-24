@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:form_mobile/models/server_info.dart';
 
@@ -88,6 +90,38 @@ class FormApi {
       throw const FormApiException(ApiFailure.incompatible);
     }
     return records.length;
+  }
+
+  Future<Map<String, dynamic>> request(
+    String path, {
+    String method = 'GET',
+    Map<String, dynamic>? data,
+  }) async {
+    try {
+      final response = await _dio.request<Object?>(
+        path,
+        data: data,
+        options: Options(method: method),
+      );
+      if (response.data is! Map<String, dynamic>) {
+        throw const FormApiException(ApiFailure.incompatible);
+      }
+      return response.data! as Map<String, dynamic>;
+    } on DioException catch (error) {
+      throw FormApiException(mapFailure(error));
+    }
+  }
+
+  Future<Uint8List> bytes(String path) async {
+    try {
+      final response = await _dio.get<List<int>>(
+        path,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return Uint8List.fromList(response.data!);
+    } on DioException catch (error) {
+      throw FormApiException(mapFailure(error));
+    }
   }
 
   void close() => _dio.close();

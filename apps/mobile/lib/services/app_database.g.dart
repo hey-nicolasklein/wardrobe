@@ -951,6 +951,317 @@ class MediaCacheEntriesCompanion extends UpdateCompanion<MediaCacheEntry> {
   }
 }
 
+class $WardrobeRecordsTable extends WardrobeRecords
+    with TableInfo<$WardrobeRecordsTable, WardrobeRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WardrobeRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _scopeMeta = const VerificationMeta('scope');
+  @override
+  late final GeneratedColumn<String> scope = GeneratedColumn<String>(
+    'scope',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _itemJsonMeta = const VerificationMeta(
+    'itemJson',
+  );
+  @override
+  late final GeneratedColumn<String> itemJson = GeneratedColumn<String>(
+    'item_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _detailJsonMeta = const VerificationMeta(
+    'detailJson',
+  );
+  @override
+  late final GeneratedColumn<String> detailJson = GeneratedColumn<String>(
+    'detail_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [scope, id, itemJson, detailJson];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'wardrobe_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<WardrobeRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('scope')) {
+      context.handle(
+        _scopeMeta,
+        scope.isAcceptableOrUnknown(data['scope']!, _scopeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scopeMeta);
+    }
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('item_json')) {
+      context.handle(
+        _itemJsonMeta,
+        itemJson.isAcceptableOrUnknown(data['item_json']!, _itemJsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_itemJsonMeta);
+    }
+    if (data.containsKey('detail_json')) {
+      context.handle(
+        _detailJsonMeta,
+        detailJson.isAcceptableOrUnknown(data['detail_json']!, _detailJsonMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {scope, id};
+  @override
+  WardrobeRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return WardrobeRecord(
+      scope: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scope'],
+      )!,
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      itemJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}item_json'],
+      )!,
+      detailJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}detail_json'],
+      ),
+    );
+  }
+
+  @override
+  $WardrobeRecordsTable createAlias(String alias) {
+    return $WardrobeRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class WardrobeRecord extends DataClass implements Insertable<WardrobeRecord> {
+  final String scope;
+  final String id;
+  final String itemJson;
+  final String? detailJson;
+  const WardrobeRecord({
+    required this.scope,
+    required this.id,
+    required this.itemJson,
+    this.detailJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['scope'] = Variable<String>(scope);
+    map['id'] = Variable<String>(id);
+    map['item_json'] = Variable<String>(itemJson);
+    if (!nullToAbsent || detailJson != null) {
+      map['detail_json'] = Variable<String>(detailJson);
+    }
+    return map;
+  }
+
+  WardrobeRecordsCompanion toCompanion(bool nullToAbsent) {
+    return WardrobeRecordsCompanion(
+      scope: Value(scope),
+      id: Value(id),
+      itemJson: Value(itemJson),
+      detailJson: detailJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(detailJson),
+    );
+  }
+
+  factory WardrobeRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return WardrobeRecord(
+      scope: serializer.fromJson<String>(json['scope']),
+      id: serializer.fromJson<String>(json['id']),
+      itemJson: serializer.fromJson<String>(json['itemJson']),
+      detailJson: serializer.fromJson<String?>(json['detailJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'scope': serializer.toJson<String>(scope),
+      'id': serializer.toJson<String>(id),
+      'itemJson': serializer.toJson<String>(itemJson),
+      'detailJson': serializer.toJson<String?>(detailJson),
+    };
+  }
+
+  WardrobeRecord copyWith({
+    String? scope,
+    String? id,
+    String? itemJson,
+    Value<String?> detailJson = const Value.absent(),
+  }) => WardrobeRecord(
+    scope: scope ?? this.scope,
+    id: id ?? this.id,
+    itemJson: itemJson ?? this.itemJson,
+    detailJson: detailJson.present ? detailJson.value : this.detailJson,
+  );
+  WardrobeRecord copyWithCompanion(WardrobeRecordsCompanion data) {
+    return WardrobeRecord(
+      scope: data.scope.present ? data.scope.value : this.scope,
+      id: data.id.present ? data.id.value : this.id,
+      itemJson: data.itemJson.present ? data.itemJson.value : this.itemJson,
+      detailJson: data.detailJson.present
+          ? data.detailJson.value
+          : this.detailJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WardrobeRecord(')
+          ..write('scope: $scope, ')
+          ..write('id: $id, ')
+          ..write('itemJson: $itemJson, ')
+          ..write('detailJson: $detailJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(scope, id, itemJson, detailJson);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WardrobeRecord &&
+          other.scope == this.scope &&
+          other.id == this.id &&
+          other.itemJson == this.itemJson &&
+          other.detailJson == this.detailJson);
+}
+
+class WardrobeRecordsCompanion extends UpdateCompanion<WardrobeRecord> {
+  final Value<String> scope;
+  final Value<String> id;
+  final Value<String> itemJson;
+  final Value<String?> detailJson;
+  final Value<int> rowid;
+  const WardrobeRecordsCompanion({
+    this.scope = const Value.absent(),
+    this.id = const Value.absent(),
+    this.itemJson = const Value.absent(),
+    this.detailJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  WardrobeRecordsCompanion.insert({
+    required String scope,
+    required String id,
+    required String itemJson,
+    this.detailJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : scope = Value(scope),
+       id = Value(id),
+       itemJson = Value(itemJson);
+  static Insertable<WardrobeRecord> custom({
+    Expression<String>? scope,
+    Expression<String>? id,
+    Expression<String>? itemJson,
+    Expression<String>? detailJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (scope != null) 'scope': scope,
+      if (id != null) 'id': id,
+      if (itemJson != null) 'item_json': itemJson,
+      if (detailJson != null) 'detail_json': detailJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  WardrobeRecordsCompanion copyWith({
+    Value<String>? scope,
+    Value<String>? id,
+    Value<String>? itemJson,
+    Value<String?>? detailJson,
+    Value<int>? rowid,
+  }) {
+    return WardrobeRecordsCompanion(
+      scope: scope ?? this.scope,
+      id: id ?? this.id,
+      itemJson: itemJson ?? this.itemJson,
+      detailJson: detailJson ?? this.detailJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (scope.present) {
+      map['scope'] = Variable<String>(scope.value);
+    }
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (itemJson.present) {
+      map['item_json'] = Variable<String>(itemJson.value);
+    }
+    if (detailJson.present) {
+      map['detail_json'] = Variable<String>(detailJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WardrobeRecordsCompanion(')
+          ..write('scope: $scope, ')
+          ..write('id: $id, ')
+          ..write('itemJson: $itemJson, ')
+          ..write('detailJson: $detailJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -959,6 +1270,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $CollectionSummariesTable(this);
   late final $MediaCacheEntriesTable mediaCacheEntries =
       $MediaCacheEntriesTable(this);
+  late final $WardrobeRecordsTable wardrobeRecords = $WardrobeRecordsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -967,6 +1281,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     preferences,
     collectionSummaries,
     mediaCacheEntries,
+    wardrobeRecords,
   ];
 }
 
@@ -1567,6 +1882,204 @@ typedef $$MediaCacheEntriesTableProcessedTableManager =
       MediaCacheEntry,
       PrefetchHooks Function()
     >;
+typedef $$WardrobeRecordsTableCreateCompanionBuilder =
+    WardrobeRecordsCompanion Function({
+      required String scope,
+      required String id,
+      required String itemJson,
+      Value<String?> detailJson,
+      Value<int> rowid,
+    });
+typedef $$WardrobeRecordsTableUpdateCompanionBuilder =
+    WardrobeRecordsCompanion Function({
+      Value<String> scope,
+      Value<String> id,
+      Value<String> itemJson,
+      Value<String?> detailJson,
+      Value<int> rowid,
+    });
+
+class $$WardrobeRecordsTableFilterComposer
+    extends Composer<_$AppDatabase, $WardrobeRecordsTable> {
+  $$WardrobeRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get itemJson => $composableBuilder(
+    column: $table.itemJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get detailJson => $composableBuilder(
+    column: $table.detailJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$WardrobeRecordsTableOrderingComposer
+    extends Composer<_$AppDatabase, $WardrobeRecordsTable> {
+  $$WardrobeRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get itemJson => $composableBuilder(
+    column: $table.itemJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get detailJson => $composableBuilder(
+    column: $table.detailJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$WardrobeRecordsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $WardrobeRecordsTable> {
+  $$WardrobeRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get scope =>
+      $composableBuilder(column: $table.scope, builder: (column) => column);
+
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get itemJson =>
+      $composableBuilder(column: $table.itemJson, builder: (column) => column);
+
+  GeneratedColumn<String> get detailJson => $composableBuilder(
+    column: $table.detailJson,
+    builder: (column) => column,
+  );
+}
+
+class $$WardrobeRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $WardrobeRecordsTable,
+          WardrobeRecord,
+          $$WardrobeRecordsTableFilterComposer,
+          $$WardrobeRecordsTableOrderingComposer,
+          $$WardrobeRecordsTableAnnotationComposer,
+          $$WardrobeRecordsTableCreateCompanionBuilder,
+          $$WardrobeRecordsTableUpdateCompanionBuilder,
+          (
+            WardrobeRecord,
+            BaseReferences<
+              _$AppDatabase,
+              $WardrobeRecordsTable,
+              WardrobeRecord
+            >,
+          ),
+          WardrobeRecord,
+          PrefetchHooks Function()
+        > {
+  $$WardrobeRecordsTableTableManager(
+    _$AppDatabase db,
+    $WardrobeRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WardrobeRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WardrobeRecordsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WardrobeRecordsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> scope = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<String> itemJson = const Value.absent(),
+                Value<String?> detailJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WardrobeRecordsCompanion(
+                scope: scope,
+                id: id,
+                itemJson: itemJson,
+                detailJson: detailJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String scope,
+                required String id,
+                required String itemJson,
+                Value<String?> detailJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => WardrobeRecordsCompanion.insert(
+                scope: scope,
+                id: id,
+                itemJson: itemJson,
+                detailJson: detailJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$WardrobeRecordsTable, WardrobeRecord>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $WardrobeRecordsTable,
+                    WardrobeRecord
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$WardrobeRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $WardrobeRecordsTable,
+      WardrobeRecord,
+      $$WardrobeRecordsTableFilterComposer,
+      $$WardrobeRecordsTableOrderingComposer,
+      $$WardrobeRecordsTableAnnotationComposer,
+      $$WardrobeRecordsTableCreateCompanionBuilder,
+      $$WardrobeRecordsTableUpdateCompanionBuilder,
+      (
+        WardrobeRecord,
+        BaseReferences<_$AppDatabase, $WardrobeRecordsTable, WardrobeRecord>,
+      ),
+      WardrobeRecord,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1577,4 +2090,6 @@ class $AppDatabaseManager {
       $$CollectionSummariesTableTableManager(_db, _db.collectionSummaries);
   $$MediaCacheEntriesTableTableManager get mediaCacheEntries =>
       $$MediaCacheEntriesTableTableManager(_db, _db.mediaCacheEntries);
+  $$WardrobeRecordsTableTableManager get wardrobeRecords =>
+      $$WardrobeRecordsTableTableManager(_db, _db.wardrobeRecords);
 }

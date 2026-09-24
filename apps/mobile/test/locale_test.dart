@@ -17,20 +17,34 @@ void main() {
     },
   );
 
-  test('both shell languages have the same complete keys', () {
+  test('both languages have the same complete leaf keys', () {
     Map<String, dynamic> translations(String language) =>
         jsonDecode(
               File('assets/translations/$language.json').readAsStringSync(),
             )
             as Map<String, dynamic>;
-    final de = translations('de');
-    final en = translations('en');
+    Map<String, String> flatten(
+      Map<String, dynamic> values, [
+      String prefix = '',
+    ]) {
+      final result = <String, String>{};
+      for (final entry in values.entries) {
+        final key = '$prefix${entry.key}';
+        if (entry.value is Map<String, dynamic>) {
+          result.addAll(flatten(entry.value as Map<String, dynamic>, '$key.'));
+        } else {
+          expect(entry.value, isA<String>());
+          result[key] = entry.value as String;
+        }
+      }
+      return result;
+    }
+
+    final de = flatten(translations('de'));
+    final en = flatten(translations('en'));
     expect(de.keys.toSet(), en.keys.toSet());
     expect(
-      [
-        ...de.values,
-        ...en.values,
-      ].every((dynamic value) => value is String && value.isNotEmpty),
+      [...de.values, ...en.values].every((value) => value.isNotEmpty),
       isTrue,
     );
   });

@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
 import 'package:form_mobile/features/settings/settings_page.dart';
+import 'package:form_mobile/features/wardrobe/item_page.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_page.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/widgets/foundation_page.dart';
@@ -55,6 +56,11 @@ GoRouter createRouter() => GoRouter(
               builder: (_, _) => const WardrobePage(),
               routes: [
                 GoRoute(
+                  path: 'items/:id',
+                  builder: (_, state) =>
+                      ItemPage(id: state.pathParameters['id']!),
+                ),
+                GoRoute(
                   path: 'status',
                   builder: (_, _) => const DataStatusPage(),
                 ),
@@ -69,6 +75,17 @@ GoRouter createRouter() => GoRouter(
               builder: (_, _) => const SettingsPage(),
               routes: [
                 GoRoute(path: 'server', builder: (_, _) => const ServerPage()),
+                GoRoute(
+                  path: 'archive',
+                  builder: (_, _) => const WardrobePage(archived: true),
+                  routes: [
+                    GoRoute(
+                      path: 'items/:id',
+                      builder: (_, state) =>
+                          ItemPage(id: state.pathParameters['id']!),
+                    ),
+                  ],
+                ),
               ],
             ),
           ],
