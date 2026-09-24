@@ -1,6 +1,6 @@
 // Coordinates use a 100 × 125 artboard. The same composition is used on screen
 // and in the downloaded image; category and ID make it independent of API order.
-const order = ['hat', 'top', 'dress', 'jacket', 'pants', 'skirt', 'scarf', 'bag', 'shoes'];
+const order = ['hat', 'top', 'dress', 'jacket', 'pants', 'skirt', 'scarf', 'accessory', 'bag', 'shoes'];
 export function flatLayLayout(garments) {
   const sorted = [...garments].sort((a, b) => {
     const rank = (item) => {
@@ -36,18 +36,19 @@ export function flatLayLayout(garments) {
   }
   const dress = kinds.includes('dress');
   const outer = kinds.includes('jacket');
-  const sidePieces = kinds.some((kind) => ['jacket', 'bag', 'scarf', 'hat'].includes(kind));
+  const sidePieces = kinds.some((kind) => ['jacket', 'bag', 'scarf', 'hat', 'accessory'].includes(kind));
   const templates = dress ? {
     dress: [35, 58, 65, -3], jacket: [77, 33, 39, 6],
     top: [76, 29, 37, -4], pants: [76, 66, 36, 3], skirt: [75, 65, 35, 4],
     bag: [77, 77, 29, 7], shoes: [63, 108, 32, -6],
-    hat: [32, 16, 23, -8], scarf: [78, 52, 25, 8],
+    hat: [32, 16, 23, -8], scarf: [78, 52, 25, 8], accessory: [16, 100, 18, -5],
   } : {
     top: [outer ? 30 : sidePieces ? 39 : 50, 30, outer ? 49 : 57, -4],
     jacket: [kinds.includes('top') ? 75 : 36, 34, kinds.includes('top') ? 43 : 58, 5],
     pants: [sidePieces ? 35 : 45, 81, 53, 2], skirt: [sidePieces ? 35 : 45, 79, 51, -3],
     bag: [78, 77, 30, 7], shoes: [72, 109, 31, -6],
     hat: [78, 15, 24, -8], scarf: [78, 53, 26, 8], dress: [35, 60, 65, -3],
+    accessory: [15, 108, 18, -5],
   };
   return sorted.map((item, index) => {
     const [x, y, size, angle] = templates[item.metadata?.category] || [76, 54 + index * 6, 26, 4];

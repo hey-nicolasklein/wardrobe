@@ -26,6 +26,7 @@ export const supportedCategorySchema = z.enum([
   'bag',
   'hat',
   'scarf',
+  'accessory',
 ]);
 
 export const detectionCategorySchema = z.enum([...supportedCategorySchema.options, 'unsupported']);

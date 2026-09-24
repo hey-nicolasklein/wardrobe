@@ -37,6 +37,7 @@ const categories = {
   bag: 'Taschen',
   hat: 'Mützen & Hüte',
   scarf: 'Schals',
+  accessory: 'Accessoires',
 };
 const icons = {
   closet: '<path d="M4 3h16v18H4zM12 3v18M9 11v2m6-2v2"/>',
@@ -788,6 +789,7 @@ async function shareFlatLay(look, download = false) {
 const lookBodyRegions = {
   hat: [40, 5, 20, 15],
   scarf: [39, 22, 22, 22],
+  accessory: [38, 12, 24, 10],
   top: [32, 24, 36, 32],
   jacket: [27, 22, 46, 38],
   dress: [30, 24, 40, 61],
@@ -2192,7 +2194,8 @@ async function checkDetection(draft) {
   draft.phase = 'ready';
   draft.detections = supported.map((proposal) => ({
     ...proposal,
-    selected: true,
+    // Accessories are opt-in so small detections are not saved by accident.
+    selected: proposal.category !== 'accessory',
     itemKey: key(),
     generationKey: key(),
     state: draft.state || 'owning',

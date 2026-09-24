@@ -92,8 +92,8 @@ test('uses strict Responses output and clamps detection boxes', async () => {
     const format = (requestBody?.text as { format: { strict: boolean; schema: unknown } }).format;
     assert.equal(format.strict, true);
     assert.equal((format.schema as { additionalProperties: boolean }).additionalProperties, false);
-    assert.deepEqual(requestBody?.reasoning, { effort: 'none' });
-    assert.equal(requestBody?.max_output_tokens, 3_000);
+    assert.deepEqual(requestBody?.reasoning, { effort: 'low' });
+    assert.equal(requestBody?.max_output_tokens, 8_000);
     const prompt = (
       requestBody?.input as Array<{
         content: Array<{ type: string; text?: string }>;

@@ -115,6 +115,7 @@ const detectionOutputSchema = z
             'bag',
             'hat',
             'scarf',
+            'accessory',
             'unsupported',
           ]),
           colors: z.array(z.string()),
@@ -152,6 +153,7 @@ function detectionJsonSchema() {
                 'bag',
                 'hat',
                 'scarf',
+                'accessory',
                 'unsupported',
               ],
             },
@@ -184,11 +186,11 @@ function detectionJsonSchema() {
 }
 
 function detectionPrompt() {
-  return `Identify every distinct visible clothing item and wearable accessory in this image.
+  return `Identify every distinct visible clothing item and wearable accessory in this image. Only include items worn by the people in focus. Ignore people cut off at the edge of the image or in the background.
 
 Treat screenshots and product grids as multiple pictured instances. Return each separately pictured garment as its own proposal, even when the same product appears more than once. Never merge a main product image with thumbnails, recommendations, captions, or controls.
 
-Return layered garments and small accessories separately. Do not infer hidden items or return materials, tags, notes, masks, or polygons. Propose a concise visible-pixel-supported name and color list. Include the brand and product model in the name when they are clearly identifiable from visible logos, text, or distinctive design features, for example "Nike Air Max 95". Do not guess them when uncertain. Write every name in title case, capitalizing each meaningful word, for example "Black Wide-Leg Pants" or "Oversized Black Jacket with Faux-Fur Leopard Collar". Use category unsupported for a visible wearable outside the supported categories.
+Return layered garments and small accessories separately. Do not infer hidden items or return materials, tags, notes, masks, or polygons. Propose a concise visible-pixel-supported name and color list. Include the brand and product model in the name when they are clearly identifiable from visible logos, text, or distinctive design features, for example "Nike Air Max 95". Do not guess them when uncertain. Write every name in title case, capitalizing each meaningful word, for example "Black Wide-Leg Pants" or "Oversized Black Jacket with Faux-Fur Leopard Collar". Use category accessory for glasses, jewelry, watches, belts, gloves, and similar worn accessories. Only return an accessory when it is clearly visible and large enough to recognize; skip tiny, blurry, or mostly hidden ones. Use category unsupported for a visible wearable outside the supported categories.
 
 For every bounding box, locate the outermost visible pixels of exactly one garment. Use a tight box with at most 2% padding and exclude captions, controls, cards, background, and other garments. Return normalized integer coordinates in the standard order top, left, bottom, right, where the image spans 0 to 1000 on both axes and the origin is the top-left corner. Before responding, verify that the center of each box lies on its named garment and that the box does not group multiple pictured instances.`;
 }
@@ -208,7 +210,9 @@ export function buildShelfImagePrompt(
   const presentation =
     metadata.category === 'shoes'
       ? 'For a pair of shoes, show both shoes. Place the right shoe upright on its sole, facing upward in the composition so its top and opening are visible. Place the left shoe immediately to its left, laid on its outer side to show its side profile. Keep both shoes fully visible, at the same scale, and naturally paired.'
-      : 'Present the garment laid flat, viewed straight from above, centered, with generous even padding.';
+      : metadata.category === 'accessory'
+        ? 'Present the accessory as a product still life viewed from the front or slightly above, centered and filling most of the frame, with generous even padding. Show glasses unfolded facing the viewer, and chains, bracelets, and belts in a loose natural arrangement.'
+        : 'Present the garment laid flat, viewed straight from above, centered, with generous even padding.';
   const referenceGuidance = refinement
     ? `\nCORRECTION TASK\n- The first image is the original source and is the ground truth for the garment.\n- The second image is the earlier catalog render. It contains a known defect and must not be copied unchanged.\n- The user reports this defect: "${refinement.feedback || 'The earlier render is not faithful enough to the original source.'}"\n- Compare the reported area or property directly with the original source, then visibly correct it in the new image. A result that repeats the reported defect has failed the task.\n- Preserve unaffected parts of the earlier layout only after making the requested correction. Never preserve an earlier-render detail that conflicts with the source.\n- The feedback identifies what to inspect. It does not permit a new garment design. The original source wins every conflict.\n`
     : '';
@@ -361,8 +365,10 @@ export class OpenAICatalogProvider implements CatalogProvider {
         body: JSON.stringify({
           model: input.model,
           store: false,
-          reasoning: { effort: 'none' },
-          max_output_tokens: 3_000,
+          // Without reasoning, small accessories on tall photos land well below
+          // their real position, and the shelf image is then built from the wrong crop.
+          reasoning: { effort: 'low' },
+          max_output_tokens: 8_000,
           input: [
             {
               role: 'user',
