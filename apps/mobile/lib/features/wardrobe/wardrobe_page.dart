@@ -460,15 +460,16 @@ class _WardrobePageState extends State<WardrobePage> {
                                                     switchInCurve:
                                                         FormTokens.easeOut,
                                                     layoutBuilder:
-                                                        (current, previous) =>
-                                                            Stack(
-                                                              fit: StackFit
-                                                                  .expand,
-                                                              children: [
-                                                                ...previous,
-                                                                ?current,
-                                                              ],
-                                                            ),
+                                                        (
+                                                          current,
+                                                          previous,
+                                                        ) => Stack(
+                                                          fit: StackFit.expand,
+                                                          children: [
+                                                            ...previous,
+                                                            ?current,
+                                                          ],
+                                                        ),
                                                     child: generating
                                                         ? _GeneratingTile(
                                                             key: const ValueKey(
