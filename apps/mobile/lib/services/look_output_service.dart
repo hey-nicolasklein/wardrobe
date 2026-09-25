@@ -45,20 +45,48 @@ class LookOutputService {
 
   final MediaRepository media;
 
+  /// The worn photo as a temporary image file. The media cache stores
+  /// extensionless `.media` files, which the share sheet and Photos would not
+  /// recognise as images.
   Future<File> _wornFile(Look look) async {
     final assetId = look.assetId;
-    final file = assetId == null
+    final cached = assetId == null
         ? null
         : await media.load(assetId, previewPath: 'v1/assets/$assetId/content');
-    if (file == null) {
+    if (cached == null) {
       throw const LookOutputException(LookOutputFailure.missingImage);
     }
+    final bytes = await cached.readAsBytes();
+    final directory = await getTemporaryDirectory();
+    final file = File(
+      '${directory.path}/form-look-${look.id}.${_imageExtension(bytes)}',
+    );
+    await file.writeAsBytes(bytes, flush: true);
     return file;
   }
 
-  Future<void> shareWorn(Look look, {required String caption}) async {
+  static String _imageExtension(Uint8List bytes) {
+    bool startsWith(List<int> magic) =>
+        bytes.length >= magic.length &&
+        Iterable<int>.generate(magic.length).every((i) => bytes[i] == magic[i]);
+    if (startsWith(const [0x89, 0x50, 0x4E, 0x47])) return 'png';
+    if (startsWith(const [0x52, 0x49, 0x46, 0x46])) return 'webp';
+    return 'jpg';
+  }
+
+  /// [origin] is the global rect of the tapped share control. iOS presents
+  /// the share sheet as a popover anchored to it and refuses to open without.
+  Future<void> shareWorn(
+    Look look, {
+    required String caption,
+    required Rect origin,
+  }) async {
     final file = await _wornFile(look);
-    await Share.shareXFiles([XFile(file.path)], text: caption);
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: caption,
+      sharePositionOrigin: origin,
+    );
   }
 
   Future<void> saveWorn(Look look) async =>
@@ -69,9 +97,14 @@ class LookOutputService {
     List<LookGarment> garments,
     FlatLayLabels labels, {
     required String caption,
+    required Rect origin,
   }) async {
     final file = await _flatLayFile(look, garments, labels);
-    await Share.shareXFiles([XFile(file.path)], text: caption);
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: caption,
+      sharePositionOrigin: origin,
+    );
   }
 
   Future<void> saveFlatLay(

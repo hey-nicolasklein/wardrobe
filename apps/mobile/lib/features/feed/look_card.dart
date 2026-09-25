@@ -41,7 +41,8 @@ class LookCard extends StatefulWidget {
   final VoidCallback onDelete;
 
   /// Shares the representation the card currently shows.
-  final VoidCallback onShare;
+  /// Receives the share button's global rect, which anchors the share sheet.
+  final ValueChanged<Rect> onShare;
   final VoidCallback onMenu;
 
   @override
@@ -174,12 +175,21 @@ class _LookCardState extends State<LookCard> {
                               color: liked ? FormTokens.liked : FormTokens.ink,
                             ),
                           ),
-                          _FooterAction(
-                            onPressed: widget.onShare,
-                            tooltip: context.tr(LocaleKeys.lookShare),
-                            icon: const FormIcon(
-                              FormIconName.share,
-                              color: FormTokens.ink,
+                          Builder(
+                            builder: (buttonContext) => _FooterAction(
+                              onPressed: () {
+                                final box =
+                                    buttonContext.findRenderObject()!
+                                        as RenderBox;
+                                widget.onShare(
+                                  box.localToGlobal(Offset.zero) & box.size,
+                                );
+                              },
+                              tooltip: context.tr(LocaleKeys.lookShare),
+                              icon: const FormIcon(
+                                FormIconName.share,
+                                color: FormTokens.ink,
+                              ),
                             ),
                           ),
                           const Spacer(),

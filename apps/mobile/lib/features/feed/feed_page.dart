@@ -139,7 +139,8 @@ class FeedPage extends StatelessWidget {
                           ),
                           onDelete: () =>
                               _confirmDelete(context, record.look.id),
-                          onShare: () => _share(context, state, record.look),
+                          onShare: (origin) =>
+                              _share(context, state, record.look, origin),
                           onMenu: () => _openLookMenu(context, record.look),
                         );
                       },
@@ -165,7 +166,12 @@ class FeedPage extends StatelessWidget {
       );
 
   /// Shares whichever representation the card currently shows.
-  Future<void> _share(BuildContext context, FeedState state, Look look) {
+  Future<void> _share(
+    BuildContext context,
+    FeedState state,
+    Look look,
+    Rect origin,
+  ) {
     final output = context.read<LookOutputService>();
     final garments = _garments(state, look);
     final flat = state.views[look.id] == LookFeedView.flat;
@@ -177,8 +183,13 @@ class FeedPage extends StatelessWidget {
               garments,
               flatLayLabels(context, look, garments.length),
               caption: lookCaption(look),
+              origin: origin,
             )
-          : output.shareWorn(look, caption: lookCaption(look)),
+          : output.shareWorn(
+              look,
+              caption: lookCaption(look),
+              origin: origin,
+            ),
     );
   }
 
