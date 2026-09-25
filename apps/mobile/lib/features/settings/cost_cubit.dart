@@ -11,6 +11,7 @@ class CostState {
     this.loading = false,
     this.costs,
     this.failure,
+    this.presentationGeneration = 0,
   });
 
   final CostWeek week;
@@ -18,6 +19,9 @@ class CostState {
   final bool loading;
   final GenerationCosts? costs;
   final ApiFailure? failure;
+
+  /// Bumps when settled costs change so the gauge can replay its intro.
+  final int presentationGeneration;
 
   bool get isCurrentWeek => week == currentWeek;
   bool get canGoNext => week.compareTo(currentWeek) < 0;
@@ -50,17 +54,37 @@ class CostCubit extends Cubit<CostState> {
     await _load(state.week.offset(1));
   }
 
+  Future<void> goToCurrentWeek() async {
+    final current = CostWeek.fromDate(_now());
+    if (state.week == current) return;
+    await _load(current);
+  }
+
   Future<void> _load(CostWeek requested) async {
     if (isClosed) return;
     final current = CostWeek.fromDate(_now());
     final week = requested.compareTo(current) > 0 ? current : requested;
     final id = ++_requestId;
-    // Never label the previous week's figures as the newly selected week.
-    emit(CostState(week: week, currentWeek: current, loading: true));
+    emit(
+      CostState(
+        week: week,
+        currentWeek: current,
+        loading: true,
+        costs: state.costs,
+        presentationGeneration: state.presentationGeneration,
+      ),
+    );
     try {
       final costs = await _repository.fetch(week);
       if (isClosed || id != _requestId) return;
-      emit(CostState(week: week, currentWeek: current, costs: costs));
+      emit(
+        CostState(
+          week: week,
+          currentWeek: current,
+          costs: costs,
+          presentationGeneration: state.presentationGeneration + 1,
+        ),
+      );
     } on Object catch (error) {
       if (isClosed || id != _requestId) return;
       emit(

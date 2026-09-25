@@ -2,7 +2,6 @@
   "appName": "FORM",
   "feed": "Feed",
   "wardrobe": "Wardrobe",
-  "settings": "Settings",
   "feedTitle": "Your style. Fresh ideas.",
   "wardrobeTitle": "A home for your favourites.",
   "feedFoundation": "You’re connected. Your looks arrive in the Feed phase.",
@@ -376,6 +375,7 @@
     "newReference": "Your new reference"
   },
   "settings": {
+    "title": "Settings",
     "heroEyebrow": "The way you need it",
     "heroTitle": "All yours.",
     "heroSubtitle": "Your private wardrobe on your server.",

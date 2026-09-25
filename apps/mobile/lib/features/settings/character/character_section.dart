@@ -128,6 +128,8 @@ class CharacterImage extends StatelessWidget {
             identity: sheet.assetId!,
             previewPath: 'v1/assets/${sheet.assetId}/content',
             online: online,
+            fit: BoxFit.cover,
+            entrance: MediaEntrance.fade,
           )
         : Center(
             child: sheet.state != 'failed'
@@ -158,9 +160,12 @@ class CharacterCard extends StatelessWidget {
     onTap: () => context.push('/settings/characters/${sheet.id}'),
     copy: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 5,
+      spacing: 4,
       children: [
-        if (horizontal) CharacterBadge(sheet: sheet),
+        if (horizontal) ...[
+          CharacterBadge(sheet: sheet),
+          const SizedBox(height: 2),
+        ],
         Text(
           horizontal
               ? newReference

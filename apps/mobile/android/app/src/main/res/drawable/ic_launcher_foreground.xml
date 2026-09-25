@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The F from apps/web/public/icon.svg, scaled so its 512px canvas fills the 72dp visible area. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.140625"
+        android:scaleY="0.140625"
+        android:translateX="18"
+        android:translateY="18">
+        <path
+            android:fillColor="#F6F5F1"
+            android:pathData="M178 360V152h162v32H216v57h105v32H216v87Z" />
+    </group>
+</vector>

@@ -1,6 +1,7 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:form_mobile/app/app_info.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
@@ -113,385 +114,420 @@ class _WardrobePageState extends State<WardrobePage> {
 
       return Scaffold(
         backgroundColor: FormTokens.paper,
-        appBar: FormPageHeader(
-          wordmark: true,
-          title: context.tr(LocaleKeys.appName),
-          action: IconButton(
-            onPressed: cubit.refresh,
-            tooltip: context.tr(LocaleKeys.refresh),
-            icon: const Icon(Icons.refresh),
-          ),
-        ),
-        body: RefreshIndicator(
-          onRefresh: cubit.refresh,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(
-                  FormTokens.gutter,
-                  0,
-                  FormTokens.gutter,
-                  16,
-                ),
-                sliver: SliverList.list(
-                  children: [
-                    if (state.loading)
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: LinearProgressIndicator(
-                          color: FormTokens.green,
-                          backgroundColor: FormTokens.line,
-                        ),
-                      ),
-                    if (state.stale && state.items != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: FormNotice(
-                          text: context.tr(LocaleKeys.wardrobeStale),
-                        ),
-                      ),
-                    if (state.failure != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: FormNotice(
-                          text: context.tr(state.failureKey),
-                          error: true,
-                        ),
-                      ),
-                    _WardrobeHero(
-                      archived: archived,
-                      totalCount: count,
-                      onAdd: archived
-                          ? null
-                          : () => context.push('/wardrobe/intake'),
+        extendBodyBehindAppBar: true,
+        appBar: const FormScrollEdge(),
+        body: Builder(
+          builder: (context) => RefreshIndicator(
+            edgeOffset: MediaQuery.paddingOf(context).top,
+            onRefresh: cubit.refresh,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverSafeArea(
+                  left: false,
+                  right: false,
+                  bottom: false,
+                  sliver: SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      FormTokens.gutter,
+                      0,
+                      FormTokens.gutter,
+                      16,
                     ),
-                    if (!archived)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: FormChoiceChips(
-                          options: {
-                            'all': context.tr(LocaleKeys.collection_all),
-                            'owning': context.tr(LocaleKeys.collection_owning),
-                            'wanting': context.tr(
-                              LocaleKeys.collection_wanting,
+                    sliver: SliverList.list(
+                      children: [
+                        FormWordmark(
+                          title: context.tr(LocaleKeys.appName),
+                          action: Text(
+                            '${AppInfo.version} (${AppInfo.buildNumber})',
+                            style: FormTokens.small.copyWith(
+                              color: FormTokens.muted,
                             ),
-                          },
-                          selected: filter.state,
-                          onSelected: (value) =>
-                              cubit.filter(filter.copyWith(state: value)),
-                        ),
-                      ),
-                    _WardrobeFilterBar(
-                      categoryLabel:
-                          context.tr(LocaleKeys.category) +
-                          (filter.categories.isEmpty
-                              ? ''
-                              : ' · ${filter.categories.length}'),
-                      colorLabel:
-                          colorFilterLabel +
-                          (filter.colors.isEmpty
-                              ? ''
-                              : ' · ${filter.colors.length}'),
-                      categoryExpanded: _expandedFilter == 'category',
-                      colorExpanded: _expandedFilter == 'color',
-                      searchExpanded:
-                          _searchExpanded || filter.query.isNotEmpty,
-                      onCategory: () => setState(
-                        () => _expandedFilter = _expandedFilter == 'category'
-                            ? null
-                            : 'category',
-                      ),
-                      onColor: () => setState(
-                        () => _expandedFilter = _expandedFilter == 'color'
-                            ? null
-                            : 'color',
-                      ),
-                      onToggleSearch: () => setState(() {
-                        _searchExpanded =
-                            !(_searchExpanded || filter.query.isNotEmpty);
-                        if (!_searchExpanded) {
-                          cubit.filter(filter.copyWith(query: ''));
-                        }
-                      }),
-                    ),
-                    if (_expandedFilter == 'category')
-                      _FilterOptionWrap(
-                        children: [
-                          for (final category in categories)
-                            if (availableCategories.contains(category))
-                              _WardrobeFilterChip(
-                                label: context.tr('categories.$category'),
-                                selected: filter.categories.contains(category),
-                                onTap: () => cubit.filter(
-                                  filter.copyWith(
-                                    categories: {...filter.categories}
-                                      ..toggle(
-                                        category,
-                                        selected: !filter.categories.contains(
-                                          category,
-                                        ),
-                                      ),
-                                  ),
-                                ),
-                              ),
-                        ],
-                      ),
-                    if (_expandedFilter == 'color')
-                      _FilterOptionWrap(
-                        children: [
-                          for (final color in colorPatterns.keys)
-                            if (availableColors.contains(color))
-                              _WardrobeFilterChip(
-                                label: context.tr('colorFamilies.$color'),
-                                swatch: FormTokens.colorSwatches[color],
-                                selected: filter.colors.contains(color),
-                                onTap: () => cubit.filter(
-                                  filter.copyWith(
-                                    colors: {...filter.colors}
-                                      ..toggle(
-                                        color,
-                                        selected: !filter.colors.contains(
-                                          color,
-                                        ),
-                                      ),
-                                  ),
-                                ),
-                              ),
-                        ],
-                      ),
-                    if (_searchExpanded || filter.query.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 18),
-                        child: FormSearchField(
-                          controller: _search,
-                          hint: context.tr(LocaleKeys.visual_searchHint),
-                          onChanged: (value) =>
-                              cubit.filter(filter.copyWith(query: value)),
-                          onClear: () =>
-                              cubit.filter(filter.copyWith(query: '')),
-                        ),
-                      ),
-                    if (filter.categories.isNotEmpty ||
-                        filter.colors.isNotEmpty ||
-                        filter.query.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            for (final category in filter.categories)
-                              _ActiveFilterChip(
-                                label: context.tr('categories.$category'),
-                                onRemove: () => cubit.filter(
-                                  filter.copyWith(
-                                    categories: {...filter.categories}
-                                      ..remove(category),
-                                  ),
-                                ),
-                              ),
-                            for (final color in filter.colors)
-                              _ActiveFilterChip(
-                                label: context.tr('colorFamilies.$color'),
-                                swatch: FormTokens.colorSwatches[color],
-                                onRemove: () => cubit.filter(
-                                  filter.copyWith(
-                                    colors: {...filter.colors}..remove(color),
-                                  ),
-                                ),
-                              ),
-                            if (filter.isFiltered)
-                              TextButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _searchExpanded = false;
-                                    _expandedFilter = null;
-                                  });
-                                  cubit.filter(const WardrobeFilter());
-                                },
-                                style: TextButton.styleFrom(
-                                  foregroundColor: FormTokens.green,
-                                  minimumSize: const Size(44, 44),
-                                ),
-                                child: Text(
-                                  context.tr(LocaleKeys.resetFilters),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    if (state.items != null && items.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 17),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                context.tr(
-                                  LocaleKeys.itemCount,
-                                  namedArgs: {
-                                    'shown': '${items.length}',
-                                    'total': '$count',
-                                  },
-                                ),
-                                style: FormTokens.small.merge(
-                                  FormTokens.numerals,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              context.tr(LocaleKeys.visual_recentFirst),
-                              style: FormTokens.small,
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              if (items.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: FormEmptyState(
-                    title: context.tr(
-                      state.items == null
-                          ? (state.loading
-                                ? LocaleKeys.checking
-                                : state.failureKey)
-                          : filter.isFiltered
-                          ? LocaleKeys.filteredEmpty
-                          : LocaleKeys.wardrobeEmpty,
-                    ),
-                    action:
-                        state.items != null &&
-                            !filter.isFiltered &&
-                            !archived &&
-                            !state.loading
-                        ? FilledButton(
-                            onPressed: () => context.push('/wardrobe/intake'),
-                            child: Text(context.tr(LocaleKeys.intake_title)),
-                          )
-                        : null,
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(
-                    FormTokens.gutter,
-                    0,
-                    FormTokens.gutter,
-                    24,
-                  ),
-                  sliver: SliverGrid.builder(
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 13,
-                          mainAxisSpacing: 22,
-                          childAspectRatio: 0.58,
-                        ),
-                    itemCount: items.length,
-                    itemBuilder: (context, index) {
-                      final record = items[index];
-                      final item = record.item;
-                      final status = item.status.replaceAll('-', '_');
-                      final generating = const {
-                        'queued',
-                        'generating',
-                      }.contains(item.status);
-                      final failed = item.status == 'failed';
-                      return Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => context.push(
-                            archived
-                                ? '/settings/archive/items/${item.id}'
-                                : '/wardrobe/items/${item.id}',
                           ),
-                          borderRadius: BorderRadius.circular(
-                            FormTokens.cardRadius,
+                        ),
+                        if (state.loading)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 12),
+                            child: LinearProgressIndicator(
+                              color: FormTokens.green,
+                              backgroundColor: FormTokens.line,
+                            ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                        if (state.stale && state.items != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: FormNotice(
+                              text: context.tr(LocaleKeys.wardrobeStale),
+                            ),
+                          ),
+                        if (state.failure != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: FormNotice(
+                              text: context.tr(state.failureKey),
+                              error: true,
+                            ),
+                          ),
+                        _WardrobeHero(
+                          archived: archived,
+                          totalCount: count,
+                          onAdd: archived
+                              ? null
+                              : () => context.push('/wardrobe/intake'),
+                        ),
+                        if (!archived)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: FormChoiceChips(
+                              options: {
+                                'all': context.tr(LocaleKeys.collection_all),
+                                'owning': context.tr(
+                                  LocaleKeys.collection_owning,
+                                ),
+                                'wanting': context.tr(
+                                  LocaleKeys.collection_wanting,
+                                ),
+                              },
+                              selected: filter.state,
+                              onSelected: (value) =>
+                                  cubit.filter(filter.copyWith(state: value)),
+                            ),
+                          ),
+                        _WardrobeFilterBar(
+                          categoryLabel:
+                              context.tr(LocaleKeys.category) +
+                              (filter.categories.isEmpty
+                                  ? ''
+                                  : ' · ${filter.categories.length}'),
+                          colorLabel:
+                              colorFilterLabel +
+                              (filter.colors.isEmpty
+                                  ? ''
+                                  : ' · ${filter.colors.length}'),
+                          categoryExpanded: _expandedFilter == 'category',
+                          colorExpanded: _expandedFilter == 'color',
+                          searchExpanded:
+                              _searchExpanded || filter.query.isNotEmpty,
+                          onCategory: () => setState(
+                            () =>
+                                _expandedFilter = _expandedFilter == 'category'
+                                ? null
+                                : 'category',
+                          ),
+                          onColor: () => setState(
+                            () => _expandedFilter = _expandedFilter == 'color'
+                                ? null
+                                : 'color',
+                          ),
+                          onToggleSearch: () => setState(() {
+                            _searchExpanded =
+                                !(_searchExpanded || filter.query.isNotEmpty);
+                            if (!_searchExpanded) {
+                              cubit.filter(filter.copyWith(query: ''));
+                            }
+                          }),
+                        ),
+                        if (_expandedFilter == 'category')
+                          _FilterOptionWrap(
                             children: [
-                              AspectRatio(
-                                aspectRatio: 3 / 4,
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(
-                                    FormTokens.cardRadius,
-                                  ),
-                                  child: ColoredBox(
-                                    color: _photoTint(item.id),
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        if (!generating)
-                                          CachedMedia(
-                                            identity: record.thumbnailIdentity,
-                                            previewPath: record.thumbnailPath,
-                                            online: !state.stale,
+                              for (final category in categories)
+                                if (availableCategories.contains(category))
+                                  _WardrobeFilterChip(
+                                    label: context.tr('categories.$category'),
+                                    selected: filter.categories.contains(
+                                      category,
+                                    ),
+                                    onTap: () => cubit.filter(
+                                      filter.copyWith(
+                                        categories: {...filter.categories}
+                                          ..toggle(
+                                            category,
+                                            selected: !filter.categories
+                                                .contains(
+                                                  category,
+                                                ),
                                           ),
-                                        if (generating)
-                                          _GeneratingTile(
-                                            label: context.tr(
-                                              'itemStatus.$status',
-                                            ),
-                                          ),
-                                        if (failed)
-                                          Positioned(
-                                            left: 8,
-                                            bottom: 8,
-                                            child: _StatusBadge(
-                                              label: context.tr(
-                                                'itemStatus.$status',
-                                              ),
-                                            ),
-                                          ),
-                                      ],
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                item.metadata.name,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: FormTokens.body.copyWith(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.35,
-                                ),
-                              ),
-                              const SizedBox(height: 5),
-                              Text(
-                                context.tr(
-                                  'categories.${item.metadata.category}',
-                                ),
-                                style: FormTokens.small.copyWith(fontSize: 11),
-                              ),
-                              if (item.status != 'ready' &&
-                                  !generating &&
-                                  !failed)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 4),
-                                  child: Text(
-                                    context.tr('itemStatus.$status'),
-                                    style: FormTokens.small.copyWith(
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
                             ],
                           ),
-                        ),
-                      );
-                    },
+                        if (_expandedFilter == 'color')
+                          _FilterOptionWrap(
+                            children: [
+                              for (final color in colorPatterns.keys)
+                                if (availableColors.contains(color))
+                                  _WardrobeFilterChip(
+                                    label: context.tr('colorFamilies.$color'),
+                                    swatch: FormTokens.colorSwatches[color],
+                                    selected: filter.colors.contains(color),
+                                    onTap: () => cubit.filter(
+                                      filter.copyWith(
+                                        colors: {...filter.colors}
+                                          ..toggle(
+                                            color,
+                                            selected: !filter.colors.contains(
+                                              color,
+                                            ),
+                                          ),
+                                      ),
+                                    ),
+                                  ),
+                            ],
+                          ),
+                        if (_searchExpanded || filter.query.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 18),
+                            child: FormSearchField(
+                              controller: _search,
+                              hint: context.tr(LocaleKeys.visual_searchHint),
+                              onChanged: (value) =>
+                                  cubit.filter(filter.copyWith(query: value)),
+                              onClear: () =>
+                                  cubit.filter(filter.copyWith(query: '')),
+                            ),
+                          ),
+                        if (filter.categories.isNotEmpty ||
+                            filter.colors.isNotEmpty ||
+                            filter.query.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                for (final category in filter.categories)
+                                  _ActiveFilterChip(
+                                    label: context.tr('categories.$category'),
+                                    onRemove: () => cubit.filter(
+                                      filter.copyWith(
+                                        categories: {...filter.categories}
+                                          ..remove(category),
+                                      ),
+                                    ),
+                                  ),
+                                for (final color in filter.colors)
+                                  _ActiveFilterChip(
+                                    label: context.tr('colorFamilies.$color'),
+                                    swatch: FormTokens.colorSwatches[color],
+                                    onRemove: () => cubit.filter(
+                                      filter.copyWith(
+                                        colors: {...filter.colors}
+                                          ..remove(color),
+                                      ),
+                                    ),
+                                  ),
+                                if (filter.isFiltered)
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _searchExpanded = false;
+                                        _expandedFilter = null;
+                                      });
+                                      cubit.filter(const WardrobeFilter());
+                                    },
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: FormTokens.green,
+                                      minimumSize: const Size(44, 44),
+                                    ),
+                                    child: Text(
+                                      context.tr(LocaleKeys.resetFilters),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        if (state.items != null && items.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 17),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    context.tr(
+                                      LocaleKeys.itemCount,
+                                      namedArgs: {
+                                        'shown': '${items.length}',
+                                        'total': '$count',
+                                      },
+                                    ),
+                                    style: FormTokens.small.merge(
+                                      FormTokens.numerals,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  context.tr(LocaleKeys.visual_recentFirst),
+                                  style: FormTokens.small,
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-            ],
+                if (items.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: FormEmptyState(
+                      title: context.tr(
+                        state.items == null
+                            ? (state.loading
+                                  ? LocaleKeys.checking
+                                  : state.failureKey)
+                            : filter.isFiltered
+                            ? LocaleKeys.filteredEmpty
+                            : LocaleKeys.wardrobeEmpty,
+                      ),
+                      action:
+                          state.items != null &&
+                              !filter.isFiltered &&
+                              !archived &&
+                              !state.loading
+                          ? FilledButton(
+                              onPressed: () => context.push('/wardrobe/intake'),
+                              child: Text(context.tr(LocaleKeys.intake_title)),
+                            )
+                          : null,
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      FormTokens.gutter,
+                      0,
+                      FormTokens.gutter,
+                      24,
+                    ),
+                    sliver: SliverGrid.builder(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 13,
+                            mainAxisSpacing: 22,
+                            childAspectRatio: 0.54,
+                          ),
+                      itemCount: items.length,
+                      itemBuilder: (context, index) {
+                        final record = items[index];
+                        final item = record.item;
+                        final status = item.status.replaceAll('-', '_');
+                        final generating = const {
+                          'queued',
+                          'generating',
+                        }.contains(item.status);
+                        final failed = item.status == 'failed';
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () => context.push(
+                              archived
+                                  ? '/settings/archive/items/${item.id}'
+                                  : '/wardrobe/items/${item.id}',
+                            ),
+                            borderRadius: BorderRadius.circular(
+                              FormTokens.cardRadius,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(
+                                  child: AspectRatio(
+                                    aspectRatio: 3 / 4,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(
+                                        FormTokens.cardRadius,
+                                      ),
+                                      child: ColoredBox(
+                                        color: _photoTint(item.id),
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            if (!generating)
+                                              CachedMedia(
+                                                identity:
+                                                    record.thumbnailIdentity,
+                                                previewPath:
+                                                    record.thumbnailPath,
+                                                online: !state.stale,
+                                              ),
+                                            if (generating)
+                                              _GeneratingTile(
+                                                label: context.tr(
+                                                  'itemStatus.$status',
+                                                ),
+                                              ),
+                                            if (failed)
+                                              Positioned(
+                                                left: 8,
+                                                bottom: 8,
+                                                child: _StatusBadge(
+                                                  label: context.tr(
+                                                    'itemStatus.$status',
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  height: 14 * 1.35 * 2,
+                                  child: Align(
+                                    alignment: Alignment.topLeft,
+                                    child: Text(
+                                      item.metadata.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: FormTokens.body.copyWith(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  context.tr(
+                                    'categories.${item.metadata.category}',
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: FormTokens.small.copyWith(
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                if (item.status != 'ready' &&
+                                    !generating &&
+                                    !failed)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      context.tr('itemStatus.$status'),
+                                      style: FormTokens.small.copyWith(
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                // Clears the translucent tab bar.
+                SliverToBoxAdapter(
+                  child: SizedBox(height: MediaQuery.paddingOf(context).bottom),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -511,71 +547,25 @@ class _WardrobeHero extends StatelessWidget {
   final VoidCallback? onAdd;
 
   @override
-  Widget build(BuildContext context) {
-    final headline = archived
+  Widget build(BuildContext context) => FormHero(
+    eyebrow: archived
         ? context.tr(LocaleKeys.archive)
-        : context.tr(LocaleKeys.visual_wardrobeHeading);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 25),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  archived
-                      ? context.tr(LocaleKeys.archive)
-                      : context.tr(LocaleKeys.visual_wardrobeEyebrow),
-                  style: FormTokens.eyebrow,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  headline,
-                  style: FormTokens.display.copyWith(fontSize: 36),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  archived
-                      ? context.tr(
-                          LocaleKeys.itemCount,
-                          namedArgs: {
-                            'shown': '$totalCount',
-                            'total': '$totalCount',
-                          },
-                        )
-                      : context.tr(
-                          LocaleKeys.visual_collectedCount,
-                          namedArgs: {'count': '$totalCount'},
-                        ),
-                  style: FormTokens.body.copyWith(color: FormTokens.muted),
-                ),
-              ],
-            ),
+        : context.tr(LocaleKeys.visual_wardrobeEyebrow),
+    title: archived
+        ? context.tr(LocaleKeys.archive)
+        : context.tr(LocaleKeys.visual_wardrobeHeading),
+    body: archived
+        ? context.tr(
+            LocaleKeys.itemCount,
+            namedArgs: {'shown': '$totalCount', 'total': '$totalCount'},
+          )
+        : context.tr(
+            LocaleKeys.visual_collectedCount,
+            namedArgs: {'count': '$totalCount'},
           ),
-          if (onAdd != null)
-            Semantics(
-              button: true,
-              label: context.tr(LocaleKeys.intake_title),
-              child: Material(
-                color: FormTokens.green,
-                shape: const CircleBorder(),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: onAdd,
-                  child: const SizedBox(
-                    width: 48,
-                    height: 48,
-                    child: Icon(Icons.add, color: Colors.white),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+    addLabel: context.tr(LocaleKeys.intake_title),
+    onAdd: onAdd,
+  );
 }
 
 class _WardrobeFilterBar extends StatelessWidget {
@@ -604,22 +594,18 @@ class _WardrobeFilterBar extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 16),
     child: Row(
       children: [
-        Expanded(
-          child: _WardrobeFilterChip(
-            label: '$categoryLabel ${categoryExpanded ? '▴' : '▾'}',
-            selected: categoryExpanded,
-            onTap: onCategory,
-          ),
+        _WardrobeFilterChip(
+          label: '$categoryLabel ${categoryExpanded ? '▴' : '▾'}',
+          selected: categoryExpanded,
+          onTap: onCategory,
         ),
         const SizedBox(width: 8),
-        Expanded(
-          child: _WardrobeFilterChip(
-            label: '$colorLabel ${colorExpanded ? '▴' : '▾'}',
-            selected: colorExpanded,
-            onTap: onColor,
-          ),
+        _WardrobeFilterChip(
+          label: '$colorLabel ${colorExpanded ? '▴' : '▾'}',
+          selected: colorExpanded,
+          onTap: onColor,
         ),
-        const SizedBox(width: 8),
+        const Spacer(),
         Semantics(
           button: true,
           selected: searchExpanded,

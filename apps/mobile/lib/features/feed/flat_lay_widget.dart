@@ -11,6 +11,7 @@ class FlatLayBoard extends StatelessWidget {
     required this.online,
     this.onGarmentTap,
     this.selectedId,
+    this.entrance,
     super.key,
   });
 
@@ -18,6 +19,45 @@ class FlatLayBoard extends StatelessWidget {
   final bool online;
   final ValueChanged<String>? onGarmentTap;
   final String? selectedId;
+
+  /// Drives the pieces rising into place one after another. Runs 0 → 1 over
+  /// [entranceDuration]; without it the board is drawn at rest.
+  final Animation<double>? entrance;
+
+  static const _rise = 420;
+  static const _stagger = 35;
+
+  static Duration entranceDuration(int count) =>
+      Duration(milliseconds: _rise + _stagger * (count - 1).clamp(0, 12));
+
+  Widget _enter(int index, int count, Widget child) {
+    final entrance = this.entrance;
+    if (entrance == null) return child;
+    final total = entranceDuration(count).inMilliseconds;
+    final start = (index.clamp(0, 12) * _stagger) / total;
+    final curve = CurvedAnimation(
+      parent: entrance,
+      curve: Interval(
+        start,
+        (start + _rise / total).clamp(0, 1),
+        curve: FormTokens.easeOut,
+      ),
+    );
+    return AnimatedBuilder(
+      animation: curve,
+      child: child,
+      builder: (context, child) {
+        final t = curve.value;
+        return Opacity(
+          opacity: t.clamp(0, 1),
+          child: Transform.translate(
+            offset: Offset(0, 14 * (1 - t)),
+            child: Transform.scale(scale: 0.88 + 0.12 * t, child: child),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +78,7 @@ class FlatLayBoard extends StatelessWidget {
           return Stack(
             clipBehavior: Clip.none,
             children: [
-              for (final placement in layout)
+              for (final (index, placement) in layout.indexed)
                 () {
                   final garment = garments.firstWhere(
                     (entry) => entry.id == placement.item.id,
@@ -64,26 +104,30 @@ class FlatLayBoard extends StatelessWidget {
                     top: top,
                     width: size,
                     height: size,
-                    child: Transform.rotate(
-                      angle: placement.angle * 3.1415926535 / 180,
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: onGarmentTap == null || !garment.available
-                              ? null
-                              : () => onGarmentTap!(garment.id),
-                          customBorder: const CircleBorder(),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              border: selectedId == garment.id
-                                  ? Border.all(
-                                      color: FormTokens.green,
-                                      width: 2,
-                                    )
-                                  : null,
-                              shape: BoxShape.circle,
+                    child: _enter(
+                      index,
+                      layout.length,
+                      Transform.rotate(
+                        angle: placement.angle * 3.1415926535 / 180,
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: onGarmentTap == null || !garment.available
+                                ? null
+                                : () => onGarmentTap!(garment.id),
+                            customBorder: const CircleBorder(),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                border: selectedId == garment.id
+                                    ? Border.all(
+                                        color: FormTokens.green,
+                                        width: 2,
+                                      )
+                                    : null,
+                                shape: BoxShape.circle,
+                              ),
+                              child: ClipOval(child: child),
                             ),
-                            child: ClipOval(child: child),
                           ),
                         ),
                       ),

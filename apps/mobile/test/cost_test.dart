@@ -140,6 +140,10 @@ void main() {
       await cubit.previousWeek();
       expect(cubit.state.week.value, '2026-W38');
       expect(cubit.state.canGoNext, isTrue);
+      await cubit.goToCurrentWeek();
+      expect(cubit.state.isCurrentWeek, isTrue);
+      await cubit.previousWeek();
+      expect(cubit.state.week.value, '2026-W38');
       first.complete({
         'costs': {...fixture(), 'lookTotalMicrounits': 99},
       });

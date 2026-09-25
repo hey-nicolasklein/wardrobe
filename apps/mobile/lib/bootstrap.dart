@@ -32,10 +32,13 @@ import 'package:form_mobile/services/look_output_service.dart';
 import 'package:form_mobile/services/photo_preparation.dart';
 import 'package:form_mobile/utils/initial_language.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:inspire_blur/inspire_blur.dart';
 import 'package:path_provider/path_provider.dart';
 
 Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Loads the header blur shaders early so the first frame doesn't stutter.
+  unawaited(Inspire.warmUp());
   Bloc.observer = SafeBlocObserver();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await EasyLocalization.ensureInitialized();

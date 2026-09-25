@@ -69,112 +69,393 @@ class LookCard extends StatelessWidget {
     final positions = lookItemPositions(
       garments.map((g) => g.item?.metadata.category ?? 'top').toList(),
     );
-    return FormPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: ColoredBox(
+        color: FormTokens.chrome,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+              child: Row(
+                children: [
+                  _LookViewSwitch(
+                    selected: view,
+                    onSelected: (value) =>
+                        context.read<FeedCubit>().setLookView(look.id, value),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: online ? onMenu : null,
+                    tooltip: context.tr(LocaleKeys.lookActions),
+                    icon: const FormIcon(FormIconName.more),
+                  ),
+                ],
+              ),
+            ),
+            AspectRatio(
+              aspectRatio: 4 / 5,
+              child: _LookStage(
+                record: record,
+                view: view,
+                garments: garments,
+                positions: positions,
+                revealed: revealed,
+                online: online,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // The glyphs carry their own inset inside the 44px targets.
+                  // The row offsets those so the heart's and bookmark's
+                  // strokes line up with the caption's edges.
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Row(
+                      children: [
+                        _FooterAction(
+                          onPressed: online
+                              ? () => context.read<FeedCubit>().toggleMark(
+                                  look.id,
+                                  liked: true,
+                                )
+                              : null,
+                          tooltip: context.tr(LocaleKeys.lookLike),
+                          selected: liked,
+                          icon: FormIcon(
+                            liked
+                                ? FormIconName.heartFilled
+                                : FormIconName.heart,
+                            color: liked ? FormTokens.liked : FormTokens.ink,
+                          ),
+                        ),
+                        _FooterAction(
+                          onPressed: onShare,
+                          tooltip: context.tr(LocaleKeys.lookShare),
+                          icon: const FormIcon(
+                            FormIconName.share,
+                            color: FormTokens.ink,
+                          ),
+                        ),
+                        const Spacer(),
+                        _FooterAction(
+                          onPressed: online
+                              ? () => context.read<FeedCubit>().toggleMark(
+                                  look.id,
+                                  liked: false,
+                                )
+                              : null,
+                          tooltip: context.tr(LocaleKeys.lookSave),
+                          selected: saved,
+                          icon: FormIcon(
+                            saved
+                                ? FormIconName.bookmarkFilled
+                                : FormIconName.bookmark,
+                            color: FormTokens.ink,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _LookCaption(
+                          mood: look.concept?.mood,
+                          caption: lookCaption(look),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          lookDateText(context, look.createdAt),
+                          style: FormTokens.small.copyWith(fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FooterAction extends StatelessWidget {
+  const _FooterAction({
+    required this.onPressed,
+    required this.tooltip,
+    required this.icon,
+    this.selected = false,
+  });
+
+  final VoidCallback? onPressed;
+  final String tooltip;
+  final Widget icon;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    onPressed: onPressed,
+    tooltip: tooltip,
+    isSelected: selected,
+    padding: EdgeInsets.zero,
+    constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+    icon: icon,
+  );
+}
+
+/// Mood in bold, followed inline by the caption. Collapsed to two lines;
+/// tapping expands it, like the PWA's `.look-caption`.
+class _LookCaption extends StatefulWidget {
+  const _LookCaption({required this.mood, required this.caption});
+
+  final String? mood;
+  final String caption;
+
+  @override
+  State<_LookCaption> createState() => _LookCaptionState();
+}
+
+class _LookCaptionState extends State<_LookCaption> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final mood = widget.mood;
+    if (mood == null && widget.caption.isEmpty) return const SizedBox.shrink();
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => setState(() => _expanded = !_expanded),
+      child: AnimatedSize(
+        duration: FormTokens.quick,
+        curve: FormTokens.easeOut,
+        alignment: Alignment.topCenter,
+        child: Text.rich(
+          TextSpan(
             children: [
-              Expanded(
-                child: FormChoiceChips(
-                  options: {
-                    'worn': context.tr(LocaleKeys.lookViewWorn),
-                    'flat': context.tr(LocaleKeys.lookViewFlat),
-                  },
-                  selected: view == LookFeedView.flat ? 'flat' : 'worn',
-                  onSelected: (value) => context.read<FeedCubit>().setLookView(
-                    look.id,
-                    value == 'flat' ? LookFeedView.flat : LookFeedView.worn,
+              if (mood != null)
+                TextSpan(
+                  text: widget.caption.isEmpty ? mood : '$mood ',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: FormTokens.ink,
+                  ),
+                ),
+              TextSpan(text: widget.caption),
+            ],
+          ),
+          style: FormTokens.small.copyWith(fontSize: 13, height: 1.5),
+          maxLines: _expanded ? null : 2,
+          overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact worn/flat pill switch, matching the PWA's `.look-view-switch`.
+/// Both segments share the wider label's width so the pill can slide.
+class _LookViewSwitch extends StatelessWidget {
+  const _LookViewSwitch({required this.selected, required this.onSelected});
+
+  final LookFeedView selected;
+  final ValueChanged<LookFeedView> onSelected;
+
+  static const _duration = Duration(milliseconds: 280);
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: FormTokens.switchTrack,
+      borderRadius: BorderRadius.circular(24),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(3),
+      child: IntrinsicWidth(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: AnimatedAlign(
+                duration: _duration,
+                curve: FormTokens.easeOut,
+                alignment: selected == LookFeedView.flat
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: 0.5,
+                  heightFactor: 1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: FormTokens.switchSelected,
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x0B27371B),
+                          blurRadius: 4,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-              IconButton(
-                onPressed: online ? onMenu : null,
-                tooltip: context.tr(LocaleKeys.lookActions),
-                icon: const FormIcon(FormIconName.more),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          AspectRatio(
-            aspectRatio: 4 / 5,
-            child: Stack(
-              fit: StackFit.expand,
+            ),
+            Row(
               children: [
-                if (view == LookFeedView.worn && look.assetId != null)
-                  GestureDetector(
-                    onTap: () =>
-                        context.read<FeedCubit>().toggleRevealed(look.id),
-                    child: CachedMedia(
-                      identity: look.assetId!,
-                      previewPath: record.previewPath(look.assetId!),
-                      online: online,
+                for (final (view, label) in [
+                  (LookFeedView.worn, LocaleKeys.lookViewWorn),
+                  (LookFeedView.flat, LocaleKeys.lookViewFlat),
+                ])
+                  Expanded(
+                    child: Semantics(
+                      button: true,
+                      selected: view == selected,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => onSelected(view),
+                        child: Container(
+                          constraints: const BoxConstraints(minHeight: 38),
+                          padding: const EdgeInsets.symmetric(horizontal: 18),
+                          alignment: Alignment.center,
+                          child: AnimatedDefaultTextStyle(
+                            duration: _duration,
+                            curve: FormTokens.easeOut,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: view == selected
+                                  ? FormTokens.flatLayInk
+                                  : FormTokens.switchInk,
+                            ),
+                            child: Text(context.tr(label)),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                if (view == LookFeedView.flat)
-                  FlatLayBoard(
-                    garments: garments,
-                    online: online,
-                    onGarmentTap: (id) => context.push('/wardrobe/items/$id'),
-                  ),
-                if (view == LookFeedView.worn)
-                  _WornGarments(
-                    garments: garments,
-                    positions: positions,
-                    revealed: revealed,
-                    online: online,
-                    onGarmentTap: (id) => context.push('/wardrobe/items/$id'),
                   ),
               ],
             ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              IconButton(
-                onPressed: online
-                    ? () => context.read<FeedCubit>().toggleMark(
-                        look.id,
-                        liked: true,
-                      )
-                    : null,
-                tooltip: context.tr(LocaleKeys.lookLike),
-                isSelected: liked,
-                icon: FormIcon(
-                  liked ? FormIconName.heartFilled : FormIconName.heart,
-                  color: liked ? FormTokens.liked : FormTokens.ink,
-                ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// The image area of a ready look. Both views stay mounted so switching never
+/// reloads media: the two views crossfade, and the flat lay pieces
+/// rise in each time it is shown.
+class _LookStage extends StatefulWidget {
+  const _LookStage({
+    required this.record,
+    required this.view,
+    required this.garments,
+    required this.positions,
+    required this.revealed,
+    required this.online,
+  });
+
+  final CachedLook record;
+  final LookFeedView view;
+  final List<LookGarment> garments;
+  final List<LookItemPosition> positions;
+  final bool revealed;
+  final bool online;
+
+  @override
+  State<_LookStage> createState() => _LookStageState();
+}
+
+class _LookStageState extends State<_LookStage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _entrance = AnimationController(
+    vsync: this,
+    duration: FlatLayBoard.entranceDuration(widget.garments.length),
+    value: widget.view == LookFeedView.flat ? 1 : 0,
+  );
+
+  @override
+  void didUpdateWidget(_LookStage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _entrance.duration = FlatLayBoard.entranceDuration(widget.garments.length);
+    if (widget.view == LookFeedView.flat &&
+        oldWidget.view != LookFeedView.flat) {
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _entrance.value = 1;
+      } else {
+        unawaited(_entrance.forward(from: 0));
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _entrance.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final look = widget.record.look;
+    final worn = widget.view == LookFeedView.worn;
+    void openItem(String id) => context.push('/wardrobe/items/$id');
+    return ColoredBox(
+      color: FormTokens.lookStage,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          IgnorePointer(
+            ignoring: worn,
+            child: AnimatedOpacity(
+              opacity: worn ? 0 : 1,
+              duration: const Duration(milliseconds: 220),
+              curve: FormTokens.easeOut,
+              child: FlatLayBoard(
+                garments: widget.garments,
+                online: widget.online,
+                entrance: _entrance,
+                onGarmentTap: openItem,
               ),
-              IconButton(
-                onPressed: onShare,
-                tooltip: context.tr(LocaleKeys.lookShare),
-                icon: const FormIcon(FormIconName.share),
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: online
-                    ? () => context.read<FeedCubit>().toggleMark(
-                        look.id,
-                        liked: false,
-                      )
-                    : null,
-                tooltip: context.tr(LocaleKeys.lookSave),
-                isSelected: saved,
-                icon: FormIcon(
-                  saved ? FormIconName.bookmarkFilled : FormIconName.bookmark,
-                  color: FormTokens.ink,
-                ),
-              ),
-            ],
-          ),
-          if (look.concept != null)
-            Text(
-              look.concept!.mood,
-              style: FormTokens.body.copyWith(fontWeight: FontWeight.w600),
             ),
-          if (lookCaption(look).isNotEmpty)
-            Text(lookCaption(look), style: FormTokens.small),
-          Text(lookDateText(context, look.createdAt), style: FormTokens.small),
+          ),
+          IgnorePointer(
+            ignoring: !worn,
+            child: AnimatedOpacity(
+              opacity: worn ? 1 : 0,
+              duration: const Duration(milliseconds: 220),
+              curve: FormTokens.easeOut,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (look.assetId != null)
+                    GestureDetector(
+                      onTap: () =>
+                          context.read<FeedCubit>().toggleRevealed(look.id),
+                      child: CachedMedia(
+                        identity: look.assetId!,
+                        previewPath: widget.record.previewPath(look.assetId!),
+                        online: widget.online,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  _WornGarments(
+                    garments: widget.garments,
+                    positions: widget.positions,
+                    revealed: widget.revealed,
+                    online: widget.online,
+                    onGarmentTap: openItem,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -317,8 +598,9 @@ class _WornGarments extends StatefulWidget {
 
 class _WornGarmentsState extends State<_WornGarments>
     with SingleTickerProviderStateMixin {
-  static const _travel = 560;
-  static const _stagger = 35;
+  static const _travel = 460;
+  static const _stagger = 30;
+  static const _fade = 180;
 
   late final AnimationController _controller = AnimationController(
     vsync: this,
@@ -350,6 +632,17 @@ class _WornGarmentsState extends State<_WornGarments>
     super.dispose();
   }
 
+  /// Fades the veil in over [_fade], ahead of the garments, so the photo is
+  /// already dimmed while the pieces travel. Closing clears it last.
+  double get _veil {
+    final total = _controller.duration!.inMilliseconds;
+    return Interval(
+      0,
+      (_fade / total).clamp(0, 1),
+      curve: FormTokens.easeOut,
+    ).transform(_controller.value);
+  }
+
   Animation<double> _curveFor(LookItemPosition position) {
     final total = _controller.duration!.inMilliseconds;
     final start = position.order * _stagger / total;
@@ -377,9 +670,7 @@ class _WornGarmentsState extends State<_WornGarments>
               Positioned.fill(
                 child: IgnorePointer(
                   child: ColoredBox(
-                    color: Colors.white.withValues(
-                      alpha: 0.76 * _controller.value.clamp(0, 1),
-                    ),
+                    color: Colors.white.withValues(alpha: 0.76 * _veil),
                   ),
                 ),
               ),

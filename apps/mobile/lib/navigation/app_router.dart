@@ -24,6 +24,8 @@ GoRouter createRouter() => GoRouter(
   routes: [
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => Scaffold(
+        // Lets content scroll under the translucent tab bar.
+        extendBody: true,
         body: shell,
         bottomNavigationBar: FormTabBar(
           selectedIndex: shell.currentIndex,
@@ -31,7 +33,7 @@ GoRouter createRouter() => GoRouter(
           labels: [
             context.tr(LocaleKeys.feed),
             context.tr(LocaleKeys.visual_wardrobeTab),
-            context.tr(LocaleKeys.settings),
+            context.tr(LocaleKeys.settings_title),
           ],
         ),
       ),

@@ -195,6 +195,8 @@ ThemeData formTheme() {
     listTileTheme: const ListTileThemeData(
       iconColor: FormTokens.green,
       contentPadding: EdgeInsets.symmetric(vertical: 4),
+      tileColor: FormTokens.field,
+      selectedTileColor: FormTokens.chrome,
     ),
     progressIndicatorTheme: const ProgressIndicatorThemeData(
       color: FormTokens.green,

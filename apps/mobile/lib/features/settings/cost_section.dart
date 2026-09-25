@@ -53,36 +53,66 @@ class _CostSectionBody extends StatelessWidget {
               children: [
                 IconButton(
                   tooltip: context.tr(LocaleKeys.costs_previousWeek),
-                  onPressed: cubit.previousWeek,
+                  onPressed: state.loading ? null : cubit.previousWeek,
                   icon: const Icon(Icons.arrow_back, size: 20),
                 ),
                 Expanded(
-                  child: Text(
-                    state.isCurrentWeek
-                        ? context.tr(LocaleKeys.costs_thisWeek)
-                        : state.week.label(context.locale.toString()),
-                    textAlign: TextAlign.center,
-                    style: FormTokens.body.merge(FormTokens.numerals),
+                  child: Semantics(
+                    button: !state.isCurrentWeek,
+                    label: context.tr(LocaleKeys.costs_thisWeek),
+                    child: InkWell(
+                      onTap: state.loading || state.isCurrentWeek
+                          ? null
+                          : cubit.goToCurrentWeek,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                state.isCurrentWeek
+                                    ? context.tr(LocaleKeys.costs_thisWeek)
+                                    : state.week.label(
+                                        context.locale.toString(),
+                                      ),
+                                textAlign: TextAlign.center,
+                                style: FormTokens.body.merge(
+                                  FormTokens.numerals,
+                                ),
+                              ),
+                            ),
+                            if (state.loading) ...[
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  semanticsLabel: context.tr(
+                                    LocaleKeys.costs_loading,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
                 IconButton(
                   tooltip: context.tr(LocaleKeys.costs_nextWeek),
-                  onPressed: state.canGoNext ? cubit.nextWeek : null,
+                  onPressed: state.loading || !state.canGoNext
+                      ? null
+                      : cubit.nextWeek,
                   disabledColor: FormTokens.ink.withValues(alpha: 0.25),
                   icon: const Icon(Icons.arrow_forward, size: 20),
                 ),
               ],
             ),
-            if (state.loading)
-              Padding(
-                padding: const EdgeInsets.all(32),
-                child: Center(
-                  child: CircularProgressIndicator(
-                    semanticsLabel: context.tr(LocaleKeys.costs_loading),
-                  ),
-                ),
-              )
-            else if (state.failure != null) ...[
+            if (state.failure != null) ...[
               FormNotice(
                 text: apiFailureText(context, state.failure!),
                 error: true,
@@ -92,9 +122,21 @@ class _CostSectionBody extends StatelessWidget {
                 child: Text(context.tr(LocaleKeys.costs_retry)),
               ),
             ] else if (state.costs != null)
-              _CostFigures(
-                key: ValueKey(state.week.value),
-                display: CostDisplay(state.costs!),
+              Opacity(
+                opacity: state.loading ? 0.55 : 1,
+                child: _CostFigures(
+                  key: ValueKey(state.presentationGeneration),
+                  display: CostDisplay(state.costs!),
+                ),
+              )
+            else if (state.loading)
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    semanticsLabel: context.tr(LocaleKeys.costs_loading),
+                  ),
+                ),
               ),
           ],
         ),

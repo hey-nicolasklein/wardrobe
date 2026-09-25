@@ -1,9 +1,13 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/widgets/form_icon.dart';
 import 'package:go_router/go_router.dart';
+import 'package:inspire_blur/inspire_blur.dart';
 
 class FormPageHeader extends StatelessWidget implements PreferredSizeWidget {
   const FormPageHeader({
@@ -19,26 +23,222 @@ class FormPageHeader extends StatelessWidget implements PreferredSizeWidget {
   final bool wordmark;
 
   @override
-  Size get preferredSize => Size.fromHeight(wordmark ? 72 : 96);
+  Size get preferredSize => Size.fromHeight(wordmark ? 56 : 76);
 
   @override
-  Widget build(BuildContext context) => AppBar(
-    toolbarHeight: preferredSize.height,
-    titleSpacing: FormTokens.gutter,
-    title: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => Stack(
+    fit: StackFit.expand,
+    children: [
+      const IgnorePointer(child: _ScrollEdgeBlur()),
+      AppBar(
+        backgroundColor: Colors.transparent,
+        systemOverlayStyle: SystemUiOverlayStyle.dark,
+        toolbarHeight: preferredSize.height,
+        titleSpacing: FormTokens.gutter,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: wordmark ? FormTokens.wordmark : FormTokens.heading,
+            ),
+            if (subtitle != null) Text(subtitle!, style: FormTokens.small),
+          ],
+        ),
+        actions: [
+          if (action != null)
+            Padding(
+              padding: const EdgeInsets.only(right: FormTokens.gutter),
+              child: action,
+            ),
+        ],
+      ),
+    ],
+  );
+}
+
+/// App bar slot for tab pages whose [FormWordmark] scrolls with the content.
+/// It takes no layout space: the blur covers the status bar and hangs
+/// [_overhang] below it, fading in once the page scrolls so the wordmark
+/// stays sharp at rest. Use with `extendBodyBehindAppBar`.
+class FormScrollEdge extends StatefulWidget implements PreferredSizeWidget {
+  const FormScrollEdge({super.key});
+
+  static const _overhang = 32.0;
+
+  @override
+  Size get preferredSize => Size.zero;
+
+  @override
+  State<FormScrollEdge> createState() => _FormScrollEdgeState();
+}
+
+class _FormScrollEdgeState extends State<FormScrollEdge> {
+  ScrollNotificationObserverState? _observer;
+  double _visibility = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _observer?.removeListener(_onScroll);
+    _observer = ScrollNotificationObserver.maybeOf(context)
+      ?..addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _observer?.removeListener(_onScroll);
+    super.dispose();
+  }
+
+  // Only the page's own vertical scroll counts, not nested carousels.
+  void _onScroll(ScrollNotification notification) {
+    if (notification.depth != 0 || notification.metrics.axis != Axis.vertical) {
+      return;
+    }
+    final visibility = (notification.metrics.pixels / FormScrollEdge._overhang)
+        .clamp(0.0, 1.0);
+    if (visibility != _visibility) setState(() => _visibility = visibility);
+  }
+
+  @override
+  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
+    value: SystemUiOverlayStyle.dark,
+    // The scaffold only caps the app bar slot's height, so expand to fill it
+    // instead of collapsing to zero.
+    child: SizedBox.expand(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: -FormScrollEdge._overhang,
+            // Scales blur strength rather than using Opacity, which a
+            // backdrop blur ignores (it would pop in at full strength).
+            // Linear keeps the blur strong further down than the default
+            // curve.
+            child: IgnorePointer(
+              child: _ScrollEdgeBlur(
+                fadeCurve: Curves.linear,
+                strength: _visibility,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// FORM wordmark row at the top of a tab's scroll content, with an optional
+/// trailing [action].
+class FormWordmark extends StatelessWidget {
+  const FormWordmark({required this.title, this.action, super.key});
+  final String title;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 56,
+    child: Row(
       children: [
-        Text(title, style: wordmark ? FormTokens.wordmark : FormTokens.heading),
-        if (subtitle != null) Text(subtitle!, style: FormTokens.small),
+        Expanded(child: Text(title, style: FormTokens.wordmark)),
+        ?action,
       ],
     ),
-    actions: [
-      if (action != null)
-        Padding(
-          padding: const EdgeInsets.only(right: FormTokens.gutter),
-          child: action,
+  );
+}
+
+/// iOS-style scroll edge: content passing under the header blurs
+/// progressively towards the top and is washed with paper, fading out to
+/// nothing at the bottom edge. It only shows when the scaffold uses
+/// `extendBodyBehindAppBar`.
+class _ScrollEdgeBlur extends StatelessWidget {
+  const _ScrollEdgeBlur({
+    this.fadeCurve = Curves.easeInSine,
+    this.strength = 1,
+  });
+  final Curve fadeCurve;
+
+  /// 0 to 1, scales both blur and tint.
+  final double strength;
+
+  @override
+  Widget build(BuildContext context) => Inspire.backdropBlur(
+    config: InspireBlurConfig.topToBottom(
+      sigma: 12 * strength,
+      fadeCurve: fadeCurve,
+    ),
+    child: Inspire.tint.topToBottom(
+      color: FormTokens.paper,
+      opacity: 0.9 * strength,
+    ),
+  );
+}
+
+/// Page intro shared by the feed and wardrobe tabs, matching the PWA's
+/// `.hero`: eyebrow, serif headline and summary, with an optional round add
+/// button aligned to the bottom edge.
+class FormHero extends StatelessWidget {
+  const FormHero({
+    required this.eyebrow,
+    required this.title,
+    required this.body,
+    this.addLabel,
+    this.onAdd,
+    super.key,
+  });
+  final String eyebrow;
+  final String title;
+  final String body;
+  final String? addLabel;
+  final VoidCallback? onAdd;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 25),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(eyebrow, style: FormTokens.eyebrow),
+              const SizedBox(height: 6),
+              Text(title, style: FormTokens.display.copyWith(fontSize: 36)),
+              const SizedBox(height: 6),
+              Text(
+                body,
+                style: FormTokens.body.copyWith(color: FormTokens.muted),
+              ),
+            ],
+          ),
         ),
-    ],
+        if (onAdd != null) ...[
+          const SizedBox(width: 15),
+          Semantics(
+            button: true,
+            label: addLabel,
+            child: Material(
+              color: FormTokens.green,
+              shape: const CircleBorder(),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: onAdd,
+                child: const SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Icon(Icons.add, color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    ),
   );
 }
 
@@ -53,56 +253,63 @@ class FormTabBar extends StatelessWidget {
   final ValueChanged<int> onSelected;
   final List<String> labels;
 
+  // Frosted paper: mostly opaque, with a hint of blurred content showing
+  // through. Needs `extendBody` on the hosting scaffold.
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: const BoxDecoration(
-      color: FormTokens.paper,
-      border: Border(top: BorderSide(color: FormTokens.line)),
-    ),
-    child: SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 9, 12, 8),
-        child: Row(
-          children: [
-            for (var i = 0; i < labels.length; i++)
-              Expanded(
-                child: Semantics(
-                  selected: i == selectedIndex,
-                  child: TextButton(
-                    style: TextButton.styleFrom(
-                      foregroundColor: i == selectedIndex
-                          ? FormTokens.green
-                          : FormTokens.muted,
-                      minimumSize: const Size(44, 49),
-                      padding: const EdgeInsets.all(4),
-                    ),
-                    onPressed: () => onSelected(i),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FormIcon(
-                          FormIconName.values[i],
-                          color: i == selectedIndex
+  Widget build(BuildContext context) => ClipRect(
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: FormTokens.paper.withValues(alpha: 0.85),
+          border: const Border(top: BorderSide(color: FormTokens.line)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 9, 12, 8),
+            child: Row(
+              children: [
+                for (var i = 0; i < labels.length; i++)
+                  Expanded(
+                    child: Semantics(
+                      selected: i == selectedIndex,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: i == selectedIndex
                               ? FormTokens.green
                               : FormTokens.muted,
+                          minimumSize: const Size(44, 49),
+                          padding: const EdgeInsets.all(4),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          labels[i],
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: i == selectedIndex
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                          ),
+                        onPressed: () => onSelected(i),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FormIcon(
+                              FormIconName.values[i],
+                              color: i == selectedIndex
+                                  ? FormTokens.green
+                                  : FormTokens.muted,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              labels[i],
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: i == selectedIndex
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     ),
@@ -266,11 +473,13 @@ class FormChoiceChips extends StatelessWidget {
                       ? null
                       : () => onSelected!(entry.key),
                   style: TextButton.styleFrom(
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 5,
+                      horizontal: 9,
                       vertical: 9,
                     ),
-                    minimumSize: const Size(44, 42),
+                    minimumSize: const Size(44, 40),
                     backgroundColor: entry.key == selected
                         ? FormTokens.green
                         : Colors.transparent,
@@ -742,39 +951,57 @@ class FormReferenceCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: active ? FormTokens.referenceActiveTint : FormTokens.paper,
-          border: pending
-              ? null
-              : Border.all(color: active ? FormTokens.green : FormTokens.line),
           borderRadius: BorderRadius.circular(FormTokens.cardRadius),
         ),
+        foregroundDecoration: pending
+            ? null
+            : BoxDecoration(
+                border: Border.all(
+                  color: active ? FormTokens.green : FormTokens.line,
+                ),
+                borderRadius: BorderRadius.circular(FormTokens.cardRadius),
+              ),
         child: InkWell(
           onTap: onTap,
+          // Stretch needs a bounded height, and list parents give none.
           child: horizontal
-              ? Row(
-                  children: [
-                    SizedBox(
-                      width: 76,
-                      height: 152,
-                      child: ColoredBox(color: FormTokens.field, child: image),
-                    ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: copy,
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.only(right: 10),
-                      child: RotatedBox(
-                        quarterTurns: 2,
-                        child: FormIcon(
-                          FormIconName.arrow,
-                          size: 16,
-                          color: FormTokens.green,
+              ? SizedBox(
+                  height: 136,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Matches the 9:16 collage so it fills edge to edge.
+                      AspectRatio(
+                        aspectRatio: 9 / 16,
+                        child: ColoredBox(
+                          color: FormTokens.field,
+                          child: image,
                         ),
                       ),
-                    ),
-                  ],
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: copy,
+                          ),
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(right: 14),
+                        child: Center(
+                          child: RotatedBox(
+                            quarterTurns: 2,
+                            child: FormIcon(
+                              FormIconName.arrow,
+                              size: 16,
+                              color: FormTokens.green,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,

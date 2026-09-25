@@ -45,109 +45,119 @@ class FeedPage extends StatelessWidget {
       final looks = state.looks ?? [];
       return Scaffold(
         backgroundColor: FormTokens.paper,
-        appBar: FormPageHeader(
-          wordmark: true,
-          title: context.tr(LocaleKeys.appName),
-          action: IconButton(
-            onPressed: cubit.refresh,
-            tooltip: context.tr(LocaleKeys.refresh),
-            icon: const Icon(Icons.refresh),
-          ),
-        ),
-        body: RefreshIndicator(
-          onRefresh: cubit.refresh,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(
-                  FormTokens.gutter,
-                  0,
-                  FormTokens.gutter,
-                  24,
-                ),
-                sliver: SliverList.list(
-                  children: [
-                    if (state.loading)
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: LinearProgressIndicator(
-                          color: FormTokens.green,
-                          backgroundColor: FormTokens.line,
-                        ),
-                      ),
-                    if (state.stale && !state.online && state.looks != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: FormNotice(
-                          text: context.tr(LocaleKeys.feedStale),
-                        ),
-                      ),
-                    if (state.failure != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: FormNotice(
-                          text: context.tr(state.failureKey),
-                          error: true,
-                        ),
-                      ),
-                    _FeedHero(onAdd: () => openLookComposer(context)),
-                  ],
-                ),
-              ),
-              if (looks.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: FormEmptyState(
-                    title: context.tr(LocaleKeys.feedEmptyTitle),
-                    message: context.tr(
-                      state.hasActiveCharacterReference == false
-                          ? LocaleKeys.feedEmptyWithoutSheet
-                          : LocaleKeys.feedEmptyWithSheet,
+        extendBodyBehindAppBar: true,
+        appBar: const FormScrollEdge(),
+        body: Builder(
+          builder: (context) => RefreshIndicator(
+            edgeOffset: MediaQuery.paddingOf(context).top,
+            onRefresh: cubit.refresh,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverSafeArea(
+                  left: false,
+                  right: false,
+                  bottom: false,
+                  sliver: SliverPadding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: FormTokens.gutter,
                     ),
-                    icon: Icons.auto_awesome_outlined,
-                    action: FilledButton(
-                      onPressed: () => openLookComposer(context),
-                      child: Text(
-                        context.tr(
-                          state.hasActiveCharacterReference == false
-                              ? LocaleKeys.feedCharacterSetup
-                              : LocaleKeys.feedFirstLook,
+                    sliver: SliverList.list(
+                      children: [
+                        FormWordmark(title: context.tr(LocaleKeys.appName)),
+                        if (state.loading)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 12),
+                            child: LinearProgressIndicator(
+                              color: FormTokens.green,
+                              backgroundColor: FormTokens.line,
+                            ),
+                          ),
+                        if (state.stale && !state.online && state.looks != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: FormNotice(
+                              text: context.tr(LocaleKeys.feedStale),
+                            ),
+                          ),
+                        if (state.failure != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: FormNotice(
+                              text: context.tr(state.failureKey),
+                              error: true,
+                            ),
+                          ),
+                        FormHero(
+                          eyebrow: context.tr(LocaleKeys.feedHeroEyebrow),
+                          title: context.tr(LocaleKeys.feedHeroTitle),
+                          body: context.tr(LocaleKeys.feedHeroBody),
+                          addLabel: context.tr(LocaleKeys.createLook),
+                          onAdd: () => openLookComposer(context),
                         ),
-                      ),
+                      ],
                     ),
                   ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(
-                    FormTokens.gutter,
-                    0,
-                    FormTokens.gutter,
-                    24,
-                  ),
-                  sliver: SliverList.separated(
-                    itemCount: looks.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 16),
-                    itemBuilder: (context, index) {
-                      final record = looks[index];
-                      return LookCard(
-                        record: record,
-                        state: state,
-                        garments: _garments(state, record.look),
-                        online: state.online && !state.stale,
-                        onRetry: () => runFeedAction(
-                          context,
-                          () => cubit.retryLook(record.look.id),
-                        ),
-                        onDelete: () => _confirmDelete(context, record.look.id),
-                        onShare: () => _share(context, state, record.look),
-                        onMenu: () => _openLookMenu(context, record.look),
-                      );
-                    },
-                  ),
                 ),
-            ],
+                if (looks.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: FormEmptyState(
+                      title: context.tr(LocaleKeys.feedEmptyTitle),
+                      message: context.tr(
+                        state.hasActiveCharacterReference == false
+                            ? LocaleKeys.feedEmptyWithoutSheet
+                            : LocaleKeys.feedEmptyWithSheet,
+                      ),
+                      icon: Icons.auto_awesome_outlined,
+                      action: FilledButton(
+                        onPressed: () => openLookComposer(context),
+                        child: Text(
+                          context.tr(
+                            state.hasActiveCharacterReference == false
+                                ? LocaleKeys.feedCharacterSetup
+                                : LocaleKeys.feedFirstLook,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      FormTokens.gutter,
+                      0,
+                      FormTokens.gutter,
+                      24,
+                    ),
+                    sliver: SliverList.separated(
+                      itemCount: looks.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 16),
+                      itemBuilder: (context, index) {
+                        final record = looks[index];
+                        return LookCard(
+                          record: record,
+                          state: state,
+                          garments: _garments(state, record.look),
+                          online: state.online && !state.stale,
+                          onRetry: () => runFeedAction(
+                            context,
+                            () => cubit.retryLook(record.look.id),
+                          ),
+                          onDelete: () =>
+                              _confirmDelete(context, record.look.id),
+                          onShare: () => _share(context, state, record.look),
+                          onMenu: () => _openLookMenu(context, record.look),
+                        );
+                      },
+                    ),
+                  ),
+                // Clears the translucent tab bar.
+                SliverToBoxAdapter(
+                  child: SizedBox(height: MediaQuery.paddingOf(context).bottom),
+                ),
+              ],
+            ),
           ),
         ),
       );
@@ -409,52 +419,6 @@ class FeedPage extends StatelessWidget {
       );
     }
   }
-}
-
-class _FeedHero extends StatelessWidget {
-  const _FeedHero({required this.onAdd});
-  final VoidCallback onAdd;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 24),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.tr(LocaleKeys.feedHeroEyebrow),
-                style: FormTokens.eyebrow,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                context.tr(LocaleKeys.feedHeroTitle),
-                style: FormTokens.display.copyWith(fontSize: 36),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                context.tr(LocaleKeys.feedHeroBody),
-                style: FormTokens.body.copyWith(color: FormTokens.muted),
-              ),
-            ],
-          ),
-        ),
-        IconButton.filled(
-          onPressed: onAdd,
-          tooltip: context.tr(LocaleKeys.createLook),
-          style: IconButton.styleFrom(
-            backgroundColor: FormTokens.green,
-            foregroundColor: Colors.white,
-            fixedSize: const Size.square(52),
-          ),
-          icon: const Icon(Icons.add),
-        ),
-      ],
-    ),
-  );
 }
 
 class _DetailRow extends StatelessWidget {

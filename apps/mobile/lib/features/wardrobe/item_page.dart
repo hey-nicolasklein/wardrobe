@@ -13,6 +13,7 @@ import 'package:form_mobile/features/settings/quality_cubit.dart';
 import 'package:form_mobile/features/wardrobe/item_cubit.dart';
 import 'package:form_mobile/features/wardrobe/item_edit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
+import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
@@ -140,11 +141,6 @@ class _ItemViewState extends State<_ItemView> {
             title: Text(title),
             actions: [
               IconButton(
-                onPressed: state.busy ? null : cubit.refresh,
-                tooltip: context.tr(LocaleKeys.refresh),
-                icon: const Icon(Icons.refresh),
-              ),
-              IconButton(
                 onPressed: () => context.pop(),
                 tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                 style: IconButton.styleFrom(
@@ -164,429 +160,310 @@ class _ItemViewState extends State<_ItemView> {
                           style: FormTokens.body,
                         ),
                 )
-              : RefreshIndicator(
-                  onRefresh: cubit.refresh,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(
-                      FormTokens.gutter,
-                      8,
-                      FormTokens.gutter,
-                      32,
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    FormTokens.gutter,
+                    8,
+                    FormTokens.gutter,
+                    32,
+                  ),
+                  children: [
+                    if (state.stale || !online)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: FormNotice(
+                          text: context.tr(LocaleKeys.wardrobeStale),
+                        ),
+                      ),
+                    if (state.failure != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: FormNotice(
+                          text: context.tr(LocaleKeys.itemActionFailed),
+                          error: true,
+                        ),
+                      ),
+                    if (state.pending != null && !state.busy)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: FilledButton.tonal(
+                          onPressed: online && state.canMutate
+                              ? () => cubit.execute(state.pending!)
+                              : null,
+                          child: Text(context.tr(LocaleKeys.retryCommand)),
+                        ),
+                      ),
+                    // Keyed so notices appearing above it after a refresh do
+                    // not rebuild the gallery and replay its image entrances.
+                    BlocBuilder<FeedCubit, FeedState>(
+                      key: const ValueKey('gallery'),
+                      builder: (context, feedState) => _ItemGallery(
+                        detail: detail,
+                        looks: readyLooksForItem(
+                          detail.wardrobeItem.id,
+                          (feedState.looks ?? []).map(
+                            (record) => record.look,
+                          ),
+                        ),
+                        online: online && !state.stale,
+                      ),
                     ),
-                    children: [
-                      if (state.busy)
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 12),
-                          child: LinearProgressIndicator(
-                            color: FormTokens.green,
-                            backgroundColor: FormTokens.line,
-                          ),
+                    const SizedBox(height: 20),
+                    Text(
+                      context.tr(
+                        'categories.${detail.wardrobeItem.metadata.category}',
+                      ),
+                      style: FormTokens.eyebrow,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      detail.wardrobeItem.metadata.name,
+                      style: FormTokens.heading,
+                    ),
+                    if (detail.wardrobeItem.metadata.colors.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 9),
+                        child: Wrap(
+                          spacing: 7,
+                          runSpacing: 7,
+                          children: [
+                            for (final color
+                                in detail.wardrobeItem.metadata.colors)
+                              _ItemColorSwatch(label: color),
+                          ],
                         ),
-                      if (state.stale || !online)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: FormNotice(
-                            text: context.tr(LocaleKeys.wardrobeStale),
+                      ),
+                    if (detail.wardrobeItem.status != 'ready')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          context.tr(
+                            'itemStatus.'
+                            '${detail.wardrobeItem.status.replaceAll(
+                              '-',
+                              '_',
+                            )}',
                           ),
+                          style: FormTokens.small,
                         ),
-                      if (state.failure != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: FormNotice(
-                            text: context.tr(LocaleKeys.itemActionFailed),
-                            error: true,
+                      ),
+                    const SizedBox(height: 18),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (detail.wardrobeItem.state == 'archived')
+                          _FactRow(
+                            label: context.tr(LocaleKeys.collectionState),
+                            value: context.tr('collection.archived'),
+                          )
+                        else
+                          FormCollectionToggle(
+                            selected: detail.wardrobeItem.state,
+                            labels: {
+                              'owning': context.tr('collection.owning'),
+                              'wanting': context.tr('collection.wanting'),
+                            },
+                            onSelected: enabled ? cubit.move : null,
                           ),
-                        ),
-                      if (state.pending != null && !state.busy)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: FilledButton.tonal(
-                            onPressed: online && state.canMutate
-                                ? () => cubit.execute(state.pending!)
-                                : null,
-                            child: Text(context.tr(LocaleKeys.retryCommand)),
+                        if (detail.wardrobeItem.metadata.notes != null)
+                          _FactRow(
+                            label: context.tr(LocaleKeys.notes),
+                            value: detail.wardrobeItem.metadata.notes!,
                           ),
-                        ),
-                      BlocBuilder<FeedCubit, FeedState>(
-                        builder: (context, feedState) {
-                          final looks = readyLooksForItem(
-                            detail.wardrobeItem.id,
-                            (feedState.looks ?? [])
-                                .map((record) => record.look)
-                                .toList(),
-                          );
-                          if (looks.isEmpty) return const SizedBox.shrink();
-                          return Column(
+                      ],
+                    ),
+                    if (detail.generating)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: FormPanel(
+                          child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const SizedBox(height: 20),
-                              SizedBox(
-                                height: 188,
-                                child: ListView.separated(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: looks.length,
-                                  separatorBuilder: (_, _) =>
-                                      const SizedBox(width: 12),
-                                  itemBuilder: (context, index) {
-                                    final look = looks[index];
-                                    return SizedBox(
-                                      width: 140,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          Expanded(
-                                            child: FormImageCard(
-                                              aspectRatio: 4 / 5,
-                                              child: look.assetId == null
-                                                  ? const SizedBox.shrink()
-                                                  : CachedMedia(
-                                                      identity: look.assetId!,
-                                                      previewPath:
-                                                          'v1/assets/${look.assetId!}/content',
-                                                      online:
-                                                          online &&
-                                                          !state.stale,
-                                                    ),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            context.tr(
-                                              LocaleKeys.generatedLookCaption,
-                                              namedArgs: {
-                                                'date': lookDateText(
-                                                  context,
-                                                  look.createdAt,
-                                                ),
-                                              },
-                                            ),
-                                            style: FormTokens.small,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ],
+                              const Padding(
+                                padding: EdgeInsets.only(top: 2, right: 12),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: FormTokens.green,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      context.tr(
+                                        LocaleKeys.generationRunning,
                                       ),
-                                    );
-                                  },
+                                      style: FormTokens.body.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      context.tr(
+                                        LocaleKeys.generationRefresh,
+                                      ),
+                                      style: FormTokens.small,
+                                    ),
+                                    TextButton(
+                                      onPressed: state.busy
+                                          ? null
+                                          : cubit.refresh,
+                                      child: Text(
+                                        context.tr(LocaleKeys.refresh),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+                      ),
+                    if (detail.generationAttempts.firstOrNull?.state ==
+                        'failed')
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: FormNotice(
+                          text: context.tr(LocaleKeys.generationFailed),
+                          error: true,
+                        ),
+                      ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: enabled
+                            ? () => _openEdit(
+                                context,
+                                cubit,
+                                detail.wardrobeItem,
+                              )
+                            : null,
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          backgroundColor: FormTokens.field,
+                          foregroundColor: FormTokens.green,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              FormTokens.cardRadius,
+                            ),
+                          ),
+                        ),
+                        child: Text(context.tr(LocaleKeys.editItem)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: enabled
+                            ? () => openLookComposer(
+                                context,
+                                itemIds: [detail.wardrobeItem.id],
+                              )
+                            : null,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          backgroundColor: FormTokens.green,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              FormTokens.cardRadius,
+                            ),
+                          ),
+                        ),
+                        child: Text(context.tr(LocaleKeys.inspireItem)),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: online && state.canGenerate
+                            ? () => _openGenerate(context, cubit, detail)
+                            : null,
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          backgroundColor: FormTokens.green,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              FormTokens.cardRadius,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          context.tr(
+                            detail.currentImage == null
+                                ? LocaleKeys.generateImage
+                                : LocaleKeys.improveImage,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const _FormRule(),
+                    Text(
+                      context.tr(LocaleKeys.imageVersions),
+                      style: FormTokens.body.copyWith(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      context.tr(LocaleKeys.generationExplanation),
+                      style: FormTokens.small,
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 188,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: EdgeInsets.zero,
+                        itemCount: detail.shelfImageVersions.length + 1,
+                        separatorBuilder: (_, _) => const SizedBox(width: 12),
+                        itemBuilder: (context, index) {
+                          if (index == 0) {
+                            return _VersionAddTile(
+                              label: context.tr(
+                                detail.currentImage == null
+                                    ? LocaleKeys.generateImage
+                                    : LocaleKeys.improveImage,
+                              ),
+                              onTap: online && state.canGenerate
+                                  ? () => _openGenerate(context, cubit, detail)
+                                  : null,
+                            );
+                          }
+                          final version = detail.shelfImageVersions[index - 1];
+                          final current =
+                              version.id ==
+                              detail.wardrobeItem.currentShelfImageVersionId;
+                          return _VersionTile(
+                            version: version,
+                            current: current,
+                            online: online,
+                            canRestore: state.canRestore(version.id),
+                            onRestore: () => cubit.restore(version.id),
                           );
                         },
                       ),
-                      if (detail.currentImage != null)
-                        FormImageCard(
-                          aspectRatio: 1,
-                          child: CachedMedia(
-                            identity: detail.currentImage!.transparentAssetId,
-                            online: online && !state.stale,
-                          ),
-                        ),
-                      Text(
-                        context.tr(
-                          'categories.${detail.wardrobeItem.metadata.category}',
-                        ),
-                        style: FormTokens.eyebrow,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        detail.wardrobeItem.metadata.name,
-                        style: FormTokens.heading,
-                      ),
-                      if (detail.wardrobeItem.metadata.colors.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 9),
-                          child: Wrap(
-                            spacing: 7,
-                            runSpacing: 7,
-                            children: [
-                              for (final color
-                                  in detail.wardrobeItem.metadata.colors)
-                                _ItemColorSwatch(label: color),
-                            ],
-                          ),
-                        ),
-                      if (detail.wardrobeItem.status != 'ready')
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            context.tr(
-                              'itemStatus.'
-                              '${detail.wardrobeItem.status.replaceAll(
-                                '-',
-                                '_',
-                              )}',
-                            ),
-                            style: FormTokens.small,
-                          ),
-                        ),
-                      const SizedBox(height: 18),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (detail.wardrobeItem.state == 'archived')
-                            _FactRow(
-                              label: context.tr(LocaleKeys.collectionState),
-                              value: context.tr('collection.archived'),
-                            )
-                          else
-                            FormCollectionToggle(
-                              selected: detail.wardrobeItem.state,
-                              labels: {
-                                'owning': context.tr('collection.owning'),
-                                'wanting': context.tr('collection.wanting'),
-                              },
-                              onSelected: enabled ? cubit.move : null,
-                            ),
-                          if (detail.wardrobeItem.metadata.notes != null)
-                            _FactRow(
-                              label: context.tr(LocaleKeys.notes),
-                              value: detail.wardrobeItem.metadata.notes!,
-                            ),
-                        ],
-                      ),
-                      if (detail.generating)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: FormPanel(
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Padding(
-                                  padding: EdgeInsets.only(top: 2, right: 12),
-                                  child: SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: FormTokens.green,
-                                    ),
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        context.tr(
-                                          LocaleKeys.generationRunning,
-                                        ),
-                                        style: FormTokens.body.copyWith(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        context.tr(
-                                          LocaleKeys.generationRefresh,
-                                        ),
-                                        style: FormTokens.small,
-                                      ),
-                                      TextButton(
-                                        onPressed: state.busy
-                                            ? null
-                                            : cubit.refresh,
-                                        child: Text(
-                                          context.tr(LocaleKeys.refresh),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      if (detail.generationAttempts.firstOrNull?.state ==
-                          'failed')
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: FormNotice(
-                            text: context.tr(LocaleKeys.generationFailed),
-                            error: true,
-                          ),
-                        ),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: enabled
-                              ? () => _openEdit(
-                                  context,
-                                  cubit,
-                                  detail.wardrobeItem,
-                                )
-                              : null,
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(50),
-                            backgroundColor: FormTokens.field,
-                            foregroundColor: FormTokens.green,
-                            side: BorderSide.none,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                FormTokens.cardRadius,
-                              ),
-                            ),
-                          ),
-                          child: Text(context.tr(LocaleKeys.editItem)),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: enabled
-                              ? () => openLookComposer(
-                                  context,
-                                  itemIds: [detail.wardrobeItem.id],
-                                )
-                              : null,
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(50),
-                            backgroundColor: FormTokens.green,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                FormTokens.cardRadius,
-                              ),
-                            ),
-                          ),
-                          child: Text(context.tr(LocaleKeys.inspireItem)),
-                        ),
-                      ),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: online && state.canGenerate
-                              ? () => _openGenerate(context, cubit, detail)
-                              : null,
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(50),
-                            backgroundColor: FormTokens.green,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                FormTokens.cardRadius,
-                              ),
-                            ),
-                          ),
-                          child: Text(
-                            context.tr(
-                              detail.currentImage == null
-                                  ? LocaleKeys.generateImage
-                                  : LocaleKeys.improveImage,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const _FormRule(),
-                      Text(
-                        context.tr(LocaleKeys.imageVersions),
-                        style: FormTokens.body.copyWith(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        context.tr(LocaleKeys.generationExplanation),
-                        style: FormTokens.small,
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        height: 188,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          padding: EdgeInsets.zero,
-                          itemCount: detail.shelfImageVersions.length + 1,
-                          separatorBuilder: (_, _) => const SizedBox(width: 12),
-                          itemBuilder: (context, index) {
-                            if (index == 0) {
-                              return _VersionAddTile(
-                                label: context.tr(
-                                  detail.currentImage == null
-                                      ? LocaleKeys.generateImage
-                                      : LocaleKeys.improveImage,
-                                ),
-                                onTap: online && state.canGenerate
-                                    ? () =>
-                                          _openGenerate(context, cubit, detail)
-                                    : null,
-                              );
-                            }
-                            final version =
-                                detail.shelfImageVersions[index - 1];
-                            final current =
-                                version.id ==
-                                detail.wardrobeItem.currentShelfImageVersionId;
-                            return _VersionTile(
-                              version: version,
-                              current: current,
-                              online: online,
-                              canRestore: state.canRestore(version.id),
-                              onRestore: () => cubit.restore(version.id),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        context.tr(LocaleKeys.sourcePhoto),
-                        style: FormTokens.body.copyWith(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      FormImageCard(
-                        aspectRatio: 4 / 5,
-                        child: CachedMedia(
-                          identity: detail.sourcePhoto.assetId,
-                          online: online && !state.stale,
-                        ),
-                      ),
-                      const _FormRule(),
-                      if (detail.wardrobeItem.state == 'archived') ...[
-                        for (final target in ['owning', 'wanting'])
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton(
-                                onPressed: enabled
-                                    ? () => cubit.move(target)
-                                    : null,
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(50),
-                                  backgroundColor: FormTokens.field,
-                                  foregroundColor: FormTokens.green,
-                                  side: BorderSide.none,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(
-                                      FormTokens.cardRadius,
-                                    ),
-                                  ),
-                                ),
-                                child: Text(
-                                  context.tr(
-                                    LocaleKeys.restoreTo,
-                                    namedArgs: {
-                                      'state': context.tr('collection.$target'),
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ] else
+                    ),
+                    const _FormRule(),
+                    if (detail.wardrobeItem.state == 'archived') ...[
+                      for (final target in ['owning', 'wanting'])
                         Padding(
                           padding: const EdgeInsets.only(bottom: 10),
                           child: SizedBox(
                             width: double.infinity,
                             child: OutlinedButton(
                               onPressed: enabled
-                                  ? () => cubit.move('archived')
+                                  ? () => cubit.move(target)
                                   : null,
                               style: OutlinedButton.styleFrom(
                                 minimumSize: const Size.fromHeight(50),
@@ -599,41 +476,160 @@ class _ItemViewState extends State<_ItemView> {
                                   ),
                                 ),
                               ),
-                              child: Text(context.tr(LocaleKeys.archiveItem)),
+                              child: Text(
+                                context.tr(
+                                  LocaleKeys.restoreTo,
+                                  namedArgs: {
+                                    'state': context.tr('collection.$target'),
+                                  },
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      TextButton(
-                        onPressed: enabled
-                            ? () async {
-                                final confirmed = await confirmFormAction(
-                                  context: context,
-                                  title: context.tr(LocaleKeys.deleteItem),
-                                  message: context.tr(
-                                    LocaleKeys.deleteItemConfirm,
-                                  ),
-                                  confirmLabel: context.tr(
-                                    LocaleKeys.deleteItem,
-                                  ),
-                                );
-                                if (confirmed && context.mounted) {
-                                  await cubit.delete();
-                                }
-                              }
-                            : null,
-                        style: TextButton.styleFrom(
-                          foregroundColor: FormTokens.green,
-                          minimumSize: const Size.fromHeight(44),
+                    ] else
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: enabled
+                                ? () => cubit.move('archived')
+                                : null,
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(50),
+                              backgroundColor: FormTokens.field,
+                              foregroundColor: FormTokens.green,
+                              side: BorderSide.none,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  FormTokens.cardRadius,
+                                ),
+                              ),
+                            ),
+                            child: Text(context.tr(LocaleKeys.archiveItem)),
+                          ),
                         ),
-                        child: Text(context.tr(LocaleKeys.deleteItem)),
                       ),
-                    ],
-                  ),
+                    TextButton(
+                      onPressed: enabled
+                          ? () async {
+                              final confirmed = await confirmFormAction(
+                                context: context,
+                                title: context.tr(LocaleKeys.deleteItem),
+                                message: context.tr(
+                                  LocaleKeys.deleteItemConfirm,
+                                ),
+                                confirmLabel: context.tr(
+                                  LocaleKeys.deleteItem,
+                                ),
+                              );
+                              if (confirmed && context.mounted) {
+                                await cubit.delete();
+                              }
+                            }
+                          : null,
+                      style: TextButton.styleFrom(
+                        foregroundColor: FormTokens.green,
+                        minimumSize: const Size.fromHeight(44),
+                      ),
+                      child: Text(context.tr(LocaleKeys.deleteItem)),
+                    ),
+                  ],
                 ),
         );
       },
     ),
   );
+}
+
+/// Horizontal strip of every image of an item: the current shelf image, the
+/// original source photo, then the generated looks it appears in.
+class _ItemGallery extends StatelessWidget {
+  const _ItemGallery({
+    required this.detail,
+    required this.looks,
+    required this.online,
+  });
+  final ItemDetail detail;
+  final List<Look> looks;
+  final bool online;
+
+  @override
+  Widget build(BuildContext context) {
+    final tiles =
+        <({String identity, String? previewPath, BoxFit fit, String caption})>[
+          if (detail.currentImage != null)
+            (
+              identity: detail.currentImage!.transparentAssetId,
+              previewPath: null,
+              fit: BoxFit.contain,
+              caption: context.tr(LocaleKeys.currentImage),
+            ),
+          (
+            identity: detail.sourcePhoto.assetId,
+            previewPath: null,
+            fit: BoxFit.cover,
+            caption: context.tr(LocaleKeys.sourcePhoto),
+          ),
+          for (final look in looks)
+            if (look.assetId != null)
+              (
+                identity: look.assetId!,
+                previewPath: 'v1/assets/${look.assetId!}/content',
+                fit: BoxFit.cover,
+                caption: context.tr(
+                  LocaleKeys.generatedLookCaption,
+                  namedArgs: {'date': lookDateText(context, look.createdAt)},
+                ),
+              ),
+        ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tileWidth = constraints.maxWidth * 0.8;
+        return SizedBox(
+          height: tileWidth * 5 / 4 + 30,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: tiles.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final tile = tiles[index];
+              final entrance = index == 0 && detail.currentImage != null
+                  ? MediaEntrance.shelf
+                  : MediaEntrance.fade;
+              return SizedBox(
+                key: ValueKey(tile.identity),
+                width: tileWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FormImageCard(
+                      aspectRatio: 4 / 5,
+                      child: CachedMedia(
+                        identity: tile.identity,
+                        previewPath: tile.previewPath,
+                        fit: tile.fit,
+                        online: online,
+                        entrance: entrance,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      tile.caption,
+                      style: FormTokens.small,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _FactRow extends StatelessWidget {
@@ -793,6 +789,7 @@ class _VersionTile extends StatelessWidget {
                           child: CachedMedia(
                             identity: version.transparentAssetId,
                             online: online,
+                            entrance: MediaEntrance.fade,
                           ),
                         ),
                       ),
@@ -839,11 +836,13 @@ class _VersionTile extends StatelessWidget {
                 const SizedBox(height: 9),
                 Text(
                   [
-                    DateFormat.yMMMd(context.locale.languageCode).format(
+                    DateFormat.yMd(context.locale.languageCode).format(
                       version.keptAt,
                     ),
                     context.tr('quality.${version.quality}'),
                   ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: FormTokens.small.copyWith(
                     color: current ? FormTokens.green : FormTokens.ink,
                     fontWeight: current ? FontWeight.w600 : FontWeight.w400,
@@ -851,6 +850,8 @@ class _VersionTile extends StatelessWidget {
                 ),
                 Text(
                   actionLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: FormTokens.small.copyWith(
                     color: current ? FormTokens.green : FormTokens.muted,
                     fontWeight: current ? FontWeight.w600 : FontWeight.w400,

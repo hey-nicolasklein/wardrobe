@@ -102,141 +102,149 @@ class _IntakePageState extends State<IntakePage> {
       final hasDrafts = state.drafts.isNotEmpty;
       return Scaffold(
         backgroundColor: FormTokens.paper,
+        extendBodyBehindAppBar: true,
         appBar: FormPageHeader(title: context.tr(LocaleKeys.intake_title)),
-        body: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: FormTokens.gutter),
-          children: [
-            const SizedBox(height: 8),
-            Text(
-              context.tr(LocaleKeys.intake_intro),
-              style: FormTokens.body.copyWith(color: FormTokens.muted),
+        body: Builder(
+          builder: (context) => ListView(
+            padding: EdgeInsets.fromLTRB(
+              FormTokens.gutter,
+              MediaQuery.paddingOf(context).top,
+              FormTokens.gutter,
+              MediaQuery.paddingOf(context).bottom,
             ),
-            const SizedBox(height: 16),
-            _UploadArea(
-              compact: hasDrafts,
-              enabled: enabled,
-              picking: _picking,
-              busy: state.busy,
-              onCamera: () => _pick(camera: true),
-              onLibrary: () => _pick(camera: false),
-            ),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: FormTokens.field,
-                borderRadius: BorderRadius.circular(FormTokens.inputRadius),
+            children: [
+              const SizedBox(height: 8),
+              Text(
+                context.tr(LocaleKeys.intake_intro),
+                style: FormTokens.body.copyWith(color: FormTokens.muted),
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                child: Text(
-                  context.tr(LocaleKeys.intake_cost),
-                  style: FormTokens.small.copyWith(color: FormTokens.noteInk),
-                ),
+              const SizedBox(height: 16),
+              _UploadArea(
+                compact: hasDrafts,
+                enabled: enabled,
+                picking: _picking,
+                busy: state.busy,
+                onCamera: () => _pick(camera: true),
+                onLibrary: () => _pick(camera: false),
               ),
-            ),
-            if (!online)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: FormNotice(
-                  text: context.tr(LocaleKeys.intake_offline),
-                  error: true,
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: FormTokens.field,
+                  borderRadius: BorderRadius.circular(FormTokens.inputRadius),
                 ),
-              ),
-            if (state.busy || _picking)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    minHeight: 3,
-                    value: state.progress > 0 ? state.progress : null,
-                    backgroundColor: FormTokens.line,
-                    color: FormTokens.green,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  child: Text(
+                    context.tr(LocaleKeys.intake_cost),
+                    style: FormTokens.small.copyWith(color: FormTokens.noteInk),
                   ),
                 ),
               ),
-            if (_pickerError != null) ...[
-              const SizedBox(height: 12),
-              FormNotice(text: context.tr(_pickerError!), error: true),
-              if (_pickerError == LocaleKeys.intake_permission)
-                TextButton(
-                  onPressed: AppSettings.openAppSettings,
-                  child: Text(context.tr(LocaleKeys.intake_openSettings)),
+              if (!online)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: FormNotice(
+                    text: context.tr(LocaleKeys.intake_offline),
+                    error: true,
+                  ),
                 ),
-            ],
-            if (state.error != null) ...[
-              const SizedBox(height: 12),
-              FormNotice(text: context.tr(state.error!), error: true),
-            ],
-            for (final draft in state.drafts)
-              _DraftCard(
-                draft: draft,
-                state: state,
-                enabled: enabled,
-                onDiscard: () => _discard(draft),
-                onSelect: enabled && draft.phase == DraftPhase.ready
-                    ? (choice) => _bloc.add(
-                        IntakeEvent(
-                          IntakeAction.select,
-                          id: draft.id,
-                          choiceKey: choice.itemKey,
-                          value: !choice.selected,
-                        ),
-                      )
-                    : null,
-                onBatchOwning: enabled && draft.phase == DraftPhase.ready
-                    ? (value) => _bloc.add(
-                        IntakeEvent(
-                          IntakeAction.ownership,
-                          id: draft.id,
-                          value: value,
-                        ),
-                      )
-                    : null,
-                onChoiceOwning: enabled
-                    ? (choice, {required value}) {
-                        if (choice.locked) return;
-                        _bloc.add(
-                          IntakeEvent(
-                            IntakeAction.ownership,
-                            id: draft.id,
-                            choiceKey: choice.itemKey,
-                            value: value,
-                          ),
-                        );
-                      }
-                    : null,
-                onChoiceSelect: enabled
-                    ? (choice, {required value}) {
-                        if (choice.locked) return;
-                        _bloc.add(
+              if (state.busy || _picking)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      minHeight: 3,
+                      value: state.progress > 0 ? state.progress : null,
+                      backgroundColor: FormTokens.line,
+                      color: FormTokens.green,
+                    ),
+                  ),
+                ),
+              if (_pickerError != null) ...[
+                const SizedBox(height: 12),
+                FormNotice(text: context.tr(_pickerError!), error: true),
+                if (_pickerError == LocaleKeys.intake_permission)
+                  TextButton(
+                    onPressed: AppSettings.openAppSettings,
+                    child: Text(context.tr(LocaleKeys.intake_openSettings)),
+                  ),
+              ],
+              if (state.error != null) ...[
+                const SizedBox(height: 12),
+                FormNotice(text: context.tr(state.error!), error: true),
+              ],
+              for (final draft in state.drafts)
+                _DraftCard(
+                  draft: draft,
+                  state: state,
+                  enabled: enabled,
+                  onDiscard: () => _discard(draft),
+                  onSelect: enabled && draft.phase == DraftPhase.ready
+                      ? (choice) => _bloc.add(
                           IntakeEvent(
                             IntakeAction.select,
                             id: draft.id,
                             choiceKey: choice.itemKey,
+                            value: !choice.selected,
+                          ),
+                        )
+                      : null,
+                  onBatchOwning: enabled && draft.phase == DraftPhase.ready
+                      ? (value) => _bloc.add(
+                          IntakeEvent(
+                            IntakeAction.ownership,
+                            id: draft.id,
                             value: value,
                           ),
-                        );
-                      }
-                    : null,
-                onRetry: enabled
-                    ? () => _bloc.add(
-                        IntakeEvent(IntakeAction.retry, id: draft.id),
-                      )
-                    : null,
-                onSave:
-                    enabled &&
-                        draft.phase == DraftPhase.ready &&
-                        draft.choices.any((c) => c.selected && !c.enqueued)
-                    ? () => _bloc.add(
-                        IntakeEvent(IntakeAction.save, id: draft.id),
-                      )
-                    : null,
-              ),
-            const SizedBox(height: 24),
-          ],
+                        )
+                      : null,
+                  onChoiceOwning: enabled
+                      ? (choice, {required value}) {
+                          if (choice.locked) return;
+                          _bloc.add(
+                            IntakeEvent(
+                              IntakeAction.ownership,
+                              id: draft.id,
+                              choiceKey: choice.itemKey,
+                              value: value,
+                            ),
+                          );
+                        }
+                      : null,
+                  onChoiceSelect: enabled
+                      ? (choice, {required value}) {
+                          if (choice.locked) return;
+                          _bloc.add(
+                            IntakeEvent(
+                              IntakeAction.select,
+                              id: draft.id,
+                              choiceKey: choice.itemKey,
+                              value: value,
+                            ),
+                          );
+                        }
+                      : null,
+                  onRetry: enabled
+                      ? () => _bloc.add(
+                          IntakeEvent(IntakeAction.retry, id: draft.id),
+                        )
+                      : null,
+                  onSave:
+                      enabled &&
+                          draft.phase == DraftPhase.ready &&
+                          draft.choices.any((c) => c.selected && !c.enqueued)
+                      ? () => _bloc.add(
+                          IntakeEvent(IntakeAction.save, id: draft.id),
+                        )
+                      : null,
+                ),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       );
     },

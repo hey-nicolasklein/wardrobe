@@ -2,7 +2,6 @@
   "appName": "FORM",
   "feed": "Feed",
   "wardrobe": "Kleiderschrank",
-  "settings": "Einstellungen",
   "feedTitle": "Dein Stil. Neue Ideen.",
   "wardrobeTitle": "Platz für Lieblingsstücke.",
   "feedFoundation": "Die Verbindung steht. Deine Looks folgen in der Feed-Phase.",
@@ -91,8 +90,8 @@
   },
   "collection": {
     "all": "Alle",
-    "owning": "Owning",
-    "wanting": "Wanting",
+    "owning": "Besitze ich",
+    "wanting": "Wünsche ich mir",
     "archived": "Archiviert"
   },
   "quality": {
@@ -376,6 +375,7 @@
     "newReference": "Deine neue Referenz"
   },
   "settings": {
+    "title": "Einstellungen",
     "heroEyebrow": "So, wie du es brauchst",
     "heroTitle": "Ganz dein Ding.",
     "heroSubtitle": "Dein privater Kleiderschrank auf deinem Server.",

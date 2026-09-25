@@ -71,6 +71,7 @@ class AppInfoSection extends StatelessWidget {
           const SizedBox(height: 8),
           ListTile(
             contentPadding: EdgeInsets.zero,
+            tileColor: FormTokens.field,
             title: Text(context.tr(LocaleKeys.server)),
             subtitle: Text(config.apiUri?.toString() ?? '—'),
             trailing: const Icon(Icons.chevron_right),
@@ -82,9 +83,7 @@ class AppInfoSection extends StatelessWidget {
             subtitle: Text(
               '${AppInfo.version} (${AppInfo.buildNumber}) · '
               '${context.tr(
-                config.flavor == 'production'
-                    ? LocaleKeys.production
-                    : LocaleKeys.development,
+                config.flavor == 'production' ? LocaleKeys.production : LocaleKeys.development,
               )}',
             ),
           ),

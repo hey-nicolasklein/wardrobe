@@ -35,6 +35,10 @@ abstract final class FormTokens {
   static const checkInk = Color(0xFF49603D);
   static const flatLayPaper = Color(0xFFF0EEE6);
   static const flatLayInk = Color(0xFF26351D);
+  static const lookStage = Color(0xFFE7E9E2);
+  static const switchTrack = Color(0xFFD9DACD);
+  static const switchSelected = Color(0xFFFFFDF7);
+  static const switchInk = Color(0xFF606855);
 
   static const gutter = 22.0;
   static const gap = 10.0;
