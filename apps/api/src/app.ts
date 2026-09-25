@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { itemMetadataSchema } from '@form/contracts';
-import { createPhotoItem, itemPreview, resetPersonalWardrobe } from '@form/service';
+import {
+  createPhotoItem,
+  isPersonalResetConfirmation,
+  itemPreview,
+  resetPersonalWardrobe,
+} from '@form/service';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -291,7 +296,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
         401,
       );
     const body = await context.req.json().catch(() => null);
-    if (body?.confirmation !== 'ALLES LÖSCHEN')
+    if (!isPersonalResetConfirmation(body?.confirmation))
       return context.json(
         errorPayload(
           'validation',

@@ -270,6 +270,12 @@ export const generationCostSummaryResponseSchema = z
   .object({ costs: generationCostSummarySchema })
   .strict();
 
+export const personalResetRequestSchema = z
+  .object({
+    confirmation: z.enum(['ALLES LÖSCHEN', 'DELETE EVERYTHING']),
+  })
+  .strict();
+
 export type ApiErrorCategory = z.infer<typeof apiErrorCategorySchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
 export type SignInRequest = z.infer<typeof signInRequestSchema>;

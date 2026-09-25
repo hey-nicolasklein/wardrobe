@@ -7,6 +7,7 @@ import {
   createWardrobeItemRequestSchema,
   createCharacterSheetRequestSchema,
   createLookRequestSchema,
+  personalResetRequestSchema,
   detectionProposalsResponseSchema,
   enqueueGenerationRequestSchema,
   garmentDetectionSchema,
@@ -222,4 +223,21 @@ test('look occasions accept supported choices and reject unknown ones', () => {
   assert.equal(createLookRequestSchema.safeParse({
     idempotencyKey: 'look-command-0123456789', occasion: 'unknown',
   }).success, false);
+});
+
+test('personal reset accepts legacy and locale-independent confirmations', () => {
+  assert.equal(
+    personalResetRequestSchema.parse({ confirmation: 'ALLES LÖSCHEN' })
+      .confirmation,
+    'ALLES LÖSCHEN',
+  );
+  assert.equal(
+    personalResetRequestSchema.parse({ confirmation: 'DELETE EVERYTHING' })
+      .confirmation,
+    'DELETE EVERYTHING',
+  );
+  assert.equal(
+    personalResetRequestSchema.safeParse({ confirmation: 'wrong' }).success,
+    false,
+  );
 });

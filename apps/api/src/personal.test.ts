@@ -108,6 +108,11 @@ test(
         400,
       );
       assert.equal(
+        (await post('/v1/personal/reset', { confirmation: 'DELETE EVERYTHING' }))
+          .status,
+        409,
+      );
+      assert.equal(
         (await post('/v1/personal/reset', { confirmation: 'ALLES LÖSCHEN' }))
           .status,
         409,

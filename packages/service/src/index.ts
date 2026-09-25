@@ -15,3 +15,4 @@ export * from './storage.js';
 export * from './wardrobe.js';
 
 export * from './personal.js';
+export * from './personal-reset.js';
