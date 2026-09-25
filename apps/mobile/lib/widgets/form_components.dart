@@ -718,6 +718,118 @@ class FormChoiceChips extends StatelessWidget {
   }
 }
 
+/// Modal routes that host a [FormSheet] with a scrolling body.
+const _formSheetExtent = 0.94;
+
+Widget formSheetDraggableWrapper(Widget child) =>
+    _FormSheetDraggableWrapper(child: child);
+
+class _FormSheetDraggableWrapper extends StatefulWidget {
+  const _FormSheetDraggableWrapper({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_FormSheetDraggableWrapper> createState() =>
+      _FormSheetDraggableWrapperState();
+}
+
+class _FormSheetDraggableWrapperState
+    extends State<_FormSheetDraggableWrapper> {
+  final GlobalKey _contentKey = GlobalKey();
+  final DraggableScrollableController _sheetController =
+      DraggableScrollableController();
+  double _openExtent = _formSheetExtent;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleExtentUpdate();
+  }
+
+  @override
+  void dispose() {
+    _sheetController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FormSheetDraggableWrapper oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.child != widget.child) {
+      _scheduleExtentUpdate();
+    }
+  }
+
+  // Content is laid out against the full sheet height (not the current
+  // extent), so its measured height is its natural size and can grow again.
+  void _scheduleExtentUpdate() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _availableHeight <= 0) return;
+      final box = _contentKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.hasSize) return;
+
+      final openExtent = (box.size.height / _availableHeight).clamp(
+        0.05,
+        _formSheetExtent,
+      );
+      if ((_openExtent - openExtent).abs() < 0.002) return;
+
+      setState(() => _openExtent = openExtent);
+      // Once dragged, the sheet ignores a new initialChildSize, so move it
+      // after the rebuild has applied the new maxChildSize.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _sheetController.isAttached) {
+          _sheetController.jumpTo(openExtent);
+        }
+      });
+    });
+  }
+
+  double _availableHeight = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _availableHeight = constraints.maxHeight;
+        return DraggableScrollableSheet(
+          expand: false,
+          controller: _sheetController,
+          initialChildSize: _openExtent,
+          minChildSize: 0,
+          maxChildSize: _openExtent,
+          snap: true,
+          snapAnimationDuration: FormTokens.sheetDuration,
+          builder: (context, scrollController) =>
+              NotificationListener<SizeChangedLayoutNotification>(
+                onNotification: (_) {
+                  _scheduleExtentUpdate();
+                  return false;
+                },
+                child: ClipRect(
+                  child: OverflowBox(
+                    alignment: Alignment.topCenter,
+                    minHeight: 0,
+                    maxHeight: constraints.maxHeight * _formSheetExtent,
+                    child: PrimaryScrollController(
+                      controller: scrollController,
+                      child: SizeChangedLayoutNotifier(
+                        child: KeyedSubtree(
+                          key: _contentKey,
+                          child: widget.child,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+        );
+      },
+    );
+  }
+}
+
 Future<T?> showFormSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -725,6 +837,7 @@ Future<T?> showFormSheet<T>({
   context: context,
   isScrollControlled: true,
   useSafeArea: true,
+  showDragHandle: true,
   sheetAnimationStyle: AnimationStyle(
     duration: MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
@@ -733,7 +846,7 @@ Future<T?> showFormSheet<T>({
         ? Duration.zero
         : FormTokens.sheetDuration,
   ),
-  builder: builder,
+  builder: (context) => formSheetDraggableWrapper(builder(context)),
 );
 
 class FormSheet extends StatelessWidget {
@@ -741,70 +854,112 @@ class FormSheet extends StatelessWidget {
     required this.title,
     required this.child,
     this.footer,
+    this.leading,
+    this.scrollable = true,
     super.key,
   });
   final String title;
   final Widget child;
+
+  /// Sits before the title, e.g. a back button for a step inside the sheet.
+  final Widget? leading;
+
+  /// Off for content that sizes itself to the available height.
+  final bool scrollable;
 
   /// Stays pinned below the scrolling [child], like the PWA's sheet footers.
   final Widget? footer;
   @override
   Widget build(BuildContext context) {
     final viewInsets = MediaQuery.viewInsetsOf(context);
+    final sheetScroll = PrimaryScrollController.maybeOf(context);
+    final modalScroll = sheetScroll != null && scrollable;
     final maxHeight =
         (MediaQuery.sizeOf(context).height * 0.92 - viewInsets.top).clamp(
           240.0,
           double.infinity,
         );
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        FormTokens.gutter,
-        8,
-        FormTokens.gutter,
-        25 + viewInsets.bottom,
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  onPressed: () => context.pop(),
-                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                  style: IconButton.styleFrom(
-                    backgroundColor: FormTokens.field,
-                  ),
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Flexible(
-              child: SingleChildScrollView(
+    final bottomInset = modalScroll
+        ? 8 + MediaQuery.paddingOf(context).bottom
+        : 25.0;
+    // Without a footer the body scrolls to the sheet's edge and carries the
+    // bottom inset itself, so content is not clipped above the home indicator.
+    // The keyboard always pads outside the scroll view: the viewport then ends
+    // above it, and a focused field scrolls into sight.
+    final insetInBody = scrollable && footer == null;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final heightCap = modalScroll
+            ? constraints.maxHeight
+            : maxHeight.clamp(240.0, constraints.maxHeight);
+        final scrollBody = scrollable
+            ? SingleChildScrollView(
+                controller: modalScroll ? sheetScroll : null,
+                physics: modalScroll
+                    ? const AlwaysScrollableScrollPhysics()
+                    : null,
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: insetInBody
+                    ? EdgeInsets.only(bottom: bottomInset)
+                    : null,
                 child: child,
-              ),
+              )
+            : child;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            FormTokens.gutter,
+            8,
+            FormTokens.gutter,
+            (insetInBody ? 0 : bottomInset) + viewInsets.bottom,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: heightCap),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    if (leading != null) ...[
+                      leading!,
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => context.pop(),
+                      tooltip: MaterialLocalizations.of(
+                        context,
+                      ).closeButtonTooltip,
+                      style: IconButton.styleFrom(
+                        backgroundColor: FormTokens.field,
+                      ),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Flexible(child: scrollBody),
+                if (footer != null) ...[
+                  const Divider(height: 1, color: FormTokens.line),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: footer,
+                  ),
+                ],
+              ],
             ),
-            if (footer != null) ...[
-              const Divider(height: 1, color: FormTokens.line),
-              Padding(padding: const EdgeInsets.only(top: 16), child: footer),
-            ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

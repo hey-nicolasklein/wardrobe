@@ -166,6 +166,6 @@ class FormSheetPage extends Page<void> {
           ? Duration.zero
           : FormTokens.sheetDuration,
     ),
-    builder: (_) => FractionallySizedBox(heightFactor: 0.94, child: child),
+    builder: (_) => formSheetDraggableWrapper(child),
   );
 }
