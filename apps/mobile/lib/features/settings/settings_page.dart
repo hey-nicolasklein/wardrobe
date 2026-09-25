@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/app_config.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/settings/cost_section.dart';
 import 'package:form_mobile/features/settings/language_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/server_info.dart';
@@ -19,6 +20,8 @@ class SettingsPage extends StatelessWidget {
     body: ListView(
       padding: const EdgeInsets.all(FormTokens.gutter),
       children: [
+        const CostSection(),
+        const SizedBox(height: 20),
         FormPanel(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

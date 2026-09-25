@@ -14,6 +14,7 @@ class ItemState {
     this.failure,
     this.deleted = false,
     this.pending,
+    this.movedTo,
   });
   final ItemDetail? detail;
   final bool stale;
@@ -21,6 +22,7 @@ class ItemState {
   final ApiFailure? failure;
   final bool deleted;
   final ItemCommand? pending;
+  final String? movedTo;
   bool get canStartCommand => canMutate && pending == null;
   bool get canGenerate =>
       canStartCommand &&
@@ -64,9 +66,13 @@ class ItemCubit extends Cubit<ItemState> {
 
   Future<void> edit(ItemEdit edit) =>
       execute(ItemCommand.edit(state.detail!.wardrobeItem, edit.toJson()));
-  Future<void> move(String collection) => execute(
-    ItemCommand.edit(state.detail!.wardrobeItem, {'state': collection}),
-  );
+  Future<void> move(String collection) async {
+    if (collection == state.detail?.wardrobeItem.state) return;
+    await execute(
+      ItemCommand.edit(state.detail!.wardrobeItem, {'state': collection}),
+    );
+  }
+
   Future<void> restore(String version) async {
     if (state.canRestore(version)) {
       await execute(ItemCommand.restore(state.detail!.wardrobeItem, version));
@@ -158,6 +164,10 @@ class ItemCubit extends Cubit<ItemState> {
             detail: detail,
             stale: availability != _availability,
             deleted: command.method == 'DELETE',
+            movedTo:
+                command.method == 'PATCH' && command.body['metadata'] == null
+                ? command.body['state'] as String?
+                : null,
           ),
         );
       }

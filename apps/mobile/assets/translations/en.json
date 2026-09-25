@@ -73,7 +73,7 @@
   "itemColors": "Colors, separated by commas",
   "invalidColors": "Enter 1–6 colors, each up to 32 characters.",
   "notes": "Notes",
-  "collectionState": "Collection state",
+  "collectionState": "Collection",
   "customFeedback": "Your feedback (optional)",
   "requestPaidImage": "Request a paid image",
   "generationExplanation": "The new catalog image is adopted automatically. Older images remain available. Higher quality costs more.",
@@ -281,5 +281,29 @@
   "composerQualityLabel": "Image quality",
   "composerQualityNote": "Choose directly for this look. Higher quality costs more.",
   "lookImageCost": "Image generation",
-  "lookImageCostValue": "{value} US cents"
+  "lookImageCostValue": "{value} US cents",
+  "collectionMoved": {
+    "owning": "Moved to your wardrobe",
+    "wanting": "Added to your wishlist"
+  },
+  "costs": {
+    "title": "Generation costs",
+    "previousWeek": "Previous week",
+    "nextWeek": "Next week",
+    "thisWeek": "This week",
+    "loading": "Loading costs",
+    "retry": "Try again",
+    "total": "Total cost",
+    "average": "Average per completed look",
+    "looks": "Looks",
+    "wardrobe": "Catalog images",
+    "detection": "Detection",
+    "completed": "{count} completed",
+    "imageOne": "{count} image",
+    "imageMany": "{count} images",
+    "photoOne": "{count} photo",
+    "photoMany": "{count} photos",
+    "noShare": "–",
+    "share": "{percent} %"
+  }
 }

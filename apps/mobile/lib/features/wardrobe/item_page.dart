@@ -118,6 +118,12 @@ class _ItemViewState extends State<_ItemView> {
     child: BlocConsumer<ItemCubit, ItemState>(
       listener: (context, state) {
         if (state.deleted) context.pop();
+        if (['owning', 'wanting'].contains(state.movedTo)) {
+          showFormToast(
+            context,
+            context.tr('collectionMoved.${state.movedTo}'),
+          );
+        }
       },
       builder: (context, state) {
         final cubit = context.read<ItemCubit>();
@@ -315,23 +321,29 @@ class _ItemViewState extends State<_ItemView> {
                           ),
                         ),
                       const SizedBox(height: 18),
-                      FormPanel(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (detail.wardrobeItem.state == 'archived')
                             _FactRow(
                               label: context.tr(LocaleKeys.collectionState),
-                              value: context.tr(
-                                'collection.${detail.wardrobeItem.state}',
-                              ),
+                              value: context.tr('collection.archived'),
+                            )
+                          else
+                            FormCollectionToggle(
+                              selected: detail.wardrobeItem.state,
+                              labels: {
+                                'owning': context.tr('collection.owning'),
+                                'wanting': context.tr('collection.wanting'),
+                              },
+                              onSelected: enabled ? cubit.move : null,
                             ),
-                            if (detail.wardrobeItem.metadata.notes != null)
-                              _FactRow(
-                                label: context.tr(LocaleKeys.notes),
-                                value: detail.wardrobeItem.metadata.notes!,
-                              ),
-                          ],
-                        ),
+                          if (detail.wardrobeItem.metadata.notes != null)
+                            _FactRow(
+                              label: context.tr(LocaleKeys.notes),
+                              value: detail.wardrobeItem.metadata.notes!,
+                            ),
+                        ],
                       ),
                       if (detail.generating)
                         Padding(
@@ -932,19 +944,15 @@ class _EditItemState extends State<_EditItem> {
               labelText: context.tr(LocaleKeys.notes),
             ),
           ),
-          DropdownButtonFormField<String>(
-            initialValue: _state,
-            decoration: InputDecoration(
-              labelText: context.tr(LocaleKeys.collectionState),
-            ),
-            items: [
-              for (final s in itemStates)
-                DropdownMenuItem(
-                  value: s,
-                  child: Text(context.tr('collection.$s')),
-                ),
-            ],
-            onChanged: (v) => setState(() => _state = v!),
+          Text(context.tr(LocaleKeys.collectionState), style: FormTokens.small),
+          const SizedBox(height: 7),
+          FormRadioChoices(
+            options: {
+              for (final value in editableCollections(widget.item.state))
+                value: context.tr('collection.$value'),
+            },
+            selected: _state,
+            onSelected: (value) => setState(() => _state = value),
           ),
           const SizedBox(height: 16),
           FilledButton(

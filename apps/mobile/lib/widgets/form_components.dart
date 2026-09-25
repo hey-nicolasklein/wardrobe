@@ -541,3 +541,122 @@ void showFormToast(BuildContext context, String message) {
       ),
     );
 }
+
+class FormRadioChoices extends StatelessWidget {
+  const FormRadioChoices({
+    required this.options,
+    required this.selected,
+    required this.onSelected,
+    super.key,
+  });
+  final Map<String, String> options;
+  final String selected;
+  final ValueChanged<String>? onSelected;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(3),
+    decoration: BoxDecoration(
+      color: FormTokens.field,
+      borderRadius: BorderRadius.circular(FormTokens.inputRadius),
+    ),
+    child: Row(
+      children: [
+        for (final option in options.entries)
+          Expanded(
+            child: Semantics(
+              checked: option.key == selected,
+              inMutuallyExclusiveGroup: true,
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(44, 42),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 5,
+                    vertical: 7,
+                  ),
+                  backgroundColor: option.key == selected
+                      ? Colors.white
+                      : Colors.transparent,
+                  foregroundColor: option.key == selected
+                      ? FormTokens.green
+                      : FormTokens.muted,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                onPressed: onSelected == null
+                    ? null
+                    : () => onSelected!(option.key),
+                child: Text(option.value, textAlign: TextAlign.center),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class FormCollectionToggle extends StatelessWidget {
+  const FormCollectionToggle({
+    required this.selected,
+    required this.labels,
+    required this.onSelected,
+    super.key,
+  });
+  final String selected;
+  final Map<String, String> labels;
+  final ValueChanged<String>? onSelected;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 4, bottom: 20),
+    child: Row(
+      children: [
+        Expanded(child: Text(labels[selected]!, style: FormTokens.small)),
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: FormTokens.field,
+            border: Border.all(color: FormTokens.line),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: 4,
+            children: [
+              for (final entry in labels.entries)
+                Semantics(
+                  selected: selected == entry.key,
+                  child: IconButton(
+                    tooltip: entry.value,
+                    style: IconButton.styleFrom(
+                      fixedSize: const Size(44, 44),
+                      backgroundColor: selected == entry.key
+                          ? FormTokens.green
+                          : Colors.transparent,
+                      foregroundColor: selected == entry.key
+                          ? Colors.white
+                          : FormTokens.muted,
+                    ),
+                    onPressed: onSelected == null
+                        ? null
+                        : () => onSelected!(entry.key),
+                    icon: FormIcon(
+                      entry.key == 'owning'
+                          ? FormIconName.closet
+                          : FormIconName.heart,
+                      size: 20,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}

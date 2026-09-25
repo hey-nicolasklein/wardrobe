@@ -213,6 +213,46 @@ void main() {
     },
   );
 
+  test(
+    'collection toggle is versioned, retriable and disabled offline',
+    () async {
+      final cubit = ItemCubit(repository, 'wardrobe-item-0001');
+      addTearDown(cubit.close);
+      await cubit.load(online: true);
+      final before = requests.length;
+      await cubit.move('owning');
+      expect(requests.length, before);
+      respond = (_) async => jsonResponse('{}', 503);
+      await cubit.move('wanting');
+      final command = cubit.state.pending!;
+      expect(command.body['expectedRecordVersion'], 3);
+      expect(command.body['state'], 'wanting');
+      expect(cubit.state.movedTo, isNull);
+      await cubit.move('owning');
+      expect(cubit.state.pending, same(command));
+      var moved = false;
+      respond = (request) async {
+        moved = moved || request.method == 'PATCH';
+        final detail = detailJson(version: moved ? 4 : 3);
+        if (moved) {
+          (detail['wardrobeItem'] as Map<String, dynamic>)['state'] = 'wanting';
+        }
+        return jsonResponse(jsonEncode(detail));
+      };
+      await cubit.refresh();
+      await cubit.execute(command);
+      final patches = requests.where((r) => r.method == 'PATCH').toList();
+      expect(patches, hasLength(2));
+      expect(patches.first.data, patches.last.data);
+      expect(cubit.state.movedTo, 'wanting');
+      expect(cubit.state.detail!.wardrobeItem.recordVersion, 4);
+      cubit.markUnavailable();
+      final count = requests.length;
+      await cubit.move('owning');
+      expect(requests.length, count);
+    },
+  );
+
   test('offline signal during request cannot reenable mutations', () async {
     final cubit = ItemCubit(repository, 'wardrobe-item-0001');
     addTearDown(cubit.close);

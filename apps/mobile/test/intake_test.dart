@@ -510,6 +510,36 @@ void main() {
     await bloc.close();
   });
 
+  test('accessories are opt-in and retain their selection on reload', () async {
+    final saved = await draft(phase: DraftPhase.detecting);
+    api.respond = (_, _) async => {
+      'attempt': {'state': 'succeeded'},
+      'detections': [
+        proposal().toJson(),
+        {...proposal('accessory').toJson(), 'category': 'accessory'},
+      ],
+    };
+    await repository.poll(saved);
+    expect(saved.phase, DraftPhase.ready);
+    expect(saved.choices.map((choice) => choice.selected), [true, false]);
+    final restored = (await repository.load()).single;
+    expect(restored.choices.last.proposal!.category, 'accessory');
+    expect(restored.choices.last.selected, isFalse);
+    restored.choices.last.selected = true;
+    await repository.persist(restored);
+    expect((await repository.load()).single.choices.last.selected, isTrue);
+    expect(
+      ItemEdit(
+        name: 'Glasses',
+        category: 'accessory',
+        colors: 'black',
+        notes: '',
+        state: 'wanting',
+      ).metadata.category,
+      'accessory',
+    );
+  });
+
   test('failed and unsupported-only detection use manual fallback', () async {
     for (final status in ['failed', 'succeeded']) {
       final saved = await draft(phase: DraftPhase.detecting);

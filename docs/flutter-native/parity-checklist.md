@@ -259,15 +259,18 @@ feed/composer remains with Slice 3.5 / manual acceptance.
 
 `origin/main` moved past the frozen baseline with four commits (`11ead56`,
 `77a686f`, `1a1b733`, `a2397cc`). Slice 4 adopts the contract changes and the
-look-related behaviour above. These PWA changes outside Slice 4 need Nico's
-scope decision before they enter Stage 1:
+look-related behaviour above. Nico approved these additional changes for Stage 1:
 
-- [ ] `accessory` as a full category, with accessory detections opt-in during
-      intake (`W2`/`I3`).
-- [ ] Item detail switches between Owning and Wanting with an icon toggle, and
-      editing uses radio choices for the collection (`W2`).
-- [ ] Settings shows generation costs per week with catalog-image and
-      detection totals (`S6`).
+- [x] `accessory` as a full category, with accessory detections opt-in during
+      intake (`W2`/`I3`). Approved by Nico. Filters, editing, manual intake and
+      proposal review share the supported category list.
+- [x] Item detail switches between Owning and Wanting with an icon toggle, and
+      editing uses radio choices for the collection (`W2`). Approved by Nico.
+      Versioned PATCH, stable retry keys and PWA success messages. Archive is
+      a plain detail fact and an edit choice only for archived records.
+- [x] Settings shows generation costs per week with catalog-image and
+      detection totals (`S6`). Approved by Nico. ISO-week navigation, half-ring
+      gauge and two-decimal USD formatting; calendar and display logic tested.
 
 ## Character references
 
@@ -294,8 +297,10 @@ scope decision before they enter Stage 1:
 - [ ] `S6` Language can switch between German and English without restart and
       persists across launches.
 - [ ] `S6` Feed and Wardrobe generation quality defaults persist independently.
-- [ ] `S6` Cost presentation includes total look cost, successful look count,
-      average successful-look cost, character-reference cost, and visual split.
+- [x] `S6` Weekly cost presentation is done, pulled forward with Nico’s approval.
+      Includes total, look count/average, catalog-image and detection costs/counts
+      and the PWA half-ring split. Current PWA (`1a1b733`) removes the former
+      character-reference slice; the DTO retains historical character costs.
 - [ ] `S6` Downloaded cache can be cleared without deleting drafts or server data.
 - [ ] `S6` Private-server and app-version information is visible.
 - [ ] `S6` Full reset requires the localized typed phrase while online.

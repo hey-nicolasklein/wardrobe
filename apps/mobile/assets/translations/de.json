@@ -73,7 +73,7 @@
   "itemColors": "Farben, durch Komma getrennt",
   "invalidColors": "Bitte 1–6 Farben mit je höchstens 32 Zeichen eingeben.",
   "notes": "Notizen",
-  "collectionState": "Sammlungsstatus",
+  "collectionState": "Gehört in",
   "customFeedback": "Eigener Hinweis (optional)",
   "requestPaidImage": "Kostenpflichtiges Bild anfordern",
   "generationExplanation": "Das neue Katalogbild wird automatisch verwendet. Ältere Bilder bleiben auswählbar. Höhere Qualität kostet mehr.",
@@ -281,5 +281,29 @@
   "composerQualityLabel": "Bildqualität",
   "composerQualityNote": "Direkt im Test wählen. Höhere Qualität kostet mehr.",
   "lookImageCost": "Bildgenerierung",
-  "lookImageCostValue": "{value} US-Cent"
+  "lookImageCostValue": "{value} US-Cent",
+  "collectionMoved": {
+    "owning": "In deinen Schrank verschoben",
+    "wanting": "Zur Wunschliste hinzugefügt"
+  },
+  "costs": {
+    "title": "Generierungskosten",
+    "previousWeek": "Vorherige Woche",
+    "nextWeek": "Nächste Woche",
+    "thisWeek": "Diese Woche",
+    "loading": "Kosten werden geladen",
+    "retry": "Erneut versuchen",
+    "total": "Gesamtkosten",
+    "average": "Ø pro fertigem Look",
+    "looks": "Looks",
+    "wardrobe": "Katalogbilder",
+    "detection": "Erkennung",
+    "completed": "{count} fertig",
+    "imageOne": "{count} Bild",
+    "imageMany": "{count} Bilder",
+    "photoOne": "{count} Foto",
+    "photoMany": "{count} Fotos",
+    "noShare": "–",
+    "share": "{percent} %"
+  }
 }

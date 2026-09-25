@@ -31,3 +31,9 @@ class ItemEdit {
     'state': state,
   };
 }
+
+List<String> editableCollections(String state) => [
+  'owning',
+  'wanting',
+  if (state == 'archived') 'archived',
+];

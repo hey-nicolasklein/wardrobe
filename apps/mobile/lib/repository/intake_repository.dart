@@ -203,6 +203,7 @@ class IntakeRepository {
             itemKey: intakeKey(),
             generationKey: intakeKey(),
             proposal: p,
+            selected: p.category != 'accessory',
             ownership: draft.ownership,
           ),
         ),

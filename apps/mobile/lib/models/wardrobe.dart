@@ -13,8 +13,9 @@ const supportedCategories = [
   'bag',
   'hat',
   'scarf',
+  'accessory',
 ];
-const List<String> categories = [...supportedCategories, 'accessory'];
+const List<String> categories = supportedCategories;
 const itemStates = ['owning', 'wanting', 'archived'];
 const itemStatuses = [
   'detecting',

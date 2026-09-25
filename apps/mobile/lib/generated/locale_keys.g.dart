@@ -2,7 +2,7 @@
 
 // ignore_for_file: constant_identifier_names
 
-abstract class LocaleKeys {
+abstract class  LocaleKeys {
   static const appName = 'appName';
   static const feed = 'feed';
   static const wardrobe = 'wardrobe';
@@ -252,8 +252,7 @@ abstract class LocaleKeys {
   static const composerSummaryCategories = 'composerSummaryCategories';
   static const composerSummaryCategoriesOnly = 'composerSummaryCategoriesOnly';
   static const composerSummaryDefault = 'composerSummaryDefault';
-  static const composerOccasionSuffixNightOut =
-      'composerOccasionSuffixNightOut';
+  static const composerOccasionSuffixNightOut = 'composerOccasionSuffixNightOut';
   static const composerOccasionSuffixParty = 'composerOccasionSuffixParty';
   static const composerOccasionSuffixCasual = 'composerOccasionSuffixCasual';
   static const composerTrayLabel = 'composerTrayLabel';
@@ -277,4 +276,27 @@ abstract class LocaleKeys {
   static const composerQualityNote = 'composerQualityNote';
   static const lookImageCost = 'lookImageCost';
   static const lookImageCostValue = 'lookImageCostValue';
+  static const collectionMoved_owning = 'collectionMoved.owning';
+  static const collectionMoved_wanting = 'collectionMoved.wanting';
+  static const collectionMoved = 'collectionMoved';
+  static const costs_title = 'costs.title';
+  static const costs_previousWeek = 'costs.previousWeek';
+  static const costs_nextWeek = 'costs.nextWeek';
+  static const costs_thisWeek = 'costs.thisWeek';
+  static const costs_loading = 'costs.loading';
+  static const costs_retry = 'costs.retry';
+  static const costs_total = 'costs.total';
+  static const costs_average = 'costs.average';
+  static const costs_looks = 'costs.looks';
+  static const costs_wardrobe = 'costs.wardrobe';
+  static const costs_detection = 'costs.detection';
+  static const costs_completed = 'costs.completed';
+  static const costs_imageOne = 'costs.imageOne';
+  static const costs_imageMany = 'costs.imageMany';
+  static const costs_photoOne = 'costs.photoOne';
+  static const costs_photoMany = 'costs.photoMany';
+  static const costs_noShare = 'costs.noShare';
+  static const costs_share = 'costs.share';
+  static const costs = 'costs';
+
 }
