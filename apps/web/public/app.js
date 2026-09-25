@@ -257,6 +257,21 @@ async function action(button, operation) {
     button.disabled = false;
   }
 }
+// Kurzer Tipp-Impuls. Android nutzt die Vibration API, iOS (ab 18) kennt nur den
+// Haptik-Klick eines nativen Schalters, darum ein unsichtbares <input switch>.
+let hapticSwitch;
+function haptic() {
+  if (navigator.vibrate) return navigator.vibrate(8);
+  if (!hapticSwitch) {
+    hapticSwitch = document.createElement('label');
+    hapticSwitch.hidden = true;
+    hapticSwitch.innerHTML = '<input type="checkbox" switch>';
+    document.body.append(hapticSwitch);
+  }
+  hapticSwitch.click();
+}
+// Tab, dessen Icon beim nächsten Render einmal anspringt.
+let navPop = null;
 function shell(content) {
   $('#app').innerHTML =
     `<main class="shell"><header class="masthead"><span class="wordmark">FORM</span><span class="private"><span class="dot"></span> <span id="version">${esc(version)}</span></span></header>${!navigator.onLine ? '<p class="offline">Du bist offline. Verbinde dich mit stargate, um deinen Kleiderschrank zu öffnen.</p>' : ''}${content}</main><nav class="nav" aria-label="Hauptnavigation">${[
@@ -266,12 +281,22 @@ function shell(content) {
     ]
       .map(
         ([id, i, label]) =>
-          `<button data-nav="${id}" class="${page === id || (page === 'archived' && id === 'settings') ? 'active' : ''}" ${page === id ? 'aria-current="page"' : ''}>${icon(i)}<span>${label}</span></button>`,
+          `<button data-nav="${id}" class="${page === id || (page === 'archived' && id === 'settings') ? 'active' : ''}${navPop === id ? ' pop' : ''}" ${page === id ? 'aria-current="page"' : ''}>${icon(i)}<span>${label}</span></button>`,
       )
       .join('')}</nav>`;
   document
     .querySelectorAll('[data-nav]')
-    .forEach((b) => (b.onclick = () => navigate(b.dataset.nav)));
+    .forEach(
+      (b) =>
+        (b.onclick = () => {
+          if (b.dataset.nav !== page) {
+            haptic();
+            navPop = b.dataset.nav;
+            setTimeout(() => (navPop = null), 450);
+          }
+          navigate(b.dataset.nav);
+        }),
+    );
 }
 function navigate(next) {
   page = next;

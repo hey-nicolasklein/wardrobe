@@ -1075,6 +1075,22 @@ legend {
   color: var(--green);
   font-weight: 650;
 }
+.nav button .icon {
+  transition: transform 0.2s ease;
+}
+.nav button:active .icon {
+  transform: scale(0.86);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nav button.pop .icon {
+    animation: nav-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+}
+@keyframes nav-pop {
+  0% { transform: scale(0.8) rotate(-8deg); }
+  55% { transform: scale(1.18) rotate(4deg); }
+  100% { transform: scale(1) rotate(0); }
+}
 .primary,
 .secondary,
 .danger {
