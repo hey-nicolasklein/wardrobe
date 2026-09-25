@@ -303,46 +303,103 @@ class FormTabBar extends StatelessWidget {
               children: [
                 for (var i = 0; i < labels.length; i++)
                   Expanded(
-                    child: Semantics(
+                    child: _FormTab(
+                      icon: FormIconName.values[i],
+                      label: labels[i],
                       selected: i == selectedIndex,
-                      child: TextButton(
-                        style: TextButton.styleFrom(
-                          foregroundColor: i == selectedIndex
-                              ? FormTokens.green
-                              : FormTokens.muted,
-                          minimumSize: const Size(44, 49),
-                          padding: const EdgeInsets.all(4),
-                        ),
-                        onPressed: () {
-                          if (i != selectedIndex) {
-                            unawaited(HapticFeedback.lightImpact());
-                          }
-                          onSelected(i);
-                        },
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _FormTabIcon(
-                              FormIconName.values[i],
-                              selected: i == selectedIndex,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              labels[i],
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: i == selectedIndex
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      onPressed: () {
+                        if (i != selectedIndex) {
+                          unawaited(HapticFeedback.lightImpact());
+                        }
+                        onSelected(i);
+                      },
                     ),
                   ),
               ],
             ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// One tab bar entry. While held, icon and label sink slightly and fade, then
+/// spring back on release in place of a ripple.
+class _FormTab extends StatefulWidget {
+  const _FormTab({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+  final FormIconName icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  State<_FormTab> createState() => _FormTabState();
+}
+
+class _FormTabState extends State<_FormTab> {
+  final _states = WidgetStatesController();
+  var _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _states.addListener(() {
+      final pressed = _states.value.contains(WidgetState.pressed);
+      if (pressed != _pressed) setState(() => _pressed = pressed);
+    });
+  }
+
+  @override
+  void dispose() {
+    _states.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    selected: widget.selected,
+    child: TextButton(
+      statesController: _states,
+      style: TextButton.styleFrom(
+        foregroundColor: widget.selected ? FormTokens.green : FormTokens.muted,
+        minimumSize: const Size(44, 49),
+        padding: const EdgeInsets.all(4),
+        splashFactory: NoSplash.splashFactory,
+        overlayColor: Colors.transparent,
+      ),
+      onPressed: widget.onPressed,
+      child: AnimatedScale(
+        scale: _pressed ? 0.88 : 1,
+        duration: _pressed
+            ? const Duration(milliseconds: 90)
+            : FormTokens.sheetDuration,
+        curve: _pressed ? FormTokens.easeOut : FormTokens.pop,
+        child: AnimatedOpacity(
+          opacity: _pressed ? 0.6 : 1,
+          duration: _pressed
+              ? const Duration(milliseconds: 90)
+              : FormTokens.quick,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _FormTabIcon(widget.icon, selected: widget.selected),
+              const SizedBox(height: 6),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: widget.selected
+                      ? FontWeight.w600
+                      : FontWeight.w400,
+                ),
+              ),
+            ],
           ),
         ),
       ),
