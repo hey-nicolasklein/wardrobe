@@ -888,61 +888,84 @@ class _EditItemState extends State<_EditItem> {
   }
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    child: Form(
-      key: _form,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextFormField(
+  Widget build(BuildContext context) => Form(
+    key: _form,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SheetField(
+          label: context.tr(LocaleKeys.itemName),
+          child: TextFormField(
             controller: _name,
             maxLength: 80,
-            decoration: InputDecoration(
-              labelText: context.tr(LocaleKeys.itemName),
-            ),
+            decoration: const InputDecoration(counterText: ''),
             validator: (v) => !ItemMetadata.validName(v ?? '')
                 ? context.tr(LocaleKeys.requiredField)
                 : null,
           ),
-          DropdownButtonFormField<String>(
+        ),
+        _SheetField(
+          label: context.tr(LocaleKeys.category),
+          child: FormField<String>(
             initialValue: _category,
             validator: (value) => value == null
                 ? context.tr(LocaleKeys.chooseSupportedCategory)
                 : null,
-            decoration: InputDecoration(
-              labelText: context.tr(LocaleKeys.category),
-            ),
-            items: [
-              for (final c in supportedCategories)
-                DropdownMenuItem(
-                  value: c,
-                  child: Text(context.tr('categories.$c')),
+            builder: (field) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final c in supportedCategories)
+                      FormPill(
+                        label: context.tr('categories.$c'),
+                        selected: field.value == c,
+                        onTap: () {
+                          field.didChange(c);
+                          setState(() => _category = c);
+                        },
+                      ),
+                  ],
                 ),
-            ],
-            onChanged: (v) => setState(() => _category = v),
-          ),
-          TextFormField(
-            controller: _colors,
-            decoration: InputDecoration(
-              labelText: context.tr(LocaleKeys.itemColors),
+                if (field.hasError)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      field.errorText!,
+                      style: FormTokens.small.copyWith(
+                        color: FormTokens.danger,
+                      ),
+                    ),
+                  ),
+              ],
             ),
+          ),
+        ),
+        _SheetField(
+          label: context.tr(LocaleKeys.itemColors),
+          child: TextFormField(
+            controller: _colors,
             validator: (v) => ItemEdit.validColors(v ?? '')
                 ? null
                 : context.tr(LocaleKeys.invalidColors),
           ),
-          TextFormField(
+        ),
+        _SheetField(
+          label: context.tr(LocaleKeys.notes),
+          child: TextFormField(
             controller: _notes,
             maxLength: 2000,
-            minLines: 2,
+            minLines: 3,
             maxLines: 5,
-            decoration: InputDecoration(
-              labelText: context.tr(LocaleKeys.notes),
-            ),
+            decoration: const InputDecoration(counterText: ''),
           ),
-          Text(context.tr(LocaleKeys.collectionState), style: FormTokens.small),
-          const SizedBox(height: 7),
-          FormRadioChoices(
+        ),
+        _SheetField(
+          label: context.tr(LocaleKeys.collectionState),
+          child: FormChoiceChips(
             options: {
               for (final value in editableCollections(widget.item.state))
                 value: context.tr('collection.$value'),
@@ -950,33 +973,53 @@ class _EditItemState extends State<_EditItem> {
             selected: _state,
             onSelected: (value) => setState(() => _state = value),
           ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: () {
-              if (_form.currentState!.validate()) {
-                context.pop(
-                  ItemEdit(
-                    name: _name.text,
-                    category: _category!,
-                    colors: _colors.text,
-                    notes: _notes.text,
-                    state: _state,
-                  ),
-                );
-              }
-            },
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
-              backgroundColor: FormTokens.green,
-            ),
-            child: Text(context.tr(LocaleKeys.save)),
+        ),
+        const SizedBox(height: 8),
+        FilledButton(
+          onPressed: () {
+            if (_form.currentState!.validate()) {
+              context.pop(
+                ItemEdit(
+                  name: _name.text,
+                  category: _category!,
+                  colors: _colors.text,
+                  notes: _notes.text,
+                  state: _state,
+                ),
+              );
+            }
+          },
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(50),
+            backgroundColor: FormTokens.green,
           ),
-          TextButton(
-            onPressed: () => context.pop(),
-            child: Text(context.tr(LocaleKeys.cancel)),
-          ),
-        ],
-      ),
+          child: Text(context.tr(LocaleKeys.save)),
+        ),
+        TextButton(
+          onPressed: () => context.pop(),
+          child: Text(context.tr(LocaleKeys.cancel)),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Captioned field in a sheet form, spaced evenly from the next one.
+class _SheetField extends StatelessWidget {
+  const _SheetField({required this.label, required this.child});
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(label, style: FormTokens.small),
+        const SizedBox(height: 7),
+        child,
+      ],
     ),
   );
 }
@@ -1011,95 +1054,93 @@ class _GenerateItemState extends State<_GenerateItem> {
   @override
   Widget build(BuildContext context) {
     final hasShelf = widget.detail.currentImage != null;
-    return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            context.tr(LocaleKeys.generationExplanation),
-            style: FormTokens.body,
-          ),
-          if (hasShelf) ...[
-            const SizedBox(height: 20),
-            Text(
-              context.tr(LocaleKeys.customFeedback),
-              style: FormTokens.body.copyWith(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 9),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final suggestion in ['proportions', 'color', 'details'])
-                  _FeedbackChip(
-                    label: context.tr('feedback.$suggestion'),
-                    selected: _suggestions.contains(suggestion),
-                    onTap: () => setState(() {
-                      if (_suggestions.contains(suggestion)) {
-                        _suggestions.remove(suggestion);
-                      } else {
-                        _suggestions.add(suggestion);
-                      }
-                    }),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _feedback,
-              maxLength: 800,
-              minLines: 2,
-              maxLines: 4,
-              decoration: InputDecoration(
-                labelText: context.tr(LocaleKeys.customFeedback),
-              ),
-            ),
-          ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          context.tr(LocaleKeys.generationExplanation),
+          style: FormTokens.body,
+        ),
+        if (hasShelf) ...[
           const SizedBox(height: 20),
           Text(
-            context.tr('quality.low'),
-            style: FormTokens.body.copyWith(fontSize: 14),
+            context.tr(LocaleKeys.customFeedback),
+            style: FormTokens.body.copyWith(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 9),
-          FormChoiceChips(
-            options: {
-              for (final quality in qualities)
-                quality: context.tr('quality.$quality'),
-            },
-            selected: _quality,
-            onSelected: (value) => setState(() => _quality = value),
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: () {
-              final feedback = [
-                ..._suggestions.map((s) => context.tr('feedback.$s')),
-                if (_feedback.text.trim().isNotEmpty) _feedback.text.trim(),
-              ].join('. ');
-              context.pop(
-                ItemCommand.generate(
-                  widget.detail.wardrobeItem.id,
-                  _quality,
-                  feedback.isEmpty ? null : feedback,
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final suggestion in ['proportions', 'color', 'details'])
+                _FeedbackChip(
+                  label: context.tr('feedback.$suggestion'),
+                  selected: _suggestions.contains(suggestion),
+                  onTap: () => setState(() {
+                    if (_suggestions.contains(suggestion)) {
+                      _suggestions.remove(suggestion);
+                    } else {
+                      _suggestions.add(suggestion);
+                    }
+                  }),
                 ),
-              );
-            },
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(50),
-              backgroundColor: FormTokens.green,
-            ),
-            child: Text(context.tr(LocaleKeys.requestPaidImage)),
+            ],
           ),
-          TextButton(
-            onPressed: () => context.pop(),
-            child: Text(context.tr(LocaleKeys.cancel)),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _feedback,
+            maxLength: 800,
+            minLines: 2,
+            maxLines: 4,
+            decoration: InputDecoration(
+              labelText: context.tr(LocaleKeys.customFeedback),
+            ),
           ),
         ],
-      ),
+        const SizedBox(height: 20),
+        Text(
+          context.tr('quality.low'),
+          style: FormTokens.body.copyWith(fontSize: 14),
+        ),
+        const SizedBox(height: 9),
+        FormChoiceChips(
+          options: {
+            for (final quality in qualities)
+              quality: context.tr('quality.$quality'),
+          },
+          selected: _quality,
+          onSelected: (value) => setState(() => _quality = value),
+        ),
+        const SizedBox(height: 16),
+        FilledButton(
+          onPressed: () {
+            final feedback = [
+              ..._suggestions.map((s) => context.tr('feedback.$s')),
+              if (_feedback.text.trim().isNotEmpty) _feedback.text.trim(),
+            ].join('. ');
+            context.pop(
+              ItemCommand.generate(
+                widget.detail.wardrobeItem.id,
+                _quality,
+                feedback.isEmpty ? null : feedback,
+              ),
+            );
+          },
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(50),
+            backgroundColor: FormTokens.green,
+          ),
+          child: Text(context.tr(LocaleKeys.requestPaidImage)),
+        ),
+        TextButton(
+          onPressed: () => context.pop(),
+          child: Text(context.tr(LocaleKeys.cancel)),
+        ),
+      ],
     );
   }
 }
