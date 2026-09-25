@@ -214,7 +214,7 @@ void main() {
   );
 
   test(
-    'collection toggle is versioned, retriable and disabled offline',
+    'collection toggle flips at once, reverts on failure, disabled offline',
     () async {
       final cubit = ItemCubit(repository, 'wardrobe-item-0001');
       addTearDown(cubit.close);
@@ -222,14 +222,15 @@ void main() {
       final before = requests.length;
       await cubit.move('owning');
       expect(requests.length, before);
+
       respond = (_) async => jsonResponse('{}', 503);
-      await cubit.move('wanting');
-      final command = cubit.state.pending!;
-      expect(command.body['expectedRecordVersion'], 3);
-      expect(command.body['state'], 'wanting');
-      expect(cubit.state.movedTo, isNull);
-      await cubit.move('owning');
-      expect(cubit.state.pending, same(command));
+      final failing = cubit.move('wanting');
+      expect(cubit.state.detail!.wardrobeItem.state, 'wanting');
+      expect(cubit.state.canStartCommand, isTrue);
+      await failing;
+      expect(cubit.state.detail!.wardrobeItem.state, 'owning');
+      expect(cubit.state.failure, ApiFailure.unavailable);
+
       var moved = false;
       respond = (request) async {
         moved = moved || request.method == 'PATCH';
@@ -240,12 +241,14 @@ void main() {
         return jsonResponse(jsonEncode(detail));
       };
       await cubit.refresh();
-      await cubit.execute(command);
-      final patches = requests.where((r) => r.method == 'PATCH').toList();
-      expect(patches, hasLength(2));
-      expect(patches.first.data, patches.last.data);
-      expect(cubit.state.movedTo, 'wanting');
+      await cubit.move('wanting');
+      final patch = requests.lastWhere((r) => r.method == 'PATCH');
+      final body = patch.data as Map<String, dynamic>;
+      expect(body['expectedRecordVersion'], 3);
+      expect(body['state'], 'wanting');
+      expect(cubit.state.failure, isNull);
       expect(cubit.state.detail!.wardrobeItem.recordVersion, 4);
+
       cubit.markUnavailable();
       final count = requests.length;
       await cubit.move('owning');

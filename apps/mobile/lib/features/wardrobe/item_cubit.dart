@@ -14,7 +14,6 @@ class ItemState {
     this.failure,
     this.deleted = false,
     this.pending,
-    this.movedTo,
   });
   final ItemDetail? detail;
   final bool stale;
@@ -22,7 +21,6 @@ class ItemState {
   final ApiFailure? failure;
   final bool deleted;
   final ItemCommand? pending;
-  final String? movedTo;
   bool get canStartCommand => canMutate && pending == null;
   bool get canGenerate =>
       canStartCommand &&
@@ -42,6 +40,8 @@ class ItemCubit extends Cubit<ItemState> {
   int _availability = 0;
   Timer? _poll;
   bool _foreground = true;
+  Future<void> _moves = Future.value();
+  int _movesInFlight = 0;
 
   void setForeground({required bool foreground}) {
     _foreground = foreground;
@@ -66,10 +66,72 @@ class ItemCubit extends Cubit<ItemState> {
 
   Future<void> edit(ItemEdit edit) =>
       execute(ItemCommand.edit(state.detail!.wardrobeItem, edit.toJson()));
-  Future<void> move(String collection) async {
-    if (collection == state.detail?.wardrobeItem.state) return;
-    await execute(
-      ItemCommand.edit(state.detail!.wardrobeItem, {'state': collection}),
+
+  /// Flips the collection at once and keeps the page interactive while the
+  /// PATCH runs. Moves are sent in order against the last confirmed record
+  /// version, and a failure falls back to the confirmed detail.
+  Future<void> move(String collection) {
+    final detail = state.detail;
+    if (!state.canStartCommand || detail!.wardrobeItem.state == collection) {
+      return _moves;
+    }
+    emit(
+      ItemState(detail: _withCollection(detail, collection), stale: false),
+    );
+    _movesInFlight++;
+    return _moves = _moves.then((_) => _sendMove(collection));
+  }
+
+  Future<void> _sendMove(String collection) async {
+    try {
+      // Superseded by a later toggle before it was sent.
+      if (isClosed || state.detail?.wardrobeItem.state != collection) return;
+      final confirmed = (await repository.cachedDetail(id))!;
+      if (confirmed.wardrobeItem.state == collection) return;
+      await repository.execute(
+        id,
+        ItemCommand.edit(confirmed.wardrobeItem, {'state': collection}),
+      );
+      final fresh = await repository.cachedDetail(id);
+      if (!isClosed && _movesInFlight == 1) {
+        emit(ItemState(detail: fresh, stale: state.stale));
+      }
+    } on Exception catch (error) {
+      final failure = error is FormApiException
+          ? error.failure
+          : ApiFailure.unavailable;
+      final confirmed = await repository.cachedDetail(id);
+      if (!isClosed) {
+        emit(
+          ItemState(
+            detail: confirmed ?? state.detail,
+            stale: state.stale || failure == ApiFailure.unavailable,
+            failure: failure,
+          ),
+        );
+      }
+    } finally {
+      _movesInFlight--;
+    }
+  }
+
+  static ItemDetail _withCollection(ItemDetail detail, String collection) {
+    final item = detail.wardrobeItem;
+    return ItemDetail(
+      wardrobeItem: WardrobeItem(
+        id: item.id,
+        sourcePhotoId: item.sourcePhotoId,
+        state: collection,
+        status: item.status,
+        metadata: item.metadata,
+        currentShelfImageVersionId: item.currentShelfImageVersionId,
+        recordVersion: item.recordVersion,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      ),
+      sourcePhoto: detail.sourcePhoto,
+      shelfImageVersions: detail.shelfImageVersions,
+      generationAttempts: detail.generationAttempts,
     );
   }
 
@@ -103,7 +165,8 @@ class ItemCubit extends Cubit<ItemState> {
   }
 
   Future<void> refresh() async {
-    if (state.busy || isClosed || state.deleted) return;
+    // A server snapshot taken mid-move would briefly undo the toggle.
+    if (state.busy || isClosed || state.deleted || _movesInFlight > 0) return;
     final availability = _availability;
     emit(
       ItemState(
@@ -140,6 +203,7 @@ class ItemCubit extends Cubit<ItemState> {
   }
 
   Future<void> execute(ItemCommand command) async {
+    await _moves;
     if (!state.canMutate ||
         (state.pending != null && !identical(command, state.pending))) {
       return;
@@ -164,10 +228,6 @@ class ItemCubit extends Cubit<ItemState> {
             detail: detail,
             stale: availability != _availability,
             deleted: command.method == 'DELETE',
-            movedTo:
-                command.method == 'PATCH' && command.body['metadata'] == null
-                ? command.body['state'] as String?
-                : null,
           ),
         );
       }

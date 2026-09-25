@@ -1181,6 +1181,8 @@ class FormRadioChoices extends StatelessWidget {
   );
 }
 
+/// Owning/wanting switch: a green thumb slides between the two icons and the
+/// caption cross-fades to the new collection.
 class FormCollectionToggle extends StatelessWidget {
   const FormCollectionToggle({
     required this.selected,
@@ -1192,54 +1194,136 @@ class FormCollectionToggle extends StatelessWidget {
   final Map<String, String> labels;
   final ValueChanged<String>? onSelected;
 
+  static const _slide = Duration(milliseconds: 280);
+  static const _button = 44.0;
+
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 4, bottom: 20),
-    child: Row(
-      children: [
-        Expanded(child: Text(labels[selected]!, style: FormTokens.small)),
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: FormTokens.field,
-            border: Border.all(color: FormTokens.line),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 4,
-            children: [
-              for (final entry in labels.entries)
-                Semantics(
-                  selected: selected == entry.key,
-                  child: IconButton(
-                    tooltip: entry.value,
-                    style: IconButton.styleFrom(
-                      fixedSize: const Size(44, 44),
-                      backgroundColor: selected == entry.key
-                          ? FormTokens.green
-                          : Colors.transparent,
-                      foregroundColor: selected == entry.key
-                          ? Colors.white
-                          : FormTokens.muted,
-                    ),
-                    onPressed: onSelected == null
-                        ? null
-                        : () => onSelected!(entry.key),
-                    icon: FormIcon(
-                      entry.key == 'owning'
-                          ? FormIconName.closet
-                          : FormIconName.heart,
-                      size: 20,
-                    ),
-                  ),
+  Widget build(BuildContext context) {
+    final keys = labels.keys.toList();
+    final index = keys.indexOf(selected);
+    final animate = !MediaQuery.disableAnimationsOf(context);
+    final duration = animate ? _slide : Duration.zero;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 20),
+      child: Row(
+        children: [
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: animate ? FormTokens.quick : Duration.zero,
+              layoutBuilder: (current, previous) => Stack(
+                alignment: Alignment.centerLeft,
+                children: [...previous, ?current],
+              ),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween(
+                    begin: const Offset(0, 0.3),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
                 ),
-            ],
+              ),
+              child: Text(
+                labels[selected]!,
+                key: ValueKey(selected),
+                style: FormTokens.small,
+              ),
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+          AnimatedOpacity(
+            opacity: onSelected == null ? 0.5 : 1,
+            duration: FormTokens.quick,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: FormTokens.field,
+                border: Border.all(color: FormTokens.line),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: SizedBox(
+                width: _button * keys.length + 4 * (keys.length - 1),
+                height: _button,
+                child: Stack(
+                  children: [
+                    if (index >= 0)
+                      AnimatedAlign(
+                        duration: duration,
+                        curve: FormTokens.easeOut,
+                        alignment: Alignment(
+                          keys.length == 1
+                              ? 0
+                              : -1 + 2 * index / (keys.length - 1),
+                          0,
+                        ),
+                        child: const SizedBox.square(
+                          dimension: _button,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: FormTokens.green,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ),
+                    Row(
+                      spacing: 4,
+                      children: [
+                        for (final entry in labels.entries)
+                          Semantics(
+                            selected: selected == entry.key,
+                            child: IconButton(
+                              tooltip: entry.value,
+                              style: IconButton.styleFrom(
+                                fixedSize: const Size.square(_button),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                backgroundColor: Colors.transparent,
+                                disabledBackgroundColor: Colors.transparent,
+                              ),
+                              onPressed: onSelected == null
+                                  ? null
+                                  : () {
+                                      if (entry.key != selected) {
+                                        unawaited(
+                                          HapticFeedback.mediumImpact(),
+                                        );
+                                      }
+                                      onSelected!(entry.key);
+                                    },
+                              icon: TweenAnimationBuilder<Color?>(
+                                duration: duration,
+                                curve: Curves.easeOutCubic,
+                                tween: ColorTween(
+                                  end: selected == entry.key
+                                      ? Colors.white
+                                      : FormTokens.muted,
+                                ),
+                                builder: (context, color, _) => AnimatedScale(
+                                  scale: selected == entry.key ? 1 : 0.88,
+                                  duration: duration,
+                                  curve: FormTokens.pop,
+                                  child: FormIcon(
+                                    entry.key == 'owning'
+                                        ? FormIconName.closet
+                                        : FormIconName.heart,
+                                    size: 20,
+                                    color: color,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class FormStatusBadge extends StatelessWidget {

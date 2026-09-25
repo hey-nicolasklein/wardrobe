@@ -120,12 +120,6 @@ class _ItemViewState extends State<_ItemView> {
     child: BlocConsumer<ItemCubit, ItemState>(
       listener: (context, state) {
         if (state.deleted) context.pop();
-        if (['owning', 'wanting'].contains(state.movedTo)) {
-          showFormToast(
-            context,
-            context.tr('collectionMoved.${state.movedTo}'),
-          );
-        }
       },
       builder: (context, state) {
         final cubit = context.read<ItemCubit>();

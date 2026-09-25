@@ -276,9 +276,6 @@ abstract class LocaleKeys {
   static const composerQualityNote = 'composerQualityNote';
   static const lookImageCost = 'lookImageCost';
   static const lookImageCostValue = 'lookImageCostValue';
-  static const collectionMoved_owning = 'collectionMoved.owning';
-  static const collectionMoved_wanting = 'collectionMoved.wanting';
-  static const collectionMoved = 'collectionMoved';
   static const costs_title = 'costs.title';
   static const costs_previousWeek = 'costs.previousWeek';
   static const costs_nextWeek = 'costs.nextWeek';

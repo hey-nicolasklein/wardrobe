@@ -281,10 +281,6 @@
   "composerQualityNote": "Choose directly for this look. Higher quality costs more.",
   "lookImageCost": "Image generation",
   "lookImageCostValue": "{value} US cents",
-  "collectionMoved": {
-    "owning": "Moved to your wardrobe",
-    "wanting": "Added to your wishlist"
-  },
   "costs": {
     "title": "Generation costs",
     "previousWeek": "Previous week",

@@ -281,10 +281,6 @@
   "composerQualityNote": "Direkt im Test wählen. Höhere Qualität kostet mehr.",
   "lookImageCost": "Bildgenerierung",
   "lookImageCostValue": "{value} US-Cent",
-  "collectionMoved": {
-    "owning": "In deinen Schrank verschoben",
-    "wanting": "Zur Wunschliste hinzugefügt"
-  },
   "costs": {
     "title": "Generierungskosten",
     "previousWeek": "Vorherige Woche",
