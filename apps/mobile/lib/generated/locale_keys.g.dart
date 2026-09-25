@@ -233,7 +233,6 @@ abstract class LocaleKeys {
   static const composerPreviewTitle = 'composerPreviewTitle';
   static const composerBack = 'composerBack';
   static const composerPreviewHint = 'composerPreviewHint';
-  static const composerTrayTitle = 'composerTrayTitle';
   static const composerTrayAction = 'composerTrayAction';
   static const composerReset = 'composerReset';
   static const composerRemovePiece = 'composerRemovePiece';

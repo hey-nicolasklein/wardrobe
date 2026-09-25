@@ -195,8 +195,12 @@ class ComposerCubit extends Cubit<ComposerState> {
 
   void closePreview() => emit(state.copyWith(previewExpanded: false));
 
-  void selectPiece(String? id) =>
-      emit(state.copyWith(selectedPieceId: () => id));
+  /// Tapping the highlighted piece again clears the highlight.
+  void selectPiece(String? id) => emit(
+    state.copyWith(
+      selectedPieceId: () => id == state.selectedPieceId ? null : id,
+    ),
+  );
 
   void reset() => emit(ComposerState(quality: _defaultQuality));
 

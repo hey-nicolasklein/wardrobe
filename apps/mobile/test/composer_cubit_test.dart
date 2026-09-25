@@ -97,6 +97,14 @@ void main() {
     expect(cubit.state.completeWithWardrobe, isTrue);
   });
 
+  test('tapping the highlighted preview piece again clears it', () {
+    final cubit = ComposerCubit(looks, preselectedIds: [shirt.id])
+      ..selectPiece(shirt.id);
+    expect(cubit.state.selectedPieceId, shirt.id);
+    cubit.selectPiece(shirt.id);
+    expect(cubit.state.selectedPieceId, isNull);
+  });
+
   test('selection stops at the contract limit', () {
     final cubit = ComposerCubit(
       looks,
@@ -111,11 +119,14 @@ void main() {
   });
 
   test('reset restores the feed quality default', () {
-    final cubit = ComposerCubit(
-      looks,
-      preselectedIds: [shirt.id],
-      defaultQuality: 'medium',
-    )..setQuality('high')..reset();
+    final cubit =
+        ComposerCubit(
+            looks,
+            preselectedIds: [shirt.id],
+            defaultQuality: 'medium',
+          )
+          ..setQuality('high')
+          ..reset();
     expect(cubit.state.quality, 'medium');
   });
 

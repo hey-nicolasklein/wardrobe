@@ -128,6 +128,7 @@ class FeedPage extends StatelessWidget {
                       itemBuilder: (context, index) {
                         final record = looks[index];
                         return LookCard(
+                          key: ValueKey(record.look.id),
                           record: record,
                           state: state,
                           garments: _garments(state, record.look),

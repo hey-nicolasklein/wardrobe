@@ -13,13 +13,14 @@ import 'package:form_mobile/features/feed/look_positions.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/repository/look_repository.dart';
+import 'package:form_mobile/repository/media_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:form_mobile/widgets/form_icon.dart';
 import 'package:go_router/go_router.dart';
 
-class LookCard extends StatelessWidget {
+class LookCard extends StatefulWidget {
   const LookCard({
     required this.record,
     required this.state,
@@ -43,31 +44,65 @@ class LookCard extends StatelessWidget {
   final VoidCallback onShare;
   final VoidCallback onMenu;
 
-  Look get look => record.look;
+  @override
+  State<LookCard> createState() => _LookCardState();
+}
+
+/// A look in progress and a ready look share one layout, so the card keeps
+/// its size while it develops. It stays in the developing state until the
+/// worn image is decoded, then crossfades to it.
+class _LookCardState extends State<LookCard> {
+  late bool _imageReady = widget.record.look.isReady;
+
+  Look get look => widget.record.look;
+
+  @override
+  void didUpdateWidget(LookCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (look.isReady && !oldWidget.record.look.isReady && !_imageReady) {
+      unawaited(_prepareImage());
+    }
+  }
+
+  Future<void> _prepareImage() async {
+    final assetId = look.assetId;
+    try {
+      if (assetId != null) {
+        final file = await context.read<MediaRepository>().load(
+          assetId,
+          previewPath: widget.record.previewPath(assetId),
+          online: widget.online,
+        );
+        if (file != null && mounted) {
+          await precacheImage(FileImage(file), context);
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _imageReady = true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     if (look.state == 'failed') {
       return _FailedLookCard(
-        garments: garments,
-        online: online,
-        onRetry: onRetry,
-        onDelete: onDelete,
+        garments: widget.garments,
+        online: widget.online,
+        onRetry: widget.onRetry,
+        onDelete: widget.onDelete,
       );
     }
-    if (!look.isReady) {
-      return _DevelopingLookCard(
-        look: look,
-        garments: garments,
-        online: online,
-      );
-    }
-    final view = state.views[look.id] ?? LookFeedView.worn;
+    final developing = !look.isReady || !_imageReady;
+    final online = widget.online;
+    final state = widget.state;
+    final view = developing
+        ? LookFeedView.flat
+        : state.views[look.id] ?? LookFeedView.worn;
     final revealed = state.revealed.contains(look.id);
     final liked = state.liked[look.id] ?? false;
     final saved = state.saved[look.id] ?? false;
     final positions = lookItemPositions(
-      garments.map((g) => g.item?.metadata.category ?? 'top').toList(),
+      widget.garments.map((g) => g.item?.metadata.category ?? 'top').toList(),
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
@@ -78,28 +113,32 @@ class LookCard extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
-              child: Row(
-                children: [
-                  _LookViewSwitch(
-                    selected: view,
-                    onSelected: (value) =>
-                        context.read<FeedCubit>().setLookView(look.id, value),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: online ? onMenu : null,
-                    tooltip: context.tr(LocaleKeys.lookActions),
-                    icon: const FormIcon(FormIconName.more),
-                  ),
-                ],
+              child: _Settling(
+                developing: developing,
+                child: Row(
+                  children: [
+                    _LookViewSwitch(
+                      selected: view,
+                      onSelected: (value) =>
+                          context.read<FeedCubit>().setLookView(look.id, value),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: online ? widget.onMenu : null,
+                      tooltip: context.tr(LocaleKeys.lookActions),
+                      icon: const FormIcon(FormIconName.more),
+                    ),
+                  ],
+                ),
               ),
             ),
             AspectRatio(
               aspectRatio: 4 / 5,
               child: _LookStage(
-                record: record,
+                record: widget.record,
                 view: view,
-                garments: garments,
+                developing: developing,
+                garments: widget.garments,
                 positions: positions,
                 revealed: revealed,
                 online: online,
@@ -115,50 +154,53 @@ class LookCard extends StatelessWidget {
                   // strokes line up with the caption's edges.
                   Padding(
                     padding: const EdgeInsets.only(left: 4),
-                    child: Row(
-                      children: [
-                        _FooterAction(
-                          onPressed: online
-                              ? () => context.read<FeedCubit>().toggleMark(
-                                  look.id,
-                                  liked: true,
-                                )
-                              : null,
-                          tooltip: context.tr(LocaleKeys.lookLike),
-                          selected: liked,
-                          icon: FormIcon(
-                            liked
-                                ? FormIconName.heartFilled
-                                : FormIconName.heart,
-                            color: liked ? FormTokens.liked : FormTokens.ink,
+                    child: _Settling(
+                      developing: developing,
+                      child: Row(
+                        children: [
+                          _FooterAction(
+                            onPressed: online
+                                ? () => context.read<FeedCubit>().toggleMark(
+                                    look.id,
+                                    liked: true,
+                                  )
+                                : null,
+                            tooltip: context.tr(LocaleKeys.lookLike),
+                            selected: liked,
+                            icon: FormIcon(
+                              liked
+                                  ? FormIconName.heartFilled
+                                  : FormIconName.heart,
+                              color: liked ? FormTokens.liked : FormTokens.ink,
+                            ),
                           ),
-                        ),
-                        _FooterAction(
-                          onPressed: onShare,
-                          tooltip: context.tr(LocaleKeys.lookShare),
-                          icon: const FormIcon(
-                            FormIconName.share,
-                            color: FormTokens.ink,
+                          _FooterAction(
+                            onPressed: widget.onShare,
+                            tooltip: context.tr(LocaleKeys.lookShare),
+                            icon: const FormIcon(
+                              FormIconName.share,
+                              color: FormTokens.ink,
+                            ),
                           ),
-                        ),
-                        const Spacer(),
-                        _FooterAction(
-                          onPressed: online
-                              ? () => context.read<FeedCubit>().toggleMark(
-                                  look.id,
-                                  liked: false,
-                                )
-                              : null,
-                          tooltip: context.tr(LocaleKeys.lookSave),
-                          selected: saved,
-                          icon: FormIcon(
-                            saved
-                                ? FormIconName.bookmarkFilled
-                                : FormIconName.bookmark,
-                            color: FormTokens.ink,
+                          const Spacer(),
+                          _FooterAction(
+                            onPressed: online
+                                ? () => context.read<FeedCubit>().toggleMark(
+                                    look.id,
+                                    liked: false,
+                                  )
+                                : null,
+                            tooltip: context.tr(LocaleKeys.lookSave),
+                            selected: saved,
+                            icon: FormIcon(
+                              saved
+                                  ? FormIconName.bookmarkFilled
+                                  : FormIconName.bookmark,
+                              color: FormTokens.ink,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   Padding(
@@ -166,9 +208,31 @@ class LookCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _LookCaption(
-                          mood: look.concept?.mood,
-                          caption: lookCaption(look),
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 320),
+                          curve: FormTokens.easeOut,
+                          alignment: Alignment.topCenter,
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 320),
+                            layoutBuilder: (current, previous) => Stack(
+                              alignment: Alignment.topLeft,
+                              children: [
+                                ...previous,
+                                ?current,
+                              ],
+                            ),
+                            child: developing
+                                ? _DevelopingCaption(
+                                    key: const ValueKey('developing'),
+                                    look: look,
+                                    hasGarments: widget.garments.isNotEmpty,
+                                  )
+                                : _LookCaption(
+                                    key: const ValueKey('caption'),
+                                    mood: look.concept?.mood,
+                                    caption: lookCaption(look),
+                                  ),
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -184,6 +248,71 @@ class LookCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Dims and disables controls that only apply to a finished look.
+class _Settling extends StatelessWidget {
+  const _Settling({required this.developing, required this.child});
+
+  final bool developing;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    ignoring: developing,
+    child: AnimatedOpacity(
+      opacity: developing ? 0.35 : 1,
+      duration: const Duration(milliseconds: 320),
+      curve: FormTokens.easeOut,
+      child: child,
+    ),
+  );
+}
+
+/// Progress copy in the caption's place, styled like the caption: the step in
+/// bold, followed inline by what happens next.
+class _DevelopingCaption extends StatelessWidget {
+  const _DevelopingCaption({
+    required this.look,
+    required this.hasGarments,
+    super.key,
+  });
+
+  final Look look;
+  final bool hasGarments;
+
+  @override
+  Widget build(BuildContext context) {
+    final generating = look.state == 'generating' || look.isReady;
+    final title = context.tr(
+      generating
+          ? LocaleKeys.lookGeneratingTitle
+          : LocaleKeys.lookPlanningTitle,
+    );
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: '$title ',
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: FormTokens.ink,
+            ),
+          ),
+          TextSpan(
+            text: context.tr(
+              generating
+                  ? LocaleKeys.lookGeneratingBody
+                  : hasGarments
+                  ? LocaleKeys.lookPlanningWithItems
+                  : LocaleKeys.lookPlanningBody,
+            ),
+          ),
+        ],
+      ),
+      style: FormTokens.small.copyWith(fontSize: 13, height: 1.5),
     );
   }
 }
@@ -215,7 +344,7 @@ class _FooterAction extends StatelessWidget {
 /// Mood in bold, followed inline by the caption. Collapsed to two lines;
 /// tapping expands it, like the PWA's `.look-caption`.
 class _LookCaption extends StatefulWidget {
-  const _LookCaption({required this.mood, required this.caption});
+  const _LookCaption({required this.mood, required this.caption, super.key});
 
   final String? mood;
   final String caption;
@@ -349,13 +478,15 @@ class _LookViewSwitch extends StatelessWidget {
   );
 }
 
-/// The image area of a ready look. Both views stay mounted so switching never
+/// The image area of a look. Both views stay mounted so switching never
 /// reloads media: the two views crossfade, and the flat lay pieces
-/// rise in each time it is shown.
+/// rise in each time it is shown. While [developing], the flat lay fills in
+/// piece by piece under a slow sheen.
 class _LookStage extends StatefulWidget {
   const _LookStage({
     required this.record,
     required this.view,
+    required this.developing,
     required this.garments,
     required this.positions,
     required this.revealed,
@@ -364,6 +495,7 @@ class _LookStage extends StatefulWidget {
 
   final CachedLook record;
   final LookFeedView view;
+  final bool developing;
   final List<LookGarment> garments;
   final List<LookItemPosition> positions;
   final bool revealed;
@@ -378,6 +510,8 @@ class _LookStageState extends State<_LookStage>
   late final AnimationController _entrance = AnimationController(
     vsync: this,
     duration: FlatLayBoard.entranceDuration(widget.garments.length),
+    // A developing look already shows its flat lay, which must stay at rest
+    // while it fades out for the worn image.
     value: widget.view == LookFeedView.flat ? 1 : 0,
   );
 
@@ -421,7 +555,8 @@ class _LookStageState extends State<_LookStage>
                 garments: widget.garments,
                 online: widget.online,
                 entrance: _entrance,
-                onGarmentTap: openItem,
+                arrive: widget.developing,
+                onGarmentTap: widget.developing ? null : openItem,
               ),
             ),
           ),
@@ -434,7 +569,7 @@ class _LookStageState extends State<_LookStage>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  if (look.assetId != null)
+                  if (look.assetId != null && !widget.developing)
                     GestureDetector(
                       onTap: () =>
                           context.read<FeedCubit>().toggleRevealed(look.id),
@@ -456,6 +591,7 @@ class _LookStageState extends State<_LookStage>
               ),
             ),
           ),
+          _DevelopingSheen(active: widget.developing),
         ],
       ),
     );
@@ -503,73 +639,83 @@ class _FailedLookCard extends StatelessWidget {
   );
 }
 
-class _DevelopingLookCard extends StatelessWidget {
-  const _DevelopingLookCard({
-    required this.look,
-    required this.garments,
-    required this.online,
-  });
+/// A soft band of light that drifts across the stage while a look develops,
+/// then fades away once the worn image is in.
+class _DevelopingSheen extends StatefulWidget {
+  const _DevelopingSheen({required this.active});
 
-  final Look look;
-  final List<LookGarment> garments;
-  final bool online;
+  final bool active;
 
   @override
-  Widget build(BuildContext context) => FormPanel(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (garments.isNotEmpty)
-          FlatLayBoard(garments: garments, online: online)
-        else
-          const Icon(
-            Icons.checkroom_outlined,
-            size: 48,
-            color: FormTokens.emptyIcon,
-          ),
-        const SizedBox(height: 16),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: FormTokens.green,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr(
-                      look.state == 'generating'
-                          ? LocaleKeys.lookGeneratingTitle
-                          : LocaleKeys.lookPlanningTitle,
-                    ),
-                    style: FormTokens.body.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    context.tr(
-                      look.state == 'generating'
-                          ? LocaleKeys.lookGeneratingBody
-                          : garments.isEmpty
-                          ? LocaleKeys.lookPlanningBody
-                          : LocaleKeys.lookPlanningWithItems,
-                    ),
-                    style: FormTokens.small,
-                  ),
+  State<_DevelopingSheen> createState() => _DevelopingSheenState();
+}
+
+class _DevelopingSheenState extends State<_DevelopingSheen>
+    with SingleTickerProviderStateMixin {
+  // One pass plus a pause, so the light breathes rather than loops.
+  static const _pass = 0.72;
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_DevelopingSheen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync();
+  }
+
+  void _sync() {
+    final animate = widget.active && !MediaQuery.disableAnimationsOf(context);
+    if (animate && !_controller.isAnimating) {
+      unawaited(_controller.repeat());
+    }
+    // Once inactive the sheen finishes its pass under the fade-out.
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: AnimatedOpacity(
+      opacity: widget.active ? 1 : 0,
+      duration: const Duration(milliseconds: 480),
+      curve: FormTokens.easeOut,
+      onEnd: () {
+        if (!widget.active) _controller.stop();
+      },
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final t = Curves.easeInOut.transform(
+            (_controller.value / _pass).clamp(0, 1),
+          );
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment(-1 + 4 * t - 1.6, -1),
+                end: Alignment(-1 + 4 * t, 1),
+                colors: [
+                  Colors.white.withValues(alpha: 0),
+                  Colors.white.withValues(alpha: 0.36),
+                  Colors.white.withValues(alpha: 0),
                 ],
               ),
             ),
-          ],
-        ),
-      ],
+          );
+        },
+      ),
     ),
   );
 }
@@ -711,7 +857,7 @@ class _WornGarmentsState extends State<_WornGarments>
           opacity: t.clamp(0, 1),
           child: Transform.scale(
             scale: lerpDouble(position.originScale, 1, t),
-            child: GestureDetector(
+            child: PressableGarment(
               onTap: () => widget.onGarmentTap(garment.id),
               child: item == null
                   ? const SizedBox.shrink()

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/form_tokens.dart';
@@ -85,6 +86,18 @@ class _ComposerViewState extends State<_ComposerView> {
           },
           child: FormSheet(
             title: context.tr(LocaleKeys.createLook),
+            leading: state.previewExpanded
+                ? IconButton(
+                    onPressed: cubit.closePreview,
+                    tooltip: context.tr(LocaleKeys.composerBack),
+                    style: IconButton.styleFrom(
+                      backgroundColor: FormTokens.field,
+                    ),
+                    icon: const FormIcon(FormIconName.arrow, size: 20),
+                  )
+                : null,
+            // The flat lay fits the sheet instead of scrolling.
+            scrollable: !state.previewExpanded,
             footer: _ComposerFooter(
               state: state,
               selected: selected,
@@ -163,14 +176,34 @@ class _ComposerPicker extends StatelessWidget {
             ),
             Tooltip(
               message: context.tr(LocaleKeys.composerSelectedOnly),
-              child: FormPill(
-                label: context.tr(
-                  LocaleKeys.composerSelectedCount,
-                  namedArgs: {'count': '${state.selectedIds.length}'},
-                ),
-                leading: const FormIcon(FormIconName.check, size: 18),
+              // Ghost button like the PWA, tinted only while the filter is on.
+              child: Semantics(
                 selected: state.selectedOnly,
-                onTap: cubit.toggleSelectedOnly,
+                child: TextButton.icon(
+                  onPressed: cubit.toggleSelectedOnly,
+                  icon: const FormIcon(FormIconName.check, size: 18),
+                  label: Text(
+                    context.tr(
+                      LocaleKeys.composerSelectedCount,
+                      namedArgs: {'count': '${state.selectedIds.length}'},
+                    ),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: FormTokens.ink,
+                    backgroundColor: state.selectedOnly
+                        ? FormTokens.selectedTint
+                        : Colors.transparent,
+                    minimumSize: const Size(44, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    textStyle: const TextStyle(
+                      fontSize: 12,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
@@ -226,7 +259,10 @@ class _ComposerPicker extends StatelessWidget {
                   item: item,
                   selected: state.selectedIds.contains(item.id),
                   online: online,
-                  onTap: () => cubit.toggleItem(item.id),
+                  onTap: () {
+                    unawaited(HapticFeedback.selectionClick());
+                    cubit.toggleItem(item.id);
+                  },
                 ),
             ],
           ),
@@ -279,35 +315,137 @@ class _OccasionPresets extends StatelessWidget {
   Widget _preset(
     BuildContext context,
     ({String? value, FormIconName icon, String label}) preset,
-  ) {
-    final colors = FormTokens.occasions[preset.value ?? '']!;
-    final pressed = preset.value == selected;
+  ) => _OccasionTile(
+    icon: preset.icon,
+    label: context.tr(preset.label),
+    colors: FormTokens.occasions[preset.value ?? '']!,
+    selected: preset.value == selected,
+    onTap: () {
+      unawaited(HapticFeedback.selectionClick());
+      context.read<ComposerCubit>().setOccasion(preset.value);
+    },
+  );
+}
+
+/// An occasion preset that shrinks while pressed and plays an icon-specific
+/// animation on every tap.
+class _OccasionTile extends StatefulWidget {
+  const _OccasionTile({
+    required this.icon,
+    required this.label,
+    required this.colors,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final FormIconName icon;
+  final String label;
+  final ({Color tint, Color ink}) colors;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  State<_OccasionTile> createState() => _OccasionTileState();
+}
+
+class _OccasionTileState extends State<_OccasionTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _tap = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 650),
+  );
+  bool _pressed = false;
+
+  @override
+  void dispose() {
+    _tap.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    unawaited(_tap.forward(from: 0));
+    widget.onTap();
+  }
+
+  /// Transforms the icon for tap progress [t] (0 → 1), one motion per preset:
+  /// shuffle spins, moon swings, party pops and shakes, top hops.
+  Widget _animateIcon(double t, Widget icon) {
+    final fade = 1 - t;
+    return switch (widget.icon) {
+      FormIconName.shuffle => Transform.rotate(
+        angle: Curves.easeInOutBack.transform(t) * 2 * math.pi,
+        child: icon,
+      ),
+      FormIconName.moon => Transform.rotate(
+        angle: math.sin(t * 3 * math.pi) * fade * 0.6,
+        child: icon,
+      ),
+      FormIconName.party => Transform.rotate(
+        angle: math.sin(t * 5 * math.pi) * fade * 0.35,
+        child: Transform.scale(
+          scale: 1 + math.sin(t * math.pi) * 0.3,
+          child: icon,
+        ),
+      ),
+      _ => Transform.translate(
+        offset: Offset(0, -math.sin(t * math.pi) * 10),
+        child: icon,
+      ),
+    };
+  }
+
+  void _setPressed(bool value) {
+    if (_pressed != value) setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
     return Semantics(
       button: true,
-      selected: pressed,
+      selected: widget.selected,
       child: GestureDetector(
-        onTap: () => context.read<ComposerCubit>().setOccasion(preset.value),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
-          decoration: BoxDecoration(
-            color: colors.tint,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: pressed ? colors.ink : Colors.transparent,
-              width: 2,
-            ),
-          ),
-          child: Column(
-            children: [
-              FormIcon(preset.icon, color: colors.ink),
-              const SizedBox(height: 12),
-              Text(
-                context.tr(preset.label),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: colors.ink),
+        onTapDown: (_) => _setPressed(true),
+        onTapUp: (_) => _setPressed(false),
+        onTapCancel: () => _setPressed(false),
+        onTap: _handleTap,
+        child: AnimatedScale(
+          scale: _pressed ? 0.94 : 1,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
+            decoration: BoxDecoration(
+              color: colors.tint,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: widget.selected ? colors.ink : Colors.transparent,
+                width: 2,
               ),
-            ],
+            ),
+            child: Column(
+              children: [
+                AnimatedScale(
+                  scale: widget.selected ? 1.15 : 1,
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutBack,
+                  child: AnimatedBuilder(
+                    animation: _tap,
+                    builder: (context, icon) => _animateIcon(_tap.value, icon!),
+                    child: FormIcon(widget.icon, color: colors.ink),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: colors.ink),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -379,12 +517,20 @@ class _SelectItem extends StatelessWidget {
                             online: online,
                           ),
                         ),
-                        if (selected)
-                          const Positioned(
-                            top: 7,
-                            right: 7,
-                            child: _CheckBadge(),
+                        Positioned(
+                          top: 7,
+                          right: 7,
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 320),
+                            reverseDuration: const Duration(
+                              milliseconds: 240,
+                            ),
+                            transitionBuilder: _checkTransition,
+                            child: selected
+                                ? const _CheckBadge()
+                                : const SizedBox.shrink(),
                           ),
+                        ),
                       ],
                     ),
                   ),
@@ -413,6 +559,37 @@ class _SelectItem extends StatelessWidget {
     ),
   );
 }
+
+/// Eases the check badge in with a slight twist and lets it sink out with a
+/// soft fade. Outgoing children run the animation in reverse (1 → 0).
+Widget _checkTransition(Widget child, Animation<double> animation) =>
+    AnimatedBuilder(
+      animation: animation,
+      child: child,
+      builder: (context, child) {
+        if (animation.status == AnimationStatus.reverse) {
+          final t = Curves.easeIn.transform(animation.value);
+          return Opacity(
+            opacity: t,
+            child: Transform.translate(
+              offset: Offset(0, (1 - t) * 4),
+              child: Transform.scale(scale: 0.8 + 0.2 * t, child: child),
+            ),
+          );
+        }
+        final t = Curves.easeOutCubic.transform(animation.value);
+        return Opacity(
+          opacity: t,
+          child: Transform.rotate(
+            angle: (1 - t) * -0.35,
+            child: Transform.scale(
+              scale: 0.5 + 0.5 * Curves.easeOutBack.transform(animation.value),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
 
 class _CheckBadge extends StatelessWidget {
   const _CheckBadge();
@@ -541,16 +718,9 @@ class _ComposerPreview extends StatelessWidget {
         .where((item) => item.id == state.selectedPieceId)
         .firstOrNull;
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: cubit.closePreview,
-            icon: const FormIcon(FormIconName.arrow, size: 18),
-            label: Text(context.tr(LocaleKeys.composerBack)),
-          ),
-        ),
         Text(
           context.tr(LocaleKeys.composerPreviewHint),
           style: FormTokens.small,
@@ -566,46 +736,66 @@ class _ComposerPreview extends StatelessWidget {
             style: FormTokens.small,
           ),
         ] else
-          FlatLayBoard(
-            garments: [
-              for (final item in selected) LookGarment(id: item.id, item: item),
-            ],
-            online: true,
-            selectedId: state.selectedPieceId,
-            onGarmentTap: cubit.selectPiece,
+          // Shrinks the board to the height left over on short screens.
+          Flexible(
+            child: Align(
+              alignment: Alignment.topCenter,
+              heightFactor: 1,
+              child: FlatLayBoard(
+                garments: [
+                  for (final item in selected)
+                    LookGarment(id: item.id, item: item),
+                ],
+                online: true,
+                selectedId: state.selectedPieceId,
+                onGarmentTap: cubit.selectPiece,
+              ),
+            ),
           ),
         const SizedBox(height: 12),
-        if (piece == null)
-          Text(
-            context.tr(LocaleKeys.composerPieceHint),
-            style: FormTokens.small,
-          )
-        else
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      piece.metadata.name,
-                      style: FormTokens.body.copyWith(
-                        fontWeight: FontWeight.w600,
+        // Fixed height, so the hint and a highlighted piece swap without
+        // moving the sheet footer.
+        SizedBox(
+          height: 52,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: piece == null
+                ? Text(
+                    context.tr(LocaleKeys.composerPieceHint),
+                    style: FormTokens.small,
+                  )
+                : Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              piece.metadata.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: FormTokens.body.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              context.tr(
+                                'categories.${piece.metadata.category}',
+                              ),
+                              style: FormTokens.small,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    Text(
-                      context.tr('categories.${piece.metadata.category}'),
-                      style: FormTokens.small,
-                    ),
-                  ],
-                ),
-              ),
-              TextButton(
-                onPressed: () => cubit.toggleItem(piece.id),
-                child: Text(context.tr(LocaleKeys.composerRemovePiece)),
-              ),
-            ],
+                      TextButton(
+                        onPressed: () => cubit.toggleItem(piece.id),
+                        child: Text(context.tr(LocaleKeys.composerRemovePiece)),
+                      ),
+                    ],
+                  ),
           ),
+        ),
       ],
     );
   }
@@ -640,59 +830,87 @@ class _ComposerFooter extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        if (selected.isNotEmpty && !state.previewExpanded) ...[
-          _Tray(selected: selected, online: online),
-        ],
+        // Grows and collapses instead of making the sheet jump. The preview
+        // already shows the selection, so it gets no summary here.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: _TrayGarment.curve,
+          alignment: Alignment.topCenter,
+          child: state.previewExpanded
+              ? const SizedBox(width: double.infinity)
+              : selected.isNotEmpty
+              ? _Tray(
+                  selected: selected,
+                  summary: composerSummaryText(context, state),
+                  online: online,
+                )
+              : Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Text(
+                      composerSummaryText(context, state),
+                      style: FormTokens.small.copyWith(color: FormTokens.ink),
+                    ),
+                  ),
+                ),
+        ),
         Row(
           children: [
+            // Emptying everything from the preview would compete with
+            // removing the highlighted piece, so it lives in the picker only.
+            if (!state.previewExpanded) ...[
+              TextButton(
+                onPressed: cubit.reset,
+                child: Text(context.tr(LocaleKeys.composerReset)),
+              ),
+              const SizedBox(width: 12),
+            ],
             Expanded(
-              child: Text(
-                composerSummaryText(context, state),
-                style: FormTokens.small.copyWith(color: FormTokens.ink),
+              child: FilledButton(
+                onPressed: state.submitting || !connected
+                    ? null
+                    : () => unawaited(cubit.submit()),
+                child: state.submitting
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(context.tr(LocaleKeys.createLook)),
               ),
             ),
-            TextButton(
-              onPressed: cubit.reset,
-              child: Text(context.tr(LocaleKeys.composerReset)),
-            ),
           ],
-        ),
-        const SizedBox(height: 8),
-        FilledButton(
-          onPressed: state.submitting || !connected
-              ? null
-              : () => unawaited(cubit.submit()),
-          child: state.submitting
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : Text(context.tr(LocaleKeys.createLook)),
         ),
       ],
     );
   }
 }
 
-/// "Damit starten wir": up to five selected pieces that open the preview.
+/// The selection as one tappable row: overlapping thumbnails, the summary and
+/// a chevron into the flat-lay preview.
 class _Tray extends StatelessWidget {
-  const _Tray({required this.selected, required this.online});
+  const _Tray({
+    required this.selected,
+    required this.summary,
+    required this.online,
+  });
 
-  static const _slot = 56.0;
-  static const _moreWidth = 28.0;
+  static const _thumb = 44.0;
+  static const _step = 30.0;
+  static const _maxShown = 4;
 
   final List<WardrobeItem> selected;
+  final String summary;
   final bool online;
 
   @override
   Widget build(BuildContext context) {
-    final shown = selected.take(5).toList();
+    final shown = selected.take(_maxShown).toList();
     final more = selected.length - shown.length;
-    // Matches the PWA, which shrinks the tray on short screens.
-    final height = MediaQuery.sizeOf(context).height <= 740 ? 48.0 : 62.0;
+    final width = _thumb + (shown.length - 1) * _step;
     return Semantics(
       button: true,
       label: context.tr(
@@ -704,97 +922,69 @@ class _Tray extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: () => context.read<ComposerCubit>().openPreview(),
         child: Padding(
-          padding: const EdgeInsets.only(top: 8, bottom: 10),
+          padding: const EdgeInsets.only(bottom: 14),
           child: Row(
             children: [
-              SizedBox(
-                width: 105,
+              AnimatedContainer(
+                duration: _TrayGarment.duration,
+                curve: _TrayGarment.curve,
+                width: width,
+                height: _thumb,
+                child: Stack(
+                  // Entering pieces start 14px low and must stay visible.
+                  clipBehavior: Clip.none,
+                  children: [
+                    for (final (index, item) in shown.indexed)
+                      AnimatedPositioned(
+                        key: ValueKey(item.id),
+                        duration: _TrayGarment.duration,
+                        curve: _TrayGarment.curve,
+                        left: index * _step,
+                        top: 0,
+                        width: _thumb,
+                        height: _thumb,
+                        child: _TrayGarment(
+                          item: item,
+                          online: online,
+                          delay: index * 35,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (more > 0) ...[
+                const SizedBox(width: 6),
+                Text(
+                  '+$more',
+                  style: const TextStyle(fontSize: 12, color: FormTokens.muted),
+                ),
+              ],
+              const SizedBox(width: 12),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      context.tr(LocaleKeys.composerTrayTitle),
+                      summary,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                         color: FormTokens.ink,
                       ),
                     ),
-                    const SizedBox(height: 7),
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            context.tr(LocaleKeys.composerTrayAction),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: FormTokens.muted,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 3),
-                        const Icon(
-                          Icons.chevron_left,
-                          size: 13,
-                          color: FormTokens.muted,
-                        ),
-                      ],
+                    Text(
+                      context.tr(LocaleKeys.composerTrayAction),
+                      style: FormTokens.small,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: SizedBox(
-                  height: height,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      // Pieces are laid out right-aligned by hand so that a
-                      // slot shifting over glides instead of jumping.
-                      final end =
-                          constraints.maxWidth - (more > 0 ? _moreWidth : 0);
-                      final size = math.min(
-                        math.min(_slot, height),
-                        end / shown.length,
-                      );
-                      return Stack(
-                        children: [
-                          for (final (index, item) in shown.indexed)
-                            AnimatedPositioned(
-                              key: ValueKey(item.id),
-                              duration: _TrayGarment.duration,
-                              curve: _TrayGarment.curve,
-                              left: end - (shown.length - index) * size,
-                              top: (height - size) / 2,
-                              width: size,
-                              height: size,
-                              child: _TrayGarment(
-                                item: item,
-                                online: online,
-                                delay: index * 35,
-                              ),
-                            ),
-                          if (more > 0)
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              bottom: 0,
-                              width: _moreWidth,
-                              child: Center(
-                                child: Text(
-                                  '+$more',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: FormTokens.muted,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
+              const Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: FormTokens.muted,
               ),
             ],
           ),
@@ -873,10 +1063,19 @@ class _TrayGarmentState extends State<_TrayGarment>
         ),
       );
     },
-    child: CachedMedia(
-      identity: widget.item.previewIdentity,
-      previewPath: widget.item.previewPath,
-      online: widget.online,
+    // The paper border separates overlapping thumbnails.
+    child: Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: FormTokens.field,
+        border: Border.all(color: FormTokens.paper, width: 2),
+        borderRadius: BorderRadius.circular(FormTokens.inputRadius),
+      ),
+      child: CachedMedia(
+        identity: widget.item.previewIdentity,
+        previewPath: widget.item.previewPath,
+        online: widget.online,
+      ),
     ),
   );
 }
