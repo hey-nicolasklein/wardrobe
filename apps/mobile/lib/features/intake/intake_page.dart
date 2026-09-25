@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:app_settings/app_settings.dart';
@@ -151,19 +152,6 @@ class _IntakePageState extends State<IntakePage> {
                     error: true,
                   ),
                 ),
-              if (state.busy || _picking)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      minHeight: 3,
-                      value: state.progress > 0 ? state.progress : null,
-                      backgroundColor: FormTokens.line,
-                      color: FormTokens.green,
-                    ),
-                  ),
-                ),
               if (_pickerError != null) ...[
                 const SizedBox(height: 12),
                 FormNotice(text: context.tr(_pickerError!), error: true),
@@ -271,70 +259,74 @@ class _UploadArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final buttonsDisabled = busy || picking || !enabled;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: FormTokens.uploadTint,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: FormTokens.uploadLine),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: compact ? 16 : 35,
+    final camera = FilledButton.icon(
+      onPressed: buttonsDisabled ? null : onCamera,
+      icon: const Icon(Icons.camera_alt_outlined, size: 23),
+      label: Text(context.tr(LocaleKeys.intake_camera)),
+    );
+    final library = OutlinedButton.icon(
+      onPressed: buttonsDisabled ? null : onLibrary,
+      icon: const Icon(Icons.photo_library_outlined, size: 23),
+      label: Text(context.tr(LocaleKeys.intake_library)),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: CustomPaint(
+        foregroundPainter: const FormDashedBorder(
+          color: FormTokens.uploadLine,
+          radius: 20,
         ),
-        child: Column(
-          children: [
-            if (!compact) ...[
-              const Icon(
-                Icons.camera_alt_outlined,
-                size: 36,
-                color: FormTokens.green,
-              ),
-              const SizedBox(height: 16),
-            ],
-            if (compact)
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: buttonsDisabled ? null : onCamera,
-                      icon: const Icon(Icons.camera_alt_outlined, size: 23),
-                      label: Text(context.tr(LocaleKeys.intake_camera)),
-                    ),
-                  ),
-                  const SizedBox(width: FormTokens.gap),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: buttonsDisabled ? null : onLibrary,
-                      icon: const Icon(
-                        Icons.photo_library_outlined,
-                        size: 23,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: FormTokens.uploadTint,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: compact
+                ? const EdgeInsets.all(16)
+                : const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: compact
+                ? Row(
+                    children: [
+                      Expanded(child: camera),
+                      const SizedBox(width: FormTokens.gap),
+                      Expanded(child: library),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Icon(
+                        Icons.camera_alt_outlined,
+                        size: 30,
+                        color: FormTokens.green,
                       ),
-                      label: Text(context.tr(LocaleKeys.intake_library)),
-                    ),
+                      const SizedBox(height: 10),
+                      Text(
+                        context.tr(LocaleKeys.intake_uploadTitle),
+                        textAlign: TextAlign.center,
+                        style: FormTokens.heading.copyWith(fontSize: 24),
+                      ),
+                      const SizedBox(height: 6),
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 270),
+                          child: Text(
+                            context.tr(LocaleKeys.intake_uploadBody),
+                            textAlign: TextAlign.center,
+                            style: FormTokens.body.copyWith(
+                              color: FormTokens.muted,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      camera,
+                      const SizedBox(height: FormTokens.gap),
+                      library,
+                    ],
                   ),
-                ],
-              )
-            else
-              Column(
-                children: [
-                  FilledButton.icon(
-                    onPressed: buttonsDisabled ? null : onCamera,
-                    icon: const Icon(Icons.camera_alt_outlined, size: 23),
-                    label: Text(context.tr(LocaleKeys.intake_camera)),
-                  ),
-                  const SizedBox(height: FormTokens.gap),
-                  OutlinedButton.icon(
-                    onPressed: buttonsDisabled ? null : onLibrary,
-                    icon: const Icon(
-                      Icons.photo_library_outlined,
-                      size: 23,
-                    ),
-                    label: Text(context.tr(LocaleKeys.intake_library)),
-                  ),
-                ],
-              ),
-          ],
+          ),
         ),
       ),
     );
@@ -383,19 +375,6 @@ class _DraftCard extends StatelessWidget {
               title: _draftTitle(context),
               onDiscard: onDiscard,
             ),
-            if (state.activeDraftId == draft.id && state.progress > 0)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    minHeight: 3,
-                    value: state.progress,
-                    backgroundColor: FormTokens.line,
-                    color: FormTokens.green,
-                  ),
-                ),
-              ),
             if (draft.phase == DraftPhase.manual) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
@@ -863,6 +842,9 @@ class _DetectionChoiceRow extends StatelessWidget {
   final IntakeChoiceBoolCallback? onSelect;
   final IntakeChoiceBoolCallback? onOwning;
 
+  static const double _rowRadius = FormTokens.panelRadius;
+  static const _rowPadding = 10.0;
+
   @override
   Widget build(BuildContext context) {
     final selected = choice.selected;
@@ -872,44 +854,52 @@ class _DetectionChoiceRow extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: selected ? const Color(0xFFE7EDDF) : FormTokens.surface,
-        borderRadius: BorderRadius.circular(FormTokens.inputRadius),
+        borderRadius: BorderRadius.circular(_rowRadius),
         border: Border.all(
           color: selected ? const Color(0xFF9EAF92) : FormTokens.line,
         ),
       ),
-      child: Stack(
-        children: [
-          Semantics(
-            label: semanticsLabel,
-            button: true,
-            selected: selected,
-            enabled: rowEnabled,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(FormTokens.inputRadius),
-                onTap: rowEnabled
-                    ? () => onSelect!(choice, value: !choice.selected)
-                    : null,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 38),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 58,
-                        height: 74,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(9),
-                          child: ColoredBox(
-                            color: const Color(0xFFE2E6DE),
-                            child: DraftPhoto(
-                              draft: draft,
-                              crop: choice.proposal!.boundingBox,
-                            ),
-                          ),
+      child: Semantics(
+        label: semanticsLabel,
+        button: true,
+        selected: selected,
+        enabled: rowEnabled,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(_rowRadius),
+            onTap: rowEnabled
+                ? () => onSelect!(choice, value: !choice.selected)
+                : null,
+            child: Padding(
+              padding: const EdgeInsets.all(_rowPadding),
+              // The text column sets the row height. The photo is stretched to
+              // it (DraftPhoto uses a LayoutBuilder, so no IntrinsicHeight),
+              // the chip sits at the bottom and the checkbox stays centred.
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 58,
+                    child: ClipRRect(
+                      // Concentric with the row's corners.
+                      borderRadius: BorderRadius.circular(
+                        _rowRadius - _rowPadding,
+                      ),
+                      child: ColoredBox(
+                        color: const Color(0xFFE2E6DE),
+                        child: DraftPhoto(
+                          draft: draft,
+                          crop: choice.proposal!.boundingBox,
                         ),
                       ),
-                      const SizedBox(width: 10),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      const SizedBox(width: 70),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -922,7 +912,7 @@ class _DetectionChoiceRow extends StatelessWidget {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            const SizedBox(height: 3),
+                            const SizedBox(height: 2),
                             Text(
                               '$categoryLabel · '
                               '${choice.proposal!.colors.join(', ')}',
@@ -932,7 +922,7 @@ class _DetectionChoiceRow extends StatelessWidget {
                             ),
                             if (choice.itemId != null)
                               Padding(
-                                padding: const EdgeInsets.only(top: 6),
+                                padding: const EdgeInsets.only(top: 4),
                                 child: Text(
                                   context.tr(
                                     choice.enqueued
@@ -942,28 +932,26 @@ class _DetectionChoiceRow extends StatelessWidget {
                                   style: FormTokens.small,
                                 ),
                               ),
+                            const SizedBox(height: 12),
+                            _OwnershipChip(
+                              owning: choice.ownership == 'owning',
+                              enabled: enabled && !choice.locked,
+                              onChanged: onOwning == null
+                                  ? null
+                                  : (value) => onOwning!(choice, value: value),
+                            ),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 10),
                       _ChoiceNumber(selected: selected, index: index),
                     ],
                   ),
-                ),
+                ],
               ),
             ),
           ),
-          Positioned(
-            left: 80,
-            bottom: 10,
-            child: _OwnershipChip(
-              owning: choice.ownership == 'owning',
-              enabled: enabled && !choice.locked,
-              onChanged: onOwning == null
-                  ? null
-                  : (value) => onOwning!(choice, value: value),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1088,6 +1076,9 @@ IconData _categoryIcon(String theme) => switch (theme) {
 };
 
 /// Both preview crops and overlays use the prepared photo's pixel geometry.
+/// The whole draft photo with tappable detection boxes, or with [crop] a
+/// single detection that covers its box so the parent's rounded clip shapes
+/// every corner.
 class DraftPhoto extends StatelessWidget {
   const DraftPhoto({required this.draft, this.crop, this.onSelect, super.key});
   final IntakeDraft draft;
@@ -1096,38 +1087,59 @@ class DraftPhoto extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final source = Size(draft.width.toDouble(), draft.height.toDouble());
-    final region = crop?.pixels(source) ?? Offset.zero & source;
+    final image = Image.file(
+      File(draft.filePath),
+      fit: BoxFit.fill,
+      errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined),
+    );
+    if (crop != null) {
+      final region = crop!.pixels(source);
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final box = constraints.biggest;
+          final scale = math.max(
+            box.width / region.width,
+            box.height / region.height,
+          );
+          return ClipRect(
+            child: Stack(
+              children: [
+                Positioned(
+                  left:
+                      (box.width - region.width * scale) / 2 -
+                      region.left * scale,
+                  top:
+                      (box.height - region.height * scale) / 2 -
+                      region.top * scale,
+                  width: source.width * scale,
+                  height: source.height * scale,
+                  child: image,
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
     return Center(
       child: AspectRatio(
-        aspectRatio: region.width / region.height,
+        aspectRatio: source.width / source.height,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final scale = constraints.maxWidth / region.width;
+            final scale = constraints.maxWidth / source.width;
             return ClipRect(
               child: Stack(
                 children: [
-                  Positioned(
-                    left: -region.left * scale,
-                    top: -region.top * scale,
-                    width: source.width * scale,
-                    height: source.height * scale,
-                    child: Image.file(
-                      File(draft.filePath),
-                      fit: BoxFit.fill,
-                      errorBuilder: (_, _, _) =>
-                          const Icon(Icons.broken_image_outlined),
+                  Positioned.fill(child: image),
+                  for (final choice in draft.choices.where(
+                    (c) => c.proposal != null && !c.enqueued,
+                  ))
+                    _DetectionBoxOverlay(
+                      choice: choice,
+                      scale: scale,
+                      source: source,
+                      onSelect: onSelect,
                     ),
-                  ),
-                  if (crop == null)
-                    for (final choice in draft.choices.where(
-                      (c) => c.proposal != null && !c.enqueued,
-                    ))
-                      _DetectionBoxOverlay(
-                        choice: choice,
-                        scale: scale,
-                        source: source,
-                        onSelect: onSelect,
-                      ),
                 ],
               ),
             );

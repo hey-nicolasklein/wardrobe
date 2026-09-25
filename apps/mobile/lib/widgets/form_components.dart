@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
 import 'package:easy_localization/easy_localization.dart';
@@ -28,8 +29,9 @@ class FormPageHeader extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) => Stack(
     fit: StackFit.expand,
+    clipBehavior: Clip.none,
     children: [
-      const IgnorePointer(child: _ScrollEdgeBlur()),
+      const _ScrollAwareBlur(solid: true),
       AppBar(
         backgroundColor: Colors.transparent,
         systemOverlayStyle: SystemUiOverlayStyle.dark,
@@ -58,22 +60,42 @@ class FormPageHeader extends StatelessWidget implements PreferredSizeWidget {
 }
 
 /// App bar slot for tab pages whose [FormWordmark] scrolls with the content.
-/// It takes no layout space: the blur covers the status bar and hangs
-/// [_overhang] below it, fading in once the page scrolls so the wordmark
-/// stays sharp at rest. Use with `extendBodyBehindAppBar`.
-class FormScrollEdge extends StatefulWidget implements PreferredSizeWidget {
+/// It takes no layout space, only the scroll edge blur. Use with
+/// `extendBodyBehindAppBar`.
+class FormScrollEdge extends StatelessWidget implements PreferredSizeWidget {
   const FormScrollEdge({super.key});
-
-  static const _overhang = 32.0;
 
   @override
   Size get preferredSize => Size.zero;
 
   @override
-  State<FormScrollEdge> createState() => _FormScrollEdgeState();
+  Widget build(BuildContext context) => const AnnotatedRegion(
+    value: SystemUiOverlayStyle.dark,
+    // The scaffold only caps the app bar slot's height, so expand to fill it
+    // instead of collapsing to zero.
+    child: SizedBox.expand(
+      child: Stack(clipBehavior: Clip.none, children: [_ScrollAwareBlur()]),
+    ),
+  );
 }
 
-class _FormScrollEdgeState extends State<FormScrollEdge> {
+/// Scroll edge behind an app bar slot. The blur covers the slot and hangs
+/// [_overhang] below it, so the fade happens under the header instead of
+/// across it. [solid] swaps the blur for opaque paper that stays inside the
+/// slot and fades out over its bottom padding, leaving more room for content.
+/// Either way it fades in once the page scrolls, keeping the content sharp at
+/// rest. The parent Stack must not clip.
+class _ScrollAwareBlur extends StatefulWidget {
+  const _ScrollAwareBlur({this.solid = false});
+  final bool solid;
+
+  static const _overhang = 32.0;
+
+  @override
+  State<_ScrollAwareBlur> createState() => _ScrollAwareBlurState();
+}
+
+class _ScrollAwareBlurState extends State<_ScrollAwareBlur> {
   ScrollNotificationObserverState? _observer;
   double _visibility = 0;
 
@@ -96,38 +118,47 @@ class _FormScrollEdgeState extends State<FormScrollEdge> {
     if (notification.depth != 0 || notification.metrics.axis != Axis.vertical) {
       return;
     }
-    final visibility = (notification.metrics.pixels / FormScrollEdge._overhang)
-        .clamp(0.0, 1.0);
+    final visibility =
+        (notification.metrics.pixels / _ScrollAwareBlur._overhang).clamp(
+          0.0,
+          1.0,
+        );
     if (visibility != _visibility) setState(() => _visibility = visibility);
   }
 
   @override
-  Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
-    value: SystemUiOverlayStyle.dark,
-    // The scaffold only caps the app bar slot's height, so expand to fill it
-    // instead of collapsing to zero.
-    child: SizedBox.expand(
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: -FormScrollEdge._overhang,
-            // Scales blur strength rather than using Opacity, which a
-            // backdrop blur ignores (it would pop in at full strength).
-            // Linear keeps the blur strong further down than the default
-            // curve.
-            child: IgnorePointer(
-              child: _ScrollEdgeBlur(
-                fadeCurve: Curves.linear,
-                strength: _visibility,
+  Widget build(BuildContext context) => Positioned(
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: widget.solid ? 0 : -_ScrollAwareBlur._overhang,
+    // Scales blur strength rather than using Opacity, which a backdrop blur
+    // ignores (it would pop in at full strength). Linear keeps the blur
+    // strong further down than the default curve.
+    child: IgnorePointer(
+      child: widget.solid
+          ? Opacity(
+              opacity: _visibility,
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: ColoredBox(color: FormTokens.paper)),
+                  SizedBox(
+                    height: 18,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [FormTokens.paper, Color(0x00F6F5F1)],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ),
-        ],
-      ),
+            )
+          : _ScrollEdgeBlur(fadeCurve: Curves.linear, strength: _visibility),
     ),
   );
 }
@@ -282,15 +313,18 @@ class FormTabBar extends StatelessWidget {
                           minimumSize: const Size(44, 49),
                           padding: const EdgeInsets.all(4),
                         ),
-                        onPressed: () => onSelected(i),
+                        onPressed: () {
+                          if (i != selectedIndex) {
+                            unawaited(HapticFeedback.lightImpact());
+                          }
+                          onSelected(i);
+                        },
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            FormIcon(
+                            _FormTabIcon(
                               FormIconName.values[i],
-                              color: i == selectedIndex
-                                  ? FormTokens.green
-                                  : FormTokens.muted,
+                              selected: i == selectedIndex,
                             ),
                             const SizedBox(height: 6),
                             Text(
@@ -312,6 +346,83 @@ class FormTabBar extends StatelessWidget {
           ),
         ),
       ),
+    ),
+  );
+}
+
+/// Tab icon that plays a short pop each time its tab becomes selected. The
+/// closet also swings like a hanger and the settings gear turns.
+class _FormTabIcon extends StatefulWidget {
+  const _FormTabIcon(this.name, {required this.selected});
+  final FormIconName name;
+  final bool selected;
+
+  @override
+  State<_FormTabIcon> createState() => _FormTabIconState();
+}
+
+class _FormTabIconState extends State<_FormTabIcon>
+    with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 520),
+  );
+
+  // Squash, overshoot, settle.
+  late final Animation<double> _scale = TweenSequence([
+    TweenSequenceItem(tween: Tween<double>(begin: 1, end: 0.82), weight: 20),
+    TweenSequenceItem(
+      tween: Tween<double>(
+        begin: 0.82,
+        end: 1,
+      ).chain(CurveTween(curve: FormTokens.pop)),
+      weight: 80,
+    ),
+  ]).animate(_controller);
+
+  // Damped back-and-forth, 0 at both ends. Drives the closet swing.
+  late final Animation<double> _wobble = TweenSequence([
+    TweenSequenceItem(tween: Tween<double>(begin: 0, end: 1), weight: 25),
+    TweenSequenceItem(tween: Tween<double>(begin: 1, end: -0.5), weight: 30),
+    TweenSequenceItem(tween: Tween(begin: -0.5, end: 0.2), weight: 25),
+    TweenSequenceItem(tween: Tween<double>(begin: 0.2, end: 0), weight: 20),
+  ]).chain(CurveTween(curve: Curves.easeInOut)).animate(_controller);
+
+  @override
+  void didUpdateWidget(_FormTabIcon oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected &&
+        !oldWidget.selected &&
+        !MediaQuery.disableAnimationsOf(context)) {
+      unawaited(_controller.forward(from: 0));
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<Color?>(
+    tween: ColorTween(
+      end: widget.selected ? FormTokens.green : FormTokens.muted,
+    ),
+    duration: FormTokens.quick,
+    builder: (context, color, _) => AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.rotate(
+          angle: switch (widget.name) {
+            FormIconName.closet => 0.3 * _wobble.value,
+            FormIconName.settings => _controller.value * 1.05,
+            _ => 0,
+          },
+          child: Transform.scale(scale: _scale.value, child: child),
+        );
+      },
+      child: FormIcon(widget.name, color: color),
     ),
   );
 }
@@ -376,14 +487,15 @@ class FormPanel extends StatelessWidget {
   const FormPanel({required this.child, super.key});
   final Widget child;
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(21),
-    decoration: BoxDecoration(
-      color: FormTokens.surface,
-      border: Border.all(color: FormTokens.line),
+  // A Material (not a decorated box) so ListTiles inside can paint their
+  // tile color and ink splashes.
+  Widget build(BuildContext context) => Material(
+    color: FormTokens.surface,
+    shape: RoundedRectangleBorder(
+      side: const BorderSide(color: FormTokens.line),
       borderRadius: BorderRadius.circular(FormTokens.panelRadius),
     ),
-    child: child,
+    child: Padding(padding: const EdgeInsets.all(21), child: child),
   );
 }
 
@@ -444,6 +556,8 @@ class FormSearchField extends StatelessWidget {
   );
 }
 
+/// Segmented control whose green pill slides between options. Changing the
+/// selection gives a light selection haptic.
 class FormChoiceChips extends StatelessWidget {
   const FormChoiceChips({
     required this.options,
@@ -454,51 +568,97 @@ class FormChoiceChips extends StatelessWidget {
   final Map<String, String> options;
   final String selected;
   final ValueChanged<String>? onSelected;
+
+  static const _slide = Duration(milliseconds: 260);
+
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: FormTokens.field,
-      borderRadius: BorderRadius.circular(FormTokens.cardRadius),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: [
-          for (final entry in options.entries)
-            Expanded(
-              child: Semantics(
-                selected: entry.key == selected,
-                child: TextButton(
-                  onPressed: onSelected == null
-                      ? null
-                      : () => onSelected!(entry.key),
-                  style: TextButton.styleFrom(
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 9,
-                    ),
-                    minimumSize: const Size(44, 40),
-                    backgroundColor: entry.key == selected
-                        ? FormTokens.green
-                        : Colors.transparent,
-                    foregroundColor: entry.key == selected
-                        ? Colors.white
-                        : FormTokens.ink,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    textStyle: const TextStyle(fontSize: 13),
+  Widget build(BuildContext context) {
+    final keys = options.keys.toList();
+    final index = keys.indexOf(selected);
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : _slide;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: FormTokens.field,
+        borderRadius: BorderRadius.circular(FormTokens.cardRadius),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Stack(
+          children: [
+            if (index >= 0)
+              Positioned.fill(
+                child: AnimatedAlign(
+                  duration: duration,
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment(
+                    keys.length == 1 ? 0 : -1 + 2 * index / (keys.length - 1),
+                    0,
                   ),
-                  child: Text(entry.value, textAlign: TextAlign.center),
+                  child: FractionallySizedBox(
+                    widthFactor: 1 / keys.length,
+                    heightFactor: 1,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: FormTokens.green,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
                 ),
               ),
+            Row(
+              children: [
+                for (final entry in options.entries)
+                  Expanded(
+                    child: Semantics(
+                      selected: entry.key == selected,
+                      child: TextButton(
+                        onPressed: onSelected == null
+                            ? null
+                            : () {
+                                if (entry.key != selected) {
+                                  unawaited(HapticFeedback.selectionClick());
+                                }
+                                onSelected!(entry.key);
+                              },
+                        style: TextButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 9,
+                            vertical: 9,
+                          ),
+                          minimumSize: const Size(44, 40),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: TweenAnimationBuilder<Color?>(
+                          duration: duration,
+                          curve: Curves.easeOutCubic,
+                          tween: ColorTween(
+                            end: entry.key == selected
+                                ? Colors.white
+                                : FormTokens.ink,
+                          ),
+                          builder: (context, color, _) => Text(
+                            entry.value,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 13, color: color),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 Future<T?> showFormSheet<T>({
@@ -946,7 +1106,7 @@ class FormReferenceCard extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     button: true,
     child: CustomPaint(
-      foregroundPainter: pending ? const _FormDashedBorder() : null,
+      foregroundPainter: pending ? const FormDashedBorder() : null,
       child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
@@ -1118,19 +1278,26 @@ class FormCropViewport extends StatelessWidget {
   );
 }
 
-class _FormDashedBorder extends CustomPainter {
-  const _FormDashedBorder();
+/// Dashed rounded outline, painted as a `foregroundPainter` over a card.
+class FormDashedBorder extends CustomPainter {
+  const FormDashedBorder({
+    this.color = FormTokens.line,
+    this.radius = FormTokens.cardRadius,
+  });
+  final Color color;
+  final double radius;
+
   @override
   void paint(Canvas canvas, Size size) {
     final path = Path()
       ..addRRect(
         RRect.fromRectAndRadius(
           (Offset.zero & size).deflate(0.5),
-          const Radius.circular(FormTokens.cardRadius),
+          Radius.circular(radius),
         ),
       );
     final paint = Paint()
-      ..color = FormTokens.line
+      ..color = color
       ..style = PaintingStyle.stroke;
     for (final metric in path.computeMetrics()) {
       for (var offset = 0.0; offset < metric.length; offset += 8) {
@@ -1140,5 +1307,6 @@ class _FormDashedBorder extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_FormDashedBorder oldDelegate) => false;
+  bool shouldRepaint(FormDashedBorder oldDelegate) =>
+      color != oldDelegate.color || radius != oldDelegate.radius;
 }

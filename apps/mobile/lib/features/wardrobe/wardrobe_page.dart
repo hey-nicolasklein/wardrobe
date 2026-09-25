@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -145,14 +148,6 @@ class _WardrobePageState extends State<WardrobePage> {
                             ),
                           ),
                         ),
-                        if (state.loading)
-                          const Padding(
-                            padding: EdgeInsets.only(bottom: 12),
-                            child: LinearProgressIndicator(
-                              color: FormTokens.green,
-                              backgroundColor: FormTokens.line,
-                            ),
-                          ),
                         if (state.stale && state.items != null)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 12),
@@ -434,50 +429,92 @@ class _WardrobePageState extends State<WardrobePage> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 Expanded(
-                                  child: AspectRatio(
-                                    aspectRatio: 3 / 4,
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(
-                                        FormTokens.cardRadius,
-                                      ),
-                                      child: ColoredBox(
-                                        color: _photoTint(item.id),
-                                        child: Stack(
-                                          fit: StackFit.expand,
-                                          children: [
-                                            if (!generating)
-                                              CachedMedia(
-                                                identity:
-                                                    record.thumbnailIdentity,
-                                                previewPath:
-                                                    record.thumbnailPath,
-                                                online: !state.stale,
-                                              ),
-                                            if (generating)
-                                              _GeneratingTile(
-                                                label: context.tr(
-                                                  'itemStatus.$status',
-                                                ),
-                                              ),
-                                            if (failed)
-                                              Positioned(
-                                                left: 8,
-                                                bottom: 8,
-                                                child: _StatusBadge(
-                                                  label: context.tr(
-                                                    'itemStatus.$status',
+                                  child: LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final width = constraints.maxWidth;
+                                      final height = math.min(
+                                        constraints.maxHeight,
+                                        width * 4 / 3,
+                                      );
+                                      return Align(
+                                        alignment: Alignment.topCenter,
+                                        child: SizedBox(
+                                          width: width,
+                                          height: height,
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              FormTokens.cardRadius,
+                                            ),
+                                            child: ColoredBox(
+                                              color: _photoTint(item.id),
+                                              child: Stack(
+                                                fit: StackFit.expand,
+                                                children: [
+                                                  // Crossfades from the ripple to
+                                                  // the image, which fades in again
+                                                  // once its first frame decodes.
+                                                  AnimatedSwitcher(
+                                                    duration: const Duration(
+                                                      milliseconds: 450,
+                                                    ),
+                                                    switchInCurve:
+                                                        FormTokens.easeOut,
+                                                    layoutBuilder:
+                                                        (current, previous) =>
+                                                            Stack(
+                                                              fit: StackFit
+                                                                  .expand,
+                                                              children: [
+                                                                ...previous,
+                                                                ?current,
+                                                              ],
+                                                            ),
+                                                    child: generating
+                                                        ? _GeneratingTile(
+                                                            key: const ValueKey(
+                                                              'generating',
+                                                            ),
+                                                            label: context.tr(
+                                                              'itemStatus.$status',
+                                                            ),
+                                                          )
+                                                        : CachedMedia(
+                                                            key: const ValueKey(
+                                                              'image',
+                                                            ),
+                                                            identity: record
+                                                                .thumbnailIdentity,
+                                                            previewPath: record
+                                                                .thumbnailPath,
+                                                            online:
+                                                                !state.stale,
+                                                            entrance:
+                                                                MediaEntrance
+                                                                    .fade,
+                                                          ),
                                                   ),
-                                                ),
+                                                  if (failed)
+                                                    Positioned(
+                                                      left: 8,
+                                                      bottom: 8,
+                                                      child: _StatusBadge(
+                                                        label: context.tr(
+                                                          'itemStatus.$status',
+                                                        ),
+                                                      ),
+                                                    ),
+                                                ],
                                               ),
-                                          ],
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                    ),
+                                      );
+                                    },
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 SizedBox(
-                                  height: 14 * 1.35 * 2,
+                                  height: 14 * 1.35 * 2 + 4,
                                   child: Align(
                                     alignment: Alignment.topLeft,
                                     child: Text(
@@ -764,9 +801,40 @@ class _ColorSwatch extends StatelessWidget {
   );
 }
 
-class _GeneratingTile extends StatelessWidget {
-  const _GeneratingTile({required this.label});
+/// Placeholder while the catalog image is generated: soft rings ripple out
+/// from the centre. Holds still when the system asks for reduced motion.
+class _GeneratingTile extends StatefulWidget {
+  const _GeneratingTile({required this.label, super.key});
   final String label;
+
+  @override
+  State<_GeneratingTile> createState() => _GeneratingTileState();
+}
+
+class _GeneratingTileState extends State<_GeneratingTile>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2800),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller
+        ..stop()
+        ..value = 0.35;
+    } else if (!_controller.isAnimating) {
+      unawaited(_controller.repeat());
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -777,24 +845,62 @@ class _GeneratingTile extends StatelessWidget {
         colors: [Color(0xFFEEF0EA), Color(0xFFE2E6DE)],
       ),
     ),
-    child: Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(
-            width: 36,
-            height: 36,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Color(0xFF78906E),
-            ),
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        CustomPaint(painter: _RipplePainter(_controller)),
+        Align(
+          alignment: const Alignment(0, 0.55),
+          child: Text(
+            widget.label,
+            style: FormTokens.small.copyWith(fontSize: 11),
           ),
-          const SizedBox(height: 10),
-          Text(label, style: FormTokens.small.copyWith(fontSize: 11)),
-        ],
-      ),
+        ),
+      ],
     ),
   );
+}
+
+class _RipplePainter extends CustomPainter {
+  _RipplePainter(this.progress) : super(repaint: progress);
+  final Animation<double> progress;
+
+  static const _rings = 3;
+  static const _color = Color(0xFF78906E);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final maxRadius = size.shortestSide * 0.42;
+    for (var i = 0; i < _rings; i++) {
+      final t = (progress.value + i / _rings) % 1;
+      final eased = Curves.easeOutCubic.transform(t);
+      final opacity = (1 - t) * (1 - t) * 0.5;
+      canvas
+        ..drawCircle(
+          center,
+          maxRadius * eased,
+          Paint()..color = _color.withValues(alpha: opacity * 0.18),
+        )
+        ..drawCircle(
+          center,
+          maxRadius * eased,
+          Paint()
+            ..color = _color.withValues(alpha: opacity)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.2,
+        );
+    }
+    canvas.drawCircle(
+      center,
+      4,
+      Paint()..color = _color.withValues(alpha: 0.7),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RipplePainter oldDelegate) =>
+      progress != oldDelegate.progress;
 }
 
 class _StatusBadge extends StatelessWidget {

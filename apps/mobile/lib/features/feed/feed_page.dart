@@ -65,14 +65,6 @@ class FeedPage extends StatelessWidget {
                     sliver: SliverList.list(
                       children: [
                         FormWordmark(title: context.tr(LocaleKeys.appName)),
-                        if (state.loading)
-                          const Padding(
-                            padding: EdgeInsets.only(bottom: 12),
-                            child: LinearProgressIndicator(
-                              color: FormTokens.green,
-                              backgroundColor: FormTokens.line,
-                            ),
-                          ),
                         if (state.stale && !state.online && state.looks != null)
                           Padding(
                             padding: const EdgeInsets.only(bottom: 12),

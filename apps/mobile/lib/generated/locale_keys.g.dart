@@ -130,6 +130,8 @@ abstract class LocaleKeys {
   static const chooseSupportedCategory = 'chooseSupportedCategory';
   static const intake_title = 'intake.title';
   static const intake_intro = 'intake.intro';
+  static const intake_uploadTitle = 'intake.uploadTitle';
+  static const intake_uploadBody = 'intake.uploadBody';
   static const intake_camera = 'intake.camera';
   static const intake_library = 'intake.library';
   static const intake_cost = 'intake.cost';

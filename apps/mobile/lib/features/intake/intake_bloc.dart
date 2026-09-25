@@ -42,14 +42,10 @@ class IntakeState {
   const IntakeState({
     this.drafts = const [],
     this.busy = false,
-    this.progress = 0,
-    this.activeDraftId,
     this.error,
   });
   final List<IntakeDraft> drafts;
   final bool busy;
-  final double progress;
-  final String? activeDraftId;
   final String? error;
 }
 
@@ -84,16 +80,12 @@ class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
   void _publish(
     Emitter<IntakeState> emit, {
     bool busy = false,
-    double progress = 0,
-    String? activeDraftId,
     String? error,
   }) {
     emit(
       IntakeState(
         drafts: List.unmodifiable(_drafts.map((d) => d.snapshot())),
         busy: busy,
-        progress: progress,
-        activeDraftId: activeDraftId,
         error: error,
       ),
     );
@@ -197,12 +189,8 @@ class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
               draft.phase == DraftPhase.uploading) {
             await repository.upload(
               draft,
-              (value) => _publish(
-                emit,
-                busy: true,
-                progress: value,
-                activeDraftId: draft.id,
-              ),
+              // Republishes so the card picks up the uploading phase.
+              (_) => _publish(emit, busy: true),
               () => canContinue && !_discarding.contains(draft.id),
             );
             _publish(emit, busy: true);
