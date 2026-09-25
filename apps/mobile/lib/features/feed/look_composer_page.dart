@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -322,6 +323,13 @@ class _SelectItem extends StatelessWidget {
     required this.onTap,
   });
 
+  static const TextStyle titleStyle = TextStyle(
+    fontSize: 11,
+    height: 1.3,
+    color: FormTokens.ink,
+  );
+  static const double titleHeight = 11 * 1.3 * 2;
+
   final WardrobeItem item;
   final bool selected;
   final bool online;
@@ -338,38 +346,66 @@ class _SelectItem extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AspectRatio(
-            aspectRatio: 3 / 4,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? FormTokens.selectedTint
-                        : FormTokens.field,
-                    borderRadius: BorderRadius.circular(FormTokens.inputRadius),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final height = math.min(
+                  constraints.maxHeight,
+                  width * 4 / 3,
+                );
+                return Align(
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    width: width,
+                    height: height,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? FormTokens.selectedTint
+                                : FormTokens.field,
+                            borderRadius: BorderRadius.circular(
+                              FormTokens.inputRadius,
+                            ),
+                          ),
+                          child: CachedMedia(
+                            identity: item.previewIdentity,
+                            previewPath: item.previewPath,
+                            online: online,
+                          ),
+                        ),
+                        if (selected)
+                          const Positioned(
+                            top: 7,
+                            right: 7,
+                            child: _CheckBadge(),
+                          ),
+                      ],
+                    ),
                   ),
-                  child: CachedMedia(
-                    identity: item.previewIdentity,
-                    previewPath: item.previewPath,
-                    online: online,
-                  ),
-                ),
-                if (selected)
-                  const Positioned(top: 7, right: 7, child: _CheckBadge()),
-              ],
+                );
+              },
             ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-            child: Text(
-              item.metadata.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, color: FormTokens.ink),
+            child: SizedBox(
+              height: _SelectItem.titleHeight,
+              width: double.infinity,
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Text(
+                  item.metadata.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _SelectItem.titleStyle,
+                ),
+              ),
             ),
           ),
         ],
@@ -606,14 +642,13 @@ class _ComposerFooter extends StatelessWidget {
         ],
         if (selected.isNotEmpty && !state.previewExpanded) ...[
           _Tray(selected: selected, online: online),
-          const SizedBox(height: 12),
         ],
         Row(
           children: [
             Expanded(
               child: Text(
                 composerSummaryText(context, state),
-                style: FormTokens.small,
+                style: FormTokens.small.copyWith(color: FormTokens.ink),
               ),
             ),
             TextButton(
@@ -646,66 +681,202 @@ class _ComposerFooter extends StatelessWidget {
 class _Tray extends StatelessWidget {
   const _Tray({required this.selected, required this.online});
 
+  static const _slot = 56.0;
+  static const _moreWidth = 28.0;
+
   final List<WardrobeItem> selected;
   final bool online;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: context.tr(
-      LocaleKeys.composerTrayLabel,
-      namedArgs: {'count': '${selected.length}'},
-    ),
-    excludeSemantics: true,
-    child: GestureDetector(
-      onTap: () => context.read<ComposerCubit>().openPreview(),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: FormTokens.surface,
-          border: Border.all(color: FormTokens.line),
-          borderRadius: BorderRadius.circular(FormTokens.cardRadius),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.tr(LocaleKeys.composerTrayTitle),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) {
+    final shown = selected.take(5).toList();
+    final more = selected.length - shown.length;
+    // Matches the PWA, which shrinks the tray on short screens.
+    final height = MediaQuery.sizeOf(context).height <= 740 ? 48.0 : 62.0;
+    return Semantics(
+      button: true,
+      label: context.tr(
+        LocaleKeys.composerTrayLabel,
+        namedArgs: {'count': '${selected.length}'},
+      ),
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => context.read<ComposerCubit>().openPreview(),
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 10),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 105,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr(LocaleKeys.composerTrayTitle),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: FormTokens.ink,
+                      ),
                     ),
-                  ),
-                  Text(
-                    context.tr(LocaleKeys.composerTrayAction),
-                    style: FormTokens.small,
-                  ),
-                ],
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            context.tr(LocaleKeys.composerTrayAction),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: FormTokens.muted,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 3),
+                        const Icon(
+                          Icons.chevron_left,
+                          size: 13,
+                          color: FormTokens.muted,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            for (final item in selected.take(5))
-              Padding(
-                padding: const EdgeInsets.only(left: 4),
-                child: SizedBox.square(
-                  dimension: 36,
-                  child: CachedMedia(
-                    identity: item.previewIdentity,
-                    previewPath: item.previewPath,
-                    online: online,
+              const SizedBox(width: 10),
+              Expanded(
+                child: SizedBox(
+                  height: height,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Pieces are laid out right-aligned by hand so that a
+                      // slot shifting over glides instead of jumping.
+                      final end =
+                          constraints.maxWidth - (more > 0 ? _moreWidth : 0);
+                      final size = math.min(
+                        math.min(_slot, height),
+                        end / shown.length,
+                      );
+                      return Stack(
+                        children: [
+                          for (final (index, item) in shown.indexed)
+                            AnimatedPositioned(
+                              key: ValueKey(item.id),
+                              duration: _TrayGarment.duration,
+                              curve: _TrayGarment.curve,
+                              left: end - (shown.length - index) * size,
+                              top: (height - size) / 2,
+                              width: size,
+                              height: size,
+                              child: _TrayGarment(
+                                item: item,
+                                online: online,
+                                delay: index * 35,
+                              ),
+                            ),
+                          if (more > 0)
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              bottom: 0,
+                              width: _moreWidth,
+                              child: Center(
+                                child: Text(
+                                  '+$more',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: FormTokens.muted,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
-            if (selected.length > 5)
-              Padding(
-                padding: const EdgeInsets.only(left: 6),
-                child: Text('+${selected.length - 5}', style: FormTokens.small),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+/// A tray piece that rises into place when it first appears, like the PWA's
+/// entrance: up 14px, from 88% scale and transparent.
+class _TrayGarment extends StatefulWidget {
+  const _TrayGarment({
+    required this.item,
+    required this.online,
+    required this.delay,
+  });
+
+  static const duration = Duration(milliseconds: 420);
+  static const curve = Cubic(0.22, 1, 0.36, 1);
+
+  final WardrobeItem item;
+  final bool online;
+  final int delay;
+
+  @override
+  State<_TrayGarment> createState() => _TrayGarmentState();
+}
+
+class _TrayGarmentState extends State<_TrayGarment>
+    with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: _TrayGarment.duration,
+  );
+  late final _progress = CurvedAnimation(
+    parent: _controller,
+    curve: _TrayGarment.curve,
+  );
+  Timer? _delay;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_controller.isAnimating || _controller.isCompleted || _delay != null) {
+      return;
+    }
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 1;
+    } else {
+      _delay = Timer(
+        Duration(milliseconds: widget.delay),
+        () => unawaited(_controller.forward()),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _delay?.cancel();
+    _progress.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _progress,
+    builder: (context, child) {
+      final t = _progress.value;
+      return Opacity(
+        opacity: t.clamp(0, 1),
+        child: Transform.translate(
+          offset: Offset(0, 14 * (1 - t)),
+          child: Transform.scale(scale: 0.88 + 0.12 * t, child: child),
+        ),
+      );
+    },
+    child: CachedMedia(
+      identity: widget.item.previewIdentity,
+      previewPath: widget.item.previewPath,
+      online: widget.online,
     ),
   );
 }
