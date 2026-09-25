@@ -6,6 +6,41 @@ abstract class LocaleKeys {
   static const appName = 'appName';
   static const feed = 'feed';
   static const wardrobe = 'wardrobe';
+  static const settings_heroEyebrow = 'settings.heroEyebrow';
+  static const settings_heroTitle = 'settings.heroTitle';
+  static const settings_heroSubtitle = 'settings.heroSubtitle';
+  static const settings_qualityTitle = 'settings.qualityTitle';
+  static const settings_qualityBody = 'settings.qualityBody';
+  static const settings_appTitle = 'settings.appTitle';
+  static const settings_appBody = 'settings.appBody';
+  static const settings_access = 'settings.access';
+  static const settings_accessValue = 'settings.accessValue';
+  static const settings_signIn = 'settings.signIn';
+  static const settings_signInValue = 'settings.signInValue';
+  static const settings_storage = 'settings.storage';
+  static const settings_storageValue = 'settings.storageValue';
+  static const settings_appVersion = 'settings.appVersion';
+  static const settings_openArchive = 'settings.openArchive';
+  static const settings_cacheTitle = 'settings.cacheTitle';
+  static const settings_cacheBody = 'settings.cacheBody';
+  static const settings_cacheAction = 'settings.cacheAction';
+  static const settings_cacheConfirmTitle = 'settings.cacheConfirmTitle';
+  static const settings_cacheConfirmBody = 'settings.cacheConfirmBody';
+  static const settings_cacheConfirmAction = 'settings.cacheConfirmAction';
+  static const settings_cacheCleared = 'settings.cacheCleared';
+  static const settings_resetTitle = 'settings.resetTitle';
+  static const settings_resetBody = 'settings.resetBody';
+  static const settings_resetAction = 'settings.resetAction';
+  static const settings_resetOffline = 'settings.resetOffline';
+  static const settings_resetSheetTitle = 'settings.resetSheetTitle';
+  static const settings_resetSheetHeading = 'settings.resetSheetHeading';
+  static const settings_resetSheetBody = 'settings.resetSheetBody';
+  static const settings_resetPhraseLabel = 'settings.resetPhraseLabel';
+  static const settings_resetPhraseMismatch = 'settings.resetPhraseMismatch';
+  static const settings_resetConfirm = 'settings.resetConfirm';
+  static const settings_resetFailed = 'settings.resetFailed';
+  static const settings_resetDone = 'settings.resetDone';
+  static const settings_footer = 'settings.footer';
   static const settings = 'settings';
   static const feedTitle = 'feedTitle';
   static const wardrobeTitle = 'wardrobeTitle';
@@ -367,4 +402,51 @@ abstract class LocaleKeys {
   static const character_pendingDelete = 'character.pendingDelete';
   static const character_newReference = 'character.newReference';
   static const character = 'character';
+  static const apiErrors_activeCharacterSheet =
+      'apiErrors.activeCharacterSheet';
+  static const apiErrors_assetContentMissing = 'apiErrors.assetContentMissing';
+  static const apiErrors_assetNotFound = 'apiErrors.assetNotFound';
+  static const apiErrors_characterSheetProcessing =
+      'apiErrors.characterSheetProcessing';
+  static const apiErrors_confirmationRequired =
+      'apiErrors.confirmationRequired';
+  static const apiErrors_generationInProgress =
+      'apiErrors.generationInProgress';
+  static const apiErrors_idempotencyKeyReused =
+      'apiErrors.idempotencyKeyReused';
+  static const apiErrors_invalidActivation = 'apiErrors.invalidActivation';
+  static const apiErrors_invalidCharacterSheet =
+      'apiErrors.invalidCharacterSheet';
+  static const apiErrors_invalidDetectionRequest =
+      'apiErrors.invalidDetectionRequest';
+  static const apiErrors_invalidGenerationRequest =
+      'apiErrors.invalidGenerationRequest';
+  static const apiErrors_invalidItemState = 'apiErrors.invalidItemState';
+  static const apiErrors_invalidKeepRequest = 'apiErrors.invalidKeepRequest';
+  static const apiErrors_invalidLook = 'apiErrors.invalidLook';
+  static const apiErrors_invalidPermanentDeletion =
+      'apiErrors.invalidPermanentDeletion';
+  static const apiErrors_invalidPhotoItem = 'apiErrors.invalidPhotoItem';
+  static const apiErrors_invalidRejectRequest =
+      'apiErrors.invalidRejectRequest';
+  static const apiErrors_invalidRestoreRequest =
+      'apiErrors.invalidRestoreRequest';
+  static const apiErrors_invalidRetry = 'apiErrors.invalidRetry';
+  static const apiErrors_invalidSignInRequest =
+      'apiErrors.invalidSignInRequest';
+  static const apiErrors_invalidUploadIntent = 'apiErrors.invalidUploadIntent';
+  static const apiErrors_invalidWardrobeEdit = 'apiErrors.invalidWardrobeEdit';
+  static const apiErrors_invalidWardrobeItem = 'apiErrors.invalidWardrobeItem';
+  static const apiErrors_invalidWardrobeTransition =
+      'apiErrors.invalidWardrobeTransition';
+  static const apiErrors_originNotAllowed = 'apiErrors.originNotAllowed';
+  static const apiErrors_resetInProgress = 'apiErrors.resetInProgress';
+  static const apiErrors_sourcePhotoNotFound = 'apiErrors.sourcePhotoNotFound';
+  static const apiErrors_staleRecordVersion = 'apiErrors.staleRecordVersion';
+  static const apiErrors_uploadIntentNotFound =
+      'apiErrors.uploadIntentNotFound';
+  static const apiErrors_uploadMissing = 'apiErrors.uploadMissing';
+  static const apiErrors_wardrobeItemNotFound =
+      'apiErrors.wardrobeItemNotFound';
+  static const apiErrors = 'apiErrors';
 }

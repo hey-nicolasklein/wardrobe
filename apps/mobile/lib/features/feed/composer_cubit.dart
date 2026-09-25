@@ -126,11 +126,19 @@ class ComposerCubit extends Cubit<ComposerState> {
     this.looks, {
     List<String> preselectedIds = const [],
     String? idempotencyKey,
+    String defaultQuality = 'low',
   }) : idempotencyKey = idempotencyKey ?? newIdempotencyKey(),
-       super(ComposerState(selectedIds: preselectedIds.toSet()));
+       _defaultQuality = defaultQuality,
+       super(
+         ComposerState(
+           selectedIds: preselectedIds.toSet(),
+           quality: defaultQuality,
+         ),
+       );
 
   final LookRepository looks;
   final String idempotencyKey;
+  final String _defaultQuality;
 
   void toggleItem(String id) {
     final next = {...state.selectedIds};
@@ -190,7 +198,7 @@ class ComposerCubit extends Cubit<ComposerState> {
   void selectPiece(String? id) =>
       emit(state.copyWith(selectedPieceId: () => id));
 
-  void reset() => emit(const ComposerState());
+  void reset() => emit(ComposerState(quality: _defaultQuality));
 
   LookCommand command() => LookCommand.create(
     exactItemIds: state.selectedIds.toList(),

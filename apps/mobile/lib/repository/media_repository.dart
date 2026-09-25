@@ -146,4 +146,13 @@ class MediaRepository {
       await _remove(entry);
     }
   });
+
+  Future<void> clearScope() => _serial(() async {
+    final entries = await (database.select(
+      database.mediaCacheEntries,
+    )..where((r) => r.scope.equals(scope))).get();
+    for (final entry in entries) {
+      await _remove(entry);
+    }
+  });
 }

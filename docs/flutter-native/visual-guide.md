@@ -102,8 +102,9 @@ captured. Functional C5 verification is unit-only and does not close visual C5.
 - Flutter bottom sheets use native drag/settling physics with the PWA's duration
   and corner styling. Token curves remain available for later in-content motion.
 - Feed and character-reference workflows are implemented in slices 4–5. Their
-  current PWA/native screenshot pairs remain outstanding. Remaining Settings
-  work belongs to Slice 6.
+  current PWA/native screenshot pairs remain outstanding. Settings replaces the
+  PWA “Auf deinem iPhone / Add to Home Screen” panel with native app and
+  private-server information; Settings screenshot pairs remain outstanding.
 - Intake's upload panel uses a solid border in place of the CSS dashed border.
 - Native archive restoration keeps both existing Owning and Wanting targets.
 

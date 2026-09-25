@@ -110,6 +110,15 @@ void main() {
     expect(cubit.state.limitReached, isFalse);
   });
 
+  test('reset restores the feed quality default', () {
+    final cubit = ComposerCubit(
+      looks,
+      preselectedIds: [shirt.id],
+      defaultQuality: 'medium',
+    )..setQuality('high')..reset();
+    expect(cubit.state.quality, 'medium');
+  });
+
   test('reset clears every choice including search', () {
     final cubit = ComposerCubit(looks, preselectedIds: [shirt.id])
       ..setOccasion('party')

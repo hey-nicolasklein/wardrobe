@@ -9,6 +9,7 @@ import 'package:form_mobile/features/feed/composer_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/feed/flat_lay_widget.dart';
+import 'package:form_mobile/features/settings/quality_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/wardrobe.dart';
@@ -30,6 +31,7 @@ class LookComposerPage extends StatelessWidget {
     create: (context) => ComposerCubit(
       context.read<LookRepository>(),
       preselectedIds: preselectedIds,
+      defaultQuality: context.read<QualityCubit>().state.feed,
     ),
     child: const _ComposerView(),
   );

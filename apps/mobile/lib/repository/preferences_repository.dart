@@ -1,10 +1,14 @@
+import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/services/app_database.dart';
 
-/// Persists the language override and validates supported language codes.
+/// Persists app preferences that survive account resets.
 class PreferencesRepository {
   const PreferencesRepository(this._database);
 
   final AppDatabase _database;
+
+  static const feedQualityKey = 'feed-quality';
+  static const wardrobeQualityKey = 'wardrobe-quality';
 
   Future<String?> language() async {
     final value = await _database.preference('language');
@@ -16,5 +20,27 @@ class PreferencesRepository {
       throw ArgumentError.value(language, 'language');
     }
     return _database.setPreference('language', language);
+  }
+
+  Future<String> feedQuality() => _quality(feedQualityKey);
+
+  Future<String> wardrobeQuality() => _quality(wardrobeQualityKey);
+
+  Future<void> setFeedQuality(String quality) =>
+      _setQuality(feedQualityKey, quality);
+
+  Future<void> setWardrobeQuality(String quality) =>
+      _setQuality(wardrobeQualityKey, quality);
+
+  Future<String> _quality(String key) async {
+    final value = await _database.preference(key);
+    return qualities.contains(value) ? value! : 'low';
+  }
+
+  Future<void> _setQuality(String key, String quality) {
+    if (!qualities.contains(quality)) {
+      throw ArgumentError.value(quality, 'quality');
+    }
+    return _database.setPreference(key, quality);
   }
 }

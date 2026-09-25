@@ -6,6 +6,7 @@ import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/services/look_output_service.dart';
+import 'package:form_mobile/utils/api_error_message.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 
 /// "Today", "3 days ago", or a short date after one week, as in the PWA.
@@ -101,7 +102,7 @@ Future<void> runFeedAction(
     message = success;
   } on FormApiException catch (error) {
     if (!context.mounted) return;
-    message = apiFailureText(context, error.failure);
+    message = localizedApiError(context, error);
   } on LookOutputException catch (error) {
     if (!context.mounted) return;
     message = context.tr(switch (error.failure) {

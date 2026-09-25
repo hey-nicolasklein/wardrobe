@@ -4,9 +4,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/app_config.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/settings/app_info_section.dart';
+import 'package:form_mobile/features/settings/cache_section.dart';
 import 'package:form_mobile/features/settings/character/character_section.dart';
 import 'package:form_mobile/features/settings/cost_section.dart';
-import 'package:form_mobile/features/settings/language_cubit.dart';
+import 'package:form_mobile/features/settings/quality_section.dart';
+import 'package:form_mobile/features/settings/reset_section.dart';
+import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/server_info.dart';
 import 'package:form_mobile/widgets/form_components.dart';
@@ -16,68 +20,66 @@ class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: FormPageHeader(title: context.tr(LocaleKeys.settings)),
-    body: ListView(
-      padding: const EdgeInsets.all(FormTokens.gutter),
-      children: [
-        const CharacterSection(),
-        const SizedBox(height: 20),
-        const CostSection(),
-        const SizedBox(height: 20),
-        FormPanel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                context.tr(LocaleKeys.language),
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
-              FormChoiceChips(
-                options: {
-                  'de': context.tr(LocaleKeys.german),
-                  'en': context.tr(LocaleKeys.english),
-                },
-                selected: context.watch<LanguageCubit>().state,
-                onSelected: (value) async {
-                  try {
-                    await context.read<LanguageCubit>().select(value);
-                  } on Exception {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(context.tr(LocaleKeys.languageFailed)),
-                        ),
-                      );
-                    }
-                  }
-                },
-              ),
-            ],
+  Widget build(BuildContext context) {
+    final archivedCount =
+        context
+            .watch<WardrobeCubit>()
+            .state
+            .items
+            ?.where((item) => item.item.state == 'archived')
+            .length ??
+        0;
+    return Scaffold(
+      appBar: FormPageHeader(title: context.tr(LocaleKeys.settings)),
+      body: ListView(
+        padding: const EdgeInsets.all(FormTokens.gutter),
+        children: [
+          Text(
+            context.tr(LocaleKeys.settings_heroEyebrow),
+            style: FormTokens.eyebrow,
           ),
-        ),
-        const SizedBox(height: 20),
-        const Divider(),
-        ListTile(
-          leading: const Icon(Icons.archive_outlined),
-          title: Text(context.tr(LocaleKeys.archive)),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => context.push('/settings/archive'),
-        ),
-        ListTile(
-          leading: const Icon(Icons.dns_outlined),
-          title: Text(context.tr(LocaleKeys.server)),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => context.go('/settings/server'),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(FormTokens.gutter),
-          child: Text(context.tr(LocaleKeys.foundationNote)),
-        ),
-      ],
-    ),
-  );
+          const SizedBox(height: 6),
+          Text(
+            context.tr(LocaleKeys.settings_heroTitle),
+            style: FormTokens.display.copyWith(fontSize: 30),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            context.tr(LocaleKeys.settings_heroSubtitle),
+            style: FormTokens.small,
+          ),
+          const SizedBox(height: 20),
+          const CharacterSection(),
+          const SizedBox(height: 20),
+          const CostSection(),
+          const SizedBox(height: 20),
+          const QualitySection(),
+          const SizedBox(height: 20),
+          const AppInfoSection(),
+          const SizedBox(height: 20),
+          OutlinedButton(
+            onPressed: () => context.push('/settings/archive'),
+            child: Text(
+              context.tr(
+                LocaleKeys.settings_openArchive,
+                namedArgs: {'count': '$archivedCount'},
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const CacheSection(),
+          const SizedBox(height: 20),
+          const ResetSection(),
+          const SizedBox(height: 24),
+          Text(
+            context.tr(LocaleKeys.settings_footer),
+            textAlign: TextAlign.center,
+            style: FormTokens.small.copyWith(fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class ServerPage extends StatelessWidget {

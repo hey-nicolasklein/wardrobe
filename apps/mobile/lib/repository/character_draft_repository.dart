@@ -170,4 +170,10 @@ class CharacterDraftRepository {
     checkOnline();
     await _complete(draft);
   }
+
+  Future<void> clearLocalDraft() async {
+    final draft = await load();
+    if (draft != null) await removeFiles(draft);
+    await sheets.database.setPreference(_key, '');
+  }
 }

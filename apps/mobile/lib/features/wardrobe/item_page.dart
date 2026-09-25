@@ -9,6 +9,7 @@ import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
+import 'package:form_mobile/features/settings/quality_cubit.dart';
 import 'package:form_mobile/features/wardrobe/item_cubit.dart';
 import 'package:form_mobile/features/wardrobe/item_edit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -994,8 +995,18 @@ class _GenerateItem extends StatefulWidget {
 
 class _GenerateItemState extends State<_GenerateItem> {
   String _quality = 'low';
+  var _loadedDefault = false;
   final _feedback = TextEditingController();
   final Set<String> _suggestions = {};
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_loadedDefault) {
+      _quality = context.read<QualityCubit>().state.wardrobe;
+      _loadedDefault = true;
+    }
+  }
+
   @override
   void dispose() {
     _feedback.dispose();

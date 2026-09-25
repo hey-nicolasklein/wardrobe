@@ -85,7 +85,9 @@ endpoint correctly produces the incompatibility screen.
 - [ ] `L4` Feed, composer, and look screens match the PWA.
 - [ ] `C5` Character-reference setup, crop, collage, and detail match the PWA
       (implemented with shared FORM components; current screenshot pairs pending).
-- [ ] `S6` Settings, cost presentation, and reset match the PWA.
+- [ ] `S6` Settings, cost presentation, and reset match the PWA (functional
+      parity implemented; screenshot pair pending — native replaces PWA
+      “Auf deinem iPhone” with app/server info per `visual-guide.md`).
 
 ## Wardrobe and archive
 
@@ -351,28 +353,50 @@ Screenshots and their comparison manifest stay outside Git.
 
 ## Settings and reset
 
-- [ ] `S6` Language can switch between German and English without restart and
-      persists across launches.
-- [ ] `S6` Feed and Wardrobe generation quality defaults persist independently.
+- [x] `S6` Language can switch between German and English without restart and
+      persists across launches (`LanguageCubit`, `preferences_test.dart`).
+- [x] `S6` Feed and Wardrobe generation quality defaults persist independently
+      (`QualityCubit`, composer/item/intake wiring, `preferences_test.dart`).
 - [x] `S6` Weekly cost presentation is done, pulled forward with Nico’s approval.
       Includes total, look count/average, catalog-image and detection costs/counts
       and the PWA half-ring split. Current PWA (`1a1b733`) removes the former
       character-reference slice; the DTO retains historical character costs.
-- [ ] `S6` Downloaded cache can be cleared without deleting drafts or server data.
-- [ ] `S6` Private-server and app-version information is visible.
-- [ ] `S6` Full reset requires the localized typed phrase while online.
-- [ ] `S6` Full reset sends a locale-independent confirmation value.
-- [ ] `S6` The API continues accepting the PWA's existing German confirmation.
-- [ ] `S6` Successful reset clears server-owned wardrobe data, matching cached
+- [x] `S6` Downloaded cache can be cleared without deleting drafts or server data
+      (`MediaRepository.clearDownloaded`, `CacheSection`, `media_repository_test.dart`).
+- [x] `S6` Private-server and app-version information is visible (`AppInfoSection`,
+      `ServerPage`, `AppInfo`).
+- [x] `S6` Full reset requires the localized typed phrase while online
+      (`ResetSection`, `reset_confirmation_test.dart`).
+- [x] `S6` Full reset sends a locale-independent confirmation value (`DELETE EVERYTHING`,
+      `personal_repository_test.dart`).
+- [x] `S6` The API continues accepting the PWA's existing German confirmation
+      (`isPersonalResetConfirmation` in `@form/service`, `personal.test.ts`,
+      `personalResetRequestSchema` in `@form/contracts`).
+- [x] `S6` Successful reset clears server-owned wardrobe data, matching cached
       account data, draft files, and obsolete look markings while preserving
-      app preferences such as language and default image quality.
+      app preferences such as language and default image quality
+      (`AccountCacheRepository`, `account_cache_test.dart`).
+
+### S6 evidence and validation handoff
+
+Settings composition lives in `settings_page.dart` with `CharacterSection`,
+`CostSection`, `QualitySection`, `AppInfoSection`, archive entry, `CacheSection`,
+and `ResetSection`. Stage 1 API error codes map through `localizedApiError` and
+`apiErrors.*` translations. `fvm flutter analyze` reports no issues; 154 unit
+tests pass. Android development debug APK and iOS simulator builds succeed.
+Physical-device acceptance remains with Nico.
 
 ## Stage closure
 
-- [ ] `S6` German and English contain no placeholder or hard-coded UI copy.
-- [ ] `S6` Every API error code used by Stage 1 has localized production copy.
-- [ ] `S6` `fvm flutter analyze` passes.
-- [ ] `S6` `fvm flutter test` passes with unit tests only.
-- [ ] `S6` Android remains buildable as the secondary target.
-- [ ] `S6` The PWA still works against every evolved API contract.
-- [ ] `S6` Nico accepts the complete iOS flow on a physical device.
+- [x] `S6` German and English contain no placeholder or hard-coded UI copy
+      (audit; contract version uses a numeric constant only).
+- [x] `S6` Every API error code used by Stage 1 has localized production copy
+      (`api_error_message.dart`, `apiErrors` in `en.json` / `de.json`).
+- [x] `S6` `fvm flutter analyze` passes.
+- [x] `S6` `fvm flutter test` passes with unit tests only (154 tests).
+- [x] `S6` Android remains buildable as the secondary target
+      (`app-development-debug.apk`).
+- [x] `S6` The PWA still works against every evolved API contract (additive reset
+      confirmation; legacy `ALLES LÖSCHEN` unchanged for the web client).
+- [ ] `S6` Nico accepts the complete iOS flow on a physical device (manual;
+      steps in `apps/mobile/README.md`).

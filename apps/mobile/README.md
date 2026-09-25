@@ -1,4 +1,4 @@
-# FORM mobile, slices 1–5
+# FORM mobile, Stage 1
 
 Flutter 3.44.9, iOS 16+, Android 10+. The app includes the native shell, connection gate, language selection, persistent
 tab stacks, the wardrobe lifecycle, durable clothing intake, and the cached
@@ -129,8 +129,8 @@ issuing work in the background and polls detection only on the visible intake ro
 Discard stops further commands after an in-flight request settles. Existing items
 and server jobs remain. Partial saves retain item and generation checkpoints.
 Finished drafts are removed after wardrobe refresh succeeds. Startup cleans orphan
-files and resumes interrupted local deletion. Automatic images default to Low,
-with the persisted `wardrobe-quality` preference reserved for Settings in slice 6.
+files and resumes interrupted local deletion. Automatic catalog images use the persisted `wardrobe-quality` preference from
+Settings.
 
 Manual device checks for Nico:
 
@@ -151,3 +151,32 @@ Unit coverage uses synthetic photos, fake API responses, and temporary SQLite.
 iOS simulator and Android development builds compile. HEIC decoding, camera,
 permission prompts, and end-to-end device behavior still need manual acceptance.
 Presentation alignment for slices 1–3 belongs to slice 3.5.
+
+## Settings, reset, and Stage 1 acceptance (Slice 6)
+
+Settings order matches the PWA: character references, weekly costs, image-quality
+defaults, app/server information (replacing the web-only “Add to Home Screen”
+panel), archive entry with count, downloaded-cache clearing, and full wardrobe
+reset. Language switches immediately without restart.
+
+Manual iOS checks for Nico:
+
+1. Open Settings in German and English. Confirm hero copy, cost week navigation,
+   independent Feed and Wardrobe quality chips, server URL, app version, and
+   archive count after wardrobe sync.
+2. Change Feed quality, open the look composer, and confirm the default quality
+   matches. Change Wardrobe quality and request a new catalog image; confirm the
+   default matches. Save an intake item and confirm automatic catalog generation
+   uses the Wardrobe default.
+3. With cached thumbnails present, clear the downloaded cache. Confirm intake and
+   character drafts still open locally; server data is unchanged.
+4. Online only: open reset, reject a wrong phrase, then confirm with
+   `ALLES LÖSCHEN` (German) or `DELETE EVERYTHING` (English). Feed should reopen
+   empty while language and quality defaults remain.
+5. Walk Feed, Wardrobe, intake, character setup, and archive once on a physical
+   iPhone with Tailscale connected. Portrait only; mutations should refuse while
+   offline.
+
+`fvm flutter analyze`, `fvm flutter test` (154 unit tests), Android development
+debug APK, and iOS simulator builds were verified locally. Visual screenshot pairs
+for Settings remain open in `parity-checklist.md`.

@@ -120,4 +120,28 @@ class AppDatabase extends _$AppDatabase {
       into(preferences).insertOnConflictUpdate(
         PreferencesCompanion.insert(key: key, value: value),
       );
+
+  /// Removes cached account data while keeping language and quality defaults.
+  Future<void> clearAccountCache(String scope) async {
+    await transaction(() async {
+      await (delete(wardrobeRecords)..where((r) => r.scope.equals(scope))).go();
+      await (delete(lookRecords)..where((r) => r.scope.equals(scope))).go();
+      await (delete(
+        characterRecords,
+      )..where((r) => r.scope.equals(scope))).go();
+      await (delete(intakeRecords)..where((r) => r.scope.equals(scope))).go();
+      await (delete(
+        collectionSummaries,
+      )..where((r) => r.scope.equals(scope))).go();
+      final rows = await select(preferences).get();
+      for (final row in rows) {
+        if (row.key == 'language' ||
+            row.key == 'feed-quality' ||
+            row.key == 'wardrobe-quality') {
+          continue;
+        }
+        await (delete(preferences)..where((r) => r.key.equals(row.key))).go();
+      }
+    });
+  }
 }

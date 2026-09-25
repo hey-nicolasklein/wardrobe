@@ -33,6 +33,22 @@ void main() {
     expect(await restored.language(), 'de');
   });
 
+  test('feed and wardrobe quality defaults persist independently', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = PreferencesRepository(database);
+    expect(await repository.feedQuality(), 'low');
+    expect(await repository.wardrobeQuality(), 'low');
+    await repository.setFeedQuality('high');
+    await repository.setWardrobeQuality('medium');
+    expect(await repository.feedQuality(), 'high');
+    expect(await repository.wardrobeQuality(), 'medium');
+    expect(
+      () => repository.setFeedQuality('ultra'),
+      throwsA(isArgumentError),
+    );
+  });
+
   test(
     'unsupported saved languages fall back and cannot be selected',
     () async {

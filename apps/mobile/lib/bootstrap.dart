@@ -13,13 +13,16 @@ import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/settings/character/character_cubit.dart';
 import 'package:form_mobile/features/settings/language_cubit.dart';
+import 'package:form_mobile/features/settings/quality_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
+import 'package:form_mobile/repository/account_cache_repository.dart';
 import 'package:form_mobile/repository/character_draft_repository.dart';
 import 'package:form_mobile/repository/character_sheet_repository.dart';
 import 'package:form_mobile/repository/collection_counts_repository.dart';
 import 'package:form_mobile/repository/intake_repository.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/media_repository.dart';
+import 'package:form_mobile/repository/personal_repository.dart';
 import 'package:form_mobile/repository/preferences_repository.dart';
 import 'package:form_mobile/repository/server_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
@@ -42,6 +45,8 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
   final database = AppDatabase.open();
   final preferences = PreferencesRepository(database);
   final savedLanguage = await preferences.language();
+  final feedQuality = await preferences.feedQuality();
+  final wardrobeQuality = await preferences.wardrobeQuality();
   final deviceLanguage =
       WidgetsBinding.instance.platformDispatcher.locale.languageCode;
   final language = initialLanguage(
@@ -101,14 +106,23 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
     Directory('${support.path}/character-drafts'),
     PhotoPreparation(),
   );
+  final intakeDirectory = Directory('${support.path}/intake');
   final intakeRepository = IntakeRepository(
     database,
     api,
     uri?.toString() ?? '',
-    Directory('${support.path}/intake'),
+    intakeDirectory,
     PhotoPreparation(),
     wardrobeRepository.refreshAndNotify,
   );
+  final accountCache = AccountCacheRepository(
+    database,
+    uri?.toString() ?? '',
+    media,
+    intakeDirectory,
+    characterDraftRepository,
+  );
+  final personal = PersonalRepository(api);
   final intake = IntakeBloc(intakeRepository)
     ..add(const IntakeEvent(IntakeAction.restore));
   if (Platform.isAndroid) {
@@ -152,6 +166,8 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
           create: (_) => database,
           dispose: (db) => db.close(),
         ),
+        RepositoryProvider<AccountCacheRepository>.value(value: accountCache),
+        RepositoryProvider<PersonalRepository>.value(value: personal),
         RepositoryProvider<PreferencesRepository>.value(value: preferences),
         if (api != null)
           RepositoryProvider<FormApi>(
@@ -170,6 +186,15 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
           BlocProvider(create: (_) => characters),
           BlocProvider(create: (_) => intake),
           BlocProvider(create: (_) => LanguageCubit(preferences, language)),
+          BlocProvider(
+            create: (_) => QualityCubit(
+              preferences,
+              QualityPreferences(
+                feed: feedQuality,
+                wardrobe: wardrobeQuality,
+              ),
+            ),
+          ),
         ],
         child: EasyLocalization(
           supportedLocales: const [Locale('de'), Locale('en')],
