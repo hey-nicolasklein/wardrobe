@@ -311,9 +311,17 @@ Future<T?> showFormSheet<T>({
 );
 
 class FormSheet extends StatelessWidget {
-  const FormSheet({required this.title, required this.child, super.key});
+  const FormSheet({
+    required this.title,
+    required this.child,
+    this.footer,
+    super.key,
+  });
   final String title;
   final Widget child;
+
+  /// Stays pinned below the scrolling [child], like the PWA's sheet footers.
+  final Widget? footer;
   @override
   Widget build(BuildContext context) {
     final viewInsets = MediaQuery.viewInsetsOf(context);
@@ -364,6 +372,10 @@ class FormSheet extends StatelessWidget {
                 child: child,
               ),
             ),
+            if (footer != null) ...[
+              const Divider(height: 1, color: FormTokens.line),
+              Padding(padding: const EdgeInsets.only(top: 16), child: footer),
+            ],
           ],
         ),
       ),
@@ -395,3 +407,137 @@ Future<bool> confirmFormAction({
       ),
     ) ??
     false;
+
+/// A rounded pill that toggles, like `.composer-filter-chips button`.
+class FormPill extends StatelessWidget {
+  const FormPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.leading,
+    super.key,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+  final Widget? leading;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    selected: selected,
+    child: TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        minimumSize: const Size(44, 44),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        backgroundColor: selected ? FormTokens.selectedTint : FormTokens.pill,
+        foregroundColor: FormTokens.ink,
+        shape: const StadiumBorder(),
+        textStyle: const TextStyle(fontSize: 13),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (leading != null) ...[leading!, const SizedBox(width: 6)],
+          Text(label),
+        ],
+      ),
+    ),
+  );
+}
+
+/// A labelled on/off row with the PWA's `.state-toggle` switch.
+class FormToggleRow extends StatelessWidget {
+  const FormToggleRow({
+    required this.title,
+    required this.value,
+    required this.onChanged,
+    this.subtitle,
+    super.key,
+  });
+  final String title;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    toggled: value,
+    enabled: onChanged != null,
+    child: InkWell(
+      onTap: onChanged == null ? null : () => onChanged!(!value),
+      child: Opacity(
+        opacity: onChanged == null ? 0.55 : 1,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: FormTokens.ink,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          height: 16 / 11,
+                          color: FormTokens.muted,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              AnimatedContainer(
+                duration: FormTokens.quick,
+                width: 40,
+                height: 24,
+                padding: const EdgeInsets.all(3),
+                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+                decoration: BoxDecoration(
+                  color: value ? FormTokens.green : FormTokens.toggleOff,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: SizedBox(width: 18, height: 18),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Short feedback after an action, styled like the PWA's `#toast`.
+void showFormToast(BuildContext context, String message) {
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontSize: 14)),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: FormTokens.toast,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(FormTokens.cardRadius),
+        ),
+      ),
+    );
+}

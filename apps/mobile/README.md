@@ -1,8 +1,9 @@
-# FORM mobile, slices 1–3
+# FORM mobile, slices 1–4
 
 Flutter 3.44.9, iOS 16+, Android 10+. The app includes the native shell, connection gate, language selection, persistent
-tab stacks, the wardrobe lifecycle, and durable clothing intake. Feed/Looks and
-character references remain in the following slices.
+tab stacks, the wardrobe lifecycle, durable clothing intake, and the cached
+inspiration feed with look composition, Worn/Flat views, share, and Photo save.
+Character references remain in Slice 5.
 
 ## Run here
 

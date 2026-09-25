@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/feed/feed_cubit.dart';
+import 'package:form_mobile/features/feed/feed_domain.dart';
+import 'package:form_mobile/features/feed/feed_page.dart';
+import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/wardrobe/item_cubit.dart';
 import 'package:form_mobile/features/wardrobe/item_edit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -196,6 +200,74 @@ class _ItemViewState extends State<_ItemView> {
                             child: Text(context.tr(LocaleKeys.retryCommand)),
                           ),
                         ),
+                      BlocBuilder<FeedCubit, FeedState>(
+                        builder: (context, feedState) {
+                          final looks = readyLooksForItem(
+                            detail.wardrobeItem.id,
+                            (feedState.looks ?? [])
+                                .map((record) => record.look)
+                                .toList(),
+                          );
+                          if (looks.isEmpty) return const SizedBox.shrink();
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 20),
+                              SizedBox(
+                                height: 188,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: looks.length,
+                                  separatorBuilder: (_, _) =>
+                                      const SizedBox(width: 12),
+                                  itemBuilder: (context, index) {
+                                    final look = looks[index];
+                                    return SizedBox(
+                                      width: 140,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Expanded(
+                                            child: FormImageCard(
+                                              aspectRatio: 4 / 5,
+                                              child: look.assetId == null
+                                                  ? const SizedBox.shrink()
+                                                  : CachedMedia(
+                                                      identity: look.assetId!,
+                                                      previewPath:
+                                                          'v1/assets/${look.assetId!}/content',
+                                                      online:
+                                                          online &&
+                                                          !state.stale,
+                                                    ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            context.tr(
+                                              LocaleKeys.generatedLookCaption,
+                                              namedArgs: {
+                                                'date': lookDateText(
+                                                  context,
+                                                  look.createdAt,
+                                                ),
+                                              },
+                                            ),
+                                            style: FormTokens.small,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                       if (detail.currentImage != null)
                         FormImageCard(
                           aspectRatio: 1,
@@ -348,6 +420,28 @@ class _ItemViewState extends State<_ItemView> {
                         ),
                       ),
                       const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: enabled
+                              ? () => openLookComposer(
+                                  context,
+                                  itemIds: [detail.wardrobeItem.id],
+                                )
+                              : null,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(50),
+                            backgroundColor: FormTokens.green,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                FormTokens.cardRadius,
+                              ),
+                            ),
+                          ),
+                          child: Text(context.tr(LocaleKeys.inspireItem)),
+                        ),
+                      ),
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton(

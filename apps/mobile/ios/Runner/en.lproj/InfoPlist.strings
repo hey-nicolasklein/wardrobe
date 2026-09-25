@@ -1,2 +1,3 @@
 "NSCameraUsageDescription" = "FORM uses the camera to add clothing photos.";
 "NSPhotoLibraryUsageDescription" = "FORM uses selected photos to add clothing.";
+"NSPhotoLibraryAddUsageDescription" = "FORM saves your looks and flat lays to Photos.";

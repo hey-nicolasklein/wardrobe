@@ -17,6 +17,15 @@ abstract final class FormTokens {
   static const emptyIcon = Color(0xFF9BA694);
   static const uploadTint = Color(0xFFEBEEE6);
   static const uploadLine = Color(0xFFA7B39F);
+  static const pill = Color(0xFFEEEDE7);
+  static const selectedTint = Color(0xFFDFE8D2);
+  static const toggleOff = Color(0xFFB9BEB5);
+  static const liked = Color(0xFFFF7788);
+  static const toast = Color(0xFF263D30);
+  static const checkBadge = Color(0xFFF6F8EF);
+  static const checkInk = Color(0xFF49603D);
+  static const flatLayPaper = Color(0xFFF0EEE6);
+  static const flatLayInk = Color(0xFF26351D);
 
   static const gutter = 22.0;
   static const gap = 10.0;

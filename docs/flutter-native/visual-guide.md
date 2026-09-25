@@ -76,15 +76,16 @@ names remain localized; do not derive labels by slicing unrelated translations.
 7. Run `fvm flutter analyze` and `fvm flutter test`. Existing unit tests remain
    unchanged. No golden, widget or automated UI tests are introduced.
 
-## Capture status (2026-09-24)
+## Capture status (2026-09-25)
 
-Reference PWA screenshots (15) and `web-report.md` live under
-`/tmp/form-35-visual/web/` (outside Git). Native pairs are incomplete: only the
-Feed tab has a current iOS simulator capture; wardrobe, settings, item sheets,
-intake, and archive still need matching simulator shots at 402 dp width. Device
-Hub and agent device access are unavailable here — physical-device acceptance
-remains with Nico. Do not mark the per-screen `V` checklist rows complete until
-those pairs exist.
+Task A (checklist verification) complete: V intake visual item unchecked (lacks
+screenshot pairs). Task B (PWA vs Flutter screenshot pairs) blocked: Docker
+daemon unavailable (Postgres/object-storage services needed), backend API
+unavailable (looks data required), PWA dev server unavailable (402 px
+reference capture). Flutter build prepared on iOS simulator (iPhone 16 Pro Fresh,
+booted) but cannot run without backend connection. No screenshot pairs captured.
+Recommend: defer to local development environment where infrastructure can be
+provisioned.
 
 ## Explicit deviations and acceptance
 

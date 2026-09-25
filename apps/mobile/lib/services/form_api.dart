@@ -134,6 +134,8 @@ class FormApi {
         data: data,
         options: Options(method: method),
       );
+      // A successful DELETE answers 204 without a body.
+      if (response.statusCode == 204) return const {};
       if (response.data is! Map<String, dynamic>) {
         throw const FormApiException(ApiFailure.incompatible);
       }

@@ -9,17 +9,21 @@ import 'package:form_mobile/app/app_config.dart';
 import 'package:form_mobile/app/collection_counts_cubit.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/safe_bloc_observer.dart';
+import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/settings/language_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
+import 'package:form_mobile/repository/character_sheet_repository.dart';
 import 'package:form_mobile/repository/collection_counts_repository.dart';
 import 'package:form_mobile/repository/intake_repository.dart';
+import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/media_repository.dart';
 import 'package:form_mobile/repository/preferences_repository.dart';
 import 'package:form_mobile/repository/server_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/services/app_database.dart';
 import 'package:form_mobile/services/form_api.dart';
+import 'package:form_mobile/services/look_output_service.dart';
 import 'package:form_mobile/services/photo_preparation.dart';
 import 'package:form_mobile/utils/initial_language.dart';
 import 'package:image_picker/image_picker.dart';
@@ -66,8 +70,22 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
     uri?.toString() ?? '',
     media,
   );
+  final lookRepository = LookRepository(
+    database,
+    api,
+    uri?.toString() ?? '',
+    media,
+  );
+  final characterSheetRepository = CharacterSheetRepository(api);
+  final lookOutput = LookOutputService(media);
   final wardrobe = WardrobeCubit(wardrobeRepository);
   await wardrobe.loadCache();
+  final feed = FeedCubit(
+    lookRepository,
+    wardrobeRepository,
+    characterSheetRepository,
+  );
+  await feed.loadCache();
   final support = await getApplicationSupportDirectory();
   final intakeRepository = IntakeRepository(
     database,
@@ -96,6 +114,14 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
     MultiRepositoryProvider(
       providers: [
         RepositoryProvider<MediaRepository>.value(value: media),
+        RepositoryProvider<LookRepository>(
+          create: (_) => lookRepository,
+          dispose: (repository) => repository.close(),
+        ),
+        RepositoryProvider<CharacterSheetRepository>(
+          create: (_) => characterSheetRepository,
+        ),
+        RepositoryProvider<LookOutputService>.value(value: lookOutput),
         RepositoryProvider<WardrobeRepository>(
           create: (_) => wardrobeRepository,
           dispose: (repository) => repository.close(),
@@ -122,6 +148,7 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
           BlocProvider(create: (_) => ConnectionCubit(server)),
           BlocProvider(create: (_) => collectionCounts),
           BlocProvider(create: (_) => wardrobe),
+          BlocProvider(create: (_) => feed),
           BlocProvider(create: (_) => intake),
           BlocProvider(create: (_) => LanguageCubit(preferences, language)),
         ],

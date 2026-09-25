@@ -56,6 +56,16 @@ class IntakeRecords extends Table {
   Set<Column<Object>> get primaryKey => {scope, id};
 }
 
+class LookRecords extends Table {
+  TextColumn get scope => text()();
+  TextColumn get id => text()();
+  TextColumn get lookJson => text()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {scope, id};
+}
+
 @DriftDatabase(
   tables: [
     Preferences,
@@ -63,6 +73,7 @@ class IntakeRecords extends Table {
     MediaCacheEntries,
     WardrobeRecords,
     IntakeRecords,
+    LookRecords,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -78,7 +89,7 @@ class AppDatabase extends _$AppDatabase {
   );
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -86,6 +97,7 @@ class AppDatabase extends _$AppDatabase {
     onUpgrade: (m, from, to) async {
       if (from < 2) await m.createTable(wardrobeRecords);
       if (from < 3) await m.createTable(intakeRecords);
+      if (from < 4) await m.createTable(lookRecords);
     },
   );
 

@@ -1,22 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:drift/drift.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/media_repository.dart';
 import 'package:form_mobile/services/app_database.dart';
 import 'package:form_mobile/services/form_api.dart';
+import 'package:form_mobile/utils/idempotency_key.dart';
 import 'package:form_mobile/utils/immutable_json.dart';
 
 class ItemCommand {
   ItemCommand(this.path, this.method, Map<String, dynamic> fields)
     : body = immutableJson({
         ...fields,
-        'idempotencyKey': List.generate(
-          24,
-          (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
-        ).join(),
+        'idempotencyKey': newIdempotencyKey(),
       });
 
   factory ItemCommand.edit(WardrobeItem item, Map<String, dynamic> changes) =>
@@ -60,9 +57,14 @@ class CachedItem {
   );
   final WardrobeItem item;
   final ItemDetail? detail;
-  String get thumbnailIdentity => 'preview:${item.id}:${item.recordVersion}';
-  String get thumbnailPath =>
-      'v1/wardrobe-items/${item.id}/preview?v=${item.recordVersion}';
+  String get thumbnailIdentity => item.previewIdentity;
+  String get thumbnailPath => item.previewPath;
+}
+
+/// Cache identity and API path of an item's cut-out preview image.
+extension WardrobeItemPreview on WardrobeItem {
+  String get previewIdentity => 'preview:$id:$recordVersion';
+  String get previewPath => 'v1/wardrobe-items/$id/preview?v=$recordVersion';
 }
 
 class WardrobeRepository {

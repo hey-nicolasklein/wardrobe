@@ -75,6 +75,8 @@
 	<string>FORM uses the camera to add clothing photos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>FORM uses selected photos to add clothing.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>FORM saves your looks and flat lays to Photos.</string>
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
 </dict>

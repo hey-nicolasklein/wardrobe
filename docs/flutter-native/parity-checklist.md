@@ -79,7 +79,7 @@ endpoint correctly produces the incompatibility screen.
       (screenshot pair pending; item routes use root `FormSheetPage` /
       `ModalBottomSheetRoute` with drag dismissal).
 - [ ] `V` Intake capture, drafts, progress, detection, proposals, and manual path
-      match the PWA (screenshot pair pending).
+      match the PWA (screenshot pair pending; unchecked pending 3.5 visual verification).
 - [x] `V` `visual-guide.md` documents tokens, components, and the comparison
       routine.
 - [ ] `L4` Feed, composer, and look screens match the PWA.
@@ -106,11 +106,11 @@ endpoint correctly produces the incompatibility screen.
 
 - [x] `W2` Details show name, category, colors, notes, and collection state.
 - [x] `W2` Details show the current catalog image and original source photo.
-- [ ] `L4` Details include the item's appearances in ready looks.
+- [x] `L4` Details include the item's appearances in ready looks.
 - [x] `W2` Cached details and media remain browseable offline.
 - [x] `W2` Online editing validates and saves metadata.
 - [x] `W2` Online editing moves items between Owning and Wanting.
-- [ ] `L4` Inspiration opens the look composer with the item preselected.
+- [x] `L4` Inspiration opens the look composer with the item preselected.
 - [x] `W2` Running catalog generation shows durable progress and manual refresh.
 - [x] `W2` New catalog generation supports Low, Medium, and High quality.
 - [x] `W2` Catalog improvement accepts baseline suggestions and free text.
@@ -190,37 +190,84 @@ behavior remains for device acceptance. Slice 3.5 owns visual alignment.
 
 ## Feed browsing
 
-- [ ] `L4` Cached look cards render immediately and remain browseable offline.
-- [ ] `L4` Feed supports empty, planning, generating, ready, failed, stale, and
+- [x] `L4` Cached look cards render immediately and remain browseable offline.
+- [x] `L4` Feed supports empty, planning, generating, ready, failed, stale, and
       offline states.
-- [ ] `L4` Feed refreshes at launch, on foreground return, and by pull-to-refresh.
-- [ ] `L4` A missing active ready character reference routes toward its setup.
-- [ ] `L4` Planning and generating cards show selected garments when available.
-- [ ] `L4` Ready cards switch between Worn and Flat views.
-- [ ] `L4` Worn view reveals positioned wardrobe pieces and opens item details.
-- [ ] `L4` Flat view opens item details from each available garment.
-- [ ] `L4` Concept, relative creation date, liked state, and saved state persist
+- [x] `L4` Feed refreshes at launch, on foreground return, and by pull-to-refresh.
+- [x] `L4` A missing active ready character reference routes toward its setup.
+- [x] `L4` Planning and generating cards show selected garments when available.
+- [x] `L4` Ready cards switch between Worn and Flat views.
+- [x] `L4` Worn view reveals positioned wardrobe pieces and opens item details.
+- [x] `L4` Flat view opens item details from each available garment.
+- [x] `L4` Concept, relative creation date, liked state, and saved state persist
       locally.
-- [ ] `L4` Local look markings are disabled while offline.
+- [x] `L4` Local look markings are disabled while offline.
 
 ## Look composition and actions
 
-- [ ] `L4` Composition accepts zero to twelve exact eligible wardrobe items.
-- [ ] `L4` Eligible items can be searched and filtered by category.
-- [ ] `L4` Selected-only mode and reset behave like the baseline.
-- [ ] `L4` Selected garments have a Flat preview and can be removed there.
-- [ ] `L4` Surprise, Night Out, Party, and Casual occasions are available.
-- [ ] `L4` Wardrobe completion can be enabled or disabled.
-- [ ] `L4` Completion can be constrained by selected garment categories.
-- [ ] `L4` Look creation submits one idempotent command and opens its feed state.
-- [ ] `L4` Failed looks can be retried or deleted.
-- [ ] `L4` Ready looks expose details, variation, same-piece recombination, and
+- [x] `L4` Composition accepts zero to twelve exact eligible wardrobe items.
+- [x] `L4` Eligible items can be searched and filtered by category.
+- [x] `L4` Selected-only mode and reset behave like the baseline.
+- [x] `L4` Selected garments have a Flat preview and can be removed there.
+- [x] `L4` Surprise, Night Out, Party, and Casual occasions are available.
+- [x] `L4` Wardrobe completion can be enabled or disabled.
+- [x] `L4` Completion can be constrained by selected garment categories.
+- [x] `L4` Look creation submits one idempotent command and opens its feed state.
+- [x] `L4` Failed looks can be retried or deleted.
+- [x] `L4` Ready looks expose details, variation, same-piece recombination, and
       quality upgrade where supported.
-- [ ] `L4` Worn and Flat representations share through the native share sheet.
-- [ ] `L4` Worn and Flat representations save to Photos after point-of-use
+- [x] `L4` Worn and Flat representations share through the native share sheet.
+- [x] `L4` Worn and Flat representations save to Photos after point-of-use
       permission.
-- [ ] `L4` Permanent deletion uses a native confirmation and retains historic
+- [x] `L4` Permanent deletion uses a native confirmation and retains historic
       costs on the server.
+
+### L4 evidence and validation handoff
+
+Implemented in `apps/mobile/lib/features/feed`, `LookRepository`,
+`CharacterSheetRepository`, `LookOutputService`, and Drift schema v4
+(`look_records`). Strict look DTOs, stale-while-refresh feed cache, local
+liked/saved preferences, pending look starts, Worn/Flat layout from PWA logic,
+composer with wardrobe cross-links, native share (`share_plus`) and Photos save
+(`gal`). Missing active character reference routes to
+`/feed/character-setup` (Slice 5 fills setup). Visual PWA screenshot pair for
+feed/composer remains with Slice 3.5 / manual acceptance.
+
+- `FeedPage`, `FeedCubit`, and `LookCard` cover cached startup, pull refresh,
+  foreground refresh (via `FormApp`), offline browse, planning/generating/
+  ready/failed states, Worn/Flat toggle, the staggered worn reveal from
+  category body regions (the server no longer sends look boxes), and
+  liked/saved (read-only offline). Looks accept both `1024x1280` and the
+  current `768x960` size.
+- `LookComposerPage` on `ComposerCubit` covers search, category filter,
+  selected-only (ignores search and category, as in the PWA), reset, flat
+  preview, occasions, wardrobe completion, category constraints, up to 12 exact
+  items, a per-look quality choice, and one idempotency key per composer
+  session. Creation opens the Feed. Look details show the image cost.
+- Feed actions report failures as localized toasts. Flat-lay export refuses
+  looks with missing pieces. Saving to Photos checks access first and uses
+  `NSPhotoLibraryAddUsageDescription`.
+- `ItemPage` shows ready looks and opens the composer with the item preselected.
+- Unit tests: look DTOs, `look_json` normalization, feed domain (age, upgrade
+  qualities), flat lay layout, worn positions, look
+  commands, look repository (including 204 delete), v3→v4 migration, feed
+  cubit, and composer cubit (selection, limit, reset, command, key reuse).
+- Validation: `fvm flutter analyze` reports no issues and 106 unit tests pass.
+  PWA screenshot pairs are still missing, so the visual `L4` item stays open.
+
+### PWA changes after the baseline
+
+`origin/main` moved past the frozen baseline with four commits (`11ead56`,
+`77a686f`, `1a1b733`, `a2397cc`). Slice 4 adopts the contract changes and the
+look-related behaviour above. These PWA changes outside Slice 4 need Nico's
+scope decision before they enter Stage 1:
+
+- [ ] `accessory` as a full category, with accessory detections opt-in during
+      intake (`W2`/`I3`).
+- [ ] Item detail switches between Owning and Wanting with an icon toggle, and
+      editing uses radio choices for the collection (`W2`).
+- [ ] Settings shows generation costs per week with catalog-image and
+      detection totals (`S6`).
 
 ## Character references
 

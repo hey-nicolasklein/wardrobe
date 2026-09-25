@@ -79,12 +79,13 @@ void main() {
           'collection_summaries',
           'media_cache_entries',
           'wardrobe_records',
+          'look_records',
         ]),
       );
       final version = await database
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.read<int>('user_version'), 3);
+      expect(version.read<int>('user_version'), 4);
       final first = CollectionCountsRepository(database, null, 'server-a');
       final second = CollectionCountsRepository(database, null, 'server-b');
       await first.collection(Collection.feed).writeCache(0);

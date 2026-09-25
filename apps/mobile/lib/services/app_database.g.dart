@@ -1521,6 +1521,314 @@ class IntakeRecordsCompanion extends UpdateCompanion<IntakeRecord> {
   }
 }
 
+class $LookRecordsTable extends LookRecords
+    with TableInfo<$LookRecordsTable, LookRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LookRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _scopeMeta = const VerificationMeta('scope');
+  @override
+  late final GeneratedColumn<String> scope = GeneratedColumn<String>(
+    'scope',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lookJsonMeta = const VerificationMeta(
+    'lookJson',
+  );
+  @override
+  late final GeneratedColumn<String> lookJson = GeneratedColumn<String>(
+    'look_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [scope, id, lookJson, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'look_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LookRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('scope')) {
+      context.handle(
+        _scopeMeta,
+        scope.isAcceptableOrUnknown(data['scope']!, _scopeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scopeMeta);
+    }
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('look_json')) {
+      context.handle(
+        _lookJsonMeta,
+        lookJson.isAcceptableOrUnknown(data['look_json']!, _lookJsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_lookJsonMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {scope, id};
+  @override
+  LookRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LookRecord(
+      scope: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scope'],
+      )!,
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      lookJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}look_json'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $LookRecordsTable createAlias(String alias) {
+    return $LookRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class LookRecord extends DataClass implements Insertable<LookRecord> {
+  final String scope;
+  final String id;
+  final String lookJson;
+  final DateTime createdAt;
+  const LookRecord({
+    required this.scope,
+    required this.id,
+    required this.lookJson,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['scope'] = Variable<String>(scope);
+    map['id'] = Variable<String>(id);
+    map['look_json'] = Variable<String>(lookJson);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  LookRecordsCompanion toCompanion(bool nullToAbsent) {
+    return LookRecordsCompanion(
+      scope: Value(scope),
+      id: Value(id),
+      lookJson: Value(lookJson),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory LookRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LookRecord(
+      scope: serializer.fromJson<String>(json['scope']),
+      id: serializer.fromJson<String>(json['id']),
+      lookJson: serializer.fromJson<String>(json['lookJson']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'scope': serializer.toJson<String>(scope),
+      'id': serializer.toJson<String>(id),
+      'lookJson': serializer.toJson<String>(lookJson),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  LookRecord copyWith({
+    String? scope,
+    String? id,
+    String? lookJson,
+    DateTime? createdAt,
+  }) => LookRecord(
+    scope: scope ?? this.scope,
+    id: id ?? this.id,
+    lookJson: lookJson ?? this.lookJson,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  LookRecord copyWithCompanion(LookRecordsCompanion data) {
+    return LookRecord(
+      scope: data.scope.present ? data.scope.value : this.scope,
+      id: data.id.present ? data.id.value : this.id,
+      lookJson: data.lookJson.present ? data.lookJson.value : this.lookJson,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LookRecord(')
+          ..write('scope: $scope, ')
+          ..write('id: $id, ')
+          ..write('lookJson: $lookJson, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(scope, id, lookJson, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LookRecord &&
+          other.scope == this.scope &&
+          other.id == this.id &&
+          other.lookJson == this.lookJson &&
+          other.createdAt == this.createdAt);
+}
+
+class LookRecordsCompanion extends UpdateCompanion<LookRecord> {
+  final Value<String> scope;
+  final Value<String> id;
+  final Value<String> lookJson;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const LookRecordsCompanion({
+    this.scope = const Value.absent(),
+    this.id = const Value.absent(),
+    this.lookJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LookRecordsCompanion.insert({
+    required String scope,
+    required String id,
+    required String lookJson,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : scope = Value(scope),
+       id = Value(id),
+       lookJson = Value(lookJson),
+       createdAt = Value(createdAt);
+  static Insertable<LookRecord> custom({
+    Expression<String>? scope,
+    Expression<String>? id,
+    Expression<String>? lookJson,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (scope != null) 'scope': scope,
+      if (id != null) 'id': id,
+      if (lookJson != null) 'look_json': lookJson,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LookRecordsCompanion copyWith({
+    Value<String>? scope,
+    Value<String>? id,
+    Value<String>? lookJson,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return LookRecordsCompanion(
+      scope: scope ?? this.scope,
+      id: id ?? this.id,
+      lookJson: lookJson ?? this.lookJson,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (scope.present) {
+      map['scope'] = Variable<String>(scope.value);
+    }
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (lookJson.present) {
+      map['look_json'] = Variable<String>(lookJson.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LookRecordsCompanion(')
+          ..write('scope: $scope, ')
+          ..write('id: $id, ')
+          ..write('lookJson: $lookJson, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1533,6 +1841,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this,
   );
   late final $IntakeRecordsTable intakeRecords = $IntakeRecordsTable(this);
+  late final $LookRecordsTable lookRecords = $LookRecordsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1543,6 +1852,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     mediaCacheEntries,
     wardrobeRecords,
     intakeRecords,
+    lookRecords,
   ];
 }
 
@@ -2512,6 +2822,196 @@ typedef $$IntakeRecordsTableProcessedTableManager =
       IntakeRecord,
       PrefetchHooks Function()
     >;
+typedef $$LookRecordsTableCreateCompanionBuilder =
+    LookRecordsCompanion Function({
+      required String scope,
+      required String id,
+      required String lookJson,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$LookRecordsTableUpdateCompanionBuilder =
+    LookRecordsCompanion Function({
+      Value<String> scope,
+      Value<String> id,
+      Value<String> lookJson,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$LookRecordsTableFilterComposer
+    extends Composer<_$AppDatabase, $LookRecordsTable> {
+  $$LookRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lookJson => $composableBuilder(
+    column: $table.lookJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$LookRecordsTableOrderingComposer
+    extends Composer<_$AppDatabase, $LookRecordsTable> {
+  $$LookRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lookJson => $composableBuilder(
+    column: $table.lookJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$LookRecordsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $LookRecordsTable> {
+  $$LookRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get scope =>
+      $composableBuilder(column: $table.scope, builder: (column) => column);
+
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get lookJson =>
+      $composableBuilder(column: $table.lookJson, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$LookRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $LookRecordsTable,
+          LookRecord,
+          $$LookRecordsTableFilterComposer,
+          $$LookRecordsTableOrderingComposer,
+          $$LookRecordsTableAnnotationComposer,
+          $$LookRecordsTableCreateCompanionBuilder,
+          $$LookRecordsTableUpdateCompanionBuilder,
+          (
+            LookRecord,
+            BaseReferences<_$AppDatabase, $LookRecordsTable, LookRecord>,
+          ),
+          LookRecord,
+          PrefetchHooks Function()
+        > {
+  $$LookRecordsTableTableManager(_$AppDatabase db, $LookRecordsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$LookRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$LookRecordsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$LookRecordsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> scope = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<String> lookJson = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LookRecordsCompanion(
+                scope: scope,
+                id: id,
+                lookJson: lookJson,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String scope,
+                required String id,
+                required String lookJson,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => LookRecordsCompanion.insert(
+                scope: scope,
+                id: id,
+                lookJson: lookJson,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$LookRecordsTable, LookRecord>(table),
+                  BaseReferences<_$AppDatabase, $LookRecordsTable, LookRecord>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$LookRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $LookRecordsTable,
+      LookRecord,
+      $$LookRecordsTableFilterComposer,
+      $$LookRecordsTableOrderingComposer,
+      $$LookRecordsTableAnnotationComposer,
+      $$LookRecordsTableCreateCompanionBuilder,
+      $$LookRecordsTableUpdateCompanionBuilder,
+      (
+        LookRecord,
+        BaseReferences<_$AppDatabase, $LookRecordsTable, LookRecord>,
+      ),
+      LookRecord,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2526,4 +3026,6 @@ class $AppDatabaseManager {
       $$WardrobeRecordsTableTableManager(_db, _db.wardrobeRecords);
   $$IntakeRecordsTableTableManager get intakeRecords =>
       $$IntakeRecordsTableTableManager(_db, _db.intakeRecords);
+  $$LookRecordsTableTableManager get lookRecords =>
+      $$LookRecordsTableTableManager(_db, _db.lookRecords);
 }

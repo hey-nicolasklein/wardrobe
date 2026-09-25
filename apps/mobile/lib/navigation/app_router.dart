@@ -1,7 +1,9 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/feed/character_setup_page.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
+import 'package:form_mobile/features/feed/look_composer_page.dart';
 import 'package:form_mobile/features/intake/intake_page.dart';
 import 'package:form_mobile/features/settings/settings_page.dart';
 import 'package:form_mobile/features/wardrobe/item_page.dart';
@@ -38,6 +40,21 @@ GoRouter createRouter() => GoRouter(
               path: '/feed',
               builder: (_, _) => const FeedPage(),
               routes: [
+                GoRoute(
+                  path: 'composer',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  pageBuilder: (_, state) => FormSheetPage(
+                    key: state.pageKey,
+                    child: LookComposerPage(
+                      preselectedIds:
+                          state.uri.queryParametersAll['item'] ?? const [],
+                    ),
+                  ),
+                ),
+                GoRoute(
+                  path: 'character-setup',
+                  builder: (_, _) => const CharacterSetupPage(),
+                ),
                 GoRoute(
                   path: 'status',
                   builder: (_, _) => const DataStatusPage(),
