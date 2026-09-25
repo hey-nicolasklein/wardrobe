@@ -1,10 +1,12 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:form_mobile/app/form_tokens.dart';
-import 'package:form_mobile/features/feed/character_setup_page.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
 import 'package:form_mobile/features/feed/look_composer_page.dart';
 import 'package:form_mobile/features/intake/intake_page.dart';
+import 'package:form_mobile/features/settings/character/character_detail_page.dart';
+import 'package:form_mobile/features/settings/character/character_section.dart';
+import 'package:form_mobile/features/settings/character/character_setup_page.dart';
 import 'package:form_mobile/features/settings/settings_page.dart';
 import 'package:form_mobile/features/wardrobe/item_page.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_page.dart';
@@ -53,7 +55,11 @@ GoRouter createRouter() => GoRouter(
                 ),
                 GoRoute(
                   path: 'character-setup',
-                  builder: (_, _) => const CharacterSetupPage(),
+                  parentNavigatorKey: _rootNavigatorKey,
+                  pageBuilder: (_, state) => FormSheetPage(
+                    key: state.pageKey,
+                    child: const CharacterSetupPage(fromFeed: true),
+                  ),
                 ),
                 GoRoute(
                   path: 'status',
@@ -93,6 +99,30 @@ GoRouter createRouter() => GoRouter(
               builder: (_, _) => const SettingsPage(),
               routes: [
                 GoRoute(path: 'server', builder: (_, _) => const ServerPage()),
+                GoRoute(
+                  path: 'character-setup',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  pageBuilder: (_, state) => FormSheetPage(
+                    key: state.pageKey,
+                    child: const CharacterSetupPage(),
+                  ),
+                ),
+                GoRoute(
+                  path: 'characters/history',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  pageBuilder: (_, state) => FormSheetPage(
+                    key: state.pageKey,
+                    child: const CharacterHistoryPage(),
+                  ),
+                ),
+                GoRoute(
+                  path: 'characters/:id',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  pageBuilder: (_, state) => FormSheetPage(
+                    key: state.pageKey,
+                    child: CharacterDetailPage(id: state.pathParameters['id']!),
+                  ),
+                ),
                 GoRoute(
                   path: 'archive',
                   builder: (_, _) => const WardrobePage(archived: true),

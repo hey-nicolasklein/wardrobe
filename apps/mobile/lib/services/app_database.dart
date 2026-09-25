@@ -66,6 +66,15 @@ class LookRecords extends Table {
   Set<Column<Object>> get primaryKey => {scope, id};
 }
 
+class CharacterRecords extends Table {
+  TextColumn get scope => text()();
+  TextColumn get id => text()();
+  TextColumn get sheetJson => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {scope, id};
+}
+
 @DriftDatabase(
   tables: [
     Preferences,
@@ -74,6 +83,7 @@ class LookRecords extends Table {
     WardrobeRecords,
     IntakeRecords,
     LookRecords,
+    CharacterRecords,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -89,7 +99,7 @@ class AppDatabase extends _$AppDatabase {
   );
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -98,6 +108,7 @@ class AppDatabase extends _$AppDatabase {
       if (from < 2) await m.createTable(wardrobeRecords);
       if (from < 3) await m.createTable(intakeRecords);
       if (from < 4) await m.createTable(lookRecords);
+      if (from < 5) await m.createTable(characterRecords);
     },
   );
 

@@ -12,6 +12,7 @@ import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/services/app_database.dart';
 import 'package:form_mobile/services/form_api.dart';
 
+import 'support/character_fixtures.dart';
 import 'support/fake_server.dart';
 import 'support/look_fixtures.dart';
 
@@ -22,8 +23,10 @@ void main() {
   late WardrobeRepository wardrobeRepository;
   late CharacterSheetRepository characterSheets;
   late FeedCubit cubit;
+  var characters = <Map<String, dynamic>>[];
 
   setUp(() async {
+    characters = [];
     database = AppDatabase(NativeDatabase.memory());
     directory = await Directory.systemTemp.createTemp('form-feed-test-');
     final api = FormApi(
@@ -37,7 +40,7 @@ void main() {
             );
           }
           if (options.path == 'v1/character-sheets') {
-            return jsonResponse(jsonEncode({'characterSheets': <Object>[]}));
+            return jsonResponse(jsonEncode({'characterSheets': characters}));
           }
           return jsonResponse('{}', 404);
         }),
@@ -45,7 +48,11 @@ void main() {
     final media = MediaRepository(database, null, 'test', directory);
     lookRepository = LookRepository(database, api, 'test', media);
     wardrobeRepository = WardrobeRepository(database, null, 'test', media);
-    characterSheets = CharacterSheetRepository(api);
+    characterSheets = CharacterSheetRepository(
+      api,
+      database: database,
+      scope: 'test',
+    );
     cubit = FeedCubit(lookRepository, wardrobeRepository, characterSheets);
   });
 
@@ -56,6 +63,20 @@ void main() {
     await database.close();
     await directory.delete(recursive: true);
   });
+
+  test(
+    'reference changes refresh Feed and cached active state restores',
+    () async {
+      characters = [characterJson(active: true)];
+      final refreshed = cubit.stream.firstWhere(
+        (s) => s.hasActiveCharacterReference == true,
+      );
+      await characterSheets.fetch();
+      await refreshed;
+      await cubit.loadCache();
+      expect(cubit.state.hasActiveCharacterReference, true);
+    },
+  );
 
   test(
     'markUnavailable keeps cached looks but disables online markings',
@@ -110,7 +131,7 @@ void main() {
               );
             }
             if (options.path == 'v1/character-sheets') {
-              return jsonResponse(jsonEncode({'characterSheets': <Object>[]}));
+              return jsonResponse(jsonEncode({'characterSheets': characters}));
             }
             return jsonResponse('{}', 404);
           }),
@@ -120,7 +141,7 @@ void main() {
       final brokenCubit = FeedCubit(
         brokenRepo,
         wardrobeRepository,
-        CharacterSheetRepository(api),
+        CharacterSheetRepository(api, database: database, scope: 'test'),
       );
       addTearDown(brokenCubit.close);
       addTearDown(brokenRepo.close);

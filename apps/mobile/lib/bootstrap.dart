@@ -11,8 +11,10 @@ import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/safe_bloc_observer.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
+import 'package:form_mobile/features/settings/character/character_cubit.dart';
 import 'package:form_mobile/features/settings/language_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
+import 'package:form_mobile/repository/character_draft_repository.dart';
 import 'package:form_mobile/repository/character_sheet_repository.dart';
 import 'package:form_mobile/repository/collection_counts_repository.dart';
 import 'package:form_mobile/repository/intake_repository.dart';
@@ -76,7 +78,14 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
     uri?.toString() ?? '',
     media,
   );
-  final characterSheetRepository = CharacterSheetRepository(api);
+  final characterSheetRepository = CharacterSheetRepository(
+    api,
+    database: database,
+    scope: uri?.toString() ?? '',
+    media: media,
+  );
+  final characters = CharacterCubit(characterSheetRepository);
+  await characters.loadCache();
   final lookOutput = LookOutputService(media);
   final wardrobe = WardrobeCubit(wardrobeRepository);
   await wardrobe.loadCache();
@@ -87,6 +96,11 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
   );
   await feed.loadCache();
   final support = await getApplicationSupportDirectory();
+  final characterDraftRepository = CharacterDraftRepository(
+    characterSheetRepository,
+    Directory('${support.path}/character-drafts'),
+    PhotoPreparation(),
+  );
   final intakeRepository = IntakeRepository(
     database,
     api,
@@ -120,6 +134,10 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
         ),
         RepositoryProvider<CharacterSheetRepository>(
           create: (_) => characterSheetRepository,
+          dispose: (repository) => repository.close(),
+        ),
+        RepositoryProvider<CharacterDraftRepository>.value(
+          value: characterDraftRepository,
         ),
         RepositoryProvider<LookOutputService>.value(value: lookOutput),
         RepositoryProvider<WardrobeRepository>(
@@ -149,6 +167,7 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
           BlocProvider(create: (_) => collectionCounts),
           BlocProvider(create: (_) => wardrobe),
           BlocProvider(create: (_) => feed),
+          BlocProvider(create: (_) => characters),
           BlocProvider(create: (_) => intake),
           BlocProvider(create: (_) => LanguageCubit(preferences, language)),
         ],

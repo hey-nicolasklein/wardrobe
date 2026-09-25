@@ -83,7 +83,8 @@ endpoint correctly produces the incompatibility screen.
 - [x] `V` `visual-guide.md` documents tokens, components, and the comparison
       routine.
 - [ ] `L4` Feed, composer, and look screens match the PWA.
-- [ ] `C5` Character-reference setup, crop, collage, and detail match the PWA.
+- [ ] `C5` Character-reference setup, crop, collage, and detail match the PWA
+      (implemented with shared FORM components; current screenshot pairs pending).
 - [ ] `S6` Settings, cost presentation, and reset match the PWA.
 
 ## Wardrobe and archive
@@ -230,7 +231,7 @@ Implemented in `apps/mobile/lib/features/feed`, `LookRepository`,
 liked/saved preferences, pending look starts, Worn/Flat layout from PWA logic,
 composer with wardrobe cross-links, native share (`share_plus`) and Photos save
 (`gal`). Missing active character reference routes to
-`/feed/character-setup` (Slice 5 fills setup). Visual PWA screenshot pair for
+`/feed/character-setup` (completed by Slice 5). Visual PWA screenshot pair for
 feed/composer remains with Slice 3.5 / manual acceptance.
 
 - `FeedPage`, `FeedCubit`, and `LookCard` cover cached startup, pull refresh,
@@ -274,23 +275,79 @@ look-related behaviour above. Nico approved these additional changes for Stage 1
 
 ## Character references
 
-- [ ] `C5` Settings distinguishes active, pending, failed, and historical
+- [x] `C5` Settings distinguishes active, pending, failed, and historical
       references.
-- [ ] `C5` Setup accepts one to four photos of the same person.
-- [ ] `C5` Each photo is normalized and supports pan and zoom crop.
-- [ ] `C5` Low crop resolution produces a warning before continuation.
-- [ ] `C5` The local collage layout matches the baseline for one to four photos.
-- [ ] `C5` The exact reviewed collage is uploaded as the reference asset.
-- [ ] `C5` An optional note is persisted with the reference.
-- [ ] `C5` The new collage becomes the active ready reference.
-- [ ] `C5` Existing pending and failed server states refresh on foreground return.
-- [ ] `C5` Detail shows date, source count, creation metadata, note, refinement
-      metadata when present, cost, and failure category.
-- [ ] `C5` A ready historical reference can be activated.
-- [ ] `C5` A replacement collage can be created from reference detail.
-- [ ] `C5` An inactive ready or failed reference can be deleted after native
+- [x] `C5` Setup accepts one to four photos of the same person.
+- [x] `C5` Each photo is normalized and supports pan and zoom crop.
+- [x] `C5` Low crop resolution produces a warning before continuation.
+- [x] `C5` The local collage layout matches the baseline for one to four photos.
+- [x] `C5` The exact reviewed collage is uploaded as the reference asset.
+- [x] `C5` An optional note is persisted with the reference.
+- [x] `C5` The new collage becomes the active ready reference.
+- [x] `C5` Existing pending and failed server states refresh on foreground return.
+- [x] `C5` Detail shows date, source count, creation metadata, note, cost,
+      and failure category. Refinement was removed in `11ead56`; there is no
+      refinement field, request, or UI in the current contract.
+- [x] `C5` A ready historical reference can be activated.
+- [x] `C5` A replacement collage can be created from reference detail.
+- [x] `C5` An inactive ready or failed reference can be deleted after native
       confirmation.
-- [ ] `C5` The missing-reference Feed action opens the completed setup flow.
+- [x] `C5` The missing-reference Feed action opens the completed setup flow.
+
+### C5 implementation and validation handoff
+
+Implemented under `apps/mobile/lib/features/settings/character`. All 14
+functional C5 items above are covered. The separate visual C5 item remains open:
+current PWA/native screenshot pairs have not been captured or compared. The
+2026-09-25 capture attempt found a booted simulator, but Computer Use denied
+access to Device Hub ("not approved"). This is an explicit remaining Slice 5
+completion criterion, not a visual acceptance claim.
+
+- `CharacterSetupCubit` owns photo selection, crop/navigation state, note,
+  offline gating and the submission checkpoint. `PhotoPreparation` reuses intake's
+  25 MB limit, orientation/HEIC normalization, JPEG 0.92 and 2,400-pixel maximum.
+  `PhotoCrop` and `collageLayout` port the PWA geometry, zoom 1–6 and resolution
+  warning. Review displays the actual 864×1536 JPEG 0.95 file uploaded verbatim.
+- `CharacterDraftRepository` keeps normalized photos and the reviewed file in
+  application support, outside the evictable media cache. Scoped draft metadata,
+  upload intent, completion key, creation key and accepted record ID survive
+  reopening. After submission starts, edits are locked until retry or explicit
+  discard. Completion retries probe the existing asset before uploading again.
+  A definitely missing, expired upload starts a new asset/completion command.
+- `CharacterSheetRepository` maps the current wire contract and persists full
+  reference records in Drift v5. Activation updates cached active flags only after
+  success. Deletion is the current bodyless DELETE and is idempotent by record ID;
+  a retry treats the server's `wardrobe-item-not-found` code as confirmed absence.
+  Late list responses cannot undo successful mutations or newer refreshes.
+- The shared `CharacterCubit` supplies cached active/pending/failed/history state
+  to Settings and detail sheets, refreshes on foreground/reconnection, and polls
+  pending references only while active and online. Feed observes repository
+  changes. Its former placeholder now opens the complete setup sheet and success
+  returns to Feed after requesting a refresh.
+- The current contract stores **one** reference asset (the reviewed collage), so
+  detail's source count is 1 for new collages, even when composed from four photos.
+  This matches the current PWA. Historic records can still have 1–4 asset IDs.
+  Creation returns `characterSheetId` and immediately makes the collage ready and
+  active without generating another image. No refinement metadata is fabricated.
+- Shared FORM reference cards, status badges, portrait previews, crop viewport,
+  facts and original person/photo/close SVGs follow PWA tokens, including the
+  pending card's dashed border. Native photo picker, sheet transitions and delete
+  confirmation follow the Stage 1 native exceptions. German/English copy and
+  generated keys include the cost label correction, “Gesamt erzeugt” /
+  “Total generated”.
+- Validation: `fvm flutter analyze` reports **No issues found!** and
+  `fvm flutter test` passes **148 unit tests**. Tests cover geometry, layout pixels,
+  exact upload bytes, retry keys, lost responses, expired uploads, interrupted
+  connectivity, cached state, eligibility, foreground polling, database reopen,
+  the v4→v5 upgrade and Feed reference updates. No widget/golden/integration tests,
+  real-server generation, database resets, production access or deployment.
+
+Remaining visual/device review uses synthetic/disposable data: compare Settings
+(empty/active/pending/failed), 1–4-photo crops including low resolution, review
+and re-crop, history, ready/failed detail, activation/replacement/deletion and
+Feed return in both locales. Check native picker permissions and HEIC, swipe
+closing, scroll position on history return and the keyboard-visible note field.
+Screenshots and their comparison manifest stay outside Git.
 
 ## Settings and reset
 

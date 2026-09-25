@@ -2,7 +2,7 @@
 
 // ignore_for_file: constant_identifier_names
 
-abstract class  LocaleKeys {
+abstract class LocaleKeys {
   static const appName = 'appName';
   static const feed = 'feed';
   static const wardrobe = 'wardrobe';
@@ -178,7 +178,6 @@ abstract class  LocaleKeys {
   static const feedFirstLook = 'feedFirstLook';
   static const feedCharacterSetup = 'feedCharacterSetup';
   static const feedCharacterSetupTitle = 'feedCharacterSetupTitle';
-  static const feedCharacterSetupBody = 'feedCharacterSetupBody';
   static const feedStale = 'feedStale';
   static const feedActionFailed = 'feedActionFailed';
   static const createLook = 'createLook';
@@ -252,7 +251,8 @@ abstract class  LocaleKeys {
   static const composerSummaryCategories = 'composerSummaryCategories';
   static const composerSummaryCategoriesOnly = 'composerSummaryCategoriesOnly';
   static const composerSummaryDefault = 'composerSummaryDefault';
-  static const composerOccasionSuffixNightOut = 'composerOccasionSuffixNightOut';
+  static const composerOccasionSuffixNightOut =
+      'composerOccasionSuffixNightOut';
   static const composerOccasionSuffixParty = 'composerOccasionSuffixParty';
   static const composerOccasionSuffixCasual = 'composerOccasionSuffixCasual';
   static const composerTrayLabel = 'composerTrayLabel';
@@ -298,5 +298,73 @@ abstract class  LocaleKeys {
   static const costs_noShare = 'costs.noShare';
   static const costs_share = 'costs.share';
   static const costs = 'costs';
-
+  static const character_title = 'character.title';
+  static const character_reference = 'character.reference';
+  static const character_subtitle = 'character.subtitle';
+  static const character_collage = 'character.collage';
+  static const character_introTitle = 'character.introTitle';
+  static const character_introBody = 'character.introBody';
+  static const character_photoCount = 'character.photoCount';
+  static const character_continueCrop = 'character.continueCrop';
+  static const character_crop = 'character.crop';
+  static const character_photoIndex = 'character.photoIndex';
+  static const character_cropTitle = 'character.cropTitle';
+  static const character_cropBody = 'character.cropBody';
+  static const character_resolution = 'character.resolution';
+  static const character_zoom = 'character.zoom';
+  static const character_zoomValue = 'character.zoomValue';
+  static const character_back = 'character.back';
+  static const character_nextPhoto = 'character.nextPhoto';
+  static const character_review = 'character.review';
+  static const character_reviewTitle = 'character.reviewTitle';
+  static const character_reviewBody = 'character.reviewBody';
+  static const character_preview = 'character.preview';
+  static const character_recrop = 'character.recrop';
+  static const character_note = 'character.note';
+  static const character_noteLabel = 'character.noteLabel';
+  static const character_noteHint = 'character.noteHint';
+  static const character_noteLimit = 'character.noteLimit';
+  static const character_useCollage = 'character.useCollage';
+  static const character_retryLocked = 'character.retryLocked';
+  static const character_uploading = 'character.uploading';
+  static const character_preparing = 'character.preparing';
+  static const character_saved = 'character.saved';
+  static const character_discard = 'character.discard';
+  static const character_discardBody = 'character.discardBody';
+  static const character_offline = 'character.offline';
+  static const character_failed = 'character.failed';
+  static const character_incompatible = 'character.incompatible';
+  static const character_active = 'character.active';
+  static const character_failedStatus = 'character.failedStatus';
+  static const character_pending = 'character.pending';
+  static const character_stored = 'character.stored';
+  static const character_activeTitle = 'character.activeTitle';
+  static const character_personalTitle = 'character.personalTitle';
+  static const character_failedBody = 'character.failedBody';
+  static const character_pendingBody = 'character.pendingBody';
+  static const character_storedBody = 'character.storedBody';
+  static const character_onePhoto = 'character.onePhoto';
+  static const character_photos = 'character.photos';
+  static const character_empty = 'character.empty';
+  static const character_newCollage = 'character.newCollage';
+  static const character_historyCount = 'character.historyCount';
+  static const character_history = 'character.history';
+  static const character_historyTitle = 'character.historyTitle';
+  static const character_historyBody = 'character.historyBody';
+  static const character_noHistory = 'character.noHistory';
+  static const character_missing = 'character.missing';
+  static const character_about = 'character.about';
+  static const character_sourcePhotos = 'character.sourcePhotos';
+  static const character_creation = 'character.creation';
+  static const character_cost = 'character.cost';
+  static const character_failureCategory = 'character.failureCategory';
+  static const character_activate = 'character.activate';
+  static const character_replace = 'character.replace';
+  static const character_delete = 'character.delete';
+  static const character_deleteBody = 'character.deleteBody';
+  static const character_deleted = 'character.deleted';
+  static const character_activeDelete = 'character.activeDelete';
+  static const character_pendingDelete = 'character.pendingDelete';
+  static const character_newReference = 'character.newReference';
+  static const character = 'character';
 }

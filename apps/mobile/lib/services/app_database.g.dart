@@ -1829,6 +1829,265 @@ class LookRecordsCompanion extends UpdateCompanion<LookRecord> {
   }
 }
 
+class $CharacterRecordsTable extends CharacterRecords
+    with TableInfo<$CharacterRecordsTable, CharacterRecord> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CharacterRecordsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _scopeMeta = const VerificationMeta('scope');
+  @override
+  late final GeneratedColumn<String> scope = GeneratedColumn<String>(
+    'scope',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sheetJsonMeta = const VerificationMeta(
+    'sheetJson',
+  );
+  @override
+  late final GeneratedColumn<String> sheetJson = GeneratedColumn<String>(
+    'sheet_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [scope, id, sheetJson];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'character_records';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CharacterRecord> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('scope')) {
+      context.handle(
+        _scopeMeta,
+        scope.isAcceptableOrUnknown(data['scope']!, _scopeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_scopeMeta);
+    }
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('sheet_json')) {
+      context.handle(
+        _sheetJsonMeta,
+        sheetJson.isAcceptableOrUnknown(data['sheet_json']!, _sheetJsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sheetJsonMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {scope, id};
+  @override
+  CharacterRecord map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CharacterRecord(
+      scope: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}scope'],
+      )!,
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      sheetJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}sheet_json'],
+      )!,
+    );
+  }
+
+  @override
+  $CharacterRecordsTable createAlias(String alias) {
+    return $CharacterRecordsTable(attachedDatabase, alias);
+  }
+}
+
+class CharacterRecord extends DataClass implements Insertable<CharacterRecord> {
+  final String scope;
+  final String id;
+  final String sheetJson;
+  const CharacterRecord({
+    required this.scope,
+    required this.id,
+    required this.sheetJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['scope'] = Variable<String>(scope);
+    map['id'] = Variable<String>(id);
+    map['sheet_json'] = Variable<String>(sheetJson);
+    return map;
+  }
+
+  CharacterRecordsCompanion toCompanion(bool nullToAbsent) {
+    return CharacterRecordsCompanion(
+      scope: Value(scope),
+      id: Value(id),
+      sheetJson: Value(sheetJson),
+    );
+  }
+
+  factory CharacterRecord.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CharacterRecord(
+      scope: serializer.fromJson<String>(json['scope']),
+      id: serializer.fromJson<String>(json['id']),
+      sheetJson: serializer.fromJson<String>(json['sheetJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'scope': serializer.toJson<String>(scope),
+      'id': serializer.toJson<String>(id),
+      'sheetJson': serializer.toJson<String>(sheetJson),
+    };
+  }
+
+  CharacterRecord copyWith({String? scope, String? id, String? sheetJson}) =>
+      CharacterRecord(
+        scope: scope ?? this.scope,
+        id: id ?? this.id,
+        sheetJson: sheetJson ?? this.sheetJson,
+      );
+  CharacterRecord copyWithCompanion(CharacterRecordsCompanion data) {
+    return CharacterRecord(
+      scope: data.scope.present ? data.scope.value : this.scope,
+      id: data.id.present ? data.id.value : this.id,
+      sheetJson: data.sheetJson.present ? data.sheetJson.value : this.sheetJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CharacterRecord(')
+          ..write('scope: $scope, ')
+          ..write('id: $id, ')
+          ..write('sheetJson: $sheetJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(scope, id, sheetJson);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CharacterRecord &&
+          other.scope == this.scope &&
+          other.id == this.id &&
+          other.sheetJson == this.sheetJson);
+}
+
+class CharacterRecordsCompanion extends UpdateCompanion<CharacterRecord> {
+  final Value<String> scope;
+  final Value<String> id;
+  final Value<String> sheetJson;
+  final Value<int> rowid;
+  const CharacterRecordsCompanion({
+    this.scope = const Value.absent(),
+    this.id = const Value.absent(),
+    this.sheetJson = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CharacterRecordsCompanion.insert({
+    required String scope,
+    required String id,
+    required String sheetJson,
+    this.rowid = const Value.absent(),
+  }) : scope = Value(scope),
+       id = Value(id),
+       sheetJson = Value(sheetJson);
+  static Insertable<CharacterRecord> custom({
+    Expression<String>? scope,
+    Expression<String>? id,
+    Expression<String>? sheetJson,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (scope != null) 'scope': scope,
+      if (id != null) 'id': id,
+      if (sheetJson != null) 'sheet_json': sheetJson,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CharacterRecordsCompanion copyWith({
+    Value<String>? scope,
+    Value<String>? id,
+    Value<String>? sheetJson,
+    Value<int>? rowid,
+  }) {
+    return CharacterRecordsCompanion(
+      scope: scope ?? this.scope,
+      id: id ?? this.id,
+      sheetJson: sheetJson ?? this.sheetJson,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (scope.present) {
+      map['scope'] = Variable<String>(scope.value);
+    }
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (sheetJson.present) {
+      map['sheet_json'] = Variable<String>(sheetJson.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CharacterRecordsCompanion(')
+          ..write('scope: $scope, ')
+          ..write('id: $id, ')
+          ..write('sheetJson: $sheetJson, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -1842,6 +2101,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   );
   late final $IntakeRecordsTable intakeRecords = $IntakeRecordsTable(this);
   late final $LookRecordsTable lookRecords = $LookRecordsTable(this);
+  late final $CharacterRecordsTable characterRecords = $CharacterRecordsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1853,6 +2115,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     wardrobeRecords,
     intakeRecords,
     lookRecords,
+    characterRecords,
   ];
 }
 
@@ -3012,6 +3275,183 @@ typedef $$LookRecordsTableProcessedTableManager =
       LookRecord,
       PrefetchHooks Function()
     >;
+typedef $$CharacterRecordsTableCreateCompanionBuilder =
+    CharacterRecordsCompanion Function({
+      required String scope,
+      required String id,
+      required String sheetJson,
+      Value<int> rowid,
+    });
+typedef $$CharacterRecordsTableUpdateCompanionBuilder =
+    CharacterRecordsCompanion Function({
+      Value<String> scope,
+      Value<String> id,
+      Value<String> sheetJson,
+      Value<int> rowid,
+    });
+
+class $$CharacterRecordsTableFilterComposer
+    extends Composer<_$AppDatabase, $CharacterRecordsTable> {
+  $$CharacterRecordsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sheetJson => $composableBuilder(
+    column: $table.sheetJson,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CharacterRecordsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CharacterRecordsTable> {
+  $$CharacterRecordsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get scope => $composableBuilder(
+    column: $table.scope,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sheetJson => $composableBuilder(
+    column: $table.sheetJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CharacterRecordsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CharacterRecordsTable> {
+  $$CharacterRecordsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get scope =>
+      $composableBuilder(column: $table.scope, builder: (column) => column);
+
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get sheetJson =>
+      $composableBuilder(column: $table.sheetJson, builder: (column) => column);
+}
+
+class $$CharacterRecordsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CharacterRecordsTable,
+          CharacterRecord,
+          $$CharacterRecordsTableFilterComposer,
+          $$CharacterRecordsTableOrderingComposer,
+          $$CharacterRecordsTableAnnotationComposer,
+          $$CharacterRecordsTableCreateCompanionBuilder,
+          $$CharacterRecordsTableUpdateCompanionBuilder,
+          (
+            CharacterRecord,
+            BaseReferences<
+              _$AppDatabase,
+              $CharacterRecordsTable,
+              CharacterRecord
+            >,
+          ),
+          CharacterRecord,
+          PrefetchHooks Function()
+        > {
+  $$CharacterRecordsTableTableManager(
+    _$AppDatabase db,
+    $CharacterRecordsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CharacterRecordsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CharacterRecordsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CharacterRecordsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> scope = const Value.absent(),
+                Value<String> id = const Value.absent(),
+                Value<String> sheetJson = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CharacterRecordsCompanion(
+                scope: scope,
+                id: id,
+                sheetJson: sheetJson,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String scope,
+                required String id,
+                required String sheetJson,
+                Value<int> rowid = const Value.absent(),
+              }) => CharacterRecordsCompanion.insert(
+                scope: scope,
+                id: id,
+                sheetJson: sheetJson,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$CharacterRecordsTable, CharacterRecord>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $CharacterRecordsTable,
+                    CharacterRecord
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CharacterRecordsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CharacterRecordsTable,
+      CharacterRecord,
+      $$CharacterRecordsTableFilterComposer,
+      $$CharacterRecordsTableOrderingComposer,
+      $$CharacterRecordsTableAnnotationComposer,
+      $$CharacterRecordsTableCreateCompanionBuilder,
+      $$CharacterRecordsTableUpdateCompanionBuilder,
+      (
+        CharacterRecord,
+        BaseReferences<_$AppDatabase, $CharacterRecordsTable, CharacterRecord>,
+      ),
+      CharacterRecord,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3028,4 +3468,6 @@ class $AppDatabaseManager {
       $$IntakeRecordsTableTableManager(_db, _db.intakeRecords);
   $$LookRecordsTableTableManager get lookRecords =>
       $$LookRecordsTableTableManager(_db, _db.lookRecords);
+  $$CharacterRecordsTableTableManager get characterRecords =>
+      $$CharacterRecordsTableTableManager(_db, _db.characterRecords);
 }

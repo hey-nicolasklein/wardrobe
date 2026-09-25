@@ -9,6 +9,7 @@ import 'package:form_mobile/app/connection_gate.dart';
 import 'package:form_mobile/app/form_theme.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
+import 'package:form_mobile/features/settings/character/character_cubit.dart';
 import 'package:form_mobile/features/settings/language_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -40,6 +41,9 @@ class _FormAppState extends State<FormApp> {
         context.read<FeedCubit>().setForeground(
           foreground: state == AppLifecycleState.resumed,
         );
+        context.read<CharacterCubit>().setForeground(
+          foreground: state == AppLifecycleState.resumed,
+        );
         context.read<IntakeBloc>().availability(
           foreground: state == AppLifecycleState.resumed,
         );
@@ -61,6 +65,9 @@ class _FormAppState extends State<FormApp> {
       online: status == ConnectionStatus.ready,
     );
     context.read<FeedCubit>().setOnline(
+      online: status == ConnectionStatus.ready,
+    );
+    context.read<CharacterCubit>().setOnline(
       online: status == ConnectionStatus.ready,
     );
     final collectionCounts = context.read<CollectionCountsCubit>();

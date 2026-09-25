@@ -84,6 +84,9 @@ class FeedCubit extends Cubit<FeedState> {
     this.wardrobeRepository,
     this.characterSheets,
   ) : super(const FeedState()) {
+    _characterSubscription = characterSheets.changes.listen(
+      (_) => unawaited(_reloadCharacter()),
+    );
     _subscription = lookRepository.changes.listen(
       (_) => unawaited(_reloadLocal()),
     );
@@ -93,6 +96,19 @@ class FeedCubit extends Cubit<FeedState> {
   final WardrobeRepository wardrobeRepository;
   final CharacterSheetRepository characterSheets;
   late final StreamSubscription<void> _subscription;
+  late final StreamSubscription<void> _characterSubscription;
+
+  Future<void> _reloadCharacter() async {
+    final sheets = await characterSheets.cached();
+    if (!isClosed) {
+      emit(
+        state.copyWith(
+          hasActiveCharacterReference: sheets.any((s) => s.isActiveReady),
+        ),
+      );
+    }
+  }
+
   bool _refreshing = false;
   int _availability = 0;
   Timer? _poll;
@@ -185,6 +201,7 @@ class FeedCubit extends Cubit<FeedState> {
   }
 
   Future<void> loadCache() async {
+    final characters = await characterSheets.cached();
     final looks = await lookRepository.cached();
     final hasSnapshot = await lookRepository.hasSnapshot();
     final wardrobe = await wardrobeRepository.cached();
@@ -196,6 +213,7 @@ class FeedCubit extends Cubit<FeedState> {
       FeedState(
         looks: looks.isEmpty && !hasSnapshot ? null : looks,
         itemsById: {for (final item in wardrobe) item.item.id: item.item},
+        hasActiveCharacterReference: characters.any((s) => s.isActiveReady),
         pendingStarts: pendingStarts,
         liked: liked,
         saved: saved,
@@ -273,6 +291,7 @@ class FeedCubit extends Cubit<FeedState> {
   Future<void> close() async {
     _poll?.cancel();
     await _subscription.cancel();
+    await _characterSubscription.cancel();
     return super.close();
   }
 }

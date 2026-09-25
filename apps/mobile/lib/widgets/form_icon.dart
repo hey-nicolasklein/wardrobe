@@ -19,7 +19,10 @@ enum FormIconName {
   share('share'),
   bookmark('bookmark'),
   bookmarkFilled('bookmark-filled'),
-  more('more');
+  more('more'),
+  person('person'),
+  photo('photo'),
+  close('close');
 
   const FormIconName(this.file);
   final String file;

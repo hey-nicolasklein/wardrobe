@@ -660,3 +660,258 @@ class FormCollectionToggle extends StatelessWidget {
     ),
   );
 }
+
+class FormStatusBadge extends StatelessWidget {
+  const FormStatusBadge({
+    required this.label,
+    required this.icon,
+    this.active = false,
+    this.failed = false,
+    super.key,
+  });
+  final String label;
+  final FormIconName icon;
+  final bool active;
+  final bool failed;
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerLeft,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: failed
+            ? FormTokens.referenceFailedTint
+            : active
+            ? FormTokens.referenceActiveBadge
+            : FormTokens.referenceBadge,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 4,
+        children: [
+          FormIcon(
+            icon,
+            size: 12,
+            color: failed
+                ? FormTokens.referenceFailedInk
+                : active
+                ? FormTokens.green
+                : FormTokens.referenceBadgeInk,
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: failed
+                  ? FormTokens.referenceFailedInk
+                  : active
+                  ? FormTokens.green
+                  : FormTokens.referenceBadgeInk,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class FormReferenceCard extends StatelessWidget {
+  const FormReferenceCard({
+    required this.image,
+    required this.copy,
+    required this.onTap,
+    this.active = false,
+    this.horizontal = true,
+    this.pending = false,
+    super.key,
+  });
+  final Widget image;
+  final Widget copy;
+  final VoidCallback onTap;
+  final bool active;
+  final bool horizontal;
+  final bool pending;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    child: CustomPaint(
+      foregroundPainter: pending ? const _FormDashedBorder() : null,
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: active ? FormTokens.referenceActiveTint : FormTokens.paper,
+          border: pending
+              ? null
+              : Border.all(color: active ? FormTokens.green : FormTokens.line),
+          borderRadius: BorderRadius.circular(FormTokens.cardRadius),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          child: horizontal
+              ? Row(
+                  children: [
+                    SizedBox(
+                      width: 76,
+                      height: 152,
+                      child: ColoredBox(color: FormTokens.field, child: image),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: copy,
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(right: 10),
+                      child: RotatedBox(
+                        quarterTurns: 2,
+                        child: FormIcon(
+                          FormIconName.arrow,
+                          size: 16,
+                          color: FormTokens.green,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 9 / 16,
+                      child: ColoredBox(color: FormTokens.field, child: image),
+                    ),
+                    Padding(padding: const EdgeInsets.all(11), child: copy),
+                  ],
+                ),
+        ),
+      ),
+    ),
+  );
+}
+
+class FormReferenceImage extends StatelessWidget {
+  const FormReferenceImage({
+    required this.child,
+    this.aspectRatio = 9 / 16,
+    this.preview = false,
+    super.key,
+  });
+  final Widget child;
+  final double aspectRatio;
+  final bool preview;
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Container(
+      constraints: BoxConstraints(
+        maxWidth: preview ? double.infinity : 360,
+        maxHeight: preview
+            ? MediaQuery.sizeOf(context).height * 0.42
+            : double.infinity,
+      ),
+      margin: const EdgeInsets.symmetric(vertical: 18),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: FormTokens.field,
+        borderRadius: BorderRadius.circular(preview ? 0 : 16),
+      ),
+      child: AspectRatio(aspectRatio: aspectRatio, child: child),
+    ),
+  );
+}
+
+class FormFact extends StatelessWidget {
+  const FormFact({required this.label, required this.value, super.key});
+  final String label;
+  final String value;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: FormTokens.small.copyWith(fontSize: 11, letterSpacing: 0.6),
+        ),
+        const SizedBox(height: 3),
+        Text(value, style: FormTokens.body.copyWith(height: 1.45)),
+      ],
+    ),
+  );
+}
+
+/// The image is positioned from source-pixel bounds supplied by the crop state.
+class FormCropViewport extends StatelessWidget {
+  const FormCropViewport({
+    required this.image,
+    required this.sourceSize,
+    required this.bounds,
+    required this.label,
+    this.onPan,
+    super.key,
+  });
+  final Widget image;
+  final Size sourceSize;
+  final Rect bounds;
+  final String label;
+  final void Function(double, double)? onPan;
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    image: true,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = constraints.maxWidth / bounds.width;
+        return GestureDetector(
+          onPanUpdate: onPan == null
+              ? null
+              : (event) => onPan!(
+                  event.delta.dx / constraints.maxWidth,
+                  event.delta.dy / constraints.maxHeight,
+                ),
+          child: ClipRect(
+            child: Stack(
+              children: [
+                Positioned(
+                  left: -bounds.left * scale,
+                  top: -bounds.top * scale,
+                  width: sourceSize.width * scale,
+                  height: sourceSize.height * scale,
+                  child: image,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ),
+  );
+}
+
+class _FormDashedBorder extends CustomPainter {
+  const _FormDashedBorder();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          (Offset.zero & size).deflate(0.5),
+          const Radius.circular(FormTokens.cardRadius),
+        ),
+      );
+    final paint = Paint()
+      ..color = FormTokens.line
+      ..style = PaintingStyle.stroke;
+    for (final metric in path.computeMetrics()) {
+      for (var offset = 0.0; offset < metric.length; offset += 8) {
+        canvas.drawPath(metric.extractPath(offset, offset + 4), paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_FormDashedBorder oldDelegate) => false;
+}

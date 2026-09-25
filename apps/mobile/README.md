@@ -1,9 +1,11 @@
-# FORM mobile, slices 1–4
+# FORM mobile, slices 1–5
 
 Flutter 3.44.9, iOS 16+, Android 10+. The app includes the native shell, connection gate, language selection, persistent
 tab stacks, the wardrobe lifecycle, durable clothing intake, and the cached
 inspiration feed with look composition, Worn/Flat views, share, and Photo save.
-Character references remain in Slice 5.
+Slice 5 adds personal photo collages, crop/review, reference history, activation,
+replacement and deletion. Its functional checks pass; screenshot acceptance
+remains open in `docs/flutter-native/parity-checklist.md`.
 
 ## Run here
 

@@ -130,7 +130,12 @@ class CharacterSheet {
     if (value.id.isEmpty ||
         !['queued', 'processing', 'ready', 'failed'].contains(value.state) ||
         value.quality != 'high' ||
-        value.size != '864x1536') {
+        value.size != '864x1536' ||
+        value.referenceAssetIds.isEmpty ||
+        value.referenceAssetIds.length > 4 ||
+        value.referenceAssetIds.any((id) => id.isEmpty) ||
+        (value.note?.length ?? 0) > 1000 ||
+        (value.costMicrounits ?? 0) < 0) {
       throw const FormatException('Invalid character sheet');
     }
     return value;
@@ -166,6 +171,10 @@ class CharacterSheet {
   final DateTime? finishedAt;
 
   bool get isActiveReady => active && state == 'ready';
+  bool get isPending => state == 'queued' || state == 'processing';
+  bool get canActivate => !active && state == 'ready';
+  bool get canReplace => state == 'ready' && assetId != null;
+  bool get canDelete => !active && (state == 'ready' || state == 'failed');
 
   Map<String, dynamic> toJson() => _$CharacterSheetToJson(this);
 }

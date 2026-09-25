@@ -3,6 +3,12 @@ import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
 
 /// Values from apps/web/public/style.css. Keep screen-specific values there aligned.
 abstract final class FormTokens {
+  static const referenceActiveTint = Color(0xFFEDF1EA);
+  static const referenceActiveBadge = Color(0xFFDCE6D7);
+  static const referenceBadge = Color(0xFFE8EAE3);
+  static const referenceBadgeInk = Color(0xFF51564D);
+  static const referenceFailedTint = Color(0xFFF3E3DF);
+  static const referenceFailedInk = Color(0xFF8A4235);
   static const costWardrobe = Color(0xFF667F61);
   static const costDetection = Color(0xFFC39A62);
   static const costTrack = Color(0xFFDFE1D5);

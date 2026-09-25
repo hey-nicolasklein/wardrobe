@@ -42,6 +42,9 @@ Use the existing component before adding another wrapper.
 | `FormImageCard` | `.photo` (3:4), `.detail-photo` (square) |
 | `FormEmptyState`, `FormNotice` | `.empty`, `.note`, `.offline` |
 | `FormPanel` | `.panel` |
+| `FormReferenceCard`, `FormStatusBadge` | `.character-current`, `.character-version`, `.character-status`, dashed pending border |
+| `FormReferenceImage`, `FormCropViewport` | `.character-detail`, `.character-crop`, `.character-collage-preview`; preview capped at 42% viewport height |
+| `FormFact` | `.facts` |
 | `showFormSheet`, `FormSheet` | `dialog`, `.sheet-head`, `.sheet-body`, `.sheet-grip` |
 | `FormSheetPage` in `app_router.dart` | Routable item detail over the current tab; drag handle, swipe dismissal, close |
 | `showAdaptiveDialog`, `AlertDialog.adaptive` | Native destructive confirmation required by Stage 1 |
@@ -87,6 +90,10 @@ booted) but cannot run without backend connection. No screenshot pairs captured.
 Recommend: defer to local development environment where infrastructure can be
 provisioned.
 
+Slice 5 capture attempt (2026-09-25): a simulator is booted, but Computer Use
+returned “not approved to use Device Hub”. No current native/PWA pairs were
+captured. Functional C5 verification is unit-only and does not close visual C5.
+
 ## Explicit deviations and acceptance
 
 - Native safe areas, keyboard, system pickers, scrolling, route transitions and
@@ -94,8 +101,9 @@ provisioned.
 - Libre Baskerville replaces the platform-dependent web display serif.
 - Flutter bottom sheets use native drag/settling physics with the PWA's duration
   and corner styling. Token curves remain available for later in-content motion.
-- Feed is the existing foundation placeholder. Full Feed and later Settings and
-  character workflows belong to slices 4–6.
+- Feed and character-reference workflows are implemented in slices 4–5. Their
+  current PWA/native screenshot pairs remain outstanding. Remaining Settings
+  work belongs to Slice 6.
 - Intake's upload panel uses a solid border in place of the CSS dashed border.
 - Native archive restoration keeps both existing Owning and Wanting targets.
 

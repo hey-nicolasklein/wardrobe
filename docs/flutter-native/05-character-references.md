@@ -70,6 +70,8 @@ Primary code lives in:
 
 ## Exclusions
 
-The unused server refinement endpoint is outside frozen PWA parity. Stage 1
-creates replacement collages through the baseline flow.
+Server refinement was removed in `11ead56`. The current contract has no
+refinement endpoint or field. Stage 1 creates replacement collages through the
+current PWA flow. See the C5 contract decisions and remaining screenshot
+acceptance in [`parity-checklist.md`](parity-checklist.md).
 
