@@ -10,6 +10,7 @@ import 'package:form_mobile/features/onboarding/onboarding_pieces.dart';
 import 'package:form_mobile/features/onboarding/onboarding_steps.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/repository/preferences_repository.dart';
+import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
 /// First-run walkthrough: shows a lively wardrobe and feed made of bundled
@@ -235,14 +236,14 @@ class _WelcomeStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        OnboardingReveal(
+        FormReveal(
           child: Text(
             context.tr(LocaleKeys.onboarding_welcomeEyebrow).toUpperCase(),
             style: FormTokens.eyebrow,
           ),
         ),
         const SizedBox(height: 8),
-        OnboardingReveal(
+        FormReveal(
           delay: const Duration(milliseconds: 120),
           child: Text(
             context.tr(LocaleKeys.onboarding_welcomeTitle),
@@ -250,7 +251,7 @@ class _WelcomeStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        OnboardingReveal(
+        FormReveal(
           delay: const Duration(milliseconds: 240),
           child: Text(
             context.tr(LocaleKeys.onboarding_welcomeBody),
@@ -258,7 +259,7 @@ class _WelcomeStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        OnboardingReveal(
+        FormReveal(
           delay: const Duration(milliseconds: 900),
           child: Text(
             context.tr(LocaleKeys.onboarding_welcomeHint),

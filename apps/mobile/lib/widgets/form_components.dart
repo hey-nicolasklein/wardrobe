@@ -1606,3 +1606,64 @@ class FormDashedBorder extends CustomPainter {
   bool shouldRepaint(FormDashedBorder oldDelegate) =>
       color != oldDelegate.color || radius != oldDelegate.radius;
 }
+
+/// Fades and lifts [child] into place once, after [delay].
+class FormReveal extends StatefulWidget {
+  const FormReveal({
+    required this.child,
+    this.delay = Duration.zero,
+    super.key,
+  });
+  final Widget child;
+  final Duration delay;
+
+  @override
+  State<FormReveal> createState() => _FormRevealState();
+}
+
+class _FormRevealState extends State<FormReveal>
+    with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 560),
+  );
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _controller.value = 1;
+      } else {
+        _timer = Timer(widget.delay, () => unawaited(_controller.forward()));
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final animation = CurvedAnimation(
+      parent: _controller,
+      curve: FormTokens.easeOut,
+    );
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween(
+          begin: const Offset(0, 0.08),
+          end: Offset.zero,
+        ).animate(animation),
+        child: widget.child,
+      ),
+    );
+  }
+}

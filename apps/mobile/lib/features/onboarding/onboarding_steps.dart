@@ -8,6 +8,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/feed/flat_lay_widget.dart';
 import 'package:form_mobile/features/onboarding/onboarding_pieces.dart';
+import 'package:form_mobile/features/onboarding/scan_stage.dart';
 import 'package:form_mobile/features/settings/character/character_cubit.dart';
 import 'package:form_mobile/features/settings/character/character_section.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -43,11 +44,11 @@ class OnboardingStepLayout extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        OnboardingReveal(
+        FormReveal(
           child: Text(eyebrow.toUpperCase(), style: FormTokens.eyebrow),
         ),
         const SizedBox(height: 8),
-        OnboardingReveal(
+        FormReveal(
           delay: const Duration(milliseconds: 90),
           child: Text(
             title,
@@ -56,7 +57,7 @@ class OnboardingStepLayout extends StatelessWidget {
         ),
         if (body != null) ...[
           const SizedBox(height: 8),
-          OnboardingReveal(
+          FormReveal(
             delay: const Duration(milliseconds: 180),
             child: Text(
               body!,
@@ -66,7 +67,7 @@ class OnboardingStepLayout extends StatelessWidget {
         ],
         const SizedBox(height: 16),
         Expanded(
-          child: OnboardingReveal(
+          child: FormReveal(
             delay: const Duration(milliseconds: 260),
             child: child,
           ),
@@ -74,67 +75,6 @@ class OnboardingStepLayout extends StatelessWidget {
       ],
     ),
   );
-}
-
-/// Fades and lifts [child] into place once, after [delay].
-class OnboardingReveal extends StatefulWidget {
-  const OnboardingReveal({
-    required this.child,
-    this.delay = Duration.zero,
-    super.key,
-  });
-  final Widget child;
-  final Duration delay;
-
-  @override
-  State<OnboardingReveal> createState() => _OnboardingRevealState();
-}
-
-class _OnboardingRevealState extends State<OnboardingReveal>
-    with SingleTickerProviderStateMixin {
-  late final _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 560),
-  );
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (_still(context)) {
-        _controller.value = 1;
-      } else {
-        _timer = Timer(widget.delay, () => unawaited(_controller.forward()));
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final animation = CurvedAnimation(
-      parent: _controller,
-      curve: FormTokens.easeOut,
-    );
-    return FadeTransition(
-      opacity: animation,
-      child: SlideTransition(
-        position: Tween(
-          begin: const Offset(0, 0.08),
-          end: Offset.zero,
-        ).animate(animation),
-        child: widget.child,
-      ),
-    );
-  }
 }
 
 class OnboardingPieceImage extends StatelessWidget {
@@ -338,21 +278,6 @@ class OnboardingWardrobeStep extends StatefulWidget {
 
 class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
     with SingleTickerProviderStateMixin {
-  static const _photos = [
-    ['jersey', 'balloon-pants', 'maroon-sneaker'],
-    ['teddy-coat', 'turtleneck', 'brown-trousers'],
-    ['croc-jacket', 'black-pants', 'sunglasses'],
-  ];
-
-  // Centre x and y as stage fractions, size as a fraction of stage height,
-  // angle in degrees.
-  static const _layout = [
-    (.25, .47, .80, -7.0),
-    (.56, .52, .82, 3.0),
-    (.83, .62, .54, 9.0),
-  ];
-  static const _scanEnd = 0.42;
-
   late final _scan =
       AnimationController(
         vsync: this,
@@ -399,7 +324,7 @@ class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
   void _again() {
     unawaited(HapticFeedback.selectionClick());
     setState(() {
-      _photo = (_photo + 1) % _photos.length;
+      _photo = (_photo + 1) % ScanStage.photos.length;
       _collection = 'owning';
     });
     _play();
@@ -413,7 +338,9 @@ class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
 
   @override
   Widget build(BuildContext context) {
-    final pieces = [for (final id in _photos[_photo]) onboardingPiece(id)];
+    final pieces = [
+      for (final id in ScanStage.photos[_photo]) onboardingPiece(id),
+    ];
     final shelf = _collection == 'owning'
         ? pieces
         : onboardingPieces.where((piece) => piece.state == 'wanting').toList();
@@ -424,7 +351,13 @@ class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(child: _stage(pieces)),
+          Expanded(
+            child: ScanStage(
+              key: ValueKey(_photo),
+              pieces: pieces,
+              progress: _scan,
+            ),
+          ),
           SizedBox(
             height: 44,
             child: Row(
@@ -433,7 +366,7 @@ class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
                   child: AnimatedBuilder(
                     animation: _scan,
                     builder: (context, _) {
-                      final found = _scan.value >= _scanEnd;
+                      final found = _scan.value >= ScanStage.scanEnd;
                       return AnimatedSwitcher(
                         duration: FormTokens.quick,
                         child: Row(
@@ -524,136 +457,6 @@ class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
       ),
     );
   }
-
-  Widget _stage(List<OnboardingPiece> pieces) => ClipRRect(
-    borderRadius: BorderRadius.circular(FormTokens.panelRadius),
-    child: ColoredBox(
-      color: FormTokens.lookStage,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          final height = constraints.maxHeight;
-          final band = height * 0.3;
-          return Stack(
-            children: [
-              for (final (index, piece) in pieces.indexed)
-                () {
-                  final (x, y, size, angle) = _layout[index];
-                  final side = min(size * height, width * 0.46);
-                  final rect = Rect.fromCenter(
-                    center: Offset(x * width, y * height),
-                    width: side,
-                    height: side,
-                  );
-                  return Positioned.fromRect(
-                    key: ValueKey('$_photo-${piece.id}'),
-                    rect: rect,
-                    child: Transform.rotate(
-                      angle: angle * pi / 180,
-                      child: OnboardingPieceImage(piece: piece),
-                    ),
-                  );
-                }(),
-              // The scan band sweeps down once and fades out.
-              AnimatedBuilder(
-                animation: _scan,
-                builder: (context, _) {
-                  final t = (_scan.value / _scanEnd).clamp(0.0, 1.0);
-                  return Positioned(
-                    left: 0,
-                    right: 0,
-                    top: -band + (height + band) * t,
-                    height: band,
-                    child: Opacity(
-                      opacity: t >= 1 || _scan.value == 0 ? 0 : 1,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              FormTokens.green.withValues(alpha: 0),
-                              FormTokens.green.withValues(alpha: 0.22),
-                            ],
-                          ),
-                          border: const Border(
-                            bottom: BorderSide(
-                              color: FormTokens.green,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              for (final (index, piece) in pieces.indexed)
-                () {
-                  final (x, y, size, _) = _layout[index];
-                  final side = min(size * height, width * 0.46) * 0.92;
-                  final box = _interval(
-                    _scanEnd + index * 0.07,
-                    _scanEnd + 0.16 + index * 0.07,
-                  );
-                  return Positioned.fromRect(
-                    rect: Rect.fromCenter(
-                      center: Offset(x * width, y * height),
-                      width: side,
-                      height: side,
-                    ),
-                    child: FadeTransition(
-                      opacity: box.drive(Tween(begin: 0, end: 1)),
-                      child: ScaleTransition(
-                        scale: box.drive(Tween(begin: 1.3, end: 1)),
-                        child: _DetectionBox(
-                          label: context.tr('categories.${piece.category}'),
-                        ),
-                      ),
-                    ),
-                  );
-                }(),
-            ],
-          );
-        },
-      ),
-    ),
-  );
-}
-
-class _DetectionBox extends StatelessWidget {
-  const _DetectionBox({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      border: Border.all(color: Colors.white, width: 2),
-      borderRadius: BorderRadius.circular(FormTokens.inputRadius),
-    ),
-    child: Align(
-      alignment: Alignment.topLeft,
-      child: Container(
-        margin: const EdgeInsets.all(5),
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(FormTokens.chipRadius),
-        ),
-        child: Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: FormTokens.small.copyWith(
-            fontSize: 10,
-            height: 1.3,
-            color: FormTokens.green,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    ),
-  );
 }
 
 class _ShelfTile extends StatelessWidget {
