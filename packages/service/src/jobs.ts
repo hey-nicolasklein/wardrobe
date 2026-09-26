@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
+import pg from 'pg';
+
 import type { Database, DatabaseClient } from './database.js';
 import { withTransaction } from './database.js';
+import { chargeJob, refundFailedJobs } from './credits.js';
 
 export type RemoteImageJobKind =
   'detect-source-photo' | 'generate-shelf-image' | 'generate-character-sheet' | 'generate-look';
@@ -53,19 +56,23 @@ export type EnqueueJobInput = {
   availableAt?: Date;
 };
 
+// Inserts the job and charges its credits atomically. Pass a transaction
+// client to include both in the caller's transaction.
 export async function enqueueJob(
   database: Database | DatabaseClient,
   input: EnqueueJobInput,
 ): Promise<string> {
+  if (database instanceof pg.Pool)
+    return withTransaction(database, (client) => enqueueJob(client, input));
   const id = randomUUID();
-  const result = await database.query<{ id: string }>(
+  const result = await database.query<{ id: string; inserted: boolean }>(
     `INSERT INTO remote_image_jobs (
        id, account_id, wardrobe_item_id, generation_attempt_id, kind, payload,
        idempotency_key, available_at
      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (account_id, idempotency_key)
      DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
-     RETURNING id`,
+     RETURNING id, (xmax = 0) AS inserted`,
     [
       id,
       input.accountId,
@@ -77,7 +84,10 @@ export async function enqueueJob(
       input.availableAt ?? new Date(),
     ],
   );
-  return result.rows[0]!.id;
+  const row = result.rows[0]!;
+  // A replayed idempotency key returns the existing job and is not charged again.
+  if (row.inserted) await chargeJob(database, { accountId: input.accountId, jobId: row.id, kind: input.kind });
+  return row.id;
 }
 
 export type ClaimJobsOptions = {
@@ -198,11 +208,12 @@ export async function failJob(
   );
   const state = result.rows[0]?.state;
   if (!state) return 'not-owned';
+  if (state === 'failed') await refundFailedJobs(database, [jobId]);
   return state === 'queued' ? 'retried' : 'failed';
 }
 
 export async function recoverExpiredLeases(database: Database): Promise<number> {
-  const result = await database.query(
+  const result = await database.query<{ id: string; state: string }>(
     `UPDATE remote_image_jobs
      SET state = CASE WHEN attempts < max_attempts THEN 'queued' ELSE 'failed' END,
          available_at = CASE WHEN attempts < max_attempts THEN now() ELSE available_at END,
@@ -212,7 +223,12 @@ export async function recoverExpiredLeases(database: Database): Promise<number> 
          last_error_detail = 'The worker lease expired before completion.',
          finished_at = CASE WHEN attempts < max_attempts THEN NULL ELSE now() END,
          updated_at = now()
-     WHERE state = 'leased' AND lease_expires_at <= now()`,
+     WHERE state = 'leased' AND lease_expires_at <= now()
+     RETURNING id, state`,
+  );
+  await refundFailedJobs(
+    database,
+    result.rows.filter((row) => row.state === 'failed').map((row) => row.id),
   );
   return result.rowCount ?? 0;
 }

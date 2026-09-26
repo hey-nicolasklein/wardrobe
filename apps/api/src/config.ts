@@ -12,6 +12,11 @@ export const apiConfigSchema = z.object({
   OPENAI_DETECTION_MODEL: z.string().min(1).default('gpt-5.6-luna'),
   PERSONAL_ACCOUNT_ID: z.uuid().optional(),
   WEB_ORIGIN: z.url().optional(),
+  // Comma-separated client IDs accepted as ID token audiences.
+  APPLE_CLIENT_IDS: z.string().default(''),
+  GOOGLE_CLIENT_IDS: z.string().default(''),
+  // Password-free sign-in for any email. Never enable outside local development.
+  DEV_SIGN_IN: z.stringbool().default(false),
 });
 
 export type ApiConfig = z.infer<typeof apiConfigSchema>;

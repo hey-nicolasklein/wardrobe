@@ -3,6 +3,7 @@ export * from './catalog-images.js';
 export * from './catalog-provider.js';
 export * from './catalog.js';
 export * from './config.js';
+export * from './credits.js';
 export * from './database.js';
 export * from './fixtures.js';
 export * from './garment-reference-collage.js';

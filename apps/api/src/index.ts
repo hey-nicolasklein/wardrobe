@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
 import {
   checkDependencies,
+  createIdentityTokenVerifier,
   createDatabase,
   createPrivateObjectStorage,
   ensurePrivateBucket,
@@ -11,6 +12,10 @@ import { createApp } from './app.js';
 import { readApiConfig } from './config.js';
 
 const config = readApiConfig();
+
+function clientIds(value: string): string[] {
+  return value.split(',').map((id) => id.trim()).filter(Boolean);
+}
 const database = createDatabase(config);
 const storage = createPrivateObjectStorage(config);
 
@@ -28,7 +33,13 @@ const app = createApp({
   publicOrigin: config.WEB_ORIGIN,
   detectionModel: config.OPENAI_DETECTION_MODEL,
   personalAccountId: config.PERSONAL_ACCOUNT_ID,
+  identityVerifier: createIdentityTokenVerifier({
+    apple: clientIds(config.APPLE_CLIENT_IDS),
+    google: clientIds(config.GOOGLE_CLIENT_IDS),
+  }),
+  devSignIn: config.DEV_SIGN_IN,
 });
+if (config.DEV_SIGN_IN) console.warn('DEV_SIGN_IN is on: any email can sign in without a password.');
 const server = serve({
   fetch: app.fetch,
   hostname: config.API_HOST,

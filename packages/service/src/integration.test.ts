@@ -30,6 +30,14 @@ import {
   listLooks,
   listCharacterSheets,
   removeCharacterSheet,
+  creditBalance,
+  creditSummary,
+  deleteAccount,
+  failJob,
+  grantCredits,
+  InsufficientCreditsError,
+  signInWithIdentity,
+  signupCredits,
 } from './index.js';
 import { compactIdentityReference } from './identity-collage.js';
 
@@ -758,6 +766,57 @@ test(
         )).rows[0]?.id,
       );
       assert.equal(billedFailure.rows[0]?.refinement_instruction, 'Farbe stimmt nicht');
+    } finally {
+      storage.client.destroy();
+      await database.end();
+    }
+  },
+);
+
+test(
+  'identity sign-up grants credits, jobs charge once, and failed jobs refund',
+  { skip: !enabled },
+  async () => {
+    const database = createDatabase(readDatabaseConfig());
+    const storage = createPrivateObjectStorage(readObjectStorageConfig());
+    try {
+      await migrateDatabase(database);
+      await ensurePrivateBucket(storage);
+      await resetFixtures(database, storage);
+      const identity = { provider: 'dev' as const, subject: 'new@example.com', email: 'new@example.com' };
+      const account = (await signInWithIdentity(database, identity))!;
+      assert.deepEqual(await signInWithIdentity(database, identity), account);
+      // A second provider with the same verified email joins the same account.
+      assert.deepEqual(
+        await signInWithIdentity(database, { ...identity, provider: 'google', subject: 'g-1' }),
+        account,
+      );
+      assert.deepEqual(await creditSummary(database, account.id), { metered: true, balance: signupCredits });
+
+      const look = { accountId: account.id, kind: 'generate-look' as const, payload: {} };
+      const jobId = await enqueueJob(database, { ...look, idempotencyKey: 'credits-look-1' });
+      assert.equal(await enqueueJob(database, { ...look, idempotencyKey: 'credits-look-1' }), jobId);
+      assert.equal(await creditBalance(database, account.id), signupCredits - 2);
+
+      await database.query(
+        `UPDATE remote_image_jobs SET state = 'leased', attempts = 1, max_attempts = 1,
+           lease_owner = 'credits', lease_expires_at = now() + interval '1 minute' WHERE id = $1`,
+        [jobId],
+      );
+      assert.equal(await failJob(database, jobId, 'credits', { retryable: false, category: 'test', detail: 'test' }), 'failed');
+      assert.equal(await creditBalance(database, account.id), signupCredits);
+
+      await grantCredits(database, { accountId: account.id, amount: -(signupCredits - 1), reason: 'grant' });
+      await assert.rejects(
+        enqueueJob(database, { ...look, idempotencyKey: 'credits-look-2' }),
+        InsufficientCreditsError,
+      );
+      // Unmetered accounts, like the private deployment, are never charged.
+      await enqueueJob(database, { ...look, accountId: fixtureIds.emptyAccount, idempotencyKey: 'credits-free' });
+      assert.equal(await creditBalance(database, fixtureIds.emptyAccount), 0);
+
+      await deleteAccount(database, storage, account.id);
+      assert.equal((await database.query('SELECT 1 FROM accounts WHERE id = $1', [account.id])).rowCount, 0);
     } finally {
       storage.client.destroy();
       await database.end();

@@ -62,6 +62,25 @@ export const signInRequestSchema = accountCredentialsSchema
   .extend({ transport: z.enum(['cookie', 'token']) })
   .strict();
 
+export const identitySignInRequestSchema = z
+  .object({
+    idToken: z.string().min(1).max(8192),
+    transport: z.enum(['cookie', 'token']),
+  })
+  .strict();
+
+// Only served when the API runs with DEV_SIGN_IN=true.
+export const devSignInRequestSchema = z
+  .object({
+    email: z.email(),
+    transport: z.enum(['cookie', 'token']),
+  })
+  .strict();
+
+export const creditsResponseSchema = z
+  .object({ metered: z.boolean(), balance: z.number().int() })
+  .strict();
+
 export const sessionSchema = z
   .object({
     accountId: opaqueIdSchema,
@@ -280,6 +299,9 @@ export type ApiErrorCategory = z.infer<typeof apiErrorCategorySchema>;
 export type ApiError = z.infer<typeof apiErrorSchema>;
 export type SignInRequest = z.infer<typeof signInRequestSchema>;
 export type SignInResponse = z.infer<typeof signInResponseSchema>;
+export type IdentitySignInRequest = z.infer<typeof identitySignInRequestSchema>;
+export type DevSignInRequest = z.infer<typeof devSignInRequestSchema>;
+export type CreditsResponse = z.infer<typeof creditsResponseSchema>;
 export type WardrobeItemResponse = z.infer<typeof wardrobeItemResponseSchema>;
 export type WardrobeItemsResponse = z.infer<typeof wardrobeItemsResponseSchema>;
 export type WardrobeItemDetailResponse = z.infer<typeof wardrobeItemDetailResponseSchema>;

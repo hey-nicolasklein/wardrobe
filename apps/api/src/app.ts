@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { itemMetadataSchema } from '@form/contracts';
 import {
   createPhotoItem,
+  deleteAccount,
   isPersonalResetConfirmation,
   itemPreview,
   resetPersonalWardrobe,
@@ -25,12 +26,20 @@ import {
   rejectShelfImageRequestSchema,
   restoreShelfImageVersionRequestSchema,
   signInRequestSchema,
+  devSignInRequestSchema,
+  identitySignInRequestSchema,
   updateWardrobeItemRequestSchema,
   contractVersion,
   type ApiError,
 } from '@form/contracts';
 import {
+  ActiveJobLimitError,
   authenticateSession,
+  creditSummary,
+  InsufficientCreditsError,
+  signInWithIdentity,
+  type AuthenticatedAccount,
+  type IdentityTokenVerifier,
   completeSourceUpload,
   createSession,
   createSourceUploadIntent,
@@ -71,7 +80,9 @@ import {
 } from '@form/service';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { cors } from 'hono/cors';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
+
+import { RateLimiter } from './rate-limit.js';
 
 export type ReadinessCheck = () => Promise<DependencyHealth>;
 
@@ -86,6 +97,10 @@ export type AppDependencies = {
   publicOrigin?: string;
   detectionModel?: string;
   personalAccountId?: string;
+  identityVerifier?: IdentityTokenVerifier;
+  // Enables POST /v1/auth/dev, which signs in any email without a password.
+  // Local development only.
+  devSignIn?: boolean;
 };
 
 const sessionCookie = 'form_session';
@@ -144,9 +159,21 @@ function bearerToken(authorization: string | undefined): string | null {
 }
 
 function wardrobeError(error: unknown): {
-  status: 404 | 409;
+  status: 402 | 404 | 409 | 429;
   payload: { error: ApiError };
 } | null {
+  if (error instanceof InsufficientCreditsError) {
+    return {
+      status: 402,
+      payload: errorPayload('capacity', 'insufficient-credits', error.message),
+    };
+  }
+  if (error instanceof ActiveJobLimitError) {
+    return {
+      status: 429,
+      payload: errorPayload('capacity', 'too-many-active-jobs', error.message, true),
+    };
+  }
   if (error instanceof OwnedResourceNotFoundError) {
     return {
       status: 404,
@@ -262,6 +289,45 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       if (isReset) resetting = false;
     }
   });
+
+  // Sign-in attempts per client address and minute. Behind Tailscale Serve or a
+  // reverse proxy the address comes from X-Forwarded-For.
+  const authLimiter = new RateLimiter(10, 60_000);
+  app.use('/v1/auth/*', async (context, next) => {
+    if (context.req.method !== 'POST' || context.req.path === '/v1/auth/sign-out') return next();
+    const client = context.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || 'direct';
+    if (!authLimiter.take(client))
+      return context.json(
+        errorPayload('capacity', 'rate-limited', 'Too many sign-in attempts. Try again in a minute.', true),
+        429,
+      );
+    return next();
+  });
+
+  function issueSession(
+    context: Context,
+    account: AuthenticatedAccount,
+    created: Awaited<ReturnType<typeof createSession>>,
+    transport: 'cookie' | 'token',
+  ) {
+    if (transport === 'cookie') {
+      setCookie(context, sessionCookie, created.token, {
+        httpOnly: true,
+        secure: secureCookies,
+        sameSite: 'Strict',
+        path: '/',
+        maxAge: lifetimeSeconds,
+      });
+    }
+    return context.json({
+      session: {
+        accountId: account.id,
+        email: account.email,
+        expiresAt: created.session.expiresAt.toISOString(),
+        nativeToken: transport === 'token' ? created.token : null,
+      },
+    });
+  }
 
   async function currentSession(context: Parameters<typeof getCookie>[0]): Promise<{
     session: SessionRecord;
@@ -416,23 +482,87 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       );
     }
     const created = await createSession(database, account, secret, lifetimeSeconds);
-    if (parsed.data.transport === 'cookie') {
-      setCookie(context, sessionCookie, created.token, {
-        httpOnly: true,
-        secure: secureCookies,
-        sameSite: 'Strict',
-        path: '/',
-        maxAge: lifetimeSeconds,
-      });
-    }
-    return context.json({
-      session: {
-        accountId: account.id,
-        email: account.email,
-        expiresAt: created.session.expiresAt.toISOString(),
-        nativeToken: parsed.data.transport === 'token' ? created.token : null,
-      },
+    return issueSession(context, account, created, parsed.data.transport);
+  });
+
+  for (const provider of ['apple', 'google'] as const) {
+    app.post(`/v1/auth/${provider}`, async (context) => {
+      const parsed = identitySignInRequestSchema.safeParse(
+        await context.req.json().catch(() => null),
+      );
+      if (!parsed.success)
+        return context.json(
+          errorPayload('validation', 'invalid-sign-in-request', 'Sign-in token missing.'),
+          400,
+        );
+      const identity = await resolved.identityVerifier?.(provider, parsed.data.idToken);
+      const account = identity ? await signInWithIdentity(database, identity) : null;
+      if (!account)
+        return context.json(
+          errorPayload('authentication', 'invalid-identity-token', 'Sign-in was not accepted.'),
+          401,
+        );
+      const created = await createSession(database, account, secret, lifetimeSeconds);
+      return issueSession(context, account, created, parsed.data.transport);
     });
+  }
+
+  if (resolved.devSignIn) {
+    app.post('/v1/auth/dev', async (context) => {
+      const parsed = devSignInRequestSchema.safeParse(await context.req.json().catch(() => null));
+      if (!parsed.success)
+        return context.json(
+          errorPayload('validation', 'invalid-sign-in-request', 'Enter a valid email.'),
+          400,
+        );
+      const email = parsed.data.email.trim().toLowerCase();
+      const account = await signInWithIdentity(database, {
+        provider: 'dev',
+        subject: email,
+        email,
+      });
+      if (!account)
+        return context.json(
+          errorPayload('authentication', 'account-disabled', 'This account is disabled.'),
+          401,
+        );
+      const created = await createSession(database, account, secret, lifetimeSeconds);
+      return issueSession(context, account, created, parsed.data.transport);
+    });
+  }
+
+  app.get('/v1/credits', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    return context.json(await creditSummary(database, authenticated.session.id));
+  });
+
+  app.delete('/v1/account', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    // The private deployment has no sign-in to come back through.
+    if (resolved.personalAccountId)
+      return context.json(
+        errorPayload('authorization', 'account-deletion-disabled', 'Use the wardrobe reset instead.'),
+        403,
+      );
+    try {
+      await deleteAccount(database, storage, authenticated.session.id);
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+    deleteCookie(context, sessionCookie, { path: '/', secure: secureCookies });
+    return context.body(null, 204);
   });
 
   app.get('/v1/auth/session', async (context) => {

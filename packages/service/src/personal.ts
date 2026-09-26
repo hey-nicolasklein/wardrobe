@@ -154,3 +154,14 @@ export async function resetPersonalWardrobe(
   });
   await deleteStoredAssets(database, storage, accountId, assets);
 }
+
+// Removes the account with every record and stored object. Refuses while a
+// generation is still running, like the wardrobe reset it builds on.
+export async function deleteAccount(
+  database: Database,
+  storage: PrivateObjectStorage,
+  accountId: string,
+): Promise<void> {
+  await resetPersonalWardrobe(database, storage, accountId);
+  await database.query('DELETE FROM accounts WHERE id = $1', [accountId]);
+}
