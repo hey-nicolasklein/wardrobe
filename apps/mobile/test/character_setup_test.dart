@@ -74,6 +74,27 @@ void main() {
   );
 
   test(
+    'draft photos survive the app container moving between launches',
+    () async {
+      await cubit.choose();
+      await repository.render((await repository.load())!);
+      // iOS gives the app a new container path after an update or reinstall.
+      final moved = Directory('${directory.path}-moved');
+      await directory.rename(moved.path);
+      addTearDown(() => moved.rename(directory.path));
+      final draft = (await CharacterDraftRepository(
+        sheets,
+        moved,
+        TestPreparation(),
+      ).load())!;
+      expect(draft.photos.single.path, startsWith(moved.path));
+      expect(File(draft.photos.single.path).existsSync(), isTrue);
+      expect(draft.previewPath, startsWith(moved.path));
+      expect(File(draft.previewPath!).existsSync(), isTrue);
+    },
+  );
+
+  test(
     'crop edits and note survive forward/back navigation and reopening',
     () async {
       paths = ['red', 'green'];

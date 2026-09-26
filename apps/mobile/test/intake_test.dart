@@ -276,6 +276,34 @@ void main() {
   );
 
   test(
+    'draft photos survive the app container moving between launches',
+    () async {
+      final original = File('${directory.path}/input.png');
+      await original.writeAsBytes(
+        img.encodePng(img.Image(width: 20, height: 30)),
+      );
+      final saved = await repository.add(original.path);
+      // iOS gives the app a new container path after an update or reinstall.
+      final moved = await Directory.systemTemp.createTemp('form-intake-moved-');
+      addTearDown(() => moved.delete(recursive: true));
+      final name = saved.filePath.split('/').last;
+      await File(saved.filePath).copy('${moved.path}/$name');
+      repository = IntakeRepository(
+        database,
+        api,
+        'test',
+        moved,
+        PhotoPreparation(),
+        () async {},
+      );
+      await repository.cleanOrphanFiles();
+      final restored = (await repository.load()).single;
+      expect(restored.filePath, '${moved.path}/$name');
+      expect(File(restored.filePath).existsSync(), isTrue);
+    },
+  );
+
+  test(
     'photo preparation persists JPEG and metadata before network access',
     () async {
       final original = File('${directory.path}/input.png');

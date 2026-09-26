@@ -27,13 +27,13 @@ class IntakeRepository {
     final records = await (database.select(
       database.intakeRecords,
     )..where((r) => r.scope.equals(scope))).get();
-    final drafts = records
-        .map(
-          (r) => IntakeDraft.fromJson(
-            jsonDecode(r.draftJson) as Map<String, dynamic>,
-          ),
-        )
-        .toList();
+    final drafts = records.map((r) {
+      final json = jsonDecode(r.draftJson) as Map<String, dynamic>;
+      return IntakeDraft.fromJson({
+        ...json,
+        'filePath': _local(json['filePath'] as String),
+      });
+    }).toList();
     for (final draft in drafts.where((d) => d.phase == DraftPhase.discarded)) {
       await remove(draft);
     }
@@ -50,13 +50,20 @@ class IntakeRepository {
         ),
       );
 
+  /// The photo's path in the current [directory]. Saved paths are absolute
+  /// and name the app container of the launch that wrote them; iOS moves the
+  /// container on app updates and reinstalls, the file name stays.
+  String _local(String path) => '${directory.path}/${path.split('/').last}';
+
   Future<void> cleanOrphanFiles() async {
     if (!directory.existsSync()) return;
     final records = await database.select(database.intakeRecords).get();
     final protectedPaths = records
         .map(
-          (row) =>
-              (jsonDecode(row.draftJson) as Map<String, dynamic>)['filePath'],
+          (row) => _local(
+            (jsonDecode(row.draftJson) as Map<String, dynamic>)['filePath']
+                as String,
+          ),
         )
         .toSet();
     await for (final file in directory.list()) {

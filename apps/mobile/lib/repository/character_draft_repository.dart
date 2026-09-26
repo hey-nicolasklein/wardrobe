@@ -46,9 +46,24 @@ class CharacterDraftRepository {
 
   Future<CharacterDraft?> load() async {
     final raw = await sheets.database.preference(_key);
-    return raw == null || raw.isEmpty
-        ? null
-        : CharacterDraft.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    if (raw == null || raw.isEmpty) return null;
+    final draft = CharacterDraft.fromJson(
+      jsonDecode(raw) as Map<String, dynamic>,
+    );
+    // Saved paths are absolute and name the app container of the launch that
+    // wrote them; iOS moves the container on app updates and reinstalls.
+    String local(String path) =>
+        '${directory.path}/${draft.id}/${path.split('/').last}';
+    return CharacterDraft.fromJson({
+      ...draft.toJson(),
+      'photos': [
+        for (final photo in draft.photos)
+          {...photo.toJson(), 'path': local(photo.path)},
+      ],
+      'previewPath': draft.previewPath == null
+          ? null
+          : local(draft.previewPath!),
+    });
   }
 
   Future<void> persist(CharacterDraft draft) =>
