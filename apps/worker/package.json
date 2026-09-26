@@ -13,6 +13,10 @@
   "dependencies": {
     "@form/contracts": "*",
     "@form/service": "*",
+    "@langfuse/core": "^5.11.1",
+    "@langfuse/otel": "^5.11.1",
+    "@langfuse/tracing": "^5.11.1",
+    "@opentelemetry/sdk-node": "^0.222.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

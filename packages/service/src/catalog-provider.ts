@@ -63,6 +63,14 @@ export type GenerationProviderResult = {
   usage: GenerationUsage;
 };
 
+export type LookPlanResult = {
+  requestId: string;
+  itemIds: string[];
+  concept: LookConcept;
+  // Raw Responses API usage, kept only for tracing; planning is not billed per Look.
+  usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number } };
+};
+
 export interface CatalogProvider {
   detect(input: {
     jpegBytes: Uint8Array;
@@ -88,7 +96,7 @@ export interface CatalogProvider {
     occasion?: string | null;
     model: string;
     signal?: AbortSignal;
-  }): Promise<{ requestId: string; itemIds: string[]; concept: LookConcept }>;
+  }): Promise<LookPlanResult>;
   generateComposite(input: {
     references: Uint8Array[];
     prompt: string;
@@ -559,7 +567,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
     occasion?: string | null;
     model: string;
     signal?: AbortSignal;
-  }): Promise<{ requestId: string; itemIds: string[]; concept: LookConcept }> {
+  }): Promise<LookPlanResult> {
     const schema = {
       type: 'object',
       properties: {
@@ -618,6 +626,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
       id?: string;
       output_text?: string;
       output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+      usage?: LookPlanResult['usage'];
     };
     try {
       const text =
@@ -648,6 +657,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
       return {
         requestId: raw.id ?? response.headers.get('x-request-id') ?? randomUUID(),
         ...parsed,
+        usage: raw.usage,
       };
     } catch (error) {
       // Retryable: the model occasionally drops a mandated item, and a second
@@ -781,7 +791,7 @@ export class ReplayCatalogProvider implements CatalogProvider {
   async planLook(input: {
     candidates: Array<{ id: string; metadata: ItemMetadata }>;
     exactItemIds: string[];
-  }): Promise<{ requestId: string; itemIds: string[]; concept: LookConcept }> {
+  }): Promise<LookPlanResult> {
     const fixture = this.fixtures.get('plan:look');
     const planned = fixture as
       | (ReplayCatalogFixture & {

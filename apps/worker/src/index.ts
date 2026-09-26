@@ -1,3 +1,5 @@
+import { shutdownTracing } from './instrumentation.js';
+
 import { randomUUID } from 'node:crypto';
 
 import { contractVersion } from '@form/contracts';
@@ -23,12 +25,12 @@ import {
 
 import { readWorkerConfig } from './config.js';
 import { SerialPoller } from './polling.js';
+import { traceJob, traceProvider } from './tracing.js';
 
 const config = readWorkerConfig();
 const database = createDatabase(config);
 const storage = createPrivateObjectStorage(config);
 const workerId = `worker-${randomUUID()}`;
-const provider = new OpenAICatalogProvider(config.OPENAI_API_KEY, config.OPENAI_API_BASE_URL);
 const executionConfig = {
   requestTimeoutMs: config.OPENAI_REQUEST_TIMEOUT_MS,
   detectionPricing: {
@@ -52,6 +54,11 @@ const executionConfig = {
     imageOutputMicrodollarsPerMillion: config.OPENAI_IMAGE_OUTPUT_RATE_MICRODOLLARS_PER_MILLION,
   },
 };
+
+const provider = traceProvider(
+  new OpenAICatalogProvider(config.OPENAI_API_KEY, config.OPENAI_API_BASE_URL),
+  executionConfig,
+);
 
 await migrateDatabase(database);
 await ensurePrivateBucket(storage);
@@ -87,11 +94,11 @@ async function processJob(job: RemoteImageJob): Promise<void> {
     Math.max(Math.floor((config.REMOTE_IMAGE_LEASE_SECONDS * 1_000) / 3), 1_000),
   );
   try {
-    if (job.kind === 'generate-character-sheet' || job.kind === 'generate-look') {
-      await executeInspirationJob(database, storage, provider, job, executionConfig);
-    } else {
-      await executeCatalogJob(database, storage, provider, job, executionConfig);
-    }
+    await traceJob(job, () =>
+      job.kind === 'generate-character-sheet' || job.kind === 'generate-look'
+        ? executeInspirationJob(database, storage, provider, job, executionConfig)
+        : executeCatalogJob(database, storage, provider, job, executionConfig),
+    );
     if (!(await completeJob(database, job.id, workerId))) {
       console.error(`Job ${job.id} completed after its worker lease was lost.`);
     }
@@ -143,6 +150,7 @@ async function stop(): Promise<void> {
   await poller.stop();
   storage.client.destroy();
   await database.end();
+  await shutdownTracing();
 }
 
 process.once('SIGINT', () => void stop());
