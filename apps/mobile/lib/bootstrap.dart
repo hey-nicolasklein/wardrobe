@@ -16,6 +16,7 @@ import 'package:form_mobile/features/settings/language_cubit.dart';
 import 'package:form_mobile/features/settings/quality_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/repository/account_cache_repository.dart';
+import 'package:form_mobile/repository/auth_repository.dart';
 import 'package:form_mobile/repository/character_draft_repository.dart';
 import 'package:form_mobile/repository/character_sheet_repository.dart';
 import 'package:form_mobile/repository/collection_counts_repository.dart';
@@ -30,6 +31,7 @@ import 'package:form_mobile/services/app_database.dart';
 import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/services/look_output_service.dart';
 import 'package:form_mobile/services/photo_preparation.dart';
+import 'package:form_mobile/services/session_store.dart';
 import 'package:form_mobile/utils/initial_language.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:inspire_blur/inspire_blur.dart';
@@ -61,7 +63,17 @@ Future<void> bootstrap(
     savedLanguage: savedLanguage,
   );
   final uri = config.apiUri;
-  final api = uri == null ? null : FormApi.connect(uri);
+  final sessions = SessionStore();
+  await sessions.load();
+  final api = uri == null
+      ? null
+      : FormApi.connect(uri, token: () => sessions.token);
+  final auth = AuthRepository(
+    api,
+    sessions,
+    googleClientId: config.googleClientId,
+    googleServerClientId: config.googleServerClientId,
+  );
   final server = api == null ? null : ServerRepository(api);
 
   final collectionCountsRepository = CollectionCountsRepository(
@@ -175,6 +187,7 @@ Future<void> bootstrap(
         ),
         RepositoryProvider<AccountCacheRepository>.value(value: accountCache),
         RepositoryProvider<PersonalRepository>.value(value: personal),
+        RepositoryProvider<AuthRepository>.value(value: auth),
         RepositoryProvider<PreferencesRepository>.value(value: preferences),
         if (api != null)
           RepositoryProvider<FormApi>(

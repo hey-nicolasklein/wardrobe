@@ -445,7 +445,11 @@
     "staleRecordVersion": "The item changed on the server. Refresh and try again.",
     "uploadIntentNotFound": "The upload expired. Start the upload again.",
     "uploadMissing": "The upload is incomplete. Try the upload again.",
-    "wardrobeItemNotFound": "This wardrobe item is no longer available."
+    "wardrobeItemNotFound": "This wardrobe item is no longer available.",
+    "insufficientCredits": "Not enough credits for this generation.",
+    "tooManyActiveJobs": "Several generations are already running. Wait until one finishes.",
+    "rateLimited": "Too many attempts. Try again in a minute.",
+    "invalidIdentityToken": "Sign-in was not accepted. Please try again."
   },
   "onboarding": {
     "skip": "Skip",
@@ -508,5 +512,20 @@
     "finaleTip": "Tip: start with the pieces you wear most.",
     "finaleAdd": "Add my first pieces",
     "finaleExplore": "Look around first"
+  },
+  "auth": {
+    "title": "Welcome to FORM",
+    "body": "Sign in to keep your wardrobe in sync across devices.",
+    "apple": "Sign in with Apple",
+    "google": "Sign in with Google",
+    "failed": "Sign-in failed. Please try again.",
+    "devTitle": "Developer sign-in (debug builds only)",
+    "devAction": "Sign in without password",
+    "accountTitle": "Account",
+    "signOut": "Sign out",
+    "deleteAccount": "Delete account …",
+    "deleteTitle": "Delete account?",
+    "deleteBody": "Your wardrobe, photos, looks, and credits are permanently deleted. This cannot be undone.",
+    "deleteConfirm": "Delete permanently"
   }
 }

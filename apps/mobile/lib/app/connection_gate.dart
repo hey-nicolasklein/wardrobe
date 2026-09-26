@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/collection_counts_cubit.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/auth/sign_in_page.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -57,7 +58,9 @@ class ConnectionGate extends StatelessWidget {
       return Stack(
         children: [
           Offstage(offstage: !showShell, child: child),
-          if (!showShell)
+          if (status == ConnectionStatus.missingSession)
+            const SignInPage()
+          else if (!showShell)
             Scaffold(
               appBar: FormPageHeader(
                 title: context.tr(LocaleKeys.appName),

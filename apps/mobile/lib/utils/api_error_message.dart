@@ -19,6 +19,8 @@ String? _messageKey(String? code) => switch (code) {
   'confirmation-required' => LocaleKeys.apiErrors_confirmationRequired,
   'generation-in-progress' => LocaleKeys.apiErrors_generationInProgress,
   'idempotency-key-reused' => LocaleKeys.apiErrors_idempotencyKeyReused,
+  'insufficient-credits' => LocaleKeys.apiErrors_insufficientCredits,
+  'invalid-identity-token' => LocaleKeys.apiErrors_invalidIdentityToken,
   'invalid-activation' => LocaleKeys.apiErrors_invalidActivation,
   'invalid-character-sheet' => LocaleKeys.apiErrors_invalidCharacterSheet,
   'invalid-detection-request' => LocaleKeys.apiErrors_invalidDetectionRequest,
@@ -38,6 +40,8 @@ String? _messageKey(String? code) => switch (code) {
   'invalid-wardrobe-transition' =>
     LocaleKeys.apiErrors_invalidWardrobeTransition,
   'origin-not-allowed' => LocaleKeys.apiErrors_originNotAllowed,
+  'rate-limited' => LocaleKeys.apiErrors_rateLimited,
+  'too-many-active-jobs' => LocaleKeys.apiErrors_tooManyActiveJobs,
   'reset-in-progress' => LocaleKeys.apiErrors_resetInProgress,
   'source-photo-not-found' => LocaleKeys.apiErrors_sourcePhotoNotFound,
   'stale-record-version' => LocaleKeys.apiErrors_staleRecordVersion,

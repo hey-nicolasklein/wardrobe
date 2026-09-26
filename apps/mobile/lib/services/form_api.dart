@@ -17,16 +17,30 @@ class FormApiException implements Exception {
 class FormApi {
   FormApi(this._dio);
 
-  factory FormApi.connect(Uri baseUrl) => FormApi(
+  /// [token] returns the current session token. Requests go without one when
+  /// it is null, which the private deployment accepts.
+  factory FormApi.connect(Uri baseUrl, {String? Function()? token}) => FormApi(
     Dio(
-      BaseOptions(
-        baseUrl: baseUrl.toString(),
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 15),
-        sendTimeout: const Duration(seconds: 15),
-        headers: {'Accept': 'application/json'},
+        BaseOptions(
+          baseUrl: baseUrl.toString(),
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 15),
+          sendTimeout: const Duration(seconds: 15),
+          headers: {'Accept': 'application/json'},
+        ),
+      )
+      ..interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final value = token?.call();
+            // Only our own API gets the token, never presigned storage URLs.
+            if (value != null && options.uri.host == baseUrl.host) {
+              options.headers['Authorization'] = 'Bearer $value';
+            }
+            handler.next(options);
+          },
+        ),
       ),
-    ),
   );
 
   final Dio _dio;

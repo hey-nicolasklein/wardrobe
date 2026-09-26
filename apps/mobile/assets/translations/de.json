@@ -445,7 +445,11 @@
     "staleRecordVersion": "Das Stück hat sich auf dem Server geändert. Aktualisiere und versuche es erneut.",
     "uploadIntentNotFound": "Der Upload ist abgelaufen. Starte den Upload erneut.",
     "uploadMissing": "Der Upload ist unvollständig. Versuche den Upload erneut.",
-    "wardrobeItemNotFound": "Dieses Kleidungsstück ist nicht mehr verfügbar."
+    "wardrobeItemNotFound": "Dieses Kleidungsstück ist nicht mehr verfügbar.",
+    "insufficientCredits": "Nicht genug Credits für diese Generierung.",
+    "tooManyActiveJobs": "Es laufen schon mehrere Generierungen. Warte, bis eine fertig ist.",
+    "rateLimited": "Zu viele Versuche. Probier es in einer Minute erneut.",
+    "invalidIdentityToken": "Die Anmeldung wurde nicht akzeptiert. Bitte versuche es erneut."
   },
   "onboarding": {
     "skip": "Überspringen",
@@ -508,5 +512,20 @@
     "finaleTip": "Tipp: Fang mit den Stücken an, die du am häufigsten trägst.",
     "finaleAdd": "Meine ersten Stücke hinzufügen",
     "finaleExplore": "Erst mal umschauen"
+  },
+  "auth": {
+    "title": "Willkommen bei FORM",
+    "body": "Melde dich an, damit dein Kleiderschrank auf allen Geräten gleich bleibt.",
+    "apple": "Mit Apple anmelden",
+    "google": "Mit Google anmelden",
+    "failed": "Anmeldung fehlgeschlagen. Bitte versuche es erneut.",
+    "devTitle": "Entwickler-Anmeldung (nur Debug-Builds)",
+    "devAction": "Ohne Passwort anmelden",
+    "accountTitle": "Konto",
+    "signOut": "Abmelden",
+    "deleteAccount": "Konto löschen …",
+    "deleteTitle": "Konto löschen?",
+    "deleteBody": "Kleiderschrank, Fotos, Looks und Credits werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
+    "deleteConfirm": "Endgültig löschen"
   }
 }

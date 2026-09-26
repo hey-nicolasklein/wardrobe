@@ -65,30 +65,37 @@ class ResetSection extends StatelessWidget {
   }
 
   Future<void> _afterReset(BuildContext context) async {
-    final accountCache = context.read<AccountCacheRepository>();
-    await accountCache.clearAfterReset();
-    if (!context.mounted) return;
-    context.read<IntakeBloc>().add(const IntakeEvent(IntakeAction.restore));
-    await Future.wait([
-      context.read<WardrobeCubit>().loadCache(),
-      context.read<FeedCubit>().loadCache(),
-      context.read<CharacterCubit>().loadCache(),
-      context.read<CollectionCountsCubit>().loadCache(),
-    ]);
-    if (!context.mounted) return;
-    final connection = context.read<ConnectionCubit>().state;
-    if (connection == ConnectionStatus.ready) {
-      await Future.wait([
-        context.read<CollectionCountsCubit>().refresh(Collection.feed),
-        context.read<CollectionCountsCubit>().refresh(Collection.wardrobe),
-        context.read<FeedCubit>().refresh(),
-        context.read<WardrobeCubit>().refresh(),
-        context.read<CharacterCubit>().refresh(),
-      ]);
-    }
+    await clearAccountState(context);
     if (!context.mounted) return;
     showFormToast(context, context.tr(LocaleKeys.settings_resetDone));
     context.go('/feed');
+  }
+}
+
+/// Drops every locally cached record of the account and reloads the cubits
+/// from the (now empty) cache, then from the server when it is reachable.
+/// Used after a wardrobe reset, sign-out, and account deletion.
+Future<void> clearAccountState(BuildContext context) async {
+  final accountCache = context.read<AccountCacheRepository>();
+  await accountCache.clearAfterReset();
+  if (!context.mounted) return;
+  context.read<IntakeBloc>().add(const IntakeEvent(IntakeAction.restore));
+  await Future.wait([
+    context.read<WardrobeCubit>().loadCache(),
+    context.read<FeedCubit>().loadCache(),
+    context.read<CharacterCubit>().loadCache(),
+    context.read<CollectionCountsCubit>().loadCache(),
+  ]);
+  if (!context.mounted) return;
+  final connection = context.read<ConnectionCubit>().state;
+  if (connection == ConnectionStatus.ready) {
+    await Future.wait([
+      context.read<CollectionCountsCubit>().refresh(Collection.feed),
+      context.read<CollectionCountsCubit>().refresh(Collection.wardrobe),
+      context.read<FeedCubit>().refresh(),
+      context.read<WardrobeCubit>().refresh(),
+      context.read<CharacterCubit>().refresh(),
+    ]);
   }
 }
 
@@ -108,93 +115,93 @@ class _ResetSheetState extends State<_ResetSheet> {
 
   @override
   void dispose() {
-    _controller.dispose();
-    super.dispose();
+  _controller.dispose();
+  super.dispose();
   }
 
   Future<void> _submit() async {
-    final language = context.locale.languageCode;
-    if (!matchesResetPhrase(language, _controller.text)) {
-      setState(
-        () => _error = context.tr(
-          LocaleKeys.settings_resetPhraseMismatch,
-          namedArgs: {'phrase': requiredResetPhrase(language)},
-        ),
-      );
-      return;
-    }
+  final language = context.locale.languageCode;
+  if (!matchesResetPhrase(language, _controller.text)) {
+    setState(
+      () => _error = context.tr(
+        LocaleKeys.settings_resetPhraseMismatch,
+        namedArgs: {'phrase': requiredResetPhrase(language)},
+      ),
+    );
+    return;
+  }
+  setState(() {
+    _error = null;
+    _submitting = true;
+  });
+  try {
+    await context.read<PersonalRepository>().resetWardrobe();
+    if (!mounted) return;
+    Navigator.pop(context);
+    await widget.onSuccess();
+  } on FormApiException catch (error) {
+    if (!mounted) return;
     setState(() {
-      _error = null;
-      _submitting = true;
+      _submitting = false;
+      _error = localizedApiError(context, error);
     });
-    try {
-      await context.read<PersonalRepository>().resetWardrobe();
-      if (!mounted) return;
-      Navigator.pop(context);
-      await widget.onSuccess();
-    } on FormApiException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _submitting = false;
-        _error = localizedApiError(context, error);
-      });
-    } on Exception {
-      if (!mounted) return;
-      setState(() {
-        _submitting = false;
-        _error = context.tr(LocaleKeys.settings_resetFailed);
-      });
-    }
+  } on Exception {
+    if (!mounted) return;
+    setState(() {
+      _submitting = false;
+      _error = context.tr(LocaleKeys.settings_resetFailed);
+    });
+  }
   }
 
   @override
   Widget build(BuildContext context) {
-    final language = context.locale.languageCode;
-    final phrase = requiredResetPhrase(language);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          context.tr(LocaleKeys.settings_resetSheetHeading),
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          context.tr(LocaleKeys.settings_resetSheetBody),
-          style: FormTokens.body,
-        ),
-        const SizedBox(height: 20),
-        TextField(
-          controller: _controller,
-          autocorrect: false,
-          textCapitalization: TextCapitalization.characters,
-          decoration: InputDecoration(
-            labelText: context.tr(
-              LocaleKeys.settings_resetPhraseLabel,
-              namedArgs: {'phrase': phrase},
-            ),
-            hintText: phrase,
-            errorText: _error,
+  final language = context.locale.languageCode;
+  final phrase = requiredResetPhrase(language);
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(
+        context.tr(LocaleKeys.settings_resetSheetHeading),
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      const SizedBox(height: 8),
+      Text(
+        context.tr(LocaleKeys.settings_resetSheetBody),
+        style: FormTokens.body,
+      ),
+      const SizedBox(height: 20),
+      TextField(
+        controller: _controller,
+        autocorrect: false,
+        textCapitalization: TextCapitalization.characters,
+        decoration: InputDecoration(
+          labelText: context.tr(
+            LocaleKeys.settings_resetPhraseLabel,
+            namedArgs: {'phrase': phrase},
           ),
-          onSubmitted: (_) => unawaited(_submit()),
+          hintText: phrase,
+          errorText: _error,
         ),
-        const SizedBox(height: 20),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: FormTokens.dangerTint,
-            foregroundColor: FormTokens.ink,
-            minimumSize: const Size.fromHeight(50),
-          ),
-          onPressed: _submitting ? null : () => unawaited(_submit()),
-          child: _submitting
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(context.tr(LocaleKeys.settings_resetConfirm)),
+        onSubmitted: (_) => unawaited(_submit()),
+      ),
+      const SizedBox(height: 20),
+      FilledButton(
+        style: FilledButton.styleFrom(
+          backgroundColor: FormTokens.dangerTint,
+          foregroundColor: FormTokens.ink,
+          minimumSize: const Size.fromHeight(50),
         ),
-      ],
-    );
+        onPressed: _submitting ? null : () => unawaited(_submit()),
+        child: _submitting
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(context.tr(LocaleKeys.settings_resetConfirm)),
+      ),
+    ],
+  );
   }
 }

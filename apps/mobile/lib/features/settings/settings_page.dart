@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/app_config.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/settings/account_section.dart';
 import 'package:form_mobile/features/settings/app_info_section.dart';
 import 'package:form_mobile/features/settings/cache_section.dart';
 import 'package:form_mobile/features/settings/character/character_section.dart';
@@ -13,6 +14,7 @@ import 'package:form_mobile/features/settings/reset_section.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/server_info.dart';
+import 'package:form_mobile/repository/auth_repository.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
@@ -68,7 +70,13 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: 20),
             const CacheSection(),
             const SizedBox(height: 20),
-            const ResetSection(),
+            // The wardrobe reset only exists on the private deployment;
+            // signed-in accounts delete themselves instead.
+            if (!context.read<AuthRepository>().isSignedIn) ...[
+              const ResetSection(),
+              const SizedBox(height: 20),
+            ],
+            const AccountSection(),
             const SizedBox(height: 20),
             Text(
               context.tr(LocaleKeys.settings_debugTitle).toUpperCase(),
