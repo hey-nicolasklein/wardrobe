@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:easy_localization/easy_localization.dart';
@@ -649,8 +650,8 @@ class _FailedLookCard extends StatelessWidget {
   );
 }
 
-/// A soft band of light that drifts across the stage while a look develops,
-/// then fades away once the worn image is in.
+/// Soft bands of light that drift across the stage while a look develops,
+/// then fade away once the worn image is in.
 class _DevelopingSheen extends StatefulWidget {
   const _DevelopingSheen({required this.active});
 
@@ -662,12 +663,15 @@ class _DevelopingSheen extends StatefulWidget {
 
 class _DevelopingSheenState extends State<_DevelopingSheen>
     with SingleTickerProviderStateMixin {
-  // One pass plus a pause, so the light breathes rather than loops.
-  static const _pass = 0.72;
+  // One long cycle holds several passes at a steady pace while the brightness
+  // swells on its own rhythm, so no two passes in a row look alike and the
+  // loop point never shows.
+  static const _passes = 7;
+  static const _swells = 3;
 
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2600),
+    duration: const Duration(seconds: 28),
   );
 
   @override
@@ -687,7 +691,7 @@ class _DevelopingSheenState extends State<_DevelopingSheen>
     if (animate && !_controller.isAnimating) {
       unawaited(_controller.repeat());
     }
-    // Once inactive the sheen finishes its pass under the fade-out.
+    // Once inactive the sheen keeps drifting under the fade-out.
   }
 
   @override
@@ -705,26 +709,35 @@ class _DevelopingSheenState extends State<_DevelopingSheen>
       onEnd: () {
         if (!widget.active) _controller.stop();
       },
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          final t = Curves.easeInOut.transform(
-            (_controller.value / _pass).clamp(0, 1),
-          );
-          return DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment(-1 + 4 * t - 1.6, -1),
-                end: Alignment(-1 + 4 * t, 1),
-                colors: [
-                  Colors.white.withValues(alpha: 0),
-                  Colors.white.withValues(alpha: 0.36),
-                  Colors.white.withValues(alpha: 0),
-                ],
+      // Keeps the per-frame repaint to the sheen, so the pieces beneath it
+      // are not redrawn with every step.
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            final cycle = _controller.value;
+            final phase = cycle * _passes % 1;
+            final swell = 0.5 - 0.5 * math.cos(2 * math.pi * cycle * _swells);
+            final peak = 0.2 + 0.16 * swell;
+            // The gradient repeats every (4, 5) alignment units, and one pass
+            // moves it by exactly that, so passes join without a jump.
+            return DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment(4 * (phase - 1), 5 * (phase - 1)),
+                  end: Alignment(4 * phase, 5 * phase),
+                  tileMode: TileMode.repeated,
+                  stops: const [0.3, 0.5, 0.7],
+                  colors: [
+                    Colors.white.withValues(alpha: 0),
+                    Colors.white.withValues(alpha: peak),
+                    Colors.white.withValues(alpha: 0),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     ),
   );

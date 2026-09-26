@@ -15,6 +15,7 @@ import 'package:form_mobile/services/form_api.dart';
 import 'support/character_fixtures.dart';
 import 'support/fake_server.dart';
 import 'support/look_fixtures.dart';
+import 'support/wardrobe_fixtures.dart';
 
 void main() {
   late AppDatabase database;
@@ -77,6 +78,24 @@ void main() {
       expect(cubit.state.hasActiveCharacterReference, true);
     },
   );
+
+  test('a look change picks up pieces added since the feed loaded', () async {
+    await cubit.loadCache();
+    expect(cubit.state.itemsById, isEmpty);
+    await database
+        .into(database.wardrobeRecords)
+        .insert(
+          WardrobeRecordsCompanion.insert(
+            scope: 'test',
+            id: 'wardrobe-item-0001',
+            itemJson: jsonEncode(itemJson()),
+          ),
+        );
+    // The first reload, well before the next poll would refresh the feed.
+    final reloaded = cubit.stream.first;
+    await lookRepository.refreshAndNotify();
+    expect((await reloaded).itemsById.keys, ['wardrobe-item-0001']);
+  });
 
   test(
     'markUnavailable keeps cached looks but disables online markings',

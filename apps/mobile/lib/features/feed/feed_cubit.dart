@@ -179,8 +179,11 @@ class FeedCubit extends Cubit<FeedState> {
     return marks;
   }
 
+  /// Also rereads wardrobe items, so a look started from a piece added since
+  /// the last refresh can show that piece right away.
   Future<void> _reloadLocal() async {
     final looks = await lookRepository.cached();
+    final wardrobe = await wardrobeRepository.cached();
     final pendingStarts = await lookRepository.loadLookStarts();
     final liked = await _loadMarks(looks.map((l) => l.look), liked: true);
     final saved = await _loadMarks(looks.map((l) => l.look), liked: false);
@@ -188,6 +191,7 @@ class FeedCubit extends Cubit<FeedState> {
     emit(
       state.copyWith(
         looks: looks,
+        itemsById: {for (final item in wardrobe) item.item.id: item.item},
         pendingStarts: pendingStarts,
         liked: liked,
         saved: saved,
