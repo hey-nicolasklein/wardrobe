@@ -55,7 +55,6 @@ class _SignInPageState extends State<SignInPage> {
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthRepository>();
-    final showApple = defaultTargetPlatform == TargetPlatform.iOS;
     return Scaffold(
       appBar: FormPageHeader(
         title: context.tr(LocaleKeys.appName),
@@ -78,7 +77,7 @@ class _SignInPageState extends State<SignInPage> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
-            if (showApple)
+            if (auth.appleAvailable)
               FilledButton.icon(
                 onPressed: _busy
                     ? null

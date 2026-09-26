@@ -18,6 +18,7 @@ class AuthRepository {
     this._sessions, {
     this.googleClientId,
     this.googleServerClientId,
+    this.appleEnabled = false,
   });
 
   final FormApi? _api;
@@ -29,16 +30,20 @@ class AuthRepository {
   /// Web OAuth client ID. Google issues Android ID tokens for this audience.
   final String? googleServerClientId;
 
+  /// Whether the build carries the Sign in with Apple capability.
+  final bool appleEnabled;
+
   bool _googleReady = false;
 
   bool get isSignedIn => _sessions.token != null;
 
+  bool get appleAvailable => appleEnabled && Platform.isIOS;
+
   /// iOS needs its own client ID (plus the reversed-ID URL scheme in
   /// Info.plist), Android only the server client ID.
-  bool get googleAvailable => (Platform.isIOS
-          ? googleClientId ?? ''
-          : googleServerClientId ?? '')
-      .isNotEmpty;
+  bool get googleAvailable =>
+      (Platform.isIOS ? googleClientId ?? '' : googleServerClientId ?? '')
+          .isNotEmpty;
 
   Future<void> signInWithApple() async {
     final String? idToken;

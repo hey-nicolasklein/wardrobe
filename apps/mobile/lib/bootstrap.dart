@@ -73,6 +73,7 @@ Future<void> bootstrap(
     sessions,
     googleClientId: config.googleClientId,
     googleServerClientId: config.googleServerClientId,
+    appleEnabled: config.appleSignIn,
   );
   final server = api == null ? null : ServerRepository(api);
 
