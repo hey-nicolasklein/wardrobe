@@ -89,7 +89,29 @@ class OnboardingPieceImage extends StatelessWidget {
   );
 }
 
-/// A piece that pops in, drifts gently and does a spin when tapped.
+/// How a piece reacts to a tap, picked from its rendered size. Every piece is
+/// lifted and drops back with a bounce, small ones spin on the way and middle
+/// ones tip a little.
+enum _Heft {
+  light(lift: 26, duration: Duration(milliseconds: 760)),
+  medium(lift: 20, duration: Duration(milliseconds: 790)),
+  heavy(lift: 14, duration: Duration(milliseconds: 820));
+
+  const _Heft({required this.lift, required this.duration});
+
+  /// How far the piece is lifted, in logical pixels.
+  final double lift;
+  final Duration duration;
+
+  static _Heft of(double side) => side < 80
+      ? light
+      : side < 110
+      ? medium
+      : heavy;
+}
+
+/// A piece that pops in, drifts gently and reacts to a tap according to its
+/// size.
 class FloatingPiece extends StatefulWidget {
   const FloatingPiece({
     required this.piece,
@@ -121,10 +143,8 @@ class _FloatingPieceState extends State<FloatingPiece>
     vsync: this,
     duration: Duration(milliseconds: 3600 + (widget.phase * 400).round()),
   );
-  late final _spin = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 720),
-  );
+  late final _tapped = AnimationController(vsync: this);
+  _Heft _heft = _Heft.heavy;
   Timer? _timer;
 
   @override
@@ -146,39 +166,64 @@ class _FloatingPieceState extends State<FloatingPiece>
     _timer?.cancel();
     _enter.dispose();
     _drift.dispose();
-    _spin.dispose();
+    _tapped.dispose();
     super.dispose();
   }
 
   void _tap() {
-    unawaited(HapticFeedback.lightImpact());
-    if (!_still(context)) unawaited(_spin.forward(from: 0));
+    unawaited(
+      _heft == _Heft.heavy
+          ? HapticFeedback.mediumImpact()
+          : HapticFeedback.lightImpact(),
+    );
+    if (_still(context)) return;
+    _tapped.duration = _heft.duration;
+    unawaited(_tapped.forward(from: 0));
   }
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: _tap,
-    child: AnimatedBuilder(
-      animation: Listenable.merge([_enter, _drift, _spin]),
-      child: OnboardingPieceImage(piece: widget.piece),
-      builder: (context, child) {
-        final enter = FormTokens.pop.transform(_enter.value);
-        final wave = sin(2 * pi * _drift.value + widget.phase);
-        final spin = FormTokens.easeOut.transform(_spin.value);
-        // The spin swells and settles back while turning once.
-        final swell = 1 + 0.25 * sin(pi * _spin.value);
-        return Opacity(
-          opacity: _enter.value.clamp(0, 1),
-          child: Transform.translate(
-            offset: Offset(0, 7 * wave),
-            child: Transform.rotate(
-              angle: (widget.angle + 3 * wave) * pi / 180 + 2 * pi * spin,
-              child: Transform.scale(scale: enter * swell, child: child),
-            ),
-          ),
-        );
-      },
-    ),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      _heft = _Heft.of(constraints.biggest.shortestSide);
+      return GestureDetector(
+        onTap: _tap,
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_enter, _drift, _tapped]),
+          child: OnboardingPieceImage(piece: widget.piece),
+          builder: (context, child) {
+            final enter = FormTokens.pop.transform(_enter.value);
+            final wave = sin(2 * pi * _drift.value + widget.phase);
+            final t = _tapped.value;
+            // Rises quickly, then falls back and bounces on landing.
+            const peak = 0.35;
+            final lift =
+                _heft.lift *
+                (t < peak
+                    ? Curves.easeOut.transform(t / peak)
+                    : 1 -
+                          Curves.bounceOut.transform(
+                            (t - peak) / (1 - peak),
+                          ));
+            final turn = switch (_heft) {
+              _Heft.light => 2 * pi * Curves.easeInOut.transform(t),
+              // Tips by up to 12° while in the air.
+              _Heft.medium => 12 * pi / 180 * lift / _heft.lift,
+              _Heft.heavy => 0.0,
+            };
+            return Opacity(
+              opacity: _enter.value.clamp(0, 1),
+              child: Transform.translate(
+                offset: Offset(0, 7 * wave - lift),
+                child: Transform.rotate(
+                  angle: (widget.angle + 3 * wave) * pi / 180 + turn,
+                  child: Transform.scale(scale: enter, child: child),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    },
   );
 }
 
