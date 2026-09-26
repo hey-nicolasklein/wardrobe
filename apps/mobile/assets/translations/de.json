@@ -132,7 +132,7 @@
   "feedInvalidResponse": "Die Look-Daten konnten nicht gelesen werden. Der Server ist erreichbar, aber die Antwort passt nicht zum erwarteten Format.",
   "chooseSupportedCategory": "Wähle eine unterstützte Kategorie, um dieses ältere Stück zu speichern.",
   "intake": {
-    "title": "Kleidung hinzufügen",
+    "title": "Neue Stücke",
     "intro": "Wir erkennen deine Kleidung, du wählst aus, was in den Schrank kommt.",
     "uploadTitle": "Alles auf ein Foto.",
     "uploadBody": "Ein einzelnes Stück oder ein ganzes Outfit. Ein ruhiger Hintergrund hilft bei der Erkennung.",
@@ -165,7 +165,10 @@
       "discarded": "Verworfen"
     },
     "restartRequired": "Der Fotozugriff ist in diesem laufenden Build nicht verfügbar. Beende die App und starte einen neuen Build. Hot Reload reicht nicht aus.",
-    "localSaveFailed": "Das Foto konnte auf diesem Gerät nicht gespeichert werden. Prüfe den freien Speicher und versuche es erneut."
+    "localSaveFailed": "Das Foto konnte auf diesem Gerät nicht gespeichert werden. Prüfe den freien Speicher und versuche es erneut.",
+    "more": "Weitere Fotos",
+    "cameraShort": "Kamera",
+    "libraryShort": "Fotos"
   },
   "visual": {
     "colorFilter": "Farbe",

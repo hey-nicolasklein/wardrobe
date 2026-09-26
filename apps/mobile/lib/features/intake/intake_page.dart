@@ -1,15 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:app_settings/app_settings.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/intake/intake_failure.dart';
+import 'package:form_mobile/features/onboarding/scan_stage.dart';
 import 'package:form_mobile/features/wardrobe/item_edit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/intake.dart';
@@ -101,6 +103,61 @@ class _IntakePageState extends State<IntakePage> {
           context.watch<ConnectionCubit>().state == ConnectionStatus.ready;
       final enabled = online && !state.busy && !_picking;
       final hasDrafts = state.drafts.isNotEmpty;
+      // On top while the page is empty, below the drafts once analysis is
+      // running so the photo being scanned stays front and centre.
+      final addPhotos = <Widget>[
+        if (!hasDrafts) ...[
+          const SizedBox(height: 8),
+          Text(
+            context.tr(LocaleKeys.intake_intro),
+            style: FormTokens.body.copyWith(color: FormTokens.muted),
+          ),
+          const SizedBox(height: 16),
+        ],
+        _UploadArea(
+          compact: hasDrafts,
+          // Not tied to the bloc's busy flag: detection polling toggles it
+          // every few seconds, and a new photo simply queues behind it.
+          enabled: online,
+          picking: _picking,
+          onCamera: () => _pick(camera: true),
+          onLibrary: () => _pick(camera: false),
+        ),
+        if (hasDrafts)
+          Text(
+            context.tr(LocaleKeys.intake_cost),
+            textAlign: TextAlign.center,
+            style: FormTokens.small.copyWith(fontSize: 11),
+          )
+        else
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: FormTokens.field,
+              borderRadius: BorderRadius.circular(FormTokens.inputRadius),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 14,
+              ),
+              child: Text(
+                context.tr(LocaleKeys.intake_cost),
+                style: FormTokens.small.copyWith(
+                  color: FormTokens.noteInk,
+                ),
+              ),
+            ),
+          ),
+        if (_pickerError != null) ...[
+          const SizedBox(height: 12),
+          FormNotice(text: context.tr(_pickerError!), error: true),
+          if (_pickerError == LocaleKeys.intake_permission)
+            TextButton(
+              onPressed: AppSettings.openAppSettings,
+              child: Text(context.tr(LocaleKeys.intake_openSettings)),
+            ),
+        ],
+      ];
       return Scaffold(
         backgroundColor: FormTokens.paper,
         extendBodyBehindAppBar: true,
@@ -114,36 +171,7 @@ class _IntakePageState extends State<IntakePage> {
               MediaQuery.paddingOf(context).bottom,
             ),
             children: [
-              const SizedBox(height: 8),
-              Text(
-                context.tr(LocaleKeys.intake_intro),
-                style: FormTokens.body.copyWith(color: FormTokens.muted),
-              ),
-              const SizedBox(height: 16),
-              _UploadArea(
-                compact: hasDrafts,
-                enabled: enabled,
-                picking: _picking,
-                busy: state.busy,
-                onCamera: () => _pick(camera: true),
-                onLibrary: () => _pick(camera: false),
-              ),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: FormTokens.field,
-                  borderRadius: BorderRadius.circular(FormTokens.inputRadius),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                  child: Text(
-                    context.tr(LocaleKeys.intake_cost),
-                    style: FormTokens.small.copyWith(color: FormTokens.noteInk),
-                  ),
-                ),
-              ),
+              if (!hasDrafts) ...addPhotos,
               if (!online)
                 Padding(
                   padding: const EdgeInsets.only(top: 16),
@@ -152,84 +180,82 @@ class _IntakePageState extends State<IntakePage> {
                     error: true,
                   ),
                 ),
-              if (_pickerError != null) ...[
-                const SizedBox(height: 12),
-                FormNotice(text: context.tr(_pickerError!), error: true),
-                if (_pickerError == LocaleKeys.intake_permission)
-                  TextButton(
-                    onPressed: AppSettings.openAppSettings,
-                    child: Text(context.tr(LocaleKeys.intake_openSettings)),
-                  ),
-              ],
               if (state.error != null) ...[
                 const SizedBox(height: 12),
                 FormNotice(text: context.tr(state.error!), error: true),
               ],
               for (final draft in state.drafts)
-                _DraftCard(
-                  draft: draft,
-                  state: state,
-                  enabled: enabled,
-                  onDiscard: () => _discard(draft),
-                  onSelect: enabled && draft.phase == DraftPhase.ready
-                      ? (choice) => _bloc.add(
-                          IntakeEvent(
-                            IntakeAction.select,
-                            id: draft.id,
-                            choiceKey: choice.itemKey,
-                            value: !choice.selected,
-                          ),
-                        )
-                      : null,
-                  onBatchOwning: enabled && draft.phase == DraftPhase.ready
-                      ? (value) => _bloc.add(
-                          IntakeEvent(
-                            IntakeAction.ownership,
-                            id: draft.id,
-                            value: value,
-                          ),
-                        )
-                      : null,
-                  onChoiceOwning: enabled
-                      ? (choice, {required value}) {
-                          if (choice.locked) return;
-                          _bloc.add(
-                            IntakeEvent(
-                              IntakeAction.ownership,
-                              id: draft.id,
-                              choiceKey: choice.itemKey,
-                              value: value,
-                            ),
-                          );
-                        }
-                      : null,
-                  onChoiceSelect: enabled
-                      ? (choice, {required value}) {
-                          if (choice.locked) return;
-                          _bloc.add(
+                FormReveal(
+                  key: ValueKey(draft.id),
+                  child: _DraftCard(
+                    draft: draft,
+                    state: state,
+                    enabled: enabled,
+                    onDiscard: () => _discard(draft),
+                    onSelect: enabled && draft.phase == DraftPhase.ready
+                        ? (choice) => _bloc.add(
                             IntakeEvent(
                               IntakeAction.select,
                               id: draft.id,
                               choiceKey: choice.itemKey,
+                              value: !choice.selected,
+                            ),
+                          )
+                        : null,
+                    onBatchOwning: enabled && draft.phase == DraftPhase.ready
+                        ? (value) => _bloc.add(
+                            IntakeEvent(
+                              IntakeAction.ownership,
+                              id: draft.id,
                               value: value,
                             ),
-                          );
-                        }
-                      : null,
-                  onRetry: enabled
-                      ? () => _bloc.add(
-                          IntakeEvent(IntakeAction.retry, id: draft.id),
-                        )
-                      : null,
-                  onSave:
-                      enabled &&
-                          draft.phase == DraftPhase.ready &&
-                          draft.choices.any((c) => c.selected && !c.enqueued)
-                      ? () => _bloc.add(
-                          IntakeEvent(IntakeAction.save, id: draft.id),
-                        )
-                      : null,
+                          )
+                        : null,
+                    onChoiceOwning: enabled
+                        ? (choice, {required value}) {
+                            if (choice.locked) return;
+                            _bloc.add(
+                              IntakeEvent(
+                                IntakeAction.ownership,
+                                id: draft.id,
+                                choiceKey: choice.itemKey,
+                                value: value,
+                              ),
+                            );
+                          }
+                        : null,
+                    onChoiceSelect: enabled
+                        ? (choice, {required value}) {
+                            if (choice.locked) return;
+                            _bloc.add(
+                              IntakeEvent(
+                                IntakeAction.select,
+                                id: draft.id,
+                                choiceKey: choice.itemKey,
+                                value: value,
+                              ),
+                            );
+                          }
+                        : null,
+                    onRetry: enabled
+                        ? () => _bloc.add(
+                            IntakeEvent(IntakeAction.retry, id: draft.id),
+                          )
+                        : null,
+                    onSave:
+                        enabled &&
+                            draft.phase == DraftPhase.ready &&
+                            draft.choices.any((c) => c.selected && !c.enqueued)
+                        ? () => _bloc.add(
+                            IntakeEvent(IntakeAction.save, id: draft.id),
+                          )
+                        : null,
+                  ),
                 ),
+              if (hasDrafts) ...[
+                const SizedBox(height: 24),
+                ...addPhotos,
+              ],
               const SizedBox(height: 24),
             ],
           ),
@@ -244,7 +270,6 @@ class _UploadArea extends StatelessWidget {
     required this.compact,
     required this.enabled,
     required this.picking,
-    required this.busy,
     required this.onCamera,
     required this.onLibrary,
   });
@@ -252,23 +277,54 @@ class _UploadArea extends StatelessWidget {
   final bool compact;
   final bool enabled;
   final bool picking;
-  final bool busy;
   final VoidCallback onCamera;
   final VoidCallback onLibrary;
 
   @override
   Widget build(BuildContext context) {
-    final buttonsDisabled = busy || picking || !enabled;
+    final buttonsDisabled = picking || !enabled;
     final camera = FilledButton.icon(
       onPressed: buttonsDisabled ? null : onCamera,
-      icon: const Icon(Icons.camera_alt_outlined, size: 23),
-      label: Text(context.tr(LocaleKeys.intake_camera)),
+      icon: Icon(Icons.camera_alt_outlined, size: compact ? 20 : 23),
+      label: Text(
+        context.tr(
+          compact ? LocaleKeys.intake_cameraShort : LocaleKeys.intake_camera,
+        ),
+      ),
     );
     final library = OutlinedButton.icon(
       onPressed: buttonsDisabled ? null : onLibrary,
-      icon: const Icon(Icons.photo_library_outlined, size: 23),
-      label: Text(context.tr(LocaleKeys.intake_library)),
+      icon: Icon(Icons.photo_library_outlined, size: compact ? 20 : 23),
+      label: Text(
+        context.tr(
+          compact ? LocaleKeys.intake_libraryShort : LocaleKeys.intake_library,
+        ),
+      ),
     );
+    // Below the drafts it is a secondary action: a quiet heading and one row
+    // of buttons instead of the dashed upload card.
+    if (compact) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 10,
+          children: [
+            Text(
+              context.tr(LocaleKeys.intake_more).toUpperCase(),
+              style: FormTokens.eyebrow,
+            ),
+            Row(
+              spacing: FormTokens.gap,
+              children: [
+                Expanded(child: camera),
+                Expanded(child: library),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: CustomPaint(
@@ -282,50 +338,36 @@ class _UploadArea extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
           ),
           child: Padding(
-            padding: compact
-                ? const EdgeInsets.all(16)
-                : const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: compact
-                ? Row(
-                    children: [
-                      Expanded(child: camera),
-                      const SizedBox(width: FormTokens.gap),
-                      Expanded(child: library),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Icon(
-                        Icons.camera_alt_outlined,
-                        size: 30,
-                        color: FormTokens.green,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 170, child: LoopingScanStage()),
+                const SizedBox(height: 18),
+                Text(
+                  context.tr(LocaleKeys.intake_uploadTitle),
+                  textAlign: TextAlign.center,
+                  style: FormTokens.heading.copyWith(fontSize: 24),
+                ),
+                const SizedBox(height: 6),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 270),
+                    child: Text(
+                      context.tr(LocaleKeys.intake_uploadBody),
+                      textAlign: TextAlign.center,
+                      style: FormTokens.body.copyWith(
+                        color: FormTokens.muted,
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        context.tr(LocaleKeys.intake_uploadTitle),
-                        textAlign: TextAlign.center,
-                        style: FormTokens.heading.copyWith(fontSize: 24),
-                      ),
-                      const SizedBox(height: 6),
-                      Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 270),
-                          child: Text(
-                            context.tr(LocaleKeys.intake_uploadBody),
-                            textAlign: TextAlign.center,
-                            style: FormTokens.body.copyWith(
-                              color: FormTokens.muted,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      camera,
-                      const SizedBox(height: FormTokens.gap),
-                      library,
-                    ],
+                    ),
                   ),
+                ),
+                const SizedBox(height: 18),
+                camera,
+                const SizedBox(height: FormTokens.gap),
+                library,
+              ],
+            ),
           ),
         ),
       ),
@@ -459,7 +501,28 @@ class _DraftHead extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: FormTokens.heading.copyWith(fontSize: 22)),
+                AnimatedSwitcher(
+                  duration: FormTokens.sheetDuration,
+                  switchInCurve: FormTokens.easeOut,
+                  // Only the new title takes part, so the old one doesn't
+                  // overlap it while fading.
+                  layoutBuilder: (current, _) => current ?? const SizedBox(),
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween(
+                        begin: const Offset(0, 0.35),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: Text(
+                    title,
+                    key: ValueKey(title),
+                    style: FormTokens.heading.copyWith(fontSize: 22),
+                  ),
+                ),
               ],
             ),
           ),
@@ -526,14 +589,20 @@ class _DetectionStage extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             DraftPhoto(draft: draft, onSelect: busy ? null : onSelect),
-            if (busy)
-              _ScanProgress(
-                message: context.tr(
-                  analyzing
-                      ? LocaleKeys.intake_phases_detecting
-                      : LocaleKeys.intake_phases_uploading,
-                ),
+            Positioned.fill(
+              child: AnimatedSwitcher(
+                duration: FormTokens.sheetDuration,
+                child: busy
+                    ? _ScanOverlay(
+                        message: context.tr(
+                          analyzing
+                              ? LocaleKeys.intake_phases_detecting
+                              : LocaleKeys.intake_phases_uploading,
+                        ),
+                      )
+                    : const SizedBox.expand(),
               ),
+            ),
           ],
         ),
       ),
@@ -541,54 +610,145 @@ class _DetectionStage extends StatelessWidget {
   }
 }
 
-class _ScanProgress extends StatelessWidget {
-  const _ScanProgress({required this.message});
+/// A band sweeping over the photo while it uploads and is analysed, with
+/// the current step in a pill below.
+class _ScanOverlay extends StatefulWidget {
+  const _ScanOverlay({required this.message});
 
   final String message;
 
   @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-          child: ColoredBox(
-            color: const Color(0x99263329),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Color(0x24FFFFFF),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.all(9),
-                      child: Icon(
-                        Icons.search,
-                        color: Colors.white,
-                        size: 28,
+  State<_ScanOverlay> createState() => _ScanOverlayState();
+}
+
+class _ScanOverlayState extends State<_ScanOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _sweep;
+
+  @override
+  void initState() {
+    super.initState();
+    _sweep = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _sweep.stop();
+    } else if (!_sweep.isAnimating) {
+      unawaited(_sweep.repeat());
+    }
+  }
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: const Color(0x40263329),
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final height = constraints.maxHeight;
+        final band = height * 0.35;
+        return Stack(
+          children: [
+            AnimatedBuilder(
+              animation: _sweep,
+              builder: (context, _) {
+                final t = FormTokens.easeOut.transform(_sweep.value);
+                return Positioned(
+                  left: 0,
+                  right: 0,
+                  top: -band + (height + band) * t,
+                  height: band,
+                  child: Opacity(
+                    // Fades in at the top and out at the bottom so the loop
+                    // restarts without a visible jump.
+                    opacity: math.sin(math.pi * _sweep.value),
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0x00FFFFFF), Color(0x70FFFFFF)],
+                        ),
+                        border: Border(
+                          bottom: BorderSide(color: Colors.white, width: 2),
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    message,
-                    style: FormTokens.body.copyWith(
-                      fontSize: 13,
-                      color: Colors.white,
-                    ),
-                    textAlign: TextAlign.center,
+                );
+              },
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 14,
+              child: Center(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: const Color(0xD9263329),
+                    borderRadius: BorderRadius.circular(FormTokens.chipRadius),
                   ),
-                ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 8,
+                      children: [
+                        AnimatedBuilder(
+                          animation: _sweep,
+                          builder: (context, _) => Opacity(
+                            opacity:
+                                0.45 +
+                                0.55 * math.sin(math.pi * _sweep.value).abs(),
+                            child: const SizedBox.square(
+                              dimension: 7,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        AnimatedSwitcher(
+                          duration: FormTokens.quick,
+                          layoutBuilder: (current, _) =>
+                              current ?? const SizedBox(),
+                          child: Text(
+                            widget.message,
+                            key: ValueKey(widget.message),
+                            style: FormTokens.body.copyWith(
+                              fontSize: 13,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
+          ],
+        );
+      },
+    ),
+  );
 }
 
 class _BatchOwnership extends StatelessWidget {
@@ -796,14 +956,18 @@ class _DetectionChoices extends StatelessWidget {
       ),
       for (final entry in indexed)
         Padding(
+          key: ValueKey(entry.choice.itemKey),
           padding: const EdgeInsets.only(bottom: 7),
-          child: _DetectionChoiceRow(
-            draft: draft,
-            choice: entry.choice,
-            index: entry.index,
-            enabled: enabled,
-            onSelect: onChoiceSelect,
-            onOwning: onChoiceOwning,
+          child: FormReveal(
+            delay: Duration(milliseconds: 250 + 70 * entry.index),
+            child: _DetectionChoiceRow(
+              draft: draft,
+              choice: entry.choice,
+              index: entry.index,
+              enabled: enabled,
+              onSelect: onChoiceSelect,
+              onOwning: onChoiceOwning,
+            ),
           ),
         ),
       const SizedBox(height: 9),
@@ -851,7 +1015,9 @@ class _DetectionChoiceRow extends StatelessWidget {
     final rowEnabled = enabled && !choice.locked && onSelect != null;
     final categoryLabel = context.tr('categories.${choice.proposal!.category}');
     final semanticsLabel = '$categoryLabel · ${choice.proposal!.name}';
-    return DecoratedBox(
+    return AnimatedContainer(
+      duration: FormTokens.quick,
+      curve: FormTokens.easeOut,
       decoration: BoxDecoration(
         color: selected ? const Color(0xFFE7EDDF) : FormTokens.surface,
         borderRadius: BorderRadius.circular(_rowRadius),
@@ -965,7 +1131,8 @@ class _ChoiceNumber extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AnimatedContainer(
+      duration: FormTokens.quick,
       width: 27,
       height: 27,
       alignment: Alignment.center,
@@ -976,17 +1143,29 @@ class _ChoiceNumber extends StatelessWidget {
           color: selected ? FormTokens.green : const Color(0xFFB9BEB5),
         ),
       ),
-      child: selected
-          ? const Icon(Icons.check, size: 15, color: Colors.white)
-          : Text(
-              '${index + 1}',
-              style: FormTokens.small
-                  .copyWith(
-                    fontSize: 11,
-                    color: FormTokens.muted,
-                  )
-                  .merge(FormTokens.numerals),
-            ),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        switchInCurve: FormTokens.pop,
+        transitionBuilder: (child, animation) =>
+            ScaleTransition(scale: animation, child: child),
+        child: selected
+            ? const Icon(
+                Icons.check,
+                key: ValueKey(true),
+                size: 15,
+                color: Colors.white,
+              )
+            : Text(
+                '${index + 1}',
+                key: const ValueKey(false),
+                style: FormTokens.small
+                    .copyWith(
+                      fontSize: 11,
+                      color: FormTokens.muted,
+                    )
+                    .merge(FormTokens.numerals),
+              ),
+      ),
     );
   }
 }
@@ -1131,10 +1310,11 @@ class DraftPhoto extends StatelessWidget {
               child: Stack(
                 children: [
                   Positioned.fill(child: image),
-                  for (final choice in draft.choices.where(
-                    (c) => c.proposal != null && !c.enqueued,
-                  ))
+                  for (final (index, choice)
+                      in draft.choices.where((c) => c.proposal != null).indexed)
                     _DetectionBoxOverlay(
+                      key: ValueKey(choice.proposal!.id),
+                      index: index,
                       choice: choice,
                       scale: scale,
                       source: source,
@@ -1150,78 +1330,198 @@ class DraftPhoto extends StatelessWidget {
   }
 }
 
-class _DetectionBoxOverlay extends StatelessWidget {
+/// A detected piece framed on the photo. Boxes pop in one after another
+/// with a haptic tick. Once saved, a box flashes green with a check and
+/// shrinks away, as if the piece were lifted into the wardrobe.
+class _DetectionBoxOverlay extends StatefulWidget {
   const _DetectionBoxOverlay({
+    required this.index,
     required this.choice,
     required this.scale,
     required this.source,
     required this.onSelect,
+    super.key,
   });
 
+  final int index;
   final IntakeChoice choice;
   final double scale;
   final Size source;
   final void Function(IntakeChoice)? onSelect;
 
   @override
+  State<_DetectionBoxOverlay> createState() => _DetectionBoxOverlayState();
+}
+
+class _DetectionBoxOverlayState extends State<_DetectionBoxOverlay>
+    with TickerProviderStateMixin {
+  late final AnimationController _enter;
+  late final AnimationController _lift;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _enter = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 560),
+    );
+    _lift = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+      // A piece saved before this box was built is already gone.
+      value: widget.choice.enqueued ? 1 : 0,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _enter.value = 1;
+        return;
+      }
+      _timer = Timer(
+        Duration(milliseconds: 220 + 120 * widget.index),
+        () {
+          unawaited(HapticFeedback.lightImpact());
+          unawaited(_enter.forward());
+        },
+      );
+    });
+  }
+
+  @override
+  void didUpdateWidget(_DetectionBoxOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.choice.enqueued && !oldWidget.choice.enqueued) {
+      unawaited(HapticFeedback.mediumImpact());
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _lift.value = 1;
+      } else {
+        unawaited(_lift.forward());
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _enter.dispose();
+    _lift.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final choice = widget.choice;
+    final onSelect = widget.onSelect;
     final theme = _detectionTheme(choice.proposal!.category);
     final colors = FormTokens.category(theme);
     final selected = choice.selected;
     final rect = choice.proposal!.boundingBox.pixels(
-      Size(source.width * scale, source.height * scale),
+      Size(
+        widget.source.width * widget.scale,
+        widget.source.height * widget.scale,
+      ),
     );
-    final enabled = onSelect != null && !choice.locked;
+    final enabled = onSelect != null && !choice.locked && !choice.enqueued;
     final label =
         '${context.tr('categories.${choice.proposal!.category}')} · '
         '${choice.proposal!.name}';
+    final saved = choice.enqueued;
     return Positioned.fromRect(
       rect: rect,
-      child: Semantics(
-        label: label,
-        button: true,
-        selected: selected,
-        enabled: enabled,
-        onTap: enabled ? () => onSelect!(choice) : null,
-        child: Actions(
-          actions: <Type, Action<Intent>>{
-            ActivateIntent: CallbackAction<ActivateIntent>(
-              onInvoke: (_) {
-                if (enabled) onSelect!(choice);
-                return null;
-              },
-            ),
-          },
-          child: Focus(
-            child: GestureDetector(
-              onTap: enabled ? () => onSelect!(choice) : null,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: selected ? colors.ink : const Color(0xCCFFFFFF),
-                    width: selected ? 3 : 2,
-                  ),
-                  color: selected ? colors.ink.withValues(alpha: 0.26) : null,
-                  boxShadow: const [
-                    BoxShadow(color: Color(0x66263329)),
-                  ],
+      child: IgnorePointer(
+        ignoring: saved,
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_enter, _lift]),
+          builder: (context, child) {
+            final enter = FormTokens.pop.transform(_enter.value);
+            // The flash holds for the first half, then the box lifts away.
+            final lift = Curves.easeIn.transform(
+              ((_lift.value - 0.45) / 0.55).clamp(0, 1),
+            );
+            return Opacity(
+              opacity: (_enter.value * (1 - lift)).clamp(0, 1),
+              child: Transform.translate(
+                offset: Offset(0, -18 * lift),
+                child: Transform.scale(
+                  scale: (1.3 - 0.3 * enter) * (1 - 0.25 * lift),
+                  child: child,
                 ),
-                child: Center(
-                  child: DecoratedBox(
-                    decoration: const BoxDecoration(
-                      color: FormTokens.surface,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: Color(0x30000000), blurRadius: 10),
+              ),
+            );
+          },
+          child: Semantics(
+            label: label,
+            button: true,
+            selected: selected,
+            enabled: enabled,
+            onTap: enabled ? () => onSelect(choice) : null,
+            child: Actions(
+              actions: <Type, Action<Intent>>{
+                ActivateIntent: CallbackAction<ActivateIntent>(
+                  onInvoke: (_) {
+                    if (enabled) onSelect(choice);
+                    return null;
+                  },
+                ),
+              },
+              child: Focus(
+                child: GestureDetector(
+                  onTap: enabled
+                      ? () {
+                          unawaited(HapticFeedback.selectionClick());
+                          onSelect(choice);
+                        }
+                      : null,
+                  child: AnimatedContainer(
+                    duration: FormTokens.quick,
+                    curve: FormTokens.easeOut,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: saved
+                            ? FormTokens.green
+                            : selected
+                            ? colors.ink
+                            : const Color(0xCCFFFFFF),
+                        width: selected || saved ? 3 : 2,
+                      ),
+                      color: saved
+                          ? FormTokens.green.withValues(alpha: 0.4)
+                          : selected
+                          ? colors.ink.withValues(alpha: 0.26)
+                          : const Color(0x00000000),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x66263329)),
                       ],
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: Icon(
-                        _categoryIcon(theme),
-                        size: 14,
-                        color: colors.ink,
+                    child: Center(
+                      child: AnimatedScale(
+                        scale: selected || saved ? 1.12 : 1,
+                        duration: const Duration(milliseconds: 260),
+                        curve: FormTokens.pop,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: saved
+                                ? FormTokens.green
+                                : FormTokens.surface,
+                            shape: BoxShape.circle,
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x30000000),
+                                blurRadius: 10,
+                              ),
+                            ],
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Icon(
+                              saved ? Icons.check : _categoryIcon(theme),
+                              size: 14,
+                              color: saved ? Colors.white : colors.ink,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),

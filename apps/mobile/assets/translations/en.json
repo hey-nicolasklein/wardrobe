@@ -165,7 +165,10 @@
       "discarded": "Discarded"
     },
     "restartRequired": "Photo access is not available in this running build. Stop the app and launch a fresh build. Hot reload is not sufficient.",
-    "localSaveFailed": "The photo could not be saved on this device. Check free storage and try again."
+    "localSaveFailed": "The photo could not be saved on this device. Check free storage and try again.",
+    "more": "More photos",
+    "cameraShort": "Camera",
+    "libraryShort": "Photos"
   },
   "visual": {
     "colorFilter": "Color",

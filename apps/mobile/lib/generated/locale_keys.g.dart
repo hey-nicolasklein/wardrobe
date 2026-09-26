@@ -161,6 +161,9 @@ abstract class LocaleKeys {
   static const intake_phases = 'intake.phases';
   static const intake_restartRequired = 'intake.restartRequired';
   static const intake_localSaveFailed = 'intake.localSaveFailed';
+  static const intake_more = 'intake.more';
+  static const intake_cameraShort = 'intake.cameraShort';
+  static const intake_libraryShort = 'intake.libraryShort';
   static const intake = 'intake';
   static const visual_colorFilter = 'visual.colorFilter';
   static const visual_wardrobeEyebrow = 'visual.wardrobeEyebrow';
