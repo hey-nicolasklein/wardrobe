@@ -69,6 +69,16 @@ class SettingsPage extends StatelessWidget {
             const CacheSection(),
             const SizedBox(height: 20),
             const ResetSection(),
+            const SizedBox(height: 20),
+            Text(
+              context.tr(LocaleKeys.settings_debugTitle).toUpperCase(),
+              style: FormTokens.eyebrow,
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: () => context.push('/onboarding'),
+              child: Text(context.tr(LocaleKeys.settings_replayOnboarding)),
+            ),
             const SizedBox(height: 24),
             Text(
               context.tr(LocaleKeys.settings_footer),

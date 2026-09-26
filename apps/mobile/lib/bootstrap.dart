@@ -35,7 +35,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:inspire_blur/inspire_blur.dart';
 import 'package:path_provider/path_provider.dart';
 
-Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
+/// [builder] learns whether the app should open with onboarding.
+Future<void> bootstrap(
+  FutureOr<Widget> Function({required bool onboarding}) builder,
+) async {
   WidgetsFlutterBinding.ensureInitialized();
   // Loads the header blur shaders early so the first frame doesn't stutter.
   unawaited(Inspire.warmUp());
@@ -50,6 +53,7 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
   final savedLanguage = await preferences.language();
   final feedQuality = await preferences.feedQuality();
   final wardrobeQuality = await preferences.wardrobeQuality();
+  final onboardingSeen = await preferences.onboardingSeen();
   final deviceLanguage =
       WidgetsBinding.instance.platformDispatcher.locale.languageCode;
   final language = initialLanguage(
@@ -139,7 +143,7 @@ Future<void> bootstrap(FutureOr<Widget> Function() builder) async {
       );
     }
   }
-  final app = await builder();
+  final app = await builder(onboarding: !onboardingSeen);
 
   runApp(
     MultiRepositoryProvider(

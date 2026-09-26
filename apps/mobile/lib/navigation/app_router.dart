@@ -4,6 +4,7 @@ import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
 import 'package:form_mobile/features/feed/look_composer_page.dart';
 import 'package:form_mobile/features/intake/intake_page.dart';
+import 'package:form_mobile/features/onboarding/onboarding_page.dart';
 import 'package:form_mobile/features/settings/character/character_detail_page.dart';
 import 'package:form_mobile/features/settings/character/character_section.dart';
 import 'package:form_mobile/features/settings/character/character_setup_page.dart';
@@ -17,9 +18,9 @@ import 'package:go_router/go_router.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
-GoRouter createRouter() => GoRouter(
+GoRouter createRouter({bool onboarding = false}) => GoRouter(
   navigatorKey: _rootNavigatorKey,
-  initialLocation: '/feed',
+  initialLocation: onboarding ? '/onboarding' : '/feed',
   overridePlatformDefaultLocation: true,
   routes: [
     StatefulShellRoute.indexedStack(
@@ -142,6 +143,35 @@ GoRouter createRouter() => GoRouter(
               ],
             ),
           ],
+        ),
+      ],
+    ),
+    GoRoute(
+      path: '/onboarding',
+      pageBuilder: (context, state) => CustomTransitionPage(
+        key: state.pageKey,
+        child: const OnboardingPage(),
+        transitionDuration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : FormTokens.sheetDuration,
+        transitionsBuilder: (_, animation, _, child) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 1.04, end: 1).animate(
+              CurvedAnimation(parent: animation, curve: FormTokens.easeOut),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+      routes: [
+        GoRoute(
+          path: 'character-setup',
+          parentNavigatorKey: _rootNavigatorKey,
+          pageBuilder: (_, state) => FormSheetPage(
+            key: state.pageKey,
+            child: const CharacterSetupPage(),
+          ),
         ),
       ],
     ),

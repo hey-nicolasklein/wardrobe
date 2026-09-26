@@ -18,14 +18,17 @@ import 'package:form_mobile/repository/collection_counts_repository.dart';
 import 'package:go_router/go_router.dart';
 
 class FormApp extends StatefulWidget {
-  const FormApp({super.key});
+  const FormApp({this.onboarding = false, super.key});
+
+  /// Opens onboarding instead of the Feed.
+  final bool onboarding;
 
   @override
   State<FormApp> createState() => _FormAppState();
 }
 
 class _FormAppState extends State<FormApp> {
-  final GoRouter _router = createRouter();
+  late final GoRouter _router = createRouter(onboarding: widget.onboarding);
   late final AppLifecycleListener _lifecycle;
   bool _hasLoaded = false;
 

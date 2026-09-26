@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/flat_lay_layout.dart';
+import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
 
@@ -15,6 +16,7 @@ class FlatLayBoard extends StatelessWidget {
     this.selectedId,
     this.entrance,
     this.arrive = false,
+    this.imageBuilder,
     super.key,
   });
 
@@ -31,6 +33,9 @@ class FlatLayBoard extends StatelessWidget {
   /// itself when it first appears, and pieces glide when later arrivals
   /// shift the layout. Takes precedence over [entrance].
   final bool arrive;
+
+  /// Draws a piece's image. Defaults to its cached shelf image.
+  final Widget Function(WardrobeItem item)? imageBuilder;
 
   static const _highlight = Duration(milliseconds: 320);
   static const _glide = Duration(milliseconds: 520);
@@ -93,11 +98,12 @@ class FlatLayBoard extends StatelessWidget {
                   final left = placement.x / 100 * width - size / 2;
                   final top = placement.y / 125 * height - size / 2;
                   final child = garment.available
-                      ? CachedMedia(
-                          identity: garment.item!.previewIdentity,
-                          previewPath: garment.item!.previewPath,
-                          online: online,
-                        )
+                      ? imageBuilder?.call(garment.item!) ??
+                            CachedMedia(
+                              identity: garment.item!.previewIdentity,
+                              previewPath: garment.item!.previewPath,
+                              online: online,
+                            )
                       : Center(
                           child: Text(
                             garment.item?.metadata.name ?? garment.id,

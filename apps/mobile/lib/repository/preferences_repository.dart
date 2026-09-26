@@ -9,6 +9,7 @@ class PreferencesRepository {
 
   static const feedQualityKey = 'feed-quality';
   static const wardrobeQualityKey = 'wardrobe-quality';
+  static const onboardingKey = 'onboarding-seen';
 
   Future<String?> language() async {
     final value = await _database.preference('language');
@@ -21,6 +22,14 @@ class PreferencesRepository {
     }
     return _database.setPreference('language', language);
   }
+
+  /// An account reset clears this, so an emptied account starts with
+  /// onboarding again.
+  Future<bool> onboardingSeen() async =>
+      await _database.preference(onboardingKey) == 'true';
+
+  Future<void> setOnboardingSeen() =>
+      _database.setPreference(onboardingKey, 'true');
 
   Future<String> feedQuality() => _quality(feedQualityKey);
 

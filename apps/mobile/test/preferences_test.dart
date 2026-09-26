@@ -63,4 +63,15 @@ void main() {
       expect(cubit.state, 'de');
     },
   );
+
+  test('onboarding stays seen until an account reset', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final repository = PreferencesRepository(database);
+    expect(await repository.onboardingSeen(), isFalse);
+    await repository.setOnboardingSeen();
+    expect(await repository.onboardingSeen(), isTrue);
+    await database.clearAccountCache('https://form.test/');
+    expect(await repository.onboardingSeen(), isFalse);
+  });
 }
