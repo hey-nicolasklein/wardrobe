@@ -11,7 +11,7 @@ the first months. Build what holds at that size, and keep every step replaceable
 | Providers | Sign in with Apple and Google. Password stays for CLI/admin accounts. | Apple requires its own sign-in once Google is offered (App Review 4.8). |
 | Dev sign-in | `POST /v1/auth/dev` behind `DEV_SIGN_IN=true`, button only in Flutter debug builds. | Simulators never go through Apple or Google. |
 | Metering | Credits in an append-only ledger. Plans and packs only grant credits. | Pricing stays data. The backend only asks "enough credits?". |
-| Private deployment | Existing accounts are `metered = false`. `PERSONAL_ACCOUNT_ID` mode keeps working unchanged. | stargate keeps running without credits. |
+| Private deployment | The auto-login `PERSONAL_ACCOUNT_ID` mode is gone (2026-09-27). Nico's stargate account is a normal metered account with a password. | One code path for everyone, and credits get tested on real data. |
 | Rate limits | In-memory per IP on auth routes. At most 5 active jobs per metered account. | Enough for one API instance. |
 
 ## What is built
@@ -48,8 +48,20 @@ the first months. Build what holds at that size, and keep every step replaceable
 
 1. Set `DEV_SIGN_IN=true` in `apps/api/.env.local`, then restart `npm run dev:api`.
 2. Run the app in debug and tap **Sign in without password**. The email field chooses the account, so `a@form.local` and `b@form.local` are two separate test users.
-3. To test running out of credits, use SQL for now:
-   `INSERT INTO credit_ledger (id, account_id, delta, reason) VALUES (gen_random_uuid(), '<id>', -40, 'grant');`
+3. To set or reset a budget, e.g. to test running out of credits:
+   `DATABASE_URL=… npm run accounts:credits -- <email> <balance>`. On stargate run the same
+   CLI inside the API container: `docker exec form-production-api-1 node --import tsx packages/service/src/cli/set-credits.ts <email> <balance>`.
+
+## Test data snapshots
+
+`npm run accounts:snapshot -- export <email> <dir>` writes one account with all records and
+images into `<dir>`. `import <dir>` recreates it in the database and bucket from the env
+(`FORM_ENV`, default `.env.services.local`; override `DATABASE_URL`/`S3_BUCKET` for the dev
+`form` database). Import refuses an existing account and never overwrites.
+
+Snapshots live in the git-ignored `snapshots/` folder. They hold real photos, so they stay
+out of Git. `snapshots/nico-2026-09-27` is Nico's stargate wardrobe (45 pieces, 41 looks),
+also imported into the local `form` database.
 
 Never set `DEV_SIGN_IN` on a reachable host. The API logs a warning at startup when it is on.
 

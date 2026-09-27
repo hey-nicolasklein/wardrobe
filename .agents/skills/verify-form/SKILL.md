@@ -7,8 +7,8 @@ description: Drive FORM, the mobile-web PWA in apps/web, in a real browser again
 
 FORM is a single-user German-language wardrobe PWA. The client is static HTML/CSS/JS
 in `apps/web/public` (`app.js` is the whole app, hash-routed). It talks same-origin to
-the Hono API in `apps/api`. In verification mode the API pins a fixed personal account,
-so there is **no login** — writes need no auth token.
+the Hono API in `apps/api`. Every run signs in as the populated fixture account
+(`fixtureCredentials.populated`, see `apps/web/e2e/sign-in.mjs`) before opening the page.
 
 The surface is the browser UI. There is also a JSON API (`/v1/...`) you can curl for
 setup or side-effect checks, and a background worker (`apps/worker`) for AI image jobs

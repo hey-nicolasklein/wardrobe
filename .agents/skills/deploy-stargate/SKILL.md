@@ -57,8 +57,7 @@ Report the deployed state: the stamp that went live and which services were rebu
   (default `18081`) — the `web` container, which proxies `/v1/` to the API.
   `tailscale serve status` shows the mapping.
 - Runtime config lives in the git-ignored `.env.production` (`PUBLIC_WEB_ORIGIN`, `WEB_ORIGIN`,
-  `S3_PUBLIC_ENDPOINT`, `PERSONAL_ACCOUNT_ID`). There is no login screen: `PERSONAL_ACCOUNT_ID`
-  opens that account automatically.
+  `S3_PUBLIC_ENDPOINT`, `APPLE_CLIENT_IDS`). Clients sign in with a normal account.
 - Web and API assets are baked into their images (`build.target`), so shipping needs a rebuild
   and recreate, not just a restart.
 - `npm run services:migrate` runs only when the schema actually changed.

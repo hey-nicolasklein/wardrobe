@@ -13,7 +13,7 @@ doctor, the drive harness, and cleanup.
 - Drive the browser as an emulated **iPhone 13** with `/usr/bin/chromium` via
   `PLAYWRIGHT_CHROMIUM_EXECUTABLE`, running node from the repo root.
 - Never drive an instance this run did not start, and never run any of this against the
-  personal deployment (`PERSONAL_ACCOUNT_ID` / real Tailscale host).
+  production deployment (the real Tailscale host).
 
 ## Seeded fixtures (what you start with)
 
