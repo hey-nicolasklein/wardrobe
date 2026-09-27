@@ -32,7 +32,6 @@ const app = createApp({
   webOrigin: config.WEB_ORIGIN,
   publicOrigin: config.WEB_ORIGIN,
   detectionModel: config.OPENAI_DETECTION_MODEL,
-  personalAccountId: config.PERSONAL_ACCOUNT_ID,
   identityVerifier: createIdentityTokenVerifier({
     apple: clientIds(config.APPLE_CLIENT_IDS),
     google: clientIds(config.GOOGLE_CLIENT_IDS),

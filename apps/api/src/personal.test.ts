@@ -6,6 +6,7 @@ import {
   createDatabase,
   createPrivateObjectStorage,
   ensurePrivateBucket,
+  fixtureCredentials,
   fixtureIds,
   migrateDatabase,
   readDatabaseConfig,
@@ -16,7 +17,7 @@ import { createApp } from './app.js';
 
 const enabled = process.env.FORM_RUN_SERVICE_INTEGRATION === 'true';
 test(
-  'personal wardrobe needs no login, saves photos idempotently, protects reset and preserves other accounts',
+  'wardrobe needs a session, saves photos idempotently, protects reset and preserves other accounts',
   { skip: !enabled },
   async () => {
     const database = createDatabase(readDatabaseConfig());
@@ -29,7 +30,6 @@ test(
         database,
         storage,
         sessionSecret: 'personal-test-secret-at-least-32-characters',
-        personalAccountId: fixtureIds.populatedAccount,
         webOrigin: 'https://wardrobe.test',
         checkReadiness: async () => ({
           status: 'ready',
@@ -37,6 +37,15 @@ test(
           objectStorage: 'up',
         }),
       });
+      assert.equal((await app.request('/v1/auth/session')).status, 401);
+      const signIn = await app.request('/v1/auth/sign-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...fixtureCredentials.populated, transport: 'token' }),
+      });
+      const { session } = (await signIn.json()) as { session: { nativeToken: string } };
+      const authorization = `Bearer ${session.nativeToken}`;
+      const get = (path: string) => app.request(path, { headers: { Authorization: authorization } });
       const post = (
         path: string,
         body: unknown,
@@ -44,15 +53,15 @@ test(
       ) =>
         app.request(path, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Origin: origin },
+          headers: { 'Content-Type': 'application/json', Origin: origin, Authorization: authorization },
           body: JSON.stringify(body),
         });
-      assert.equal((await app.request('/v1/auth/session')).status, 200);
-      const pendingPreview = await app.request(`/v1/wardrobe-items/${fixtureIds.needsReviewItem}/preview`);
+      assert.equal((await get('/v1/auth/session')).status, 200);
+      const pendingPreview = await get(`/v1/wardrobe-items/${fixtureIds.needsReviewItem}/preview`);
     assert.equal(pendingPreview.status, 200);
     const pendingDimensions = await sharp(Buffer.from(await pendingPreview.arrayBuffer())).metadata();
     assert.equal(pendingDimensions.width, pendingDimensions.height, 'pending catalog image is used instead of the rectangular source photo');
-    const sourceVariant = await app.request(`/v1/wardrobe-items/${fixtureIds.readyItem}/preview?variant=source`);
+    const sourceVariant = await get(`/v1/wardrobe-items/${fixtureIds.readyItem}/preview?variant=source`);
     assert.equal(sourceVariant.status, 200);
     const sourceDimensions = await sharp(Buffer.from(await sourceVariant.arrayBuffer())).metadata();
     assert.notEqual(sourceDimensions.width, sourceDimensions.height, 'source variant returns the full uncropped upload, not the square catalog image');
@@ -75,7 +84,7 @@ test(
       const item = createdBody.wardrobeItem;
       const replay = await post('/v1/wardrobe-items/from-photo', body);
       assert.deepEqual(await replay.json(), createdBody);
-      const preview = await app.request(
+      const preview = await get(
         `/v1/wardrobe-items/${item.id}/preview`,
       );
       assert.equal(preview.status, 200);
@@ -125,11 +134,11 @@ test(
         confirmation: 'ALLES LÖSCHEN',
       });
       assert.equal(reset.status, 204, await reset.text());
-      assert.deepEqual(await (await app.request('/v1/wardrobe-items')).json(), {
+      assert.deepEqual(await (await get('/v1/wardrobe-items')).json(), {
         wardrobeItems: [],
       });
       assert.equal(
-        (await app.request(`/v1/wardrobe-items/${item.id}/preview`)).status,
+        (await get(`/v1/wardrobe-items/${item.id}/preview`)).status,
         404,
       );
       assert.equal(
@@ -140,7 +149,7 @@ test(
         ).rowCount,
         1,
       );
-      assert.equal((await app.request('/v1/auth/session')).status, 200);
+      assert.equal((await get('/v1/auth/session')).status, 200);
     } finally {
       storage.client.destroy();
       storage.signingClient.destroy();

@@ -96,7 +96,6 @@ export type AppDependencies = {
   webOrigin?: string;
   publicOrigin?: string;
   detectionModel?: string;
-  personalAccountId?: string;
   identityVerifier?: IdentityTokenVerifier;
   // Enables POST /v1/auth/dev, which signs in any email without a password.
   // Local development only.
@@ -333,20 +332,6 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     session: SessionRecord;
     token: string;
   } | null> {
-    if (resolved.personalAccountId) {
-      const account = await database.query<{ id: string; email: string }>(
-        'SELECT id, email FROM accounts WHERE id = $1 AND disabled_at IS NULL',
-        [resolved.personalAccountId],
-      );
-      if (!account.rows[0]) return null;
-      return {
-        session: {
-          ...account.rows[0],
-          expiresAt: new Date(Date.now() + lifetimeSeconds * 1000),
-        },
-        token: '',
-      };
-    }
     const token =
       bearerToken(context.req.header('Authorization')) ?? getCookie(context, sessionCookie) ?? null;
     if (!token) return null;
@@ -356,9 +341,9 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
 
   app.post('/v1/personal/reset', async (context) => {
     const authenticated = await currentSession(context);
-    if (!resolved.personalAccountId || !authenticated)
+    if (!authenticated)
       return context.json(
-        errorPayload('authentication', 'authentication-required', 'Private wardrobe required.'),
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
         401,
       );
     const body = await context.req.json().catch(() => null);
@@ -547,12 +532,6 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       return context.json(
         errorPayload('authentication', 'authentication-required', 'Session required.'),
         401,
-      );
-    // The private deployment has no sign-in to come back through.
-    if (resolved.personalAccountId)
-      return context.json(
-        errorPayload('authorization', 'account-deletion-disabled', 'Use the wardrobe reset instead.'),
-        403,
       );
     try {
       await deleteAccount(database, storage, authenticated.session.id);
