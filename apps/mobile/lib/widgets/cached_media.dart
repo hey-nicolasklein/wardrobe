@@ -87,7 +87,7 @@ class _CachedMediaState extends State<CachedMedia>
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _controller.forward();
+      if (mounted) unawaited(_controller.forward());
     });
   }
 

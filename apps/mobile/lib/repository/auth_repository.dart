@@ -10,8 +10,8 @@ class SignInCancelled implements Exception {
   const SignInCancelled();
 }
 
-/// Signs in through Apple, Google, a password, or the dev shortcut and keeps the resulting
-/// session token in [SessionStore].
+/// Signs in through Apple, Google, a password, or the dev shortcut and keeps
+/// the resulting session token in [SessionStore].
 class AuthRepository {
   AuthRepository(
     this._api,

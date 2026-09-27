@@ -409,11 +409,6 @@ class _WardrobePageState extends State<WardrobePage> {
                         final record = items[index];
                         final item = record.item;
                         final status = item.status.replaceAll('-', '_');
-                        final generating = const {
-                          'queued',
-                          'generating',
-                        }.contains(item.status);
-                        final failed = item.status == 'failed';
                         return Material(
                           color: Colors.transparent,
                           child: InkWell(
@@ -445,67 +440,10 @@ class _WardrobePageState extends State<WardrobePage> {
                                             borderRadius: BorderRadius.circular(
                                               FormTokens.cardRadius,
                                             ),
-                                            child: ColoredBox(
-                                              color: _photoTint(item.id),
-                                              child: Stack(
-                                                fit: StackFit.expand,
-                                                children: [
-                                                  // Crossfades from the ripple to
-                                                  // the image, which fades in again
-                                                  // once its first frame decodes.
-                                                  AnimatedSwitcher(
-                                                    duration: const Duration(
-                                                      milliseconds: 450,
-                                                    ),
-                                                    switchInCurve:
-                                                        FormTokens.easeOut,
-                                                    layoutBuilder:
-                                                        (
-                                                          current,
-                                                          previous,
-                                                        ) => Stack(
-                                                          fit: StackFit.expand,
-                                                          children: [
-                                                            ...previous,
-                                                            ?current,
-                                                          ],
-                                                        ),
-                                                    child: generating
-                                                        ? _GeneratingTile(
-                                                            key: const ValueKey(
-                                                              'generating',
-                                                            ),
-                                                            label: context.tr(
-                                                              'itemStatus.$status',
-                                                            ),
-                                                          )
-                                                        : CachedMedia(
-                                                            key: const ValueKey(
-                                                              'image',
-                                                            ),
-                                                            identity: record
-                                                                .thumbnailIdentity,
-                                                            previewPath: record
-                                                                .thumbnailPath,
-                                                            online:
-                                                                !state.stale,
-                                                            entrance:
-                                                                MediaEntrance
-                                                                    .fade,
-                                                          ),
-                                                  ),
-                                                  if (failed)
-                                                    Positioned(
-                                                      left: 8,
-                                                      bottom: 8,
-                                                      child: _StatusBadge(
-                                                        label: context.tr(
-                                                          'itemStatus.$status',
-                                                        ),
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
+                                            child: _TileMedia(
+                                              record: record,
+                                              tint: _photoTint(item.id),
+                                              online: !state.stale,
                                             ),
                                           ),
                                         ),
@@ -541,9 +479,13 @@ class _WardrobePageState extends State<WardrobePage> {
                                     fontSize: 11,
                                   ),
                                 ),
-                                if (item.status != 'ready' &&
-                                    !generating &&
-                                    !failed)
+                                // Generating and failed show on the tile.
+                                if (!const {
+                                  'ready',
+                                  'queued',
+                                  'generating',
+                                  'failed',
+                                }.contains(item.status))
                                   Padding(
                                     padding: const EdgeInsets.only(top: 4),
                                     child: Text(
@@ -800,6 +742,61 @@ class _ColorSwatch extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// The grid tile's image area. Crossfades from the ripple to the image, which
+/// fades in again once its first frame decodes.
+class _TileMedia extends StatelessWidget {
+  const _TileMedia({
+    required this.record,
+    required this.tint,
+    required this.online,
+  });
+
+  final CachedItem record;
+  final Color tint;
+  final bool online;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = record.item;
+    final status = item.status.replaceAll('-', '_');
+    final generating = const {'queued', 'generating'}.contains(item.status);
+    return ColoredBox(
+      color: tint,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 450),
+            switchInCurve: FormTokens.easeOut,
+            layoutBuilder: (current, previous) => Stack(
+              fit: StackFit.expand,
+              children: [...previous, ?current],
+            ),
+            child: generating
+                ? _GeneratingTile(
+                    key: const ValueKey('generating'),
+                    label: context.tr('itemStatus.$status'),
+                  )
+                : CachedMedia(
+                    key: const ValueKey('image'),
+                    identity: record.thumbnailIdentity,
+                    previewPath: record.thumbnailPath,
+                    online: online,
+                    entrance: MediaEntrance.fade,
+                  ),
+          ),
+          if (item.status == 'failed')
+            Positioned(
+              left: 8,
+              bottom: 8,
+              child: _StatusBadge(label: context.tr('itemStatus.$status')),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Placeholder while the catalog image is generated: soft rings ripple out
