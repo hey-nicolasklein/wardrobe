@@ -17,6 +17,7 @@ import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/intake.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/widgets/form_components.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 typedef IntakeChoiceBoolCallback =
@@ -96,8 +97,19 @@ class _IntakePageState extends State<IntakePage> {
     }
   }
 
+  // The last draft leaving while it was saving means everything picked has
+  // landed in the wardrobe, so return to the list. A discard does not count.
+  static bool _savedLastDraft(IntakeState previous, IntakeState current) =>
+      current.drafts.isEmpty &&
+      previous.drafts.isNotEmpty &&
+      previous.drafts.every(
+        (d) => d.phase == DraftPhase.saving || d.phase == DraftPhase.finished,
+      );
+
   @override
-  Widget build(BuildContext context) => BlocBuilder<IntakeBloc, IntakeState>(
+  Widget build(BuildContext context) => BlocConsumer<IntakeBloc, IntakeState>(
+    listenWhen: _savedLastDraft,
+    listener: (context, _) => context.go('/wardrobe'),
     builder: (context, state) {
       final online =
           context.watch<ConnectionCubit>().state == ConnectionStatus.ready;
