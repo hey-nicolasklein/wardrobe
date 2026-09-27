@@ -513,6 +513,10 @@ abstract class  LocaleKeys {
   static const auth_deleteTitle = 'auth.deleteTitle';
   static const auth_deleteBody = 'auth.deleteBody';
   static const auth_deleteConfirm = 'auth.deleteConfirm';
+  static const auth_emailTitle = 'auth.emailTitle';
+  static const auth_email = 'auth.email';
+  static const auth_password = 'auth.password';
+  static const auth_emailAction = 'auth.emailAction';
   static const auth = 'auth';
 
 }

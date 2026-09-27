@@ -10,7 +10,7 @@ class SignInCancelled implements Exception {
   const SignInCancelled();
 }
 
-/// Signs in through Apple, Google, or the dev shortcut and keeps the resulting
+/// Signs in through Apple, Google, a password, or the dev shortcut and keeps the resulting
 /// session token in [SessionStore].
 class AuthRepository {
   AuthRepository(
@@ -84,6 +84,11 @@ class AuthRepository {
     if (idToken == null) throw const FormApiException(ApiFailure.rejected);
     await _exchange('v1/auth/google', {'idToken': idToken});
   }
+
+  /// Email and password, for accounts created by an admin (e.g. the App
+  /// Review demo account).
+  Future<void> signInWithPassword(String email, String password) =>
+      _exchange('v1/auth/sign-in', {'email': email, 'password': password});
 
   /// Password-free sign-in against an API started with DEV_SIGN_IN=true.
   Future<void> signInForDevelopment(String email) =>

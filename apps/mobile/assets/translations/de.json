@@ -526,6 +526,10 @@
     "deleteAccount": "Konto löschen …",
     "deleteTitle": "Konto löschen?",
     "deleteBody": "Kleiderschrank, Fotos, Looks und Credits werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
-    "deleteConfirm": "Endgültig löschen"
+    "deleteConfirm": "Endgültig löschen",
+    "emailTitle": "Oder mit E-Mail",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "emailAction": "Anmelden"
   }
 }

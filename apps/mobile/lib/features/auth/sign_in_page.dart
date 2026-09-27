@@ -12,8 +12,9 @@ import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/utils/api_error_message.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 
-/// Shown by the connection gate when the server wants a session. Debug builds
-/// add a password-free developer sign-in so simulators skip Apple and Google.
+/// Shown by the connection gate when the server wants a session. Offers Apple,
+/// Google, and email with password. Debug builds add a password-free
+/// developer sign-in so simulators skip Apple and Google.
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
 
@@ -23,12 +24,16 @@ class SignInPage extends StatefulWidget {
 
 class _SignInPageState extends State<SignInPage> {
   final _devEmail = TextEditingController(text: 'dev@form.local');
+  final _email = TextEditingController();
+  final _password = TextEditingController();
   bool _busy = false;
   String? _error;
 
   @override
   void dispose() {
     _devEmail.dispose();
+    _email.dispose();
+    _password.dispose();
     super.dispose();
   }
 
@@ -94,6 +99,44 @@ class _SignInPageState extends State<SignInPage> {
                 child: Text(context.tr(LocaleKeys.auth_google)),
               ),
             ],
+            const SizedBox(height: 32),
+            Text(
+              context.tr(LocaleKeys.auth_emailTitle),
+              style: FormTokens.small,
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _email,
+              decoration: InputDecoration(
+                labelText: context.tr(LocaleKeys.auth_email),
+              ),
+              keyboardType: TextInputType.emailAddress,
+              autocorrect: false,
+              autofillHints: const [AutofillHints.username],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _password,
+              decoration: InputDecoration(
+                labelText: context.tr(LocaleKeys.auth_password),
+              ),
+              obscureText: true,
+              autofillHints: const [AutofillHints.password],
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: _busy
+                  ? null
+                  : () => unawaited(
+                      _run(
+                        (a) => a.signInWithPassword(
+                          _email.text.trim(),
+                          _password.text,
+                        ),
+                      ),
+                    ),
+              child: Text(context.tr(LocaleKeys.auth_emailAction)),
+            ),
             if (_error != null) ...[
               const SizedBox(height: 16),
               Text(

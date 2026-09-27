@@ -526,6 +526,10 @@
     "deleteAccount": "Delete account …",
     "deleteTitle": "Delete account?",
     "deleteBody": "Your wardrobe, photos, looks, and credits are permanently deleted. This cannot be undone.",
-    "deleteConfirm": "Delete permanently"
+    "deleteConfirm": "Delete permanently",
+    "emailTitle": "Or with email",
+    "email": "Email",
+    "password": "Password",
+    "emailAction": "Sign in"
   }
 }

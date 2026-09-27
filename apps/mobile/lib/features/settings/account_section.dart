@@ -12,8 +12,7 @@ import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/utils/api_error_message.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 
-/// Sign-out and account deletion. Hidden on the private deployment, which
-/// opens its account without a session token.
+/// Sign-out and account deletion. Hidden until a session token exists.
 class AccountSection extends StatelessWidget {
   const AccountSection({super.key});
 
