@@ -12,6 +12,8 @@
     "services:down": "docker compose down",
     "services:migrate": "node --env-file=.env.services.local --import tsx packages/service/src/cli/migrate.ts",
     "accounts:create": "node --env-file=.env.services.local --import tsx packages/service/src/cli/create-account.ts",
+    "accounts:credits": "node --env-file=${FORM_ENV:-.env.services.local} --import tsx packages/service/src/cli/set-credits.ts",
+    "accounts:snapshot": "node --env-file=${FORM_ENV:-.env.services.local} --import tsx packages/service/src/cli/account-snapshot.ts",
     "fixtures:reset": "node --env-file=.env.services.local --import tsx packages/service/src/cli/reset-fixtures.ts",
     "test:integration": "FORM_RUN_SERVICE_INTEGRATION=true node --env-file=.env.services.local --import tsx --test --test-concurrency=1 packages/service/src/integration.test.ts apps/api/src/integration.test.ts apps/api/src/personal.test.ts",
     "test:openai-smoke": "FORM_RUN_OPENAI_SMOKE=true node --import tsx --test packages/service/src/openai-smoke.test.ts",

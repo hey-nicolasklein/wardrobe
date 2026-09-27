@@ -109,3 +109,20 @@ export async function refundFailedJobs(database: Queryable, jobIds: string[]): P
     [jobIds],
   );
 }
+
+// Meters the account and books one grant (or negative grant) so the balance
+// lands exactly on `balance`. Used to top up or reset test accounts.
+export async function setCreditBalance(
+  database: Queryable,
+  input: { accountId: string; balance: number; note?: string },
+): Promise<void> {
+  await database.query('UPDATE accounts SET metered = true WHERE id = $1', [input.accountId]);
+  const delta = input.balance - (await creditBalance(database, input.accountId));
+  if (delta !== 0)
+    await grantCredits(database, {
+      accountId: input.accountId,
+      amount: delta,
+      reason: 'grant',
+      note: input.note,
+    });
+}
