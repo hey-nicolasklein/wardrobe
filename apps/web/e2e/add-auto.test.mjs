@@ -10,6 +10,7 @@ import {
   recordDetectionProposals,
 } from '@form/service';
 import sharp from 'sharp';
+import { signIn } from './sign-in.mjs';
 
 const database = createDatabase(readDatabaseConfig());
 const browser = await chromium.launch({
@@ -69,6 +70,7 @@ try {
     });
   });
 
+  await signIn(page);
   await page.goto('/#add');
   const svg =
     '<svg width="800" height="1000" xmlns="http://www.w3.org/2000/svg"><rect width="800" height="1000" fill="#eee9df"/><rect x="90" y="80" width="350" height="520" rx="30" fill="#6e8271"/><rect x="500" y="250" width="240" height="650" rx="30" fill="#436078"/></svg>';

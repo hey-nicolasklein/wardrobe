@@ -8,7 +8,6 @@ import {
   readDatabaseConfig,
   readObjectStorageConfig,
   resetFixtures,
-  fixtureIds,
 } from '@form/service';
 import { createApp } from '../../api/src/app.ts';
 const database = createDatabase(readDatabaseConfig());
@@ -21,7 +20,6 @@ await resetFixtures(database, storage);
 const app = createApp({
   database,
   storage,
-  personalAccountId: fixtureIds.populatedAccount,
   sessionSecret: 'browser-test-secret-at-least-32-characters',
   webOrigin: 'http://127.0.0.1:18444',
   publicOrigin: 'http://127.0.0.1:18444',

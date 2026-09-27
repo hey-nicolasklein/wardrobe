@@ -96,6 +96,8 @@ let items = [],
   version = '',
   toastTimer;
 const detectionPolls = new Set();
+// The signed-in account from /v1/auth/session.
+let account = null;
 let drafts;
 try {
   drafts = JSON.parse(localStorage.getItem('form-photo-drafts') || '[]');
@@ -232,9 +234,36 @@ async function api(path, body, method = 'POST') {
   }
   if (response.status === 204) return null;
   const data = await response.json().catch(() => null);
+  if (response.status === 401 && !path.startsWith('/auth/')) {
+    renderSignIn();
+    throw new Error('Bitte melde dich an.');
+  }
   if (!response.ok)
-    throw new Error(data?.error?.message || `Die Anfrage ist fehlgeschlagen (${response.status}).`);
+    throw Object.assign(
+      new Error(data?.error?.message || `Die Anfrage ist fehlgeschlagen (${response.status}).`),
+      { status: response.status },
+    );
   return data;
+}
+// The session lives in an httpOnly cookie. Without one, every screen falls back here.
+function renderSignIn() {
+  $('#app').innerHTML =
+    `<main class="shell"><header class="masthead"><span class="wordmark">FORM</span></header><div class="hero"><div><p class="eyebrow">Willkommen zurück</p><h1>Anmelden.</h1></div></div><section class="panel"><form id="sign-in-form"><label>E-Mail<input name="email" type="email" autocomplete="username" required></label><label>Passwort<input name="password" type="password" autocomplete="current-password" required></label><button class="primary" type="submit" style="margin-top:20px">Anmelden</button></form></section></main>`;
+  const form = $('#sign-in-form');
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    try {
+      await api('/auth/sign-in', {
+        email: String(data.get('email')).trim(),
+        password: data.get('password'),
+        transport: 'cookie',
+      });
+      start();
+    } catch (error) {
+      formError(form, error);
+    }
+  };
 }
 function formError(form, error) {
   let el = $('.error', form);
@@ -2300,7 +2329,7 @@ async function importManual(draft, form) {
 }
 function renderSettings() {
   shell(
-    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><div class="character-section-heading"><div><h3>Personenreferenzen</h3><p>Dein Abbild für persönliche Looks.</p></div></div><div id="character-settings">${characterSettingsMarkup()}</div><button class="primary" id="new-character">Neue Fotocollage</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-week-nav" class="cost-week-nav"><button id="cost-week-prev" aria-label="Vorherige Woche">${icon('arrow')}</button><span id="cost-week-label"></span><button id="cost-week-next" class="cost-week-next" aria-label="Nächste Woche">${icon('arrow')}</button></div><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p><div class="setting-row">Zugang<span>Privat über Tailscale</span></div><div class="setting-row">Anmeldung<span>Kein Passwort nötig</span></div><div class="setting-row">Speicherort<span>Dein Server</span></div></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Personenreferenzen werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
+    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><div class="character-section-heading"><div><h3>Personenreferenzen</h3><p>Dein Abbild für persönliche Looks.</p></div></div><div id="character-settings">${characterSettingsMarkup()}</div><button class="primary" id="new-character">Neue Fotocollage</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-week-nav" class="cost-week-nav"><button id="cost-week-prev" aria-label="Vorherige Woche">${icon('arrow')}</button><span id="cost-week-label"></span><button id="cost-week-next" class="cost-week-next" aria-label="Nächste Woche">${icon('arrow')}</button></div><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p></section><section class="panel"><h3>Konto</h3><div class="setting-row">Angemeldet als<span>${esc(account?.email ?? '')}</span></div><div class="setting-row">Credits<span id="credit-balance">…</span></div><button class="secondary" id="sign-out">Abmelden</button></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Personenreferenzen werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
   );
   $('#new-character').onclick = openCharacterSetup;
   $('#cost-settings').closest('section').insertAdjacentHTML('afterend', `<section class="panel"><h3>Bildqualität</h3><p>Standard für neue Bilder auf diesem Gerät. Höhere Qualität kostet mehr. Einzelne Bilder kannst du später in höherer Qualität neu erstellen.</p>${qualityControl('feed-quality', 'Feed', preferredQuality('feed'))}${qualityControl('wardrobe-quality', 'Schrank', preferredQuality('wardrobe'))}</section>`);
@@ -2310,6 +2339,18 @@ function renderSettings() {
   if ($('#character-history')) $('#character-history').onclick = openCharacterHistory;
   loadSettingsData();
   $('#open-archive').onclick = () => navigate('archived');
+  $('#sign-out').onclick = () =>
+    action($('#sign-out'), async () => {
+      await api('/auth/sign-out', {});
+      account = null;
+      renderSignIn();
+    });
+  api('/credits')
+    .then((credits) => {
+      if ($('#credit-balance'))
+        $('#credit-balance').textContent = credits.metered ? String(credits.balance) : 'Unbegrenzt';
+    })
+    .catch(() => {});
   $('#reset').onclick = () => {
     showSheet(
       'Neu anfangen',
@@ -2762,6 +2803,11 @@ async function start() {
   const rawHash = location.hash.slice(1);
   const hash = ['owning', 'wanting'].includes(rawHash) ? 'wardrobe' : rawHash;
   if (['feed', 'wardrobe', 'add', 'settings', 'archived'].includes(hash)) page = hash;
+  try {
+    account = (await api('/auth/session')).session;
+  } catch (error) {
+    if (error.status === 401) return renderSignIn();
+  }
   try {
     await Promise.all([refreshItems(), refreshInspiration()]);
     render();

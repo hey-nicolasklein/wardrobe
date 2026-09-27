@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { chromium, devices } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
+import { signIn } from './sign-in.mjs';
 const browser = await chromium.launch({
   executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
   headless: true,
@@ -105,6 +106,7 @@ page.on('response', (response) => {
 });
 await mkdir('/tmp/form-pwa-qa', { recursive: true });
 try {
+  await signIn(page);
   await page.goto('/');
   await page.getByRole('heading', { name: 'Für heute.' }).waitFor();
   await page.waitForFunction(() =>

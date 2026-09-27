@@ -1,11 +1,13 @@
 import { chromium, devices } from '@playwright/test';
 import assert from 'node:assert/strict';
+import { signIn } from './sign-in.mjs';
 const browser = await chromium.launch({
   executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
   args: ['--no-sandbox'],
 });
 const page = await browser.newPage({ ...devices['iPhone 13'] });
 try {
+  await signIn(page);
   await page.goto('http://127.0.0.1:18444/#wardrobe');
   await page.getByRole('button', { name: /Navy overshirt/ }).click();
   await page.getByRole('button', { name: 'Details bearbeiten' }).waitFor();
