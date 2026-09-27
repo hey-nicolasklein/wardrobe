@@ -521,6 +521,7 @@
     "failed": "Sign-in failed. Please try again.",
     "devTitle": "Developer sign-in (debug builds only)",
     "devAction": "Sign in without password",
+    "devAccountAction": "Sign in with dev account",
     "accountTitle": "Account",
     "signOut": "Sign out",
     "deleteAccount": "Delete account …",

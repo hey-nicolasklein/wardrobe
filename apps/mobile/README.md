@@ -34,7 +34,9 @@ For physical iOS devices, copy `ios/Flutter/Signing.example.xcconfig` to
 `ios/Flutter/Signing.local.xcconfig` and enter the Apple development team. This
 machine already has that ignored signing file. The flavor determines the bundle
 identifier and environment. Production requires HTTPS. Development permits a
-local HTTP API. Configuration contains only the API URL, never a password.
+local HTTP API. Tracked configuration never contains a password. For a one-tap
+sign-in, set `DEV_MODE`, `DEV_EMAIL`, and `DEV_PASSWORD` in an ignored local
+JSON file. The credentials are compiled into that build.
 
 ## Validate wardrobe on iOS
 

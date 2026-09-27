@@ -2,7 +2,7 @@
 
 // ignore_for_file: constant_identifier_names
 
-abstract class  LocaleKeys {
+abstract class LocaleKeys {
   static const appName = 'appName';
   static const feed = 'feed';
   static const wardrobe = 'wardrobe';
@@ -254,7 +254,8 @@ abstract class  LocaleKeys {
   static const composerSummaryCategories = 'composerSummaryCategories';
   static const composerSummaryCategoriesOnly = 'composerSummaryCategoriesOnly';
   static const composerSummaryDefault = 'composerSummaryDefault';
-  static const composerOccasionSuffixNightOut = 'composerOccasionSuffixNightOut';
+  static const composerOccasionSuffixNightOut =
+      'composerOccasionSuffixNightOut';
   static const composerOccasionSuffixParty = 'composerOccasionSuffixParty';
   static const composerOccasionSuffixCasual = 'composerOccasionSuffixCasual';
   static const composerTrayLabel = 'composerTrayLabel';
@@ -405,41 +406,57 @@ abstract class  LocaleKeys {
   static const settings_debugTitle = 'settings.debugTitle';
   static const settings_replayOnboarding = 'settings.replayOnboarding';
   static const settings = 'settings';
-  static const apiErrors_activeCharacterSheet = 'apiErrors.activeCharacterSheet';
+  static const apiErrors_activeCharacterSheet =
+      'apiErrors.activeCharacterSheet';
   static const apiErrors_assetContentMissing = 'apiErrors.assetContentMissing';
   static const apiErrors_assetNotFound = 'apiErrors.assetNotFound';
-  static const apiErrors_characterSheetProcessing = 'apiErrors.characterSheetProcessing';
-  static const apiErrors_confirmationRequired = 'apiErrors.confirmationRequired';
-  static const apiErrors_generationInProgress = 'apiErrors.generationInProgress';
-  static const apiErrors_idempotencyKeyReused = 'apiErrors.idempotencyKeyReused';
+  static const apiErrors_characterSheetProcessing =
+      'apiErrors.characterSheetProcessing';
+  static const apiErrors_confirmationRequired =
+      'apiErrors.confirmationRequired';
+  static const apiErrors_generationInProgress =
+      'apiErrors.generationInProgress';
+  static const apiErrors_idempotencyKeyReused =
+      'apiErrors.idempotencyKeyReused';
   static const apiErrors_invalidActivation = 'apiErrors.invalidActivation';
-  static const apiErrors_invalidCharacterSheet = 'apiErrors.invalidCharacterSheet';
-  static const apiErrors_invalidDetectionRequest = 'apiErrors.invalidDetectionRequest';
-  static const apiErrors_invalidGenerationRequest = 'apiErrors.invalidGenerationRequest';
+  static const apiErrors_invalidCharacterSheet =
+      'apiErrors.invalidCharacterSheet';
+  static const apiErrors_invalidDetectionRequest =
+      'apiErrors.invalidDetectionRequest';
+  static const apiErrors_invalidGenerationRequest =
+      'apiErrors.invalidGenerationRequest';
   static const apiErrors_invalidItemState = 'apiErrors.invalidItemState';
   static const apiErrors_invalidKeepRequest = 'apiErrors.invalidKeepRequest';
   static const apiErrors_invalidLook = 'apiErrors.invalidLook';
-  static const apiErrors_invalidPermanentDeletion = 'apiErrors.invalidPermanentDeletion';
+  static const apiErrors_invalidPermanentDeletion =
+      'apiErrors.invalidPermanentDeletion';
   static const apiErrors_invalidPhotoItem = 'apiErrors.invalidPhotoItem';
-  static const apiErrors_invalidRejectRequest = 'apiErrors.invalidRejectRequest';
-  static const apiErrors_invalidRestoreRequest = 'apiErrors.invalidRestoreRequest';
+  static const apiErrors_invalidRejectRequest =
+      'apiErrors.invalidRejectRequest';
+  static const apiErrors_invalidRestoreRequest =
+      'apiErrors.invalidRestoreRequest';
   static const apiErrors_invalidRetry = 'apiErrors.invalidRetry';
-  static const apiErrors_invalidSignInRequest = 'apiErrors.invalidSignInRequest';
+  static const apiErrors_invalidSignInRequest =
+      'apiErrors.invalidSignInRequest';
   static const apiErrors_invalidUploadIntent = 'apiErrors.invalidUploadIntent';
   static const apiErrors_invalidWardrobeEdit = 'apiErrors.invalidWardrobeEdit';
   static const apiErrors_invalidWardrobeItem = 'apiErrors.invalidWardrobeItem';
-  static const apiErrors_invalidWardrobeTransition = 'apiErrors.invalidWardrobeTransition';
+  static const apiErrors_invalidWardrobeTransition =
+      'apiErrors.invalidWardrobeTransition';
   static const apiErrors_originNotAllowed = 'apiErrors.originNotAllowed';
   static const apiErrors_resetInProgress = 'apiErrors.resetInProgress';
   static const apiErrors_sourcePhotoNotFound = 'apiErrors.sourcePhotoNotFound';
   static const apiErrors_staleRecordVersion = 'apiErrors.staleRecordVersion';
-  static const apiErrors_uploadIntentNotFound = 'apiErrors.uploadIntentNotFound';
+  static const apiErrors_uploadIntentNotFound =
+      'apiErrors.uploadIntentNotFound';
   static const apiErrors_uploadMissing = 'apiErrors.uploadMissing';
-  static const apiErrors_wardrobeItemNotFound = 'apiErrors.wardrobeItemNotFound';
+  static const apiErrors_wardrobeItemNotFound =
+      'apiErrors.wardrobeItemNotFound';
   static const apiErrors_insufficientCredits = 'apiErrors.insufficientCredits';
   static const apiErrors_tooManyActiveJobs = 'apiErrors.tooManyActiveJobs';
   static const apiErrors_rateLimited = 'apiErrors.rateLimited';
-  static const apiErrors_invalidIdentityToken = 'apiErrors.invalidIdentityToken';
+  static const apiErrors_invalidIdentityToken =
+      'apiErrors.invalidIdentityToken';
   static const apiErrors = 'apiErrors';
   static const onboarding_skip = 'onboarding.skip';
   static const onboarding_next = 'onboarding.next';
@@ -507,6 +524,7 @@ abstract class  LocaleKeys {
   static const auth_failed = 'auth.failed';
   static const auth_devTitle = 'auth.devTitle';
   static const auth_devAction = 'auth.devAction';
+  static const auth_devAccountAction = 'auth.devAccountAction';
   static const auth_accountTitle = 'auth.accountTitle';
   static const auth_signOut = 'auth.signOut';
   static const auth_deleteAccount = 'auth.deleteAccount';
@@ -518,5 +536,4 @@ abstract class  LocaleKeys {
   static const auth_password = 'auth.password';
   static const auth_emailAction = 'auth.emailAction';
   static const auth = 'auth';
-
 }

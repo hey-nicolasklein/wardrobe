@@ -521,6 +521,7 @@
     "failed": "Anmeldung fehlgeschlagen. Bitte versuche es erneut.",
     "devTitle": "Entwickler-Anmeldung (nur Debug-Builds)",
     "devAction": "Ohne Passwort anmelden",
+    "devAccountAction": "Mit Dev-Account anmelden",
     "accountTitle": "Konto",
     "signOut": "Abmelden",
     "deleteAccount": "Konto löschen …",

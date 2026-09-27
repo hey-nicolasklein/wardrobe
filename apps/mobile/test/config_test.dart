@@ -45,4 +45,28 @@ void main() {
       expect(AppConfig(apiBaseUrl: url, flavor: 'production').apiUri, isNull);
     }
   });
+
+  test('dev sign-in needs the flag and both credentials', () {
+    const base = AppConfig(apiBaseUrl: '', flavor: 'development');
+    expect(base.devSignIn, isFalse);
+    expect(
+      const AppConfig(
+        apiBaseUrl: '',
+        flavor: 'development',
+        devMode: true,
+        devEmail: 'nico@example.test',
+      ).devSignIn,
+      isFalse,
+    );
+    expect(
+      const AppConfig(
+        apiBaseUrl: '',
+        flavor: 'development',
+        devMode: true,
+        devEmail: 'nico@example.test',
+        devPassword: 'secret',
+      ).devSignIn,
+      isTrue,
+    );
+  });
 }

@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:form_mobile/app/app_config.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -13,8 +14,9 @@ import 'package:form_mobile/utils/api_error_message.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 
 /// Shown by the connection gate when the server wants a session. Offers Apple,
-/// Google, and email with password. Debug builds add a password-free
-/// developer sign-in so simulators skip Apple and Google.
+/// Google, and email with password. `DEV_MODE` adds a one-tap sign-in with
+/// the configured dev account. Debug builds add a password-free developer
+/// sign-in so simulators skip Apple and Google.
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
 
@@ -60,6 +62,7 @@ class _SignInPageState extends State<SignInPage> {
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthRepository>();
+    final config = context.read<AppConfig>();
     return Scaffold(
       appBar: FormPageHeader(
         title: context.tr(LocaleKeys.appName),
@@ -137,6 +140,22 @@ class _SignInPageState extends State<SignInPage> {
                     ),
               child: Text(context.tr(LocaleKeys.auth_emailAction)),
             ),
+            if (config.devSignIn) ...[
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: _busy
+                    ? null
+                    : () => unawaited(
+                        _run(
+                          (a) => a.signInWithPassword(
+                            config.devEmail,
+                            config.devPassword,
+                          ),
+                        ),
+                      ),
+                child: Text(context.tr(LocaleKeys.auth_devAccountAction)),
+              ),
+            ],
             if (_error != null) ...[
               const SizedBox(height: 16),
               Text(
