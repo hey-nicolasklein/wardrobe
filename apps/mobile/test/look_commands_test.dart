@@ -38,6 +38,18 @@ void main() {
     );
   });
 
+  test('only a reshoot asks for another perspective', () {
+    LookCommand create({bool reshoot = false}) => LookCommand.create(
+      exactItemIds: const [],
+      categories: const [],
+      occasion: null,
+      parentLookId: 'look-parent',
+      reshoot: reshoot,
+    );
+    expect(create().body.containsKey('reshoot'), isFalse);
+    expect(create(reshoot: true).body['reshoot'], isTrue);
+  });
+
   test('retry and delete target look endpoints', () {
     final retry = LookCommand.retry('look-0001');
     expect(retry.path, 'v1/looks/look-0001/retry');

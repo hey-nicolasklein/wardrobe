@@ -16,6 +16,7 @@ class LookConcept {
     required this.scene,
     required this.framing,
     required this.mood,
+    this.shot,
   });
 
   factory LookConcept.fromJson(Map<String, dynamic> json) {
@@ -34,6 +35,11 @@ class LookConcept {
   final String framing;
   @JsonKey(required: true)
   final String mood;
+
+  /// The camera setup the planner picked, e.g. `street-low-wide`. Null for
+  /// looks planned before shot types existed.
+  @JsonKey(includeIfNull: false)
+  final String? shot;
 
   Map<String, dynamic> toJson() => _$LookConceptToJson(this);
 }

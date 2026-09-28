@@ -214,6 +214,10 @@ abstract class LocaleKeys {
   static const lookUpgradeBody = 'lookUpgradeBody';
   static const lookUpgradeConfirm = 'lookUpgradeConfirm';
   static const lookDetailsTitle = 'lookDetailsTitle';
+  static const lookShotLabel = 'lookShotLabel';
+  static const lookReshoot = 'lookReshoot';
+  static const lookShotHide = 'lookShotHide';
+  static const lookShotShow = 'lookShotShow';
   static const lookConcept = 'lookConcept';
   static const lookCreated = 'lookCreated';
   static const lookModel = 'lookModel';
@@ -559,4 +563,22 @@ abstract class LocaleKeys {
   static const lookCompletion_model = 'lookCompletion.model';
   static const lookCompletion_selected = 'lookCompletion.selected';
   static const lookCompletion = 'lookCompletion';
+  static const lookShot_candid_mid_laugh = 'lookShot.candid-mid-laugh';
+  static const lookShot_candid_over_shoulder = 'lookShot.candid-over-shoulder';
+  static const lookShot_candid_seated = 'lookShot.candid-seated';
+  static const lookShot_candid_busy_hands = 'lookShot.candid-busy-hands';
+  static const lookShot_street_low_wide = 'lookShot.street-low-wide';
+  static const lookShot_street_walking = 'lookShot.street-walking';
+  static const lookShot_street_side_lean = 'lookShot.street-side-lean';
+  static const lookShot_street_steps = 'lookShot.street-steps';
+  static const lookShot_street_wide_scene = 'lookShot.street-wide-scene';
+  static const lookShot_mirror_straight = 'lookShot.mirror-straight';
+  static const lookShot_mirror_angled = 'lookShot.mirror-angled';
+  static const lookShot_mirror_step = 'lookShot.mirror-step';
+  static const lookShot = 'lookShot';
+  static const lookStyleHint_auto = 'lookStyleHint.auto';
+  static const lookStyleHint_candid = 'lookStyleHint.candid';
+  static const lookStyleHint_street = 'lookStyleHint.street';
+  static const lookStyleHint_mirror = 'lookStyleHint.mirror';
+  static const lookStyleHint = 'lookStyleHint';
 }

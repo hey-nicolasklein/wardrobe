@@ -220,6 +220,10 @@
   "lookUpgradeBody": "Derselbe Look, mehr Details. Das vorhandene Bild dient als Vorlage. Kleine Abweichungen sind möglich. Das Original bleibt im Feed.",
   "lookUpgradeConfirm": "Kostenpflichtig neu erstellen",
   "lookDetailsTitle": "Look Details",
+  "lookShotLabel": "Perspektive",
+  "lookReshoot": "Andere Perspektive",
+  "lookShotHide": "Weniger von dieser Perspektive",
+  "lookShotShow": "Diese Perspektive wieder zeigen",
   "lookConcept": "Konzept",
   "lookCreated": "Erstellt",
   "lookModel": "Modell",
@@ -556,5 +560,25 @@
     "wardrobe": "Schrank",
     "model": "Frei ergänzen",
     "selected": "Nur meine"
+  },
+  "lookShot": {
+    "candid-mid-laugh": "Mitten im Lachen",
+    "candid-over-shoulder": "Blick über die Schulter",
+    "candid-seated": "Am Tisch",
+    "candid-busy-hands": "Hände beschäftigt",
+    "street-low-wide": "Von unten, Weitwinkel",
+    "street-walking": "Im Gehen",
+    "street-side-lean": "Angelehnt, von der Seite",
+    "street-steps": "Auf Stufen sitzend",
+    "street-wide-scene": "Aus der Distanz",
+    "mirror-straight": "Frontal",
+    "mirror-angled": "Schräg zur Seite",
+    "mirror-step": "Schritt nach vorn"
+  },
+  "lookStyleHint": {
+    "auto": "Passend zum Anlass",
+    "candid": "Wie von Freunden geknipst",
+    "street": "Fit-Pic auf der Straße",
+    "mirror": "Selfie vor dem Spiegel"
   }
 }

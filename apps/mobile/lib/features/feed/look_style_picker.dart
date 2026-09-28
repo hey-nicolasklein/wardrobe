@@ -27,25 +27,39 @@ class LookStylePicker extends StatelessWidget {
   @override
   // The side inset leaves room for the tilted, shadowed print: the composer
   // sheet's scroll view clips at the content edge.
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 10),
-    child: Row(
-      children: [
-        for (final (index, style) in [_auto, ...lookStyles].indexed) ...[
-          if (index > 0) const SizedBox(width: 8),
-          Expanded(
-            child: _StyleTile(
-              style: style,
-              // Alternate the tilt so neighbouring prints don't look stamped.
-              tilt: index.isEven ? -0.045 : 0.045,
-              selected: style == (selected ?? _auto),
-              onTap: () => onSelected(style == _auto ? null : style),
+  Widget build(BuildContext context) {
+    final styles = [_auto, ...lookStyles];
+    // Two prints per row, so each gets enough room for its sketch and hint.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Column(
+        children: [
+          for (var row = 0; row < styles.length; row += 2) ...[
+            if (row > 0) const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final (column, style)
+                    in styles.skip(row).take(2).indexed) ...[
+                  if (column > 0) const SizedBox(width: 14),
+                  Expanded(
+                    child: _StyleTile(
+                      style: style,
+                      // Checkerboard tilt so neighbouring prints don't look
+                      // stamped.
+                      tilt: (row ~/ 2 + column).isEven ? -0.035 : 0.035,
+                      selected: style == (selected ?? _auto),
+                      onTap: () => onSelected(style == _auto ? null : style),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ),
+          ],
         ],
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 class _StyleTile extends StatefulWidget {
@@ -123,7 +137,7 @@ class _StyleTileState extends State<_StyleTile>
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 curve: Curves.easeOut,
-                padding: const EdgeInsets.fromLTRB(6, 6, 6, 10),
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
                 decoration: BoxDecoration(
                   color: widget.selected ? Colors.white : colors.tint,
                   borderRadius: BorderRadius.circular(15),
@@ -167,7 +181,7 @@ class _StyleTileState extends State<_StyleTile>
                                       child: Icon(
                                         Icons.auto_awesome,
                                         color: colors.ink,
-                                        size: 30,
+                                        size: 44,
                                       ),
                                     ),
                                   )
@@ -188,19 +202,27 @@ class _StyleTileState extends State<_StyleTile>
                         ),
                       ),
                     ),
-                    const SizedBox(height: 9),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colors.ink,
-                          fontWeight: widget.selected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
-                        ),
+                    const SizedBox(height: 10),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: colors.ink,
+                        fontWeight: widget.selected
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.tr('lookStyleHint.${widget.style}'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.ink.withValues(alpha: 0.75),
                       ),
                     ),
                   ],

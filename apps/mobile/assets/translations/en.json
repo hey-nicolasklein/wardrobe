@@ -220,6 +220,10 @@
   "lookUpgradeBody": "The same look with more detail. The existing image serves as reference. Small variations are possible. The original stays in the feed.",
   "lookUpgradeConfirm": "Recreate with charges",
   "lookDetailsTitle": "Look details",
+  "lookShotLabel": "Perspective",
+  "lookReshoot": "Other perspective",
+  "lookShotHide": "Less of this perspective",
+  "lookShotShow": "Show this perspective again",
   "lookConcept": "Concept",
   "lookCreated": "Created",
   "lookModel": "Model",
@@ -556,5 +560,25 @@
     "wardrobe": "Wardrobe",
     "model": "Fill freely",
     "selected": "Only mine"
+  },
+  "lookShot": {
+    "candid-mid-laugh": "Mid-laugh",
+    "candid-over-shoulder": "Over the shoulder",
+    "candid-seated": "At the table",
+    "candid-busy-hands": "Hands busy",
+    "street-low-wide": "Low, wide angle",
+    "street-walking": "Walking",
+    "street-side-lean": "Leaning, from the side",
+    "street-steps": "Sitting on steps",
+    "street-wide-scene": "From a distance",
+    "mirror-straight": "Straight on",
+    "mirror-angled": "Angled",
+    "mirror-step": "Stepping forward"
+  },
+  "lookStyleHint": {
+    "auto": "Matches the occasion",
+    "candid": "Like a friend's snapshot",
+    "street": "Street fit pic",
+    "mirror": "Selfie in the mirror"
   }
 }

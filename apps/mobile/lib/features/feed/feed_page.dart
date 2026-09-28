@@ -11,6 +11,8 @@ import 'package:form_mobile/features/feed/look_card.dart';
 import 'package:form_mobile/features/feed/look_commands.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
+import 'package:form_mobile/repository/look_repository.dart';
+import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/services/look_output_service.dart';
 import 'package:form_mobile/utils/idempotency_key.dart';
 import 'package:form_mobile/widgets/form_components.dart';
@@ -267,6 +269,25 @@ class FeedPage extends StatelessWidget {
                 ),
                 child: Text(context.tr(LocaleKeys.lookVary)),
               ),
+            if (!look.isTryOn && look.concept != null)
+              OutlinedButton(
+                onPressed: () => run(
+                  sheetContext,
+                  () => cubit.createLook(
+                    LookCommand.create(
+                      exactItemIds: const [],
+                      categories: const [],
+                      occasion: null,
+                      parentLookId: look.id,
+                      reshoot: true,
+                      quality: look.quality,
+                    ),
+                    look.wardrobeItemIds,
+                  ),
+                  success: context.tr(LocaleKeys.lookCreating),
+                ),
+                child: Text(context.tr(LocaleKeys.lookReshoot)),
+              ),
             OutlinedButton(
               onPressed: () {
                 Navigator.pop(sheetContext);
@@ -329,6 +350,11 @@ class FeedPage extends StatelessWidget {
                 label: context.tr(LocaleKeys.lookConcept),
                 value: lookCaption(look).isEmpty ? '–' : lookCaption(look),
               ),
+              if (look.concept?.shot case final shot?)
+                _ShotDetail(
+                  shot: shot,
+                  looks: context.read<FeedCubit>().lookRepository,
+                ),
               _DetailRow(
                 label: context.tr(LocaleKeys.lookCreated),
                 value: DateFormat.yMd(
@@ -462,4 +488,84 @@ class _DetailRow extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// The shot type a look was photographed with, and a switch to see less of
+/// it. Hidden shot types are left out when the next looks are planned.
+class _ShotDetail extends StatefulWidget {
+  const _ShotDetail({required this.shot, required this.looks});
+
+  final String shot;
+  final LookRepository looks;
+
+  @override
+  State<_ShotDetail> createState() => _ShotDetailState();
+}
+
+class _ShotDetailState extends State<_ShotDetail> {
+  bool? _hidden;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    try {
+      final hidden = await widget.looks.hiddenShots();
+      if (mounted) setState(() => _hidden = hidden.contains(widget.shot));
+    } on FormApiException {
+      // Without the preference the row still shows the shot type.
+    }
+  }
+
+  Future<void> _toggle() async {
+    setState(() => _busy = true);
+    try {
+      final hidden = await widget.looks.setShotHidden(
+        widget.shot,
+        hidden: !_hidden!,
+      );
+      if (mounted) setState(() => _hidden = hidden.contains(widget.shot));
+    } on FormApiException {
+      // The switch keeps its last known state.
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = 'lookShot.${widget.shot}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _DetailRow(
+          label: context.tr(LocaleKeys.lookShotLabel),
+          // Unknown ids come from a newer server; show them raw.
+          value: context.tr(label) == label ? widget.shot : context.tr(label),
+        ),
+        if (_hidden != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: TextButton.icon(
+              onPressed: _busy ? null : _toggle,
+              icon: Icon(
+                _hidden!
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                size: 18,
+              ),
+              label: Text(
+                context.tr(
+                  _hidden! ? LocaleKeys.lookShotShow : LocaleKeys.lookShotHide,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }

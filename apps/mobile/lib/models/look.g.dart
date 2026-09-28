@@ -17,6 +17,7 @@ LookConcept _$LookConceptFromJson(Map<String, dynamic> json) =>
         scene: $checkedConvert('scene', (v) => v as String),
         framing: $checkedConvert('framing', (v) => v as String),
         mood: $checkedConvert('mood', (v) => v as String),
+        shot: $checkedConvert('shot', (v) => v as String?),
       );
       return val;
     });
@@ -27,6 +28,7 @@ Map<String, dynamic> _$LookConceptToJson(LookConcept instance) =>
       'scene': instance.scene,
       'framing': instance.framing,
       'mood': instance.mood,
+      'shot': ?instance.shot,
     };
 
 Look _$LookFromJson(Map<String, dynamic> json) => $checkedCreate('Look', json, (

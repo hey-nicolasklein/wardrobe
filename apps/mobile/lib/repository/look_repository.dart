@@ -61,6 +61,23 @@ class LookRepository {
     },
   ];
 
+  /// Shot types the user asked to see less of.
+  Future<List<String>> hiddenShots() async =>
+      ((await _request('v1/look-shots'))['hiddenShots'] as List<dynamic>)
+          .cast<String>();
+
+  Future<List<String>> setShotHidden(
+    String shot, {
+    required bool hidden,
+  }) async =>
+      ((await _request(
+                'v1/look-shots/$shot',
+                method: 'PUT',
+                data: {'hidden': hidden},
+              ))['hiddenShots']
+              as List<dynamic>)
+          .cast<String>();
+
   /// Uploads a photo of the user as a try-on base and returns its asset id.
   Future<String> uploadTryOnPhoto(Uint8List jpeg) async {
     final intent = await _request(
