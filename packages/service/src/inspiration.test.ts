@@ -94,10 +94,10 @@ test('look styles change the camera', () => {
   const concept = { activity: 'walking', scene: 'a street', mood: 'calm', framing: 'full-body' as const };
   const item = [{ name: 'Black trousers', category: 'pants', colors: ['black'] }];
   const candid = lookPrompt(concept, item, null, true);
-  assert.match(candid, /iPhone-style snapshot/);
+  assert.match(candid, /friend casually took it on an iPhone/);
   assert.match(candid, /must never be cropped/);
-  assert.match(lookPrompt(concept, item, null, true, 'mirror'), /mirror selfie/);
-  assert.doesNotMatch(lookPrompt(concept, item, null, true, 'mirror'), /Avoid selfies/);
+  assert.match(lookPrompt(concept, item, null, true, { style: 'mirror' }), /mirror selfie/);
+  assert.doesNotMatch(lookPrompt(concept, item, null, true, { style: 'mirror' }), /Avoid selfies/);
 });
 
 test('selected completion frames the body zone the picked pieces share', () => {
@@ -110,9 +110,24 @@ test('selected completion frames the body zone the picked pieces share', () => {
 
   const concept = { activity: 'walking', scene: 'a street', mood: 'calm', framing: 'full-body' as const };
   const jacket = [{ name: 'Leather jacket', category: 'jacket', colors: ['black'] }];
-  const prompt = lookPrompt(concept, jacket, null, false, 'street', 'upper');
+  const prompt = lookPrompt(concept, jacket, null, false, { style: 'street', focus: 'upper' });
   assert.match(prompt, /waist up/);
   assert.doesNotMatch(prompt, /head to shoes/);
   assert.match(prompt, /neutral base layer/);
   assert.doesNotMatch(prompt, /Complete the outfit/);
+});
+
+test('parties get the flash look and every look avoids the DSLR polish', () => {
+  const concept = { activity: 'laughing', scene: 'a rooftop party', mood: 'loose', framing: 'full-body' as const };
+  const item = [{ name: 'Fur coat', category: 'jacket', colors: ['brown'] }];
+  const party = lookPrompt(concept, item, null, true, { occasion: 'party' });
+  assert.match(party, /Light it with a direct on-camera flash/);
+  assert.doesNotMatch(party, /If the scene is at night/);
+  assert.match(party, /commercial DSLR/);
+  const casual = lookPrompt(concept, item, null, true, { occasion: 'casual' });
+  assert.doesNotMatch(casual, /flash/);
+  assert.match(lookPrompt(concept, item, null, true), /If the scene is at night/);
+  const street = lookPrompt(concept, item, null, true, { style: 'street' });
+  assert.match(street, /friend took on an iPhone/);
+  assert.doesNotMatch(street, /telephoto lens with shallow/);
 });
