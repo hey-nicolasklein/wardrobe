@@ -42,6 +42,7 @@ class LookRepository {
 
   static const _startsKey = 'look-starts';
   static const _likedPrefix = 'look-liked-';
+  static const _heartsUploadedKey = 'look-hearts-uploaded';
   static const _savedPrefix = 'look-saved-';
 
   Future<List<CachedLook>> cached() async =>
@@ -60,6 +61,46 @@ class LookRepository {
         if (cached.look.baseAssetId != null) cached.look.baseAssetId!,
     },
   ];
+
+  /// Hearts a look on the server and in the cached copy.
+  Future<void> setLiked(String lookId, {required bool liked}) async {
+    await _request(
+      'v1/looks/$lookId/like',
+      method: 'PUT',
+      data: {'liked': liked},
+    );
+    final row =
+        await (database.select(database.lookRecords)..where(
+              (r) => r.scope.equals(scope) & r.id.equals(lookId),
+            ))
+            .getSingleOrNull();
+    if (row != null) {
+      final json = jsonDecode(row.lookJson) as Map<String, dynamic>
+        ..['liked'] = liked;
+      await (database.update(database.lookRecords)..where(
+            (r) => r.scope.equals(scope) & r.id.equals(lookId),
+          ))
+          .write(LookRecordsCompanion(lookJson: Value(jsonEncode(json))));
+    }
+    _changes.add(null);
+  }
+
+  /// Hearts used to live only on the phone. Uploads them once, so they count
+  /// toward the feed weighting too.
+  Future<void> uploadLocalHearts(Iterable<Look> looks) async {
+    if (await database.preference(_heartsUploadedKey) == 'true') return;
+    for (final look in looks) {
+      if (!look.liked && await lookMarked(look.id, liked: true)) {
+        await setLiked(look.id, liked: true);
+      }
+    }
+    await database.setPreference(_heartsUploadedKey, 'true');
+  }
+
+  /// Why the feed picks its shot types: weights, hearts, recent and hidden.
+  Future<List<Map<String, dynamic>>> shotWeights() async =>
+      ((await _request('v1/look-shots/weights'))['shots'] as List<dynamic>)
+          .cast<Map<String, dynamic>>();
 
   /// Shot types the user asked to see less of.
   Future<List<String>> hiddenShots() async =>

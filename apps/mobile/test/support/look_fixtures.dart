@@ -15,6 +15,7 @@ Map<String, dynamic> lookJson({
     'wardrobeItemIds': ids,
     'characterSheetId': 'character-sheet-0001',
     'parentLookId': null,
+    'liked': false,
     'concept': {
       'activity': 'Evening walk',
       'scene': 'City lights',

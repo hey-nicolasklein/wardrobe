@@ -9,6 +9,7 @@ import 'package:form_mobile/features/settings/app_info_section.dart';
 import 'package:form_mobile/features/settings/cache_section.dart';
 import 'package:form_mobile/features/settings/character/character_section.dart';
 import 'package:form_mobile/features/settings/cost_section.dart';
+import 'package:form_mobile/features/settings/feed_weights_section.dart';
 import 'package:form_mobile/features/settings/quality_section.dart';
 import 'package:form_mobile/features/settings/reset_section.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
@@ -78,6 +79,8 @@ class SettingsPage extends StatelessWidget {
               style: FormTokens.eyebrow,
             ),
             const SizedBox(height: 8),
+            const FeedWeightsSection(),
+            const SizedBox(height: 12),
             OutlinedButton(
               onPressed: () => context.push('/onboarding'),
               child: Text(context.tr(LocaleKeys.settings_replayOnboarding)),

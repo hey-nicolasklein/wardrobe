@@ -63,6 +63,7 @@ class Look {
     required this.createdAt,
     required this.finishedAt,
     this.baseAssetId,
+    this.liked = false,
   });
 
   factory Look.fromJson(Map<String, dynamic> json) {
@@ -112,6 +113,11 @@ class Look {
   @JsonKey(includeIfNull: false)
   final String? baseAssetId;
   bool get isTryOn => baseAssetId != null;
+
+  /// Hearted by the user. Stored on the server, where hearts weight the shot
+  /// types of future looks. Absent in looks cached before that.
+  @JsonKey(defaultValue: false)
+  final bool liked;
 
   bool get isReady => state == 'ready';
   bool get isActive => ['queued', 'planning', 'generating'].contains(state);

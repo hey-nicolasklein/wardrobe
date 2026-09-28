@@ -580,5 +580,14 @@
     "candid": "Like a friend's snapshot",
     "street": "Street fit pic",
     "mirror": "Selfie in the mirror"
+  },
+  "feedWeights": {
+    "title": "What shapes your feed",
+    "body": "For each photo style FORM draws a perspective by weight. Every heart on a look makes its perspective more likely, recently used ones come less often, switched-off ones never.",
+    "refresh": "Reload",
+    "failed": "The weighting could not be loaded.",
+    "weight": "weight {value}",
+    "recent": "recently used",
+    "hidden": "hidden"
   }
 }

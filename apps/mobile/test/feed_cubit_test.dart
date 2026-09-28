@@ -25,9 +25,11 @@ void main() {
   late CharacterSheetRepository characterSheets;
   late FeedCubit cubit;
   var characters = <Map<String, dynamic>>[];
+  var likeRequests = <String>[];
 
   setUp(() async {
     characters = [];
+    likeRequests = [];
     database = AppDatabase(NativeDatabase.memory());
     directory = await Directory.systemTemp.createTemp('form-feed-test-');
     final api = FormApi(
@@ -42,6 +44,10 @@ void main() {
           }
           if (options.path == 'v1/character-sheets') {
             return jsonResponse(jsonEncode({'characterSheets': characters}));
+          }
+          if (options.path.endsWith('/like')) {
+            likeRequests.add(options.path);
+            return jsonResponse(jsonEncode(options.data));
           }
           return jsonResponse('{}', 404);
         }),
@@ -120,15 +126,28 @@ void main() {
     },
   );
 
-  test('local liked and saved marks reload from preferences', () async {
-    await lookRepository.refresh();
-    await cubit.loadCache();
-    await lookRepository.setLookMarked('look-0001', liked: true, marked: true);
-    await lookRepository.setLookMarked('look-0001', liked: false, marked: true);
-    await cubit.refresh();
-    expect(cubit.state.liked['look-0001'], isTrue);
-    expect(cubit.state.saved['look-0001'], isTrue);
-  });
+  test(
+    'hearts kept on the phone are uploaded once; bookmarks stay local',
+    () async {
+      await lookRepository.refresh();
+      await cubit.loadCache();
+      await lookRepository.setLookMarked(
+        'look-0001',
+        liked: true,
+        marked: true,
+      );
+      await lookRepository.setLookMarked(
+        'look-0001',
+        liked: false,
+        marked: true,
+      );
+      await cubit.refresh();
+      expect(cubit.state.liked['look-0001'], isTrue);
+      expect(cubit.state.saved['look-0001'], isTrue);
+      await cubit.refresh();
+      expect(likeRequests, ['v1/looks/look-0001/like']);
+    },
+  );
 
   test(
     'incompatible refresh keeps cached looks without stale banner',

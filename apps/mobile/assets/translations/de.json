@@ -580,5 +580,14 @@
     "candid": "Wie von Freunden geknipst",
     "street": "Fit-Pic auf der Straße",
     "mirror": "Selfie vor dem Spiegel"
+  },
+  "feedWeights": {
+    "title": "Was deinen Feed prägt",
+    "body": "Pro Bildstil zieht FORM eine Perspektive nach Gewicht. Jedes Herz auf einem Look macht seine Perspektive wahrscheinlicher, zuletzt genutzte kommen seltener, ausgeschaltete gar nicht.",
+    "refresh": "Neu laden",
+    "failed": "Die Gewichtung konnte nicht geladen werden.",
+    "weight": "Gewicht {value}",
+    "recent": "zuletzt genutzt",
+    "hidden": "ausgeblendet"
   }
 }

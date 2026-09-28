@@ -141,17 +141,30 @@ class FeedCubit extends Cubit<FeedState> {
     emit(state.copyWith(revealed: next));
   }
 
+  /// Hearts go to the server (they weight future shot types) and show right
+  /// away; a failed request takes the heart back. Bookmarks stay on the phone.
   Future<void> toggleMark(String lookId, {required bool liked}) async {
     if (!state.online) return;
     final current = liked
         ? state.liked[lookId] ?? false
         : state.saved[lookId] ?? false;
-    await lookRepository.setLookMarked(
-      lookId,
-      liked: liked,
-      marked: !current,
-    );
-    await _reloadLocal();
+    if (!liked) {
+      await lookRepository.setLookMarked(
+        lookId,
+        liked: false,
+        marked: !current,
+      );
+      await _reloadLocal();
+      return;
+    }
+    emit(state.copyWith(liked: {...state.liked, lookId: !current}));
+    try {
+      await lookRepository.setLiked(lookId, liked: !current);
+    } on FormApiException {
+      if (!isClosed) {
+        emit(state.copyWith(liked: {...state.liked, lookId: current}));
+      }
+    }
   }
 
   void _schedulePoll(FeedState next) {
@@ -174,7 +187,9 @@ class FeedCubit extends Cubit<FeedState> {
   }) async {
     final marks = <String, bool>{};
     for (final look in looks) {
-      marks[look.id] = await lookRepository.lookMarked(look.id, liked: liked);
+      marks[look.id] = liked
+          ? look.liked
+          : await lookRepository.lookMarked(look.id, liked: false);
     }
     return marks;
   }
@@ -232,7 +247,13 @@ class FeedCubit extends Cubit<FeedState> {
     final availability = _availability;
     emit(state.copyWith(loading: true, clearFailure: true));
     try {
-      final looks = await lookRepository.refresh();
+      var looks = await lookRepository.refresh();
+      try {
+        await lookRepository.uploadLocalHearts(looks.map((l) => l.look));
+        looks = await lookRepository.cached();
+      } on FormApiException {
+        // Retried on the next refresh; the upload flag is only set on success.
+      }
       final wardrobe = await wardrobeRepository.cached();
       bool? activeSheet;
       try {
