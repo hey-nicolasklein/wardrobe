@@ -231,9 +231,6 @@ abstract class LocaleKeys {
   static const composerEmpty = 'composerEmpty';
   static const composerNoEligible = 'composerNoEligible';
   static const composerCompleteTitle = 'composerCompleteTitle';
-  static const composerCompleteHelpOn = 'composerCompleteHelpOn';
-  static const composerCompleteHelpOff = 'composerCompleteHelpOff';
-  static const composerCompleteHelpSelected = 'composerCompleteHelpSelected';
   static const composerCompleteHelpUnframable =
       'composerCompleteHelpUnframable';
   static const composerCategoriesTitle = 'composerCategoriesTitle';

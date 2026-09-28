@@ -280,12 +280,7 @@ class _ComposerPicker extends StatelessWidget {
             ],
           ),
         const SizedBox(height: 24),
-        _CompletionOptions(
-          state: state,
-          canFrameOnly: canFrameOnly(
-            state.selectedItems(eligible).map((item) => item.metadata.category),
-          ),
-        ),
+        _CategoryOptions(state: state),
       ],
     );
   }
@@ -636,25 +631,24 @@ class _CheckBadge extends StatelessWidget {
   );
 }
 
-class _CompletionOptions extends StatefulWidget {
-  const _CompletionOptions({required this.state, required this.canFrameOnly});
+class _CategoryOptions extends StatefulWidget {
+  const _CategoryOptions({required this.state});
 
   final ComposerState state;
 
-  /// Whether the picked pieces share one body zone, see [canFrameOnly].
-  final bool canFrameOnly;
-
   @override
-  State<_CompletionOptions> createState() => _CompletionOptionsState();
+  State<_CategoryOptions> createState() => _CategoryOptionsState();
 }
 
-class _CompletionOptionsState extends State<_CompletionOptions> {
+class _CategoryOptionsState extends State<_CategoryOptions> {
   bool _open = false;
 
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
     final cubit = context.read<ComposerCubit>();
+    // Required categories only apply while completing from the wardrobe.
+    if (!state.completeWithWardrobe) return const SizedBox.shrink();
     return DecoratedBox(
       decoration: BoxDecoration(
         color: FormTokens.surface,
@@ -666,97 +660,184 @@ class _CompletionOptionsState extends State<_CompletionOptions> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    context.tr(LocaleKeys.composerCompleteTitle),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: FormTokens.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  FormChoiceChips(
-                    options: {
-                      for (final completion in lookCompletions)
-                        completion: context.tr('lookCompletion.$completion'),
-                    },
-                    selected: state.completion,
-                    disabled: {
-                      if (!state.canChooseCompletion) ...['model', 'selected'],
-                      if (!widget.canFrameOnly &&
-                          state.completion != 'selected')
-                        'selected',
-                    },
-                    onSelected: cubit.setCompletion,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    context.tr(switch (state.completion) {
-                      'model' => LocaleKeys.composerCompleteHelpOff,
-                      'selected' when widget.canFrameOnly =>
-                        LocaleKeys.composerCompleteHelpSelected,
-                      'selected' => LocaleKeys.composerCompleteHelpUnframable,
-                      _ => LocaleKeys.composerCompleteHelpOn,
-                    }),
-                    style: TextStyle(
-                      fontSize: 11,
-                      height: 16 / 11,
-                      color:
-                          state.completion == 'selected' && !widget.canFrameOnly
-                          ? FormTokens.danger
-                          : FormTokens.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (state.completeWithWardrobe) ...[
-              const Divider(height: 1, color: FormTokens.line),
-              InkWell(
-                onTap: () => setState(() => _open = !_open),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 13),
-                  child: SizedBox(
-                    height: 44,
-                    child: Row(
-                      children: [
-                        const FormIcon(FormIconName.filter, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            context.tr(LocaleKeys.composerCategoriesTitle),
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ),
-                        Text(_open ? '−' : '+'),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (_open)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(13, 0, 13, 13),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
+            InkWell(
+              onTap: () => setState(() => _open = !_open),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 13),
+                child: SizedBox(
+                  height: 44,
+                  child: Row(
                     children: [
-                      for (final category in categories)
-                        FormPill(
-                          label: context.tr('categories.$category'),
-                          selected: state.categories.contains(category),
-                          onTap: () => cubit.toggleCategory(category),
+                      const FormIcon(FormIconName.filter, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          context.tr(LocaleKeys.composerCategoriesTitle),
+                          style: const TextStyle(fontSize: 13),
                         ),
+                      ),
+                      Text(_open ? '−' : '+'),
                     ],
                   ),
                 ),
+              ),
+            ),
+            if (_open)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(13, 0, 13, 13),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final category in categories)
+                      FormPill(
+                        label: context.tr('categories.$category'),
+                        selected: state.categories.contains(category),
+                        onTap: () => cubit.toggleCategory(category),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// How the rest of the outfit is filled, pinned in the footer next to the
+/// picked pieces it depends on. `selected` needs pieces from one body zone.
+class _CompletionChoice extends StatelessWidget {
+  const _CompletionChoice({
+    required this.completion,
+    required this.canFrameOnly,
+  });
+
+  final String completion;
+  final bool canFrameOnly;
+
+  static Widget _icon(String completion, Color color) => switch (completion) {
+    'wardrobe' => FormIcon(FormIconName.closet, size: 17, color: color),
+    'model' => Icon(Icons.auto_awesome_outlined, size: 16, color: color),
+    _ => Icon(Icons.crop_free_rounded, size: 17, color: color),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<ComposerCubit>();
+    final blocked = completion == 'selected' && !canFrameOnly;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          context.tr(LocaleKeys.composerCompleteTitle),
+          style: FormTokens.eyebrow,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            for (final (index, option) in lookCompletions.indexed) ...[
+              if (index > 0) const SizedBox(width: 8),
+              Expanded(
+                child: _CompletionPill(
+                  label: context.tr('lookCompletion.$option'),
+                  icon: (color) => _icon(option, color),
+                  selected: option == completion,
+                  enabled:
+                      option != 'selected' ||
+                      canFrameOnly ||
+                      completion == 'selected',
+                  onTap: () {
+                    if (option != completion) {
+                      unawaited(HapticFeedback.selectionClick());
+                    }
+                    cubit.setCompletion(option);
+                  },
+                ),
+              ),
             ],
           ],
+        ),
+        AnimatedSize(
+          duration: FormTokens.quick,
+          alignment: Alignment.topCenter,
+          child: blocked
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    context.tr(LocaleKeys.composerCompleteHelpUnframable),
+                    style: FormTokens.small.copyWith(
+                      color: FormTokens.danger,
+                      height: 1.4,
+                    ),
+                  ),
+                )
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompletionPill extends StatelessWidget {
+  const _CompletionPill({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final Widget Function(Color color) icon;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = selected ? Colors.white : FormTokens.ink;
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: enabled,
+      child: AnimatedOpacity(
+        duration: FormTokens.quick,
+        opacity: enabled ? 1 : 0.4,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            borderRadius: BorderRadius.circular(FormTokens.chipRadius),
+            child: AnimatedContainer(
+              duration: FormTokens.quick,
+              curve: Curves.easeOut,
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: selected ? FormTokens.green : FormTokens.pill,
+                borderRadius: BorderRadius.circular(FormTokens.chipRadius),
+              ),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    icon(foreground),
+                    const SizedBox(width: 6),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: foreground,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -875,6 +956,9 @@ class _ComposerFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<ComposerCubit>();
+    final frameable = canFrameOnly(
+      selected.map((item) => item.metadata.category),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -913,6 +997,13 @@ class _ComposerFooter extends StatelessWidget {
                   ),
                 ),
         ),
+        if (selected.isNotEmpty) ...[
+          _CompletionChoice(
+            completion: state.completion,
+            canFrameOnly: frameable,
+          ),
+          const SizedBox(height: 14),
+        ],
         Row(
           children: [
             // Emptying everything from the preview would compete with
@@ -929,10 +1020,7 @@ class _ComposerFooter extends StatelessWidget {
                 onPressed:
                     state.submitting ||
                         !connected ||
-                        (state.completion == 'selected' &&
-                            !canFrameOnly(
-                              selected.map((item) => item.metadata.category),
-                            ))
+                        (state.completion == 'selected' && !frameable)
                     ? null
                     : () => unawaited(cubit.submit()),
                 child: state.submitting
