@@ -268,6 +268,8 @@ export const lookSchema = z
     wardrobeItemIds: z.array(opaqueIdSchema),
     characterSheetId: opaqueIdSchema,
     parentLookId: opaqueIdSchema.nullable(),
+    // Set for try-on looks: the user's own photo the garments were put on.
+    baseAssetId: opaqueIdSchema.nullable(),
     concept: lookConceptSchema.nullable(),
     model: z.string().min(1).max(64),
     quality: generationQualitySchema,

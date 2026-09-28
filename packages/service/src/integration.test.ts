@@ -116,6 +116,28 @@ test('photo collages cost zero and become the first reference for a priced feed 
     assert.equal(costs.detectionTotalMicrounits, 0);
     assert.equal(costs.detectionRequestCount, 0);
     assert.equal(feed[0]!.quality, 'low');
+    // A try-on edits the uploaded photo itself: no planner, the photo goes first.
+    const tryOnCommand = { accountId: input.accountId, exactItemIds: [fixtureIds.readyItem], categories: [], parentLookId: null, baseAssetId: fixtureIds.sourceAsset, idempotencyKey: randomUUID() };
+    await assert.rejects(createLook(database, { ...tryOnCommand, exactItemIds: [], idempotencyKey: randomUUID() }), /Stück/);
+    const tryOn = await createLook(database, tryOnCommand);
+    let tryOnChecked = false;
+    const tryOnProvider = Object.assign(Object.create(provider), {
+      planLook: async () => assert.fail('a try-on must not plan a scene'),
+      generateComposite: async (request: { references: Uint8Array[]; prompt: string }) => {
+        assert.ok(Buffer.from(request.references[0]!).equals(collageBytes));
+        assert.equal(request.references.length, 2);
+        assert.match(request.prompt, /^Edit the first reference/);
+        tryOnChecked = true;
+        return { requestId: 'look-try-on', pngBytes: await sharp(collageBytes).resize(768, 960).png().toBuffer(), usage: { textInputTokens: 10, imageInputTokens: 200, outputTokens: 30, serviceTier: 'default', raw: { fixture: true } } };
+      },
+    });
+    await executeInspirationJob(database, storage, tryOnProvider, makeJob(tryOn.jobId, 'generate-look', { lookId: tryOn.lookId }), config);
+    assert.ok(tryOnChecked);
+    const tried = (await listLooks(database, input.accountId)).find((entry) => entry.id === tryOn.lookId)!;
+    assert.equal(tried.state, 'ready');
+    assert.equal(tried.baseAssetId, fixtureIds.sourceAsset);
+    assert.equal(tried.concept, null);
+    assert.deepEqual(tried.wardrobeItemIds, [fixtureIds.readyItem]);
     const upgradeCommand = { accountId: input.accountId, exactItemIds: [], categories: [], parentLookId: look.lookId, quality: 'high' as const, preserveComposition: true, idempotencyKey: randomUUID() };
     const upgraded = await createLook(database, upgradeCommand);
     assert.deepEqual(await createLook(database, upgradeCommand), upgraded);
@@ -145,7 +167,8 @@ test('photo collages cost zero and become the first reference for a priced feed 
     await executeInspirationJob(database, storage, upgradeProvider, makeJob(retry.jobId, 'generate-look', retryPayload), config);
     assert.ok(upgradeChecked);
     const upgradedFeed = await listLooks(database, input.accountId);
-    assert.equal(upgradedFeed.filter((entry) => entry.state === 'ready').length, 2);
+    // The first look, its high-quality upgrade, and the try-on.
+    assert.equal(upgradedFeed.filter((entry) => entry.state === 'ready').length, 3);
 
   } finally {
     storage.client.destroy();
@@ -307,7 +330,7 @@ test(
       assert.deepEqual(queued.rows[0], {
         kind: 'generate-look',
         look_id: first.lookId,
-        payload: { lookId: first.lookId, occasion: 'party', completeWithWardrobe: true,
+        payload: { lookId: first.lookId, occasion: 'party', style: 'candid', completeWithWardrobe: true,
           outputSize: '768x960' },
       });
       await database.query("UPDATE looks SET state='failed' WHERE id=$1", [first.lookId]);

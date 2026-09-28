@@ -284,6 +284,9 @@ export const createLookRequestSchema = z
     completeWithWardrobe: z.boolean().default(true),
     // Supersedes completeWithWardrobe when present. The PWA still sends the boolean.
     completion: lookCompletionSchema.optional(),
+    // A try-on: dress this uploaded source photo in exactItemIds 1:1 instead of
+    // generating a new scene. Occasion, style, and completion do not apply.
+    baseAssetId: opaqueIdSchema.optional(),
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();

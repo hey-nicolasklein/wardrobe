@@ -5,6 +5,7 @@ import {
   candidatesForLookPlan,
   lookFocus,
   lookPrompt,
+  tryOnPrompt,
   normalizeAutomaticLookItems,
   recentForLookPlan,
 } from './inspiration.js';
@@ -130,4 +131,12 @@ test('parties get the flash look and every look avoids the DSLR polish', () => {
   const street = lookPrompt(concept, item, null, true, { style: 'street' });
   assert.match(street, /friend took on an iPhone/);
   assert.doesNotMatch(street, /telephoto lens with shallow/);
+});
+
+test('try-on edits the own photo and keeps everything but the clothes', () => {
+  const prompt = tryOnPrompt([{ name: 'Fur coat', category: 'jacket', colors: ['brown'] }]);
+  assert.match(prompt, /^Edit the first reference, a real photo/);
+  assert.match(prompt, /body shape and proportions, pose/);
+  assert.match(prompt, /Fur coat \(jacket; brown\)/);
+  assert.doesNotMatch(prompt, /identity reference/);
 });
