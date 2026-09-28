@@ -280,7 +280,6 @@ abstract class LocaleKeys {
   static const composerQualityLabel = 'composerQualityLabel';
   static const composerQualityNote = 'composerQualityNote';
   static const composerStyleLabel = 'composerStyleLabel';
-  static const composerFineTuning = 'composerFineTuning';
   static const composerModeInspire = 'composerModeInspire';
   static const composerModeTryOn = 'composerModeTryOn';
   static const composerTryOnPhotos = 'composerTryOnPhotos';

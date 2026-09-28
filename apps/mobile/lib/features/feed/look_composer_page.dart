@@ -186,7 +186,7 @@ class _ComposerPicker extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _OccasionPresets(selected: state.occasion),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           _FineTuning(state: state),
         ],
         const SizedBox(height: 28),
@@ -301,130 +301,148 @@ class _ComposerPicker extends StatelessWidget {
   }
 }
 
-/// Quality and photo style, folded into one row that summarizes the current
-/// choice. Most looks keep the defaults: quality from Settings and a style
-/// that follows the occasion.
-class _FineTuning extends StatefulWidget {
+/// Photo style and quality as two tiles showing the current value. Each opens
+/// its picker in a sheet, so the composer stays short. Most looks keep the
+/// defaults: a style that follows the occasion and quality from Settings.
+class _FineTuning extends StatelessWidget {
   const _FineTuning({required this.state});
 
   final ComposerState state;
 
-  @override
-  State<_FineTuning> createState() => _FineTuningState();
-}
-
-class _FineTuningState extends State<_FineTuning> {
-  bool _open = false;
+  Future<void> _open(BuildContext context, String title, Widget picker) {
+    final cubit = context.read<ComposerCubit>();
+    return showFormSheet<void>(
+      context: context,
+      builder: (_) => BlocProvider.value(
+        value: cubit,
+        child: FormSheet(title: title, child: picker),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final state = widget.state;
-    final cubit = context.read<ComposerCubit>();
     final style = context.tr('lookStyle.${state.resolvedStyle}');
-    final summary = [
-      if (state.style == null)
-        '${context.tr(LocaleKeys.lookStyle_auto)} ($style)'
-      else
-        style,
-      context.tr('quality.${state.quality}'),
-    ].join(' · ');
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: FormTokens.surface,
-        border: Border.all(color: FormTokens.line),
-        borderRadius: BorderRadius.circular(FormTokens.inputRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(FormTokens.inputRadius),
-            onTap: () => setState(() => _open = !_open),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
-              child: Row(
+    return Row(
+      children: [
+        Expanded(
+          child: _SettingTile(
+            icon: Icons.photo_camera_outlined,
+            label: context.tr(LocaleKeys.composerStyleLabel),
+            value: state.style == null
+                ? '${context.tr(LocaleKeys.lookStyle_auto)} · $style'
+                : style,
+            onTap: () => _open(
+              context,
+              context.tr(LocaleKeys.composerStyleLabel),
+              BlocBuilder<ComposerCubit, ComposerState>(
+                builder: (context, state) => Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 16),
+                  child: LookStylePicker(
+                    selected: state.style,
+                    onSelected: context.read<ComposerCubit>().setStyle,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _SettingTile(
+            icon: Icons.high_quality_outlined,
+            label: context.tr(LocaleKeys.composerQualityLabel),
+            value: context.tr('quality.${state.quality}'),
+            onTap: () => _open(
+              context,
+              context.tr(LocaleKeys.composerQualityLabel),
+              BlocBuilder<ComposerCubit, ComposerState>(
+                builder: (context, state) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FormNotice(
+                      text: context.tr(LocaleKeys.composerQualityNote),
+                    ),
+                    const SizedBox(height: 12),
+                    FormChoiceChips(
+                      options: {
+                        for (final quality in qualities)
+                          quality: context.tr('quality.$quality'),
+                      },
+                      selected: state.quality,
+                      onSelected: context.read<ComposerCubit>().setQuality,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingTile extends StatelessWidget {
+  const _SettingTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: FormTokens.pill,
+    borderRadius: BorderRadius.circular(15),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(15),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 13),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.tune_rounded, size: 18),
-                  const SizedBox(width: 10),
+                  Row(
+                    children: [
+                      Icon(icon, size: 15, color: FormTokens.muted),
+                      const SizedBox(width: 5),
+                      Text(label, style: FormTokens.small),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
                   Text(
-                    context.tr(LocaleKeys.composerFineTuning),
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: FormTokens.ink,
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      summary,
-                      textAlign: TextAlign.end,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: FormTokens.small,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  AnimatedRotation(
-                    turns: _open ? 0.5 : 0,
-                    duration: FormTokens.quick,
-                    child: const Icon(Icons.expand_more_rounded, size: 20),
                   ),
                 ],
               ),
             ),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 240),
-            curve: FormTokens.easeOut,
-            alignment: Alignment.topCenter,
-            child: !_open
-                ? const SizedBox(width: double.infinity)
-                : Padding(
-                    padding: const EdgeInsets.fromLTRB(13, 0, 13, 14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          context.tr(LocaleKeys.composerStyleLabel),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        LookStylePicker(
-                          selected: state.style,
-                          onSelected: cubit.setStyle,
-                        ),
-                        const SizedBox(height: 18),
-                        Text(
-                          context.tr(LocaleKeys.composerQualityLabel),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        FormNotice(
-                          text: context.tr(LocaleKeys.composerQualityNote),
-                        ),
-                        const SizedBox(height: 8),
-                        FormChoiceChips(
-                          options: {
-                            for (final quality in qualities)
-                              quality: context.tr('quality.$quality'),
-                          },
-                          selected: state.quality,
-                          onSelected: cubit.setQuality,
-                        ),
-                      ],
-                    ),
-                  ),
-          ),
-        ],
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: FormTokens.muted,
+            ),
+          ],
+        ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _OccasionPresets extends StatelessWidget {
