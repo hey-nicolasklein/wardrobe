@@ -2,24 +2,26 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { lookPrompt } from './inspiration.js';
-import { isLookShot, pickReshoot, shotsFor, shotStyle } from './look-shots.js';
+import { isLookShot, pickShot, shotStyle, type ShotWeight } from './look-shots.js';
 
-test('hidden shots are left out unless none would remain', () => {
-  const street = shotsFor('street', []).map(({ id }) => id);
-  assert.ok(street.includes('street-low-wide'));
-  assert.ok(!shotsFor('street', ['street-low-wide']).some(({ id }) => id === 'street-low-wide'));
-  assert.deepEqual(shotsFor('mirror', ['mirror-straight', 'mirror-angled', 'mirror-step']).length, 3);
+const weight = (shot: string, value: number): ShotWeight => ({
+  style: 'street', shot, likes: 0, recent: false, hidden: value === 0, weight: value, chance: 0,
+});
+
+test('shots are drawn by weight and hidden ones never', () => {
+  const weights = [weight('street-low-wide', 0), weight('street-walking', 1), weight('street-steps', 3)];
+  // The roll walks the weights in order: [0, 1) walking, [1, 4) steps.
+  assert.equal(pickShot(weights, 'street', undefined, () => 0.2), 'street-walking');
+  assert.equal(pickShot(weights, 'street', undefined, () => 0.3), 'street-steps');
+  for (let i = 0; i < 20; i++) assert.notEqual(pickShot(weights, 'street'), 'street-low-wide');
   assert.equal(shotStyle('street-steps'), 'street');
   assert.equal(isLookShot('studio-backdrop'), false);
 });
 
-test('a reshoot always changes the shot within the style', () => {
-  for (let i = 0; i < 20; i++) {
-    const shot = pickReshoot('street', 'street-walking', ['street-low-wide']);
-    assert.notEqual(shot, 'street-walking');
-    assert.notEqual(shot, 'street-low-wide');
-    assert.equal(shotStyle(shot), 'street');
-  }
+test('another perspective never repeats the current shot', () => {
+  const weights = [weight('street-walking', 5), weight('street-steps', 0)];
+  // Only a hidden shot is left, so it is taken rather than repeating.
+  assert.equal(pickShot(weights, 'street', 'street-walking'), 'street-steps');
 });
 
 test('the picked shot becomes the camera sentence of the prompt', () => {

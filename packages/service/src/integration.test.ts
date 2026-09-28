@@ -39,6 +39,8 @@ import {
   signInWithIdentity,
   signupCredits,
   setShotHidden,
+  setLookLiked,
+  shotWeights,
 } from './index.js';
 import { compactIdentityReference } from './identity-collage.js';
 
@@ -151,6 +153,17 @@ test('photo collages cost zero and become the first reference for a priced feed 
     await assert.rejects(createLook(database, { accountId: input.accountId, exactItemIds: [], categories: [], parentLookId: tryOn.lookId, reshoot: true, idempotencyKey: randomUUID() }), /Perspektive/);
     await database.query("UPDATE looks SET state='failed' WHERE id=$1", [reshoot.lookId]);
     assert.deepEqual(await setShotHidden(database, { accountId: input.accountId, shot: 'candid-seated', hidden: false }), []);
+    // A heart on the reshot look raises its shot's weight above its siblings.
+    await setLookLiked(database, { accountId: input.accountId, lookId: reshoot.lookId, liked: true });
+    const liked = (await listLooks(database, input.accountId)).find((entry) => entry.id === reshoot.lookId)!;
+    assert.equal(liked.liked, true);
+    const weights = await shotWeights(database, input.accountId);
+    const likedShot = weights.find((entry) => entry.shot === liked.concept?.shot)!;
+    assert.equal(likedShot.likes, 1);
+    assert.equal(likedShot.recent, true);
+    assert.ok(Math.abs(weights.filter((entry) => entry.style === 'candid').reduce((sum, entry) => sum + entry.chance, 0) - 1) < 1e-9);
+    await setLookLiked(database, { accountId: input.accountId, lookId: reshoot.lookId, liked: false });
+    assert.equal((await shotWeights(database, input.accountId)).find((entry) => entry.shot === liked.concept?.shot)!.likes, 0);
     const upgradeCommand = { accountId: input.accountId, exactItemIds: [], categories: [], parentLookId: look.lookId, quality: 'high' as const, preserveComposition: true, idempotencyKey: randomUUID() };
     const upgraded = await createLook(database, upgradeCommand);
     assert.deepEqual(await createLook(database, upgradeCommand), upgraded);

@@ -23,7 +23,7 @@ import {
   writeGarmentReferenceDebugGallery,
 } from './garment-reference-collage.js';
 import { withTransaction } from './database.js';
-import { hiddenShots, pickReshoot, shotPrompt, shotStyle, shotsFor } from './look-shots.js';
+import { pickShot, shotPrompt, shotStyle, shotWeights } from './look-shots.js';
 import { enqueueJob, type RemoteImageJob } from './jobs.js';
 import { collageModel, compactIdentityReference, createIdentityCollage } from './identity-collage.js';
 import { IdempotencyConflictError, OwnedResourceNotFoundError } from './media.js';
@@ -58,6 +58,7 @@ type LookRow = {
   character_sheet_id: string;
   parent_look_id: string | null;
   base_asset_id: string | null;
+  liked: boolean;
   planned_concept: LookConcept | null;
   model: string;
   quality: Look['quality'];
@@ -73,7 +74,7 @@ type LookRow = {
 const characterColumns = `id, state, reference_asset_ids, note, asset_id, active, model, quality,
   output_size, provider_request_id, cost_microunits, failure_category, created_at, finished_at`;
 const lookColumns = `l.id, l.state, l.asset_id, l.character_sheet_id, l.parent_look_id,
-  l.base_asset_id, l.planned_concept, l.model, l.quality,
+  l.base_asset_id, l.liked_at IS NOT NULL AS liked, l.planned_concept, l.model, l.quality,
   COALESCE(pa.pixel_width::text || 'x' || pa.pixel_height::text,
     CASE WHEN (SELECT payload->>'outputSize' FROM remote_image_jobs rj WHERE rj.look_id=l.id ORDER BY rj.created_at DESC LIMIT 1) = '768x960'
       THEN '768x960' ELSE '1024x1280' END) AS output_size,
@@ -105,6 +106,7 @@ const mapLook = (row: LookRow): Look => ({
   characterSheetId: row.character_sheet_id,
   parentLookId: row.parent_look_id,
   baseAssetId: row.base_asset_id,
+  liked: row.liked,
   concept: row.planned_concept,
   model: row.model,
   quality: row.quality,
@@ -499,7 +501,7 @@ export async function createLook(
         reshot = {
           concept: {
             ...row.planned_concept,
-            shot: pickReshoot(style, row.planned_concept.shot, await hiddenShots(client, input.accountId)),
+            shot: pickShot(await shotWeights(client, input.accountId), style, row.planned_concept.shot),
           },
           payload: { ...payload, style },
         };
@@ -597,6 +599,18 @@ export async function createLook(
     await remember(client, input.accountId, input.idempotencyKey, 'create-look', request, body);
     return body;
   });
+}
+/** Hearts a look. The heart also weights its shot type for future looks. */
+export async function setLookLiked(
+  database: Database,
+  input: { accountId: string; lookId: string; liked: boolean },
+) {
+  const row = await database.query(
+    `UPDATE looks SET liked_at=CASE WHEN $3 THEN COALESCE(liked_at, now()) ELSE NULL END WHERE id=$1 AND account_id=$2 AND deleted_at IS NULL RETURNING id`,
+    [input.lookId, input.accountId, input.liked],
+  );
+  if (!row.rows[0]) throw new OwnedResourceNotFoundError();
+  return { liked: input.liked };
 }
 export async function retryLook(
   database: Database,
@@ -992,7 +1006,12 @@ export async function executeInspirationJob(
         categories: row.category_constraints,
         occasion: (job.payload as { occasion?: string | null }).occasion ?? null,
         style,
-        shots: shotsFor(style, await hiddenShots(database, job.accountId)),
+        // Drawn by weight here, so hearts and hidden shots take effect; the
+        // planner then fits the activity to this one shot.
+        shots: [pickShot(await shotWeights(database, job.accountId), style)].map((id) => ({
+          id,
+          description: shotPrompt(id)!,
+        })),
         model: lookPlannerModel,
         signal: controller.signal,
       });

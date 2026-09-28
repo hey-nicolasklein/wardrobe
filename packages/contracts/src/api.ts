@@ -296,6 +296,26 @@ export const lookShotPreferencesResponseSchema = z
   .object({ hiddenShots: z.array(z.string().min(1).max(40)) })
   .strict();
 export const setLookShotPreferenceRequestSchema = z.object({ hidden: z.boolean() }).strict();
+export const setLookLikedRequestSchema = z.object({ liked: z.boolean() }).strict();
+// Why the feed picks the shots it picks: per shot the hearts, whether it was
+// used recently or hidden, and the resulting weight and chance within its style.
+export const lookShotWeightsResponseSchema = z
+  .object({
+    shots: z.array(
+      z
+        .object({
+          style: lookStyleSchema,
+          shot: z.string().min(1).max(40),
+          likes: z.number().int().nonnegative(),
+          recent: z.boolean(),
+          hidden: z.boolean(),
+          weight: z.number().nonnegative(),
+          chance: z.number().min(0).max(1),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
 export const retryLookRequestSchema = z.object({ idempotencyKey: idempotencyKeySchema }).strict();
 export const looksResponseSchema = z.object({ looks: z.array(lookSchema) }).strict();
 export const lookResponseSchema = z.object({ look: lookSchema }).strict();

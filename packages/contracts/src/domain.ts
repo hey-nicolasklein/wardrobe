@@ -272,6 +272,7 @@ export const lookSchema = z
     parentLookId: opaqueIdSchema.nullable(),
     // Set for try-on looks: the user's own photo the garments were put on.
     baseAssetId: opaqueIdSchema.nullable(),
+    liked: z.boolean(),
     concept: lookConceptSchema.nullable(),
     model: z.string().min(1).max(64),
     quality: generationQualitySchema,

@@ -30,6 +30,7 @@ import {
   identitySignInRequestSchema,
   updateWardrobeItemRequestSchema,
   setLookShotPreferenceRequestSchema,
+  setLookLikedRequestSchema,
   contractVersion,
   type ApiError,
 } from '@form/contracts';
@@ -81,6 +82,8 @@ import {
   hiddenShots,
   isLookShot,
   setShotHidden,
+  setLookLiked,
+  shotWeights,
 } from '@form/service';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { cors } from 'hono/cors';
@@ -529,6 +532,16 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
         401,
       );
     return context.json({ hiddenShots: await hiddenShots(database, authenticated.session.id) });
+  });
+
+  app.get('/v1/look-shots/weights', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    return context.json({ shots: await shotWeights(database, authenticated.session.id) });
   });
 
   app.put('/v1/look-shots/:shot', async (context) => {
@@ -1035,6 +1048,31 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     } catch (error) {
       if (error instanceof InspirationValidationError)
         return context.json(errorPayload('conflict', error.code, error.message), 409);
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.put('/v1/looks/:lookId/like', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    const parsed = setLookLikedRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success)
+      return context.json(errorPayload('validation', 'invalid-like', 'Send liked as true or false.'), 400);
+    try {
+      return context.json(
+        await setLookLiked(database, {
+          accountId: authenticated.session.id,
+          lookId: context.req.param('lookId'),
+          liked: parsed.data.liked,
+        }),
+      );
+    } catch (error) {
       const mapped = wardrobeError(error);
       if (mapped) return context.json(mapped.payload, mapped.status);
       throw error;

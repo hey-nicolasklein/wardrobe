@@ -43,23 +43,89 @@ export const shotStyle = (shot: string | undefined) =>
 export const shotPrompt = (shot: string | undefined) =>
   shotEntries.find((entry) => entry.id === shot)?.description ?? null;
 
+// How strongly hearts pull a shot type: each heart adds half the base weight,
+// up to three times the base. Shots used in the last few looks drop to a third,
+// so the feed keeps varying even around a favourite.
+const likeBoost = 0.5;
+const maxLikeBoost = 2;
+const recentLooks = 3;
+const recentFactor = 0.35;
+
+export type ShotWeight = {
+  style: LookStyle;
+  shot: string;
+  likes: number;
+  recent: boolean;
+  hidden: boolean;
+  weight: number;
+  chance: number;
+};
+
 /**
- * The shots the planner may pick for [style]. Shots the user hid are left out,
- * unless that would leave none.
+ * The current weight of every shot type for an account, the input of
+ * [pickShot] and of the feed debug panel. Hidden shots weigh nothing, unless a
+ * style's shots are all hidden; then the style ignores hiding.
  */
-export function shotsFor(style: LookStyle, hidden: string[]) {
-  const all = shotEntries.filter((entry) => entry.style === style);
-  const open = all.filter((entry) => !hidden.includes(entry.id));
-  return (open.length ? open : all).map(({ id, description }) => ({ id, description }));
+export async function shotWeights(
+  database: Database | DatabaseClient,
+  accountId: string,
+): Promise<ShotWeight[]> {
+  const [likes, recent, hidden] = await Promise.all([
+    database.query<{ shot: string; likes: string }>(
+      `SELECT planned_concept->>'shot' AS shot, count(*) AS likes FROM looks
+       WHERE account_id=$1 AND liked_at IS NOT NULL AND deleted_at IS NULL AND planned_concept ? 'shot'
+       GROUP BY 1`,
+      [accountId],
+    ),
+    database.query<{ shot: string }>(
+      `SELECT planned_concept->>'shot' AS shot FROM looks
+       WHERE account_id=$1 AND deleted_at IS NULL AND planned_concept ? 'shot'
+       ORDER BY created_at DESC LIMIT ${recentLooks}`,
+      [accountId],
+    ),
+    hiddenShots(database, accountId),
+  ]);
+  const likesByShot = new Map(likes.rows.map((row) => [row.shot, Number(row.likes)]));
+  const recentShots = new Set(recent.rows.map((row) => row.shot));
+  return (Object.keys(lookShots) as LookStyle[]).flatMap((style) => {
+    const entries = shotEntries.filter((entry) => entry.style === style);
+    const allHidden = entries.every((entry) => hidden.includes(entry.id));
+    const weighted = entries.map((entry) => {
+      const likesCount = likesByShot.get(entry.id) ?? 0;
+      const isHidden = hidden.includes(entry.id);
+      const isRecent = recentShots.has(entry.id);
+      const weight =
+        isHidden && !allHidden
+          ? 0
+          : (1 + Math.min(likesCount * likeBoost, maxLikeBoost)) * (isRecent ? recentFactor : 1);
+      return { style, shot: entry.id, likes: likesCount, recent: isRecent, hidden: isHidden, weight };
+    });
+    const total = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+    return weighted.map((entry) => ({ ...entry, chance: total ? entry.weight / total : 0 }));
+  });
 }
 
-/** A different shot of the same style for "same outfit, other perspective". */
-export function pickReshoot(style: LookStyle, current: string | undefined, hidden: string[]) {
-  const options = shotsFor(style, [...hidden, ...(current ? [current] : [])]).filter(
-    (entry) => entry.id !== current,
-  );
-  const pool = options.length ? options : shotsFor(style, []);
-  return pool[Math.floor(Math.random() * pool.length)]!.id;
+/**
+ * Draws a shot of [style] by weight. [exclude] is left out, for "same outfit,
+ * other perspective"; if nothing else has weight, any other shot of the style
+ * is taken.
+ */
+export function pickShot(
+  weights: ShotWeight[],
+  style: LookStyle,
+  exclude?: string,
+  random: () => number = Math.random,
+) {
+  const candidates = weights.filter((entry) => entry.style === style && entry.shot !== exclude);
+  const weighted = candidates.filter((entry) => entry.weight > 0);
+  const pool = weighted.length ? weighted : candidates.map((entry) => ({ ...entry, weight: 1 }));
+  const total = pool.reduce((sum, entry) => sum + entry.weight, 0);
+  let roll = random() * total;
+  for (const entry of pool) {
+    roll -= entry.weight;
+    if (roll < 0) return entry.shot;
+  }
+  return pool[pool.length - 1]!.shot;
 }
 
 export async function hiddenShots(database: Database | DatabaseClient, accountId: string) {
