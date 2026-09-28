@@ -555,6 +555,16 @@ abstract class LocaleKeys {
   static const auth_password = 'auth.password';
   static const auth_emailAction = 'auth.emailAction';
   static const auth = 'auth';
+  static const credits_title = 'credits.title';
+  static const credits_refresh = 'credits.refresh';
+  static const credits_unlimited = 'credits.unlimited';
+  static const credits_enoughFor = 'credits.enoughFor';
+  static const credits_lookOne = 'credits.lookOne';
+  static const credits_lookMany = 'credits.lookMany';
+  static const credits_shelfImageOne = 'credits.shelfImageOne';
+  static const credits_shelfImageMany = 'credits.shelfImageMany';
+  static const credits_empty = 'credits.empty';
+  static const credits = 'credits';
   static const lookStyle_auto = 'lookStyle.auto';
   static const lookStyle_candid = 'lookStyle.candid';
   static const lookStyle_street = 'lookStyle.street';

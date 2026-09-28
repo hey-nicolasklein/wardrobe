@@ -589,5 +589,16 @@
     "failed": "The weighting could not be loaded.",
     "weight": "weight {value}",
     "recent": "recently used"
+  },
+  "credits": {
+    "title": "Credits left",
+    "refresh": "Refresh credits",
+    "unlimited": "Unlimited credits on this account.",
+    "enoughFor": "Enough for",
+    "lookOne": "{count} look",
+    "lookMany": "{count} looks",
+    "shelfImageOne": "{count} catalog image",
+    "shelfImageMany": "{count} catalog images",
+    "empty": "Not enough for another look. Catalog images cost 1 credit, looks cost 2."
   }
 }

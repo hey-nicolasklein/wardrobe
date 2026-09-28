@@ -10,6 +10,7 @@ import 'package:form_mobile/app/form_theme.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/settings/character/character_cubit.dart';
+import 'package:form_mobile/features/settings/credits_cubit.dart';
 import 'package:form_mobile/features/settings/language_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -35,7 +36,9 @@ class _FormAppState extends State<FormApp> {
   @override
   void initState() {
     super.initState();
-    _router.routeInformationProvider.addListener(_intakeVisibility);
+    _router.routeInformationProvider
+      ..addListener(_intakeVisibility)
+      ..addListener(_creditsVisibility);
     _lifecycle = AppLifecycleListener(
       onStateChange: (state) {
         context.read<WardrobeCubit>().setForeground(
@@ -63,6 +66,14 @@ class _FormAppState extends State<FormApp> {
     );
   }
 
+  // Generations spend credits anywhere in the app, so the balance refreshes
+  // whenever Settings, where it is shown, comes into view.
+  void _creditsVisibility() {
+    if (_router.routeInformationProvider.value.uri.path == '/settings') {
+      unawaited(context.read<CreditsCubit>().refresh());
+    }
+  }
+
   Future<void> _sync(ConnectionStatus status) async {
     context.read<IntakeBloc>().availability(
       online: status == ConnectionStatus.ready,
@@ -74,7 +85,11 @@ class _FormAppState extends State<FormApp> {
       online: status == ConnectionStatus.ready,
     );
     final collectionCounts = context.read<CollectionCountsCubit>();
+    if (status == ConnectionStatus.missingSession) {
+      context.read<CreditsCubit>().clear();
+    }
     if (status == ConnectionStatus.ready) {
+      unawaited(context.read<CreditsCubit>().refresh());
       final initial = !_hasLoaded;
       _hasLoaded = true;
       final path = _router.routeInformationProvider.value.uri.path;
@@ -100,7 +115,9 @@ class _FormAppState extends State<FormApp> {
   @override
   void dispose() {
     _lifecycle.dispose();
-    _router.routeInformationProvider.removeListener(_intakeVisibility);
+    _router.routeInformationProvider
+      ..removeListener(_intakeVisibility)
+      ..removeListener(_creditsVisibility);
     _router.dispose();
     super.dispose();
   }

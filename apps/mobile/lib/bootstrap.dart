@@ -12,6 +12,7 @@ import 'package:form_mobile/app/safe_bloc_observer.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/settings/character/character_cubit.dart';
+import 'package:form_mobile/features/settings/credits_cubit.dart';
 import 'package:form_mobile/features/settings/language_cubit.dart';
 import 'package:form_mobile/features/settings/quality_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
@@ -20,6 +21,7 @@ import 'package:form_mobile/repository/auth_repository.dart';
 import 'package:form_mobile/repository/character_draft_repository.dart';
 import 'package:form_mobile/repository/character_sheet_repository.dart';
 import 'package:form_mobile/repository/collection_counts_repository.dart';
+import 'package:form_mobile/repository/credits_repository.dart';
 import 'package:form_mobile/repository/intake_repository.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/media_repository.dart';
@@ -202,6 +204,7 @@ Future<void> bootstrap(
         providers: [
           BlocProvider(create: (_) => ConnectionCubit(server)),
           BlocProvider(create: (_) => collectionCounts),
+          BlocProvider(create: (_) => CreditsCubit(CreditsRepository(api))),
           BlocProvider(create: (_) => wardrobe),
           BlocProvider(create: (_) => feed),
           BlocProvider(create: (_) => characters),

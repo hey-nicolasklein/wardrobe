@@ -9,6 +9,7 @@ import 'package:form_mobile/features/settings/app_info_section.dart';
 import 'package:form_mobile/features/settings/cache_section.dart';
 import 'package:form_mobile/features/settings/character/character_section.dart';
 import 'package:form_mobile/features/settings/cost_section.dart';
+import 'package:form_mobile/features/settings/credit_wallet.dart';
 import 'package:form_mobile/features/settings/feed_weights_section.dart';
 import 'package:form_mobile/features/settings/quality_section.dart';
 import 'package:form_mobile/features/settings/reset_section.dart';
@@ -50,6 +51,7 @@ class SettingsPage extends StatelessWidget {
               title: context.tr(LocaleKeys.settings_heroTitle),
               body: context.tr(LocaleKeys.settings_heroSubtitle),
             ),
+            const CreditWallet(),
             const CharacterSection(),
             const SizedBox(height: 20),
             const CostSection(),

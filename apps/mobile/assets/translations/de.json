@@ -589,5 +589,16 @@
     "failed": "Die Gewichtung konnte nicht geladen werden.",
     "weight": "Gewicht {value}",
     "recent": "zuletzt genutzt"
+  },
+  "credits": {
+    "title": "Verbleibende Credits",
+    "refresh": "Credits aktualisieren",
+    "unlimited": "Unbegrenzte Credits für dieses Konto.",
+    "enoughFor": "Reicht für",
+    "lookOne": "{count} Look",
+    "lookMany": "{count} Looks",
+    "shelfImageOne": "{count} Katalogbild",
+    "shelfImageMany": "{count} Katalogbilder",
+    "empty": "Reicht für keinen weiteren Look. Katalogbilder kosten 1 Credit, Looks 2."
   }
 }

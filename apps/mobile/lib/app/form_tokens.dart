@@ -12,6 +12,11 @@ abstract final class FormTokens {
   static const costWardrobe = Color(0xFF667F61);
   static const costDetection = Color(0xFFC39A62);
   static const costTrack = Color(0xFFDFE1D5);
+  static const coinTint = Color(0xFFF7F0DF);
+  static const coinShine = Color(0xFFFBEFC8);
+  static const coinFace = Color(0xFFE2C27E);
+  static const coinRim = Color(0xFFC39A62);
+  static const coinInk = Color(0xFF7E5F2C);
   static const paper = Color(0xFFF6F5F1);
   static const ink = Color(0xFF242923);
   static const green = Color(0xFF344D3F);
