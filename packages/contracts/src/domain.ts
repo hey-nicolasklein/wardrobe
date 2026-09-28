@@ -254,6 +254,8 @@ export const lookConceptSchema = z
     mood: z.string().trim().min(1).max(200),
   })
   .strict();
+// How a feed image is photographed. `candid` is the original friend-snapshot look.
+export const lookStyleSchema = z.enum(['candid', 'street', 'mirror', 'close-up']);
 export const lookSizeSchema = z.enum(['1024x1280', '768x960']);
 export const lookSchema = z
   .object({
@@ -306,3 +308,4 @@ export type WardrobeItem = z.infer<typeof wardrobeItemSchema>;
 export type CharacterSheet = z.infer<typeof characterSheetSchema>;
 export type Look = z.infer<typeof lookSchema>;
 export type LookConcept = z.infer<typeof lookConceptSchema>;
+export type LookStyle = z.infer<typeof lookStyleSchema>;

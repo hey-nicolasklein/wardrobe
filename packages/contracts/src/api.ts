@@ -16,6 +16,7 @@ import {
   wardrobeItemSchema,
   characterSheetSchema,
   lookSchema,
+  lookStyleSchema,
   generationCostSummarySchema,
   supportedCategorySchema,
 } from './domain.js';
@@ -275,6 +276,7 @@ export const createLookRequestSchema = z
     exactItemIds: z.array(opaqueIdSchema).max(12).default([]),
     categories: z.array(supportedCategorySchema).max(9).default([]),
     occasion: z.enum(['night-out', 'party', 'business', 'casual']).nullable().optional(),
+    style: lookStyleSchema.default('candid'),
     parentLookId: opaqueIdSchema.nullable().default(null),
     quality: generationQualitySchema.default('low'),
     preserveComposition: z.boolean().default(false),

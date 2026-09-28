@@ -5,6 +5,7 @@ import type {
   CharacterSheet,
   Look,
   LookConcept,
+  LookStyle,
   SupportedCategory,
 } from '@form/contracts';
 
@@ -386,6 +387,7 @@ export async function createLook(
     exactItemIds: string[];
     categories: SupportedCategory[];
     occasion?: string | null;
+    style?: LookStyle;
     parentLookId: string | null;
     quality?: Look['quality'];
     preserveComposition?: boolean;
@@ -398,6 +400,7 @@ export async function createLook(
     exactItemIds: input.exactItemIds,
     categories: input.categories,
     ...(input.occasion ? { occasion: input.occasion } : {}),
+    ...(input.style && input.style !== 'candid' ? { style: input.style } : {}),
     parentLookId: input.parentLookId,
     quality: input.quality ?? 'low',
     preserveComposition: input.preserveComposition ?? false,
@@ -501,6 +504,7 @@ export async function createLook(
       payload: {
         lookId,
         occasion: input.occasion ?? null,
+        style: input.style ?? 'candid',
         completeWithWardrobe,
         outputSize: lookOutputSize,
         ...(preserved ? { referenceAssetId: preserved.assetId } : {}),
@@ -687,11 +691,25 @@ async function writeAsset(
   );
   return id;
 }
+// The camera sentence of the Look prompt per style. `candid` is the original
+// friend snapshot. The others trade that for a distinct feed aesthetic.
+const lookStylePrompts: Record<LookStyle, (concept: LookConcept) => string> = {
+  candid: (c) =>
+    `Create one photorealistic 4:5 iPhone-style snapshot as if a friend naturally photographed the referenced person while ${c.activity}, in ${c.scene}. ${c.framing} framing. The person must not look directly at the camera. Avoid posed portraits, runway staging, and extreme editorial styling.`,
+  street: (c) =>
+    `Create one photorealistic 4:5 street-style fashion photograph, shot by a professional photographer on a telephoto lens with shallow depth of field, of the referenced person while ${c.activity}, in ${c.scene}. Full-body framing, head to shoes, with a confident mid-stride or relaxed pose and natural light.`,
+  mirror: (c) =>
+    `Create one photorealistic 4:5 mirror selfie: the referenced person holds a smartphone and photographs their reflection in a mirror in ${c.scene}, the phone partly covering one side of the face. Show the full outfit in the mirror, head to shoes, with casual real-world surroundings.`,
+  'close-up': (c) =>
+    `Create one photorealistic 4:5 close, intimate photograph of the referenced person while ${c.activity}, in ${c.scene}, framed from about mid-thigh up so the face, upper-body garments, and fabric texture fill the frame. Natural light, slight depth of field, the person looking away from the camera.`,
+};
+
 export function lookPrompt(
   concept: LookConcept,
   items: Array<{ name: string; category: string; colors: string[] }>,
   identityNote: string | null,
   completeWithWardrobe: boolean,
+  style: LookStyle = 'candid',
 ) {
   const garments = items.map((i) => `${i.name} (${i.category}; ${i.colors.join(', ')})`).join('; ');
   const garmentInstruction = completeWithWardrobe
@@ -704,7 +722,7 @@ export function lookPrompt(
   const garmentReferences = items.length > 1
     ? `The final garment reference is one ordered board. Its cells are row-major, from left to right and then top to bottom, matching this garment order: ${items.map((item, index) => `${index + 1}. ${item.name}`).join('; ')}. ${pairing} Use each cell only for its matching garment.`
     : `The final reference shows the garment. ${pairing}`;
-  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} ${garmentReferences} Create one photorealistic 4:5 iPhone-style snapshot as if a friend naturally photographed the referenced person while ${concept.activity}, in ${concept.scene}. Mood: ${concept.mood}. ${concept.framing} framing. The person must not look directly at the camera. ${garmentInstruction} Every referenced garment must be fully visible and faithful to its reference. ${completion} Avoid selfies, posed portraits, illustrations, runway staging, extreme editorial styling, text, watermarks, and collages in the output. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
+  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} ${garmentReferences} ${lookStylePrompts[style](concept)} Mood: ${concept.mood}. ${garmentInstruction} ${style === 'close-up' ? 'Every referenced garment must be recognisable and faithful to its reference; lower-body pieces and shoes may be partly cropped by the frame.' : 'Every referenced garment must be fully visible and faithful to its reference.'} ${completion} Avoid ${style === 'mirror' ? '' : 'selfies, '}illustrations, text, watermarks, and collages in the output.${style === 'close-up' ? '' : ' Shoes, trousers, skirts, and dresses must never be cropped when selected.'}`;
 }
 
 async function imageDimensions(bytes: Uint8Array, expected: '1024x1280' | '768x960') {
@@ -782,6 +800,8 @@ export async function executeInspirationJob(
     const completeWithWardrobe =
       (job.payload as { completeWithWardrobe?: boolean }).completeWithWardrobe ?? true;
     const outputSize = (job.payload as { outputSize?: '1024x1280' | '768x960' }).outputSize ?? lookOutputSize;
+    // Jobs queued before styles existed carry no style and stay candid.
+    const style = (job.payload as { style?: LookStyle }).style ?? 'candid';
     const started = await database.query<{
       character_sheet_id: string;
       exact_item_ids: string[];
@@ -843,6 +863,7 @@ export async function executeInspirationJob(
         exactItemIds: row.exact_item_ids,
         categories: row.category_constraints,
         occasion: (job.payload as { occasion?: string | null }).occasion ?? null,
+        style,
         model: lookPlannerModel,
         signal: controller.signal,
       });
@@ -928,7 +949,7 @@ export async function executeInspirationJob(
       references: refs,
       prompt: referenceAssetId
         ? `Recreate the first reference image with improved detail as one photorealistic 4:5 image. Preserve its composition, pose, outfit, person, lighting and background. The second reference shows the same person and is only for identity detail. ${selected.length > 1 ? 'The final reference is an ordered garment board whose cells match the garments in the requested order. Each cell contains a paired shelf view and original garment photo.' : 'The final reference shows the garment and is only for fabric and construction detail.'} Do not change the scene or add garments, text, watermarks or collage panels.`
-        : lookPrompt(concept, selected, character.rows[0].note, completeWithWardrobe),
+        : lookPrompt(concept, selected, character.rows[0].note, completeWithWardrobe, style),
       model: row.model,
       quality: row.quality,
       size: outputSize,

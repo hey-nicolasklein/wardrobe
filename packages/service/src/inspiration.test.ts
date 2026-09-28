@@ -88,3 +88,16 @@ test('look prompts describe the ordered garment board for multiple pieces', () =
   assert.match(combined, /1\. Blue shirt; 2\. Black trousers/);
   assert.doesNotMatch(lookPrompt(concept, items.slice(0, 1), null, true), /ordered board/);
 });
+
+test('look styles change the camera and only close-ups may crop lower garments', () => {
+  const concept = { activity: 'walking', scene: 'a street', mood: 'calm', framing: 'full-body' as const };
+  const item = [{ name: 'Black trousers', category: 'pants', colors: ['black'] }];
+  const candid = lookPrompt(concept, item, null, true);
+  assert.match(candid, /iPhone-style snapshot/);
+  assert.match(candid, /must never be cropped/);
+  assert.match(lookPrompt(concept, item, null, true, 'mirror'), /mirror selfie/);
+  assert.doesNotMatch(lookPrompt(concept, item, null, true, 'mirror'), /Avoid selfies/);
+  const closeUp = lookPrompt(concept, item, null, true, 'close-up');
+  assert.match(closeUp, /mid-thigh up/);
+  assert.doesNotMatch(closeUp, /must never be cropped/);
+});

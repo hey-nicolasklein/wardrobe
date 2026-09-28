@@ -191,6 +191,7 @@ test('keeps Character Sheet and Look creation constrained and strict', () => {
       exactItemIds: [],
       categories: [],
       parentLookId: null,
+      style: 'candid',
       quality: 'low',
       preserveComposition: false,
       completeWithWardrobe: true,
