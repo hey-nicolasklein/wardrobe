@@ -328,10 +328,11 @@ class _FineTuning extends StatelessWidget {
         Expanded(
           child: _SettingTile(
             icon: Icons.photo_camera_outlined,
-            label: context.tr(LocaleKeys.composerStyleLabel),
-            value: state.style == null
-                ? '${context.tr(LocaleKeys.lookStyle_auto)} · $style'
-                : style,
+            label: state.style == null
+                ? '${context.tr(LocaleKeys.composerStyleLabel)} · '
+                      '${context.tr(LocaleKeys.lookStyle_auto)}'
+                : context.tr(LocaleKeys.composerStyleLabel),
+            value: style,
             onTap: () => _open(
               context,
               context.tr(LocaleKeys.composerStyleLabel),
@@ -416,18 +417,29 @@ class _SettingTile extends StatelessWidget {
                     children: [
                       Icon(icon, size: 15, color: FormTokens.muted),
                       const SizedBox(width: 5),
-                      Text(label, style: FormTokens.small),
+                      Flexible(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: FormTokens.small,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 3),
-                  Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: FormTokens.ink,
+                  // Long German names shrink a little instead of cutting off.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      value,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: FormTokens.ink,
+                      ),
                     ),
                   ),
                 ],
