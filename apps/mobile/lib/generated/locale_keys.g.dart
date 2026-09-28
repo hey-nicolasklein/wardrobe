@@ -191,6 +191,7 @@ abstract class LocaleKeys {
   static const lookRevealHide = 'lookRevealHide';
   static const lookFailedTitle = 'lookFailedTitle';
   static const lookFailedBody = 'lookFailedBody';
+  static const lookFailedModeration = 'lookFailedModeration';
   static const lookRetry = 'lookRetry';
   static const lookDelete = 'lookDelete';
   static const lookDeleteConfirmTitle = 'lookDeleteConfirmTitle';

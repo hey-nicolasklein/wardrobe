@@ -197,6 +197,7 @@
   "lookRevealHide": "Getragene Stücke ausblenden",
   "lookFailedTitle": "Das Bild ist nicht entstanden.",
   "lookFailedBody": "Deine Stücke bleiben hier. Du kannst das Bild erneut erstellen.",
+  "lookFailedModeration": "Der Bildfilter von OpenAI hat dieses Bild abgelehnt. Bei Anproben hilft oft ein anderes Foto, auf dem du vollständig angezogen bist.",
   "lookRetry": "Erneut versuchen",
   "lookDelete": "Löschen …",
   "lookDeleteConfirmTitle": "Look löschen",

@@ -89,6 +89,7 @@ class _LookCardState extends State<LookCard> {
     if (look.state == 'failed') {
       return _FailedLookCard(
         garments: widget.garments,
+        moderated: look.failureCategory == 'moderation',
         online: widget.online,
         onRetry: widget.onRetry,
         onDelete: widget.onDelete,
@@ -650,12 +651,17 @@ class _LookStageState extends State<_LookStage>
 class _FailedLookCard extends StatelessWidget {
   const _FailedLookCard({
     required this.garments,
+    required this.moderated,
     required this.online,
     required this.onRetry,
     required this.onDelete,
   });
 
   final List<LookGarment> garments;
+
+  /// The image model's safety filter rejected the image, which says more than
+  /// a generic failure: the photo or pieces need changing, not a retry alone.
+  final bool moderated;
   final bool online;
   final VoidCallback onRetry;
   final VoidCallback onDelete;
@@ -673,7 +679,14 @@ class _FailedLookCard extends StatelessWidget {
           style: FormTokens.heading.copyWith(fontSize: 22),
         ),
         const SizedBox(height: 8),
-        Text(context.tr(LocaleKeys.lookFailedBody), style: FormTokens.body),
+        Text(
+          context.tr(
+            moderated
+                ? LocaleKeys.lookFailedModeration
+                : LocaleKeys.lookFailedBody,
+          ),
+          style: FormTokens.body,
+        ),
         const SizedBox(height: 16),
         FilledButton(
           onPressed: online ? onRetry : null,

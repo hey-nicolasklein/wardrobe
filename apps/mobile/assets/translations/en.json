@@ -197,6 +197,7 @@
   "lookRevealHide": "Hide worn pieces",
   "lookFailedTitle": "The image was not created.",
   "lookFailedBody": "Your pieces stay here. You can create the image again.",
+  "lookFailedModeration": "OpenAI's image filter rejected this image. For try-ons, a different photo where you're fully dressed often helps.",
   "lookRetry": "Try again",
   "lookDelete": "Delete …",
   "lookDeleteConfirmTitle": "Delete look",
