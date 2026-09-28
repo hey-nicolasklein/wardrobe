@@ -98,7 +98,7 @@ test('photo collages cost zero and become the first reference for a priced feed 
         const garmentReference = await sharp(request.references[1]!).metadata();
         assert.equal(garmentReference.width, 512);
         assert.equal(garmentReference.height, 256);
-        assert.match(request.prompt, /collage of cropped original photos/);
+        assert.match(request.prompt, /card containing several photos of the same person/);
         assert.match(request.prompt, /shelf view on the left/);
         assert.match(request.prompt, /braunes Haar/);
         referenceChecked = true;
