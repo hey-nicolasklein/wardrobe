@@ -235,6 +235,10 @@ abstract class LocaleKeys {
   static const composerFilterAll = 'composerFilterAll';
   static const composerEmpty = 'composerEmpty';
   static const composerNoEligible = 'composerNoEligible';
+  static const composerEmptyBody = 'composerEmptyBody';
+  static const composerNoEligibleBody = 'composerNoEligibleBody';
+  static const composerNothingSelected = 'composerNothingSelected';
+  static const composerShowAll = 'composerShowAll';
   static const composerCompleteTitle = 'composerCompleteTitle';
   static const composerCompleteHelpUnframable =
       'composerCompleteHelpUnframable';

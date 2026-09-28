@@ -120,14 +120,19 @@ class _ComposerViewState extends State<_ComposerView> {
               online: !wardrobe.stale,
               connected: connected,
             ),
+            slivers: state.previewExpanded
+                ? null
+                : [
+                    _ComposerPicker(
+                      state: state,
+                      eligible: eligible,
+                      search: _search,
+                      online: !wardrobe.stale,
+                    ),
+                  ],
             child: state.previewExpanded
                 ? _ComposerPreview(state: state, selected: selected)
-                : _ComposerPicker(
-                    state: state,
-                    eligible: eligible,
-                    search: _search,
-                    online: !wardrobe.stale,
-                  ),
+                : null,
           ),
         );
       },
@@ -157,160 +162,287 @@ class _ComposerPicker extends StatelessWidget {
         if (eligible.any((item) => item.metadata.category == category))
           category,
     ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        FormChoiceChips(
-          options: {
-            'inspire': context.tr(LocaleKeys.composerModeInspire),
-            'try-on': context.tr(LocaleKeys.composerModeTryOn),
-          },
-          selected: state.tryOn ? 'try-on' : 'inspire',
-          onSelected: (mode) => cubit.setTryOn(tryOn: mode == 'try-on'),
-        ),
-        const SizedBox(height: 20),
-        // Stays mounted in inspire mode so switching back shows the loaded
-        // photos at once.
-        Visibility(
-          visible: state.tryOn,
-          maintainState: true,
-          child: _TryOnBases(state: state, online: online),
-        ),
-        if (state.tryOn) ...[
-          const SizedBox(height: 18),
-          Text(
-            context.tr(LocaleKeys.composerQualityLabel),
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          FormChoiceChips(
-            options: {
-              for (final quality in qualities)
-                quality: context.tr('quality.$quality'),
-            },
-            selected: state.quality,
-            onSelected: cubit.setQuality,
-          ),
-        ] else ...[
-          Text(
-            context.tr(LocaleKeys.composerOccasionLabel),
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 12),
-          _OccasionPresets(selected: state.occasion),
-          const SizedBox(height: 12),
-          _FineTuning(state: state),
-        ],
-        const SizedBox(height: 28),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                context.tr(LocaleKeys.composerPickerTitle),
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: FormTokens.ink,
-                ),
-              ),
-            ),
-            Tooltip(
-              message: context.tr(LocaleKeys.composerSelectedOnly),
-              // Ghost button like the PWA, tinted only while the filter is on.
-              child: Semantics(
-                selected: state.selectedOnly,
-                child: TextButton.icon(
-                  onPressed: cubit.toggleSelectedOnly,
-                  icon: const FormIcon(FormIconName.check, size: 18),
-                  label: Text(
-                    context.tr(
-                      LocaleKeys.composerSelectedCount,
-                      namedArgs: {'count': '${state.selectedIds.length}'},
-                    ),
-                  ),
-                  style: TextButton.styleFrom(
-                    foregroundColor: FormTokens.ink,
-                    backgroundColor: state.selectedOnly
-                        ? FormTokens.selectedTint
-                        : Colors.transparent,
-                    minimumSize: const Size(44, 44),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    textStyle: const TextStyle(
-                      fontSize: 12,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        FormSearchField(
-          controller: search,
-          hint: context.tr(LocaleKeys.composerSearchHint),
-          onChanged: cubit.setQuery,
-          onClear: state.query.isEmpty ? null : () => cubit.setQuery(''),
-        ),
-        const SizedBox(height: 14),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final category in [null, ...available])
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FormPill(
-                    label: category == null
-                        ? context.tr(LocaleKeys.composerFilterAll)
-                        : context.tr('categories.$category'),
-                    selected:
-                        !state.selectedOnly && state.itemCategory == category,
-                    onTap: () => cubit.setItemCategory(category),
+              FormChoiceChips(
+                options: {
+                  'inspire': context.tr(LocaleKeys.composerModeInspire),
+                  'try-on': context.tr(LocaleKeys.composerModeTryOn),
+                },
+                selected: state.tryOn ? 'try-on' : 'inspire',
+                onSelected: (mode) => cubit.setTryOn(tryOn: mode == 'try-on'),
+              ),
+              const SizedBox(height: 20),
+              // Stays mounted in inspire mode so switching back shows the
+              // loaded photos at once.
+              Visibility(
+                visible: state.tryOn,
+                maintainState: true,
+                child: _TryOnBases(state: state, online: online),
+              ),
+              if (state.tryOn) ...[
+                const SizedBox(height: 18),
+                Text(
+                  context.tr(LocaleKeys.composerQualityLabel),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(height: 8),
+                FormChoiceChips(
+                  options: {
+                    for (final quality in qualities)
+                      quality: context.tr('quality.$quality'),
+                  },
+                  selected: state.quality,
+                  onSelected: cubit.setQuality,
+                ),
+              ] else ...[
+                Text(
+                  context.tr(LocaleKeys.composerOccasionLabel),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _OccasionPresets(selected: state.occasion),
+                const SizedBox(height: 12),
+                _FineTuning(state: state),
+              ],
+              const SizedBox(height: 28),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      context.tr(LocaleKeys.composerPickerTitle),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: FormTokens.ink,
+                      ),
+                    ),
+                  ),
+                  Tooltip(
+                    message: context.tr(LocaleKeys.composerSelectedOnly),
+                    // Ghost button like the PWA, tinted only while the filter
+                    // is on.
+                    child: Semantics(
+                      selected: state.selectedOnly,
+                      child: TextButton.icon(
+                        onPressed: cubit.toggleSelectedOnly,
+                        icon: const FormIcon(FormIconName.check, size: 18),
+                        label: Text(
+                          context.tr(
+                            LocaleKeys.composerSelectedCount,
+                            namedArgs: {'count': '${state.selectedIds.length}'},
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: FormTokens.ink,
+                          backgroundColor: state.selectedOnly
+                              ? FormTokens.selectedTint
+                              : Colors.transparent,
+                          minimumSize: const Size(44, 44),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          textStyle: const TextStyle(
+                            fontSize: 12,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              FormSearchField(
+                controller: search,
+                hint: context.tr(LocaleKeys.composerSearchHint),
+                onChanged: cubit.setQuery,
+                onClear: state.query.isEmpty ? null : () => cubit.setQuery(''),
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 24),
-        if (visible.isEmpty)
-          Text(
-            context.tr(
-              eligible.isEmpty
-                  ? LocaleKeys.composerNoEligible
-                  : LocaleKeys.composerEmpty,
+        // The category pills stay reachable while scrolling the grid.
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _PinnedPills(
+            // Pills running past the right edge fade out instead of being
+            // cut off.
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [Colors.black, Colors.black, Colors.transparent],
+                stops: [0, 0.85, 1],
+              ).createShader(bounds),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final category in [null, ...available])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FormPill(
+                          label: category == null
+                              ? context.tr(LocaleKeys.composerFilterAll)
+                              : context.tr('categories.$category'),
+                          selected:
+                              !state.selectedOnly &&
+                              state.itemCategory == category,
+                          onTap: () => cubit.setItemCategory(category),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ),
-            style: FormTokens.small,
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 14)),
+        if (visible.isEmpty)
+          SliverToBoxAdapter(
+            child: _PickerEmpty(state: state, noEligible: eligible.isEmpty),
           )
         else
-          GridView.count(
-            crossAxisCount: 3,
-            mainAxisSpacing: 18,
-            crossAxisSpacing: 12,
-            childAspectRatio: 0.6,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              for (final item in visible)
-                _SelectItem(
-                  item: item,
-                  selected: state.selectedIds.contains(item.id),
-                  online: online,
-                  onTap: () {
-                    unawaited(HapticFeedback.selectionClick());
-                    cubit.toggleItem(item.id);
-                  },
-                ),
-            ],
+          SliverGrid.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 18,
+              crossAxisSpacing: 12,
+              childAspectRatio: 0.6,
+            ),
+            itemCount: visible.length,
+            itemBuilder: (context, index) {
+              final item = visible[index];
+              return _SelectItem(
+                item: item,
+                selected: state.selectedIds.contains(item.id),
+                online: online,
+                onTap: () {
+                  unawaited(HapticFeedback.selectionClick());
+                  cubit.toggleItem(item.id);
+                },
+              );
+            },
           ),
-        const SizedBox(height: 24),
-        if (!state.tryOn) _CategoryOptions(state: state),
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        if (!state.tryOn)
+          SliverToBoxAdapter(child: _CategoryOptions(state: state)),
       ],
     );
   }
+}
+
+/// Why the picker grid is empty, with a way back to all pieces when a
+/// search, category or the selection filter hides them.
+class _PickerEmpty extends StatelessWidget {
+  const _PickerEmpty({required this.state, required this.noEligible});
+
+  final ComposerState state;
+  final bool noEligible;
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<ComposerCubit>();
+    final nothingSelected = state.selectedOnly && state.selectedIds.isEmpty;
+    final (title, message) = noEligible
+        ? (LocaleKeys.composerNoEligible, LocaleKeys.composerNoEligibleBody)
+        : nothingSelected
+        ? (LocaleKeys.composerNothingSelected, null)
+        : (LocaleKeys.composerEmpty, LocaleKeys.composerEmptyBody);
+    return FormEmptyState(
+      title: context.tr(title),
+      message: message == null ? null : context.tr(message),
+      icon: noEligible ? Icons.checkroom_outlined : Icons.search_off_rounded,
+      action: noEligible
+          ? null
+          : OutlinedButton(
+              // Also leaves the selection filter.
+              onPressed: () => cubit
+                ..setQuery('')
+                ..setItemCategory(null),
+              child: Text(
+                context.tr(
+                  nothingSelected
+                      ? LocaleKeys.composerShowAll
+                      : LocaleKeys.resetFilters,
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+/// Pins the composer's category pills below the sheet title. Once items
+/// scroll beneath, a short paper fade separates them from the pills.
+class _PinnedPills extends SliverPersistentHeaderDelegate {
+  const _PinnedPills({required this.child});
+
+  final Widget child;
+
+  static const _pills = 44.0;
+  static const _padding = 8.0;
+  static const _fade = 12.0;
+
+  @override
+  double get minExtent => _pills + 2 * _padding;
+
+  @override
+  double get maxExtent => minExtent;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) => Stack(
+    clipBehavior: Clip.none,
+    children: [
+      Positioned.fill(
+        child: ColoredBox(
+          color: FormTokens.paper,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: _padding),
+            child: child,
+          ),
+        ),
+      ),
+      Positioned(
+        left: 0,
+        right: 0,
+        bottom: -_fade,
+        height: _fade,
+        child: IgnorePointer(
+          child: AnimatedOpacity(
+            opacity: shrinkOffset > 0 || overlapsContent ? 1 : 0,
+            duration: FormTokens.quick,
+            child: const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [FormTokens.paper, Color(0x00F6F5F1)],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  @override
+  bool shouldRebuild(_PinnedPills oldDelegate) => oldDelegate.child != child;
 }
 
 /// Photo style and quality as two tiles showing the current value. Each opens

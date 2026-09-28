@@ -724,16 +724,24 @@ class FormChoiceChips extends StatelessWidget {
   }
 }
 
-/// Modal routes that host a [FormSheet] with a scrolling body.
-const _formSheetExtent = 0.94;
+/// Share of the available height a [FormSheet] may grow to.
+const formSheetExtent = 0.94;
 
-Widget formSheetDraggableWrapper(Widget child) =>
-    _FormSheetDraggableWrapper(child: child);
+/// Hosts a [FormSheet] in a modal route. The sheet fits its content up to
+/// [maxExtent] of the height below the status bar.
+Widget formSheetDraggableWrapper(
+  Widget child, {
+  double maxExtent = formSheetExtent,
+}) => _FormSheetDraggableWrapper(maxExtent: maxExtent, child: child);
 
 class _FormSheetDraggableWrapper extends StatefulWidget {
-  const _FormSheetDraggableWrapper({required this.child});
+  const _FormSheetDraggableWrapper({
+    required this.child,
+    required this.maxExtent,
+  });
 
   final Widget child;
+  final double maxExtent;
 
   @override
   State<_FormSheetDraggableWrapper> createState() =>
@@ -745,7 +753,7 @@ class _FormSheetDraggableWrapperState
   final GlobalKey _contentKey = GlobalKey();
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
-  double _openExtent = _formSheetExtent;
+  late double _openExtent = widget.maxExtent;
 
   @override
   void initState() {
@@ -777,7 +785,7 @@ class _FormSheetDraggableWrapperState
 
       final openExtent = (box.size.height / _availableHeight).clamp(
         0.05,
-        _formSheetExtent,
+        widget.maxExtent,
       );
       if ((_openExtent - openExtent).abs() < 0.002) return;
 
@@ -817,7 +825,7 @@ class _FormSheetDraggableWrapperState
                   child: OverflowBox(
                     alignment: Alignment.topCenter,
                     minHeight: 0,
-                    maxHeight: constraints.maxHeight * _formSheetExtent,
+                    maxHeight: constraints.maxHeight * widget.maxExtent,
                     child: PrimaryScrollController(
                       controller: scrollController,
                       child: SizeChangedLayoutNotifier(
@@ -858,14 +866,22 @@ Future<T?> showFormSheet<T>({
 class FormSheet extends StatelessWidget {
   const FormSheet({
     required this.title,
-    required this.child,
+    this.child,
+    this.slivers,
     this.footer,
     this.leading,
     this.scrollable = true,
     super.key,
-  });
+  }) : assert(
+         (child == null) != (slivers == null),
+         'Pass either child or slivers.',
+       );
   final String title;
-  final Widget child;
+  final Widget? child;
+
+  /// Replaces [child] when parts of the body should pin while scrolling.
+  /// The body then always fills the sheet.
+  final List<Widget>? slivers;
 
   /// Sits before the title, e.g. a back button for a step inside the sheet.
   final Widget? leading;
@@ -898,7 +914,21 @@ class FormSheet extends StatelessWidget {
         final heightCap = modalScroll
             ? constraints.maxHeight
             : maxHeight.clamp(240.0, constraints.maxHeight);
-        final scrollBody = scrollable
+        final scrollBody = slivers != null
+            ? CustomScrollView(
+                controller: modalScroll ? sheetScroll : null,
+                physics: modalScroll
+                    ? const AlwaysScrollableScrollPhysics()
+                    : null,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                slivers: [
+                  ...slivers!,
+                  if (insetInBody)
+                    SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
+                ],
+              )
+            : scrollable
             ? SingleChildScrollView(
                 controller: modalScroll ? sheetScroll : null,
                 physics: modalScroll
@@ -911,7 +941,7 @@ class FormSheet extends StatelessWidget {
                     : null,
                 child: child,
               )
-            : child;
+            : child!;
         return Padding(
           padding: EdgeInsets.fromLTRB(
             FormTokens.gutter,

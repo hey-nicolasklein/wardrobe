@@ -51,6 +51,8 @@ GoRouter createRouter({bool onboarding = false}) => GoRouter(
                   parentNavigatorKey: _rootNavigatorKey,
                   pageBuilder: (_, state) => FormSheetPage(
                     key: state.pageKey,
+                    // The composer holds a lot, so it opens nearly full height.
+                    maxExtent: 0.985,
                     child: LookComposerPage(
                       preselectedIds:
                           state.uri.queryParametersAll['item'] ?? const [],
@@ -182,8 +184,13 @@ GoRouter createRouter({bool onboarding = false}) => GoRouter(
 );
 
 class FormSheetPage extends Page<void> {
-  const FormSheetPage({required this.child, super.key});
+  const FormSheetPage({
+    required this.child,
+    this.maxExtent = formSheetExtent,
+    super.key,
+  });
   final Widget child;
+  final double maxExtent;
 
   @override
   Route<void> createRoute(BuildContext context) => ModalBottomSheetRoute<void>(
@@ -199,6 +206,6 @@ class FormSheetPage extends Page<void> {
           ? Duration.zero
           : FormTokens.sheetDuration,
     ),
-    builder: (_) => formSheetDraggableWrapper(child),
+    builder: (_) => formSheetDraggableWrapper(child, maxExtent: maxExtent),
   );
 }
