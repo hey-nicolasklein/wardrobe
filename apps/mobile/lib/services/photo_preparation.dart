@@ -58,3 +58,20 @@ class PhotoPreparation {
     return result;
   }
 }
+
+/// Center-crops a JPEG to the 4:5 look format, so a try-on keeps the photo's
+/// framing instead of the image model re-framing it.
+Uint8List cropToLookFormat(Uint8List jpeg) {
+  final image = img.decodeJpg(jpeg)!;
+  final (width, height) = image.width * 5 > image.height * 4
+      ? (image.height * 4 ~/ 5, image.height)
+      : (image.width, image.width * 5 ~/ 4);
+  final cropped = img.copyCrop(
+    image,
+    x: (image.width - width) ~/ 2,
+    y: (image.height - height) ~/ 2,
+    width: width,
+    height: height,
+  );
+  return img.encodeJpg(cropped, quality: 92);
+}

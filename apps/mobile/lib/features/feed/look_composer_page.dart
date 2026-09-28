@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -18,16 +19,23 @@ import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
+import 'package:form_mobile/services/photo_preparation.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:form_mobile/widgets/form_icon.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 /// The PWA's look composer (`openLookComposer`), shown as a sheet route.
 class LookComposerPage extends StatelessWidget {
-  const LookComposerPage({this.preselectedIds = const [], super.key});
+  const LookComposerPage({
+    this.preselectedIds = const [],
+    this.tryOn = false,
+    super.key,
+  });
 
   final List<String> preselectedIds;
+  final bool tryOn;
 
   @override
   Widget build(BuildContext context) => BlocProvider(
@@ -35,6 +43,7 @@ class LookComposerPage extends StatelessWidget {
       context.read<LookRepository>(),
       preselectedIds: preselectedIds,
       defaultQuality: context.read<QualityCubit>().state.feed,
+      tryOn: tryOn,
     ),
     child: const _ComposerView(),
   );
@@ -145,14 +154,41 @@ class _ComposerPicker extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          context.tr(LocaleKeys.composerOccasionLabel),
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        FormChoiceChips(
+          options: {
+            'inspire': context.tr(LocaleKeys.composerModeInspire),
+            'try-on': context.tr(LocaleKeys.composerModeTryOn),
+          },
+          selected: state.tryOn ? 'try-on' : 'inspire',
+          onSelected: (mode) => cubit.setTryOn(tryOn: mode == 'try-on'),
         ),
-        const SizedBox(height: 12),
-        _OccasionPresets(selected: state.occasion),
-        const SizedBox(height: 16),
-        _FineTuning(state: state),
+        const SizedBox(height: 20),
+        if (state.tryOn) ...[
+          _TryOnBases(state: state, online: online),
+          const SizedBox(height: 18),
+          Text(
+            context.tr(LocaleKeys.composerQualityLabel),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          FormChoiceChips(
+            options: {
+              for (final quality in qualities)
+                quality: context.tr('quality.$quality'),
+            },
+            selected: state.quality,
+            onSelected: cubit.setQuality,
+          ),
+        ] else ...[
+          Text(
+            context.tr(LocaleKeys.composerOccasionLabel),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          _OccasionPresets(selected: state.occasion),
+          const SizedBox(height: 16),
+          _FineTuning(state: state),
+        ],
         const SizedBox(height: 28),
         Row(
           children: [
@@ -259,7 +295,7 @@ class _ComposerPicker extends StatelessWidget {
             ],
           ),
         const SizedBox(height: 24),
-        _CategoryOptions(state: state),
+        if (!state.tryOn) _CategoryOptions(state: state),
       ],
     );
   }
@@ -949,6 +985,157 @@ class _CompletionPill extends StatelessWidget {
   }
 }
 
+/// The user's own photos for a try-on: a tile to add one, then the photos
+/// earlier try-ons used. Picking the same photo again keeps results comparable.
+class _TryOnBases extends StatelessWidget {
+  const _TryOnBases({required this.state, required this.online});
+
+  final ComposerState state;
+  final bool online;
+
+  static const _height = 150.0;
+
+  Future<void> _add(BuildContext context) async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null || !context.mounted) return;
+    await context.read<ComposerCubit>().addBase(() async {
+      final prepared = await PhotoPreparation().prepare(picked.path);
+      return compute(cropToLookFormat, prepared.bytes);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<ComposerCubit>();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          context.tr(LocaleKeys.composerTryOnPhotos),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 4),
+        Text(context.tr(LocaleKeys.composerTryOnHint), style: FormTokens.small),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: _height,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            children: [
+              _BaseTile(
+                selected: false,
+                onTap: state.uploadingBase || !online
+                    ? null
+                    : () => unawaited(_add(context)),
+                child: ColoredBox(
+                  color: FormTokens.uploadTint,
+                  child: Center(
+                    child: state.uploadingBase
+                        ? const SizedBox.square(
+                            dimension: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.add_a_photo_outlined,
+                                color: FormTokens.green,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                context.tr(LocaleKeys.composerTryOnAddPhoto),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: FormTokens.green,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+              ),
+              for (final assetId in state.tryOnBases)
+                _BaseTile(
+                  key: ValueKey(assetId),
+                  selected: assetId == state.baseAssetId,
+                  onTap: () {
+                    unawaited(HapticFeedback.selectionClick());
+                    cubit.selectBase(assetId);
+                  },
+                  child: CachedMedia(
+                    identity: assetId,
+                    previewPath: 'v1/assets/$assetId/content',
+                    online: online,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BaseTile extends StatelessWidget {
+  const _BaseTile({
+    required this.selected,
+    required this.onTap,
+    required this.child,
+    super.key,
+  });
+
+  final bool selected;
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(right: 10),
+    child: Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: FormTokens.quick,
+          width: _TryOnBases._height * 4 / 5,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selected ? FormTokens.green : Colors.transparent,
+              width: 2.5,
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                child,
+                if (selected)
+                  const Positioned(
+                    top: 6,
+                    right: 6,
+                    child: CircleAvatar(
+                      radius: 11,
+                      backgroundColor: FormTokens.green,
+                      child: Icon(Icons.check, size: 14, color: Colors.white),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 class _ComposerPreview extends StatelessWidget {
   const _ComposerPreview({required this.state, required this.selected});
 
@@ -1102,7 +1289,7 @@ class _ComposerFooter extends StatelessWidget {
                   ),
                 ),
         ),
-        if (selected.isNotEmpty) ...[
+        if (selected.isNotEmpty && !state.tryOn) ...[
           _CompletionChoice(
             completion: state.completion,
             canFrameOnly: frameable,
@@ -1125,6 +1312,7 @@ class _ComposerFooter extends StatelessWidget {
                 onPressed:
                     state.submitting ||
                         !connected ||
+                        !state.canSubmit ||
                         (state.completion == 'selected' && !frameable)
                     ? null
                     : () => unawaited(cubit.submit()),
@@ -1136,7 +1324,13 @@ class _ComposerFooter extends StatelessWidget {
                           color: Colors.white,
                         ),
                       )
-                    : Text(context.tr(LocaleKeys.createLook)),
+                    : Text(
+                        context.tr(
+                          state.tryOn
+                              ? LocaleKeys.composerTryOnAction
+                              : LocaleKeys.createLook,
+                        ),
+                      ),
               ),
             ),
           ],

@@ -338,6 +338,31 @@ class _ItemViewState extends State<_ItemView> {
                             )
                           : null,
                     ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: enabled
+                            ? () => openLookComposer(
+                                context,
+                                itemIds: [detail.wardrobeItem.id],
+                                tryOn: true,
+                              )
+                            : null,
+                        icon: const Icon(Icons.checkroom_rounded, size: 19),
+                        label: Text(context.tr(LocaleKeys.tryOnItem)),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(50),
+                          foregroundColor: FormTokens.green,
+                          side: const BorderSide(color: FormTokens.green),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              FormTokens.cardRadius,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
@@ -562,7 +587,9 @@ class _ItemGallery extends StatelessWidget {
                 previewPath: 'v1/assets/${look.assetId!}/content',
                 fit: BoxFit.cover,
                 caption: context.tr(
-                  LocaleKeys.generatedLookCaption,
+                  look.isTryOn
+                      ? LocaleKeys.tryOnLookCaption
+                      : LocaleKeys.generatedLookCaption,
                   namedArgs: {'date': lookDateText(context, look.createdAt)},
                 ),
               ),

@@ -17,18 +17,21 @@ import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
 /// Opens the look composer, or character-reference setup when no active
-/// reference exists yet. [itemIds] preselects pieces.
+/// reference exists yet. [itemIds] preselects pieces; [tryOn] starts in
+/// try-on mode.
 void openLookComposer(
   BuildContext context, {
   List<String> itemIds = const [],
+  bool tryOn = false,
 }) {
   if (context.read<FeedCubit>().state.hasActiveCharacterReference == false) {
     unawaited(context.push('/feed/character-setup'));
     return;
   }
-  final query = itemIds
-      .map((id) => 'item=${Uri.encodeComponent(id)}')
-      .join('&');
+  final query = [
+    ...itemIds.map((id) => 'item=${Uri.encodeComponent(id)}'),
+    if (tryOn) 'mode=try-on',
+  ].join('&');
   unawaited(
     context.push(query.isEmpty ? '/feed/composer' : '/feed/composer?$query'),
   );
@@ -221,7 +224,25 @@ class FeedPage extends StatelessWidget {
               style: FormTokens.heading.copyWith(fontSize: 22),
             ),
             const SizedBox(height: 8),
-            if (look.quality != 'high')
+            if (look.isTryOn)
+              OutlinedButton(
+                onPressed: () => run(
+                  sheetContext,
+                  () => cubit.createLook(
+                    LookCommand.create(
+                      exactItemIds: look.wardrobeItemIds,
+                      categories: const [],
+                      occasion: null,
+                      baseAssetId: look.baseAssetId,
+                      quality: look.quality,
+                    ),
+                    look.wardrobeItemIds,
+                  ),
+                  success: context.tr(LocaleKeys.lookCreating),
+                ),
+                child: Text(context.tr(LocaleKeys.tryOnAgain)),
+              ),
+            if (look.quality != 'high' && !look.isTryOn)
               OutlinedButton(
                 onPressed: () {
                   Navigator.pop(sheetContext);
@@ -229,22 +250,23 @@ class FeedPage extends StatelessWidget {
                 },
                 child: Text(context.tr(LocaleKeys.lookUpgrade)),
               ),
-            OutlinedButton(
-              onPressed: () => run(
-                sheetContext,
-                () => cubit.createLook(
-                  LookCommand.create(
-                    exactItemIds: const [],
-                    categories: const [],
-                    occasion: null,
-                    parentLookId: look.id,
+            if (!look.isTryOn)
+              OutlinedButton(
+                onPressed: () => run(
+                  sheetContext,
+                  () => cubit.createLook(
+                    LookCommand.create(
+                      exactItemIds: const [],
+                      categories: const [],
+                      occasion: null,
+                      parentLookId: look.id,
+                    ),
+                    look.wardrobeItemIds,
                   ),
-                  look.wardrobeItemIds,
+                  success: context.tr(LocaleKeys.lookCreating),
                 ),
-                success: context.tr(LocaleKeys.lookCreating),
+                child: Text(context.tr(LocaleKeys.lookVary)),
               ),
-              child: Text(context.tr(LocaleKeys.lookVary)),
-            ),
             OutlinedButton(
               onPressed: () {
                 Navigator.pop(sheetContext);

@@ -53,6 +53,7 @@ GoRouter createRouter({bool onboarding = false}) => GoRouter(
                     child: LookComposerPage(
                       preselectedIds:
                           state.uri.queryParametersAll['item'] ?? const [],
+                      tryOn: state.uri.queryParameters['mode'] == 'try-on',
                     ),
                   ),
                 ),

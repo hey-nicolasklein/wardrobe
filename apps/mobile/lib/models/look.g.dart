@@ -83,6 +83,7 @@ Look _$LookFromJson(Map<String, dynamic> json) => $checkedCreate('Look', json, (
       'finishedAt',
       (v) => v == null ? null : DateTime.parse(v as String),
     ),
+    baseAssetId: $checkedConvert('baseAssetId', (v) => v as String?),
   );
   return val;
 });
@@ -103,6 +104,7 @@ Map<String, dynamic> _$LookToJson(Look instance) => <String, dynamic>{
   'failureCategory': instance.failureCategory,
   'createdAt': instance.createdAt.toIso8601String(),
   'finishedAt': instance.finishedAt?.toIso8601String(),
+  'baseAssetId': ?instance.baseAssetId,
 };
 
 CharacterSheet _$CharacterSheetFromJson(

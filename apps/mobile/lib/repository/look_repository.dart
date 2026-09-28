@@ -8,6 +8,7 @@ import 'package:form_mobile/repository/look_json.dart';
 import 'package:form_mobile/repository/media_repository.dart';
 import 'package:form_mobile/services/app_database.dart';
 import 'package:form_mobile/services/form_api.dart';
+import 'package:form_mobile/utils/idempotency_key.dart';
 
 class CachedLook {
   const CachedLook(this.look);
@@ -50,6 +51,43 @@ class LookRepository {
               .get())
           .map(CachedLook.fromRecord)
           .toList();
+
+  /// Photos earlier try-ons were made from, newest first. Reusing one keeps
+  /// new try-ons comparable with the old ones.
+  Future<List<String>> tryOnBases() async => [
+    ...{
+      for (final cached in await cached())
+        if (cached.look.baseAssetId != null) cached.look.baseAssetId!,
+    },
+  ];
+
+  /// Uploads a photo of the user as a try-on base and returns its asset id.
+  Future<String> uploadTryOnPhoto(Uint8List jpeg) async {
+    final intent = await _request(
+      'v1/source-photos/upload-intents',
+      method: 'POST',
+      data: {
+        'fileName': 'try-on.jpg',
+        'contentType': 'image/jpeg',
+        'byteSize': jpeg.length,
+      },
+    );
+    await api!.upload(
+      intent['uploadUrl'] as String,
+      jpeg,
+      intent['headers'] as Map<String, dynamic>,
+      (_, _) {},
+    );
+    final completed = await _request(
+      'v1/source-photos/complete',
+      method: 'POST',
+      data: {
+        'assetId': intent['assetId'],
+        'idempotencyKey': newIdempotencyKey(),
+      },
+    );
+    return (completed['asset'] as Map<String, dynamic>)['id'] as String;
+  }
 
   Future<bool> hasSnapshot() async =>
       (await (database.select(database.collectionSummaries)..where(

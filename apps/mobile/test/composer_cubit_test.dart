@@ -172,6 +172,21 @@ void main() {
     expect(cubit.command().body['completion'], 'selected');
   });
 
+  test('a try-on needs a photo and sends only it with the pieces', () {
+    final cubit = ComposerCubit(looks, preselectedIds: [shirt.id])
+      ..setOccasion('party')
+      ..setTryOn(tryOn: true);
+    expect(cubit.state.canSubmit, isFalse);
+    cubit.selectBase('asset-base-photo');
+    expect(cubit.state.canSubmit, isTrue);
+    final body = cubit.command().body;
+    expect(body['baseAssetId'], 'asset-base-photo');
+    expect(body['exactItemIds'], [shirt.id]);
+    expect(body['occasion'], isNull);
+    cubit.toggleItem(shirt.id);
+    expect(cubit.state.canSubmit, isFalse);
+  });
+
   test('a failed submit retries with the same idempotency key', () async {
     failNextCreate = true;
     final cubit = ComposerCubit(looks, preselectedIds: [shirt.id]);

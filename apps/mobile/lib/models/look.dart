@@ -56,6 +56,7 @@ class Look {
     required this.failureCategory,
     required this.createdAt,
     required this.finishedAt,
+    this.baseAssetId,
   });
 
   factory Look.fromJson(Map<String, dynamic> json) {
@@ -99,6 +100,12 @@ class Look {
   final DateTime createdAt;
   @JsonKey(required: true)
   final DateTime? finishedAt;
+
+  /// The user's own photo a try-on was made from. Null for inspiration looks
+  /// and for looks cached before try-ons existed.
+  @JsonKey(includeIfNull: false)
+  final String? baseAssetId;
+  bool get isTryOn => baseAssetId != null;
 
   bool get isReady => state == 'ready';
   bool get isActive => ['queued', 'planning', 'generating'].contains(state);

@@ -281,6 +281,17 @@ abstract class LocaleKeys {
   static const composerQualityNote = 'composerQualityNote';
   static const composerStyleLabel = 'composerStyleLabel';
   static const composerFineTuning = 'composerFineTuning';
+  static const composerModeInspire = 'composerModeInspire';
+  static const composerModeTryOn = 'composerModeTryOn';
+  static const composerTryOnPhotos = 'composerTryOnPhotos';
+  static const composerTryOnHint = 'composerTryOnHint';
+  static const composerTryOnAddPhoto = 'composerTryOnAddPhoto';
+  static const composerTryOnAction = 'composerTryOnAction';
+  static const composerSummaryTryOn = 'composerSummaryTryOn';
+  static const tryOnItem = 'tryOnItem';
+  static const tryOnBadge = 'tryOnBadge';
+  static const tryOnLookCaption = 'tryOnLookCaption';
+  static const tryOnAgain = 'tryOnAgain';
   static const lookImageCost = 'lookImageCost';
   static const lookImageCostValue = 'lookImageCostValue';
   static const costs_title = 'costs.title';

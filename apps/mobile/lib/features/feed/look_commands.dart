@@ -19,6 +19,7 @@ class LookCommand {
     String? parentLookId,
     bool preserveComposition = false,
     String quality = 'low',
+    String? baseAssetId,
     String? idempotencyKey,
   }) => LookCommand('v1/looks', 'POST', {
     'exactItemIds': exactItemIds,
@@ -29,6 +30,7 @@ class LookCommand {
     'parentLookId': parentLookId,
     'preserveComposition': preserveComposition,
     'quality': quality,
+    'baseAssetId': ?baseAssetId,
     'idempotencyKey': ?idempotencyKey,
   });
 

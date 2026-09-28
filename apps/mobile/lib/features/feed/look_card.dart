@@ -598,6 +598,44 @@ class _LookStageState extends State<_LookStage>
                     online: widget.online,
                     onGarmentTap: openItem,
                   ),
+                  if (look.isTryOn)
+                    Positioned(
+                      top: 12,
+                      left: 12,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(
+                            FormTokens.chipRadius,
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.checkroom_rounded,
+                                size: 14,
+                                color: FormTokens.green,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                context.tr(LocaleKeys.tryOnBadge),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: FormTokens.green,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

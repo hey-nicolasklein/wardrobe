@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:bloc/bloc.dart';
 import 'package:form_mobile/features/feed/look_commands.dart';
 import 'package:form_mobile/models/wardrobe.dart';
@@ -41,6 +44,10 @@ class ComposerState {
     this.quality = 'low',
     this.completion = 'wardrobe',
     this.selectedOnly = false,
+    this.tryOn = false,
+    this.tryOnBases = const [],
+    this.baseAssetId,
+    this.uploadingBase = false,
     this.itemCategory,
     this.query = '',
     this.previewExpanded = false,
@@ -71,6 +78,20 @@ class ComposerState {
   final String completion;
   bool get completeWithWardrobe => completion == 'wardrobe';
   final bool selectedOnly;
+
+  /// Try-on mode: dress one of the user's own photos in the picked pieces 1:1
+  /// instead of generating a new scene.
+  final bool tryOn;
+
+  /// Photos earlier try-ons used, newest first, see
+  /// [LookRepository.tryOnBases].
+  final List<String> tryOnBases;
+  final String? baseAssetId;
+  final bool uploadingBase;
+
+  /// A try-on needs a photo and at least one piece to put on it.
+  bool get canSubmit =>
+      !tryOn || (baseAssetId != null && selectedIds.isNotEmpty);
 
   /// The picker's category filter. Unrelated to [categories].
   final String? itemCategory;
@@ -126,6 +147,10 @@ class ComposerState {
     String? quality,
     String? completion,
     bool? selectedOnly,
+    bool? tryOn,
+    List<String>? tryOnBases,
+    String? Function()? baseAssetId,
+    bool? uploadingBase,
     String? Function()? itemCategory,
     String? query,
     bool? previewExpanded,
@@ -142,6 +167,10 @@ class ComposerState {
     quality: quality ?? this.quality,
     completion: completion ?? this.completion,
     selectedOnly: selectedOnly ?? this.selectedOnly,
+    tryOn: tryOn ?? this.tryOn,
+    tryOnBases: tryOnBases ?? this.tryOnBases,
+    baseAssetId: baseAssetId == null ? this.baseAssetId : baseAssetId(),
+    uploadingBase: uploadingBase ?? this.uploadingBase,
     itemCategory: itemCategory == null ? this.itemCategory : itemCategory(),
     query: query ?? this.query,
     previewExpanded: previewExpanded ?? this.previewExpanded,
@@ -163,14 +192,30 @@ class ComposerCubit extends Cubit<ComposerState> {
     List<String> preselectedIds = const [],
     String? idempotencyKey,
     String defaultQuality = 'low',
+    bool tryOn = false,
   }) : idempotencyKey = idempotencyKey ?? newIdempotencyKey(),
        _defaultQuality = defaultQuality,
        super(
          ComposerState(
            selectedIds: preselectedIds.toSet(),
            quality: defaultQuality,
+           tryOn: tryOn,
          ),
-       );
+       ) {
+    unawaited(_loadBases());
+  }
+
+  Future<void> _loadBases() async {
+    final bases = await looks.tryOnBases();
+    if (isClosed) return;
+    emit(
+      state.copyWith(
+        tryOnBases: bases,
+        // The latest photo keeps new try-ons comparable with the last ones.
+        baseAssetId: () => state.baseAssetId ?? bases.firstOrNull,
+      ),
+    );
+  }
 
   final LookRepository looks;
   final String idempotencyKey;
@@ -192,6 +237,34 @@ class ComposerCubit extends Cubit<ComposerState> {
         selectedPieceId: state.selectedPieceId == id ? () => null : null,
       ),
     );
+  }
+
+  void setTryOn({required bool tryOn}) => emit(state.copyWith(tryOn: tryOn));
+
+  void selectBase(String assetId) =>
+      emit(state.copyWith(baseAssetId: () => assetId));
+
+  /// Uploads a new photo of the user and selects it as the try-on base.
+  Future<void> addBase(Future<Uint8List> Function() prepare) async {
+    if (state.uploadingBase) return;
+    emit(state.copyWith(uploadingBase: true, failure: () => null));
+    try {
+      final assetId = await looks.uploadTryOnPhoto(await prepare());
+      if (isClosed) return;
+      emit(
+        state.copyWith(
+          uploadingBase: false,
+          tryOnBases: [assetId, ...state.tryOnBases],
+          baseAssetId: () => assetId,
+        ),
+      );
+    } on FormApiException catch (error) {
+      if (!isClosed) {
+        emit(
+          state.copyWith(uploadingBase: false, failure: () => error.failure),
+        );
+      }
+    }
   }
 
   void setOccasion(String? occasion) =>
@@ -239,20 +312,40 @@ class ComposerCubit extends Cubit<ComposerState> {
     ),
   );
 
-  void reset() => emit(ComposerState(quality: _defaultQuality));
-
-  LookCommand command() => LookCommand.create(
-    exactItemIds: state.selectedIds.toList(),
-    categories: state.completeWithWardrobe ? state.categories.toList() : [],
-    occasion: state.occasion,
-    style: state.resolvedStyle,
-    completion: state.completion,
-    quality: state.quality,
-    idempotencyKey: idempotencyKey,
+  void reset() => emit(
+    ComposerState(
+      quality: _defaultQuality,
+      tryOn: state.tryOn,
+      tryOnBases: state.tryOnBases,
+      baseAssetId: state.baseAssetId,
+    ),
   );
 
+  LookCommand command() => state.tryOn
+      ? LookCommand.create(
+          exactItemIds: state.selectedIds.toList(),
+          categories: const [],
+          occasion: null,
+          baseAssetId: state.baseAssetId,
+          quality: state.quality,
+          idempotencyKey: idempotencyKey,
+        )
+      : LookCommand.create(
+          exactItemIds: state.selectedIds.toList(),
+          categories: state.completeWithWardrobe
+              ? state.categories.toList()
+              : [],
+          occasion: state.occasion,
+          style: state.resolvedStyle,
+          completion: state.completion,
+          quality: state.quality,
+          idempotencyKey: idempotencyKey,
+        );
+
   Future<void> submit() async {
-    if (state.submitting || state.createdLookId != null) return;
+    if (state.submitting || state.createdLookId != null || !state.canSubmit) {
+      return;
+    }
     emit(state.copyWith(submitting: true, failure: () => null));
     try {
       final lookId = await looks.create(
