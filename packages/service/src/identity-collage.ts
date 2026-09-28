@@ -34,8 +34,8 @@ export async function createIdentityCollage(references: Buffer[]) {
     .composite(tiles).png().toBuffer();
 }
 
-/** Shrinks the approved reference without cropping or enlarging it. */
-export function compactIdentityReference(reference: Uint8Array) {
+/** Keeps the approved board compact without cropping or enlarging it. */
+export function prepareIdentityReference(reference: Uint8Array) {
   return sharp(reference, { failOn: 'error', limitInputPixels: 40_000_000 })
     .rotate()
     .resize(432, 768, { fit: 'inside', withoutEnlargement: true })

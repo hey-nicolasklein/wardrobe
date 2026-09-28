@@ -42,7 +42,7 @@ import {
   setLookLiked,
   shotWeights,
 } from './index.js';
-import { compactIdentityReference } from './identity-collage.js';
+import { prepareIdentityReference } from './identity-collage.js';
 
 const enabled = process.env.FORM_RUN_SERVICE_INTEGRATION === 'true';
 
@@ -93,7 +93,7 @@ test('photo collages cost zero and become the first reference for a priced feed 
       planLook: async () => ({ requestId: 'plan-collage', itemIds: [fixtureIds.readyItem], concept }),
       generateComposite: async (request: { references: Uint8Array[]; prompt: string; quality: string }) => {
         assert.equal(request.quality, 'low');
-        assert.ok(Buffer.from(request.references[0]!).equals(await compactIdentityReference(collageBytes)));
+        assert.ok(Buffer.from(request.references[0]!).equals(await prepareIdentityReference(collageBytes)));
         assert.equal(request.references.length, 2);
         const garmentReference = await sharp(request.references[1]!).metadata();
         assert.equal(garmentReference.width, 512);
@@ -185,7 +185,7 @@ test('photo collages cost zero and become the first reference for a priced feed 
         assert.equal(request.quality, 'high');
         assert.equal(request.references.length, 3);
         assert.ok(Buffer.from(request.references[0]!).equals(await sharp(collageBytes).resize(768, 960).png().toBuffer()));
-        assert.ok(Buffer.from(request.references[1]!).equals(await compactIdentityReference(collageBytes)));
+        assert.ok(Buffer.from(request.references[1]!).equals(await prepareIdentityReference(collageBytes)));
         assert.match(request.prompt, /Preserve its composition/);
         upgradeChecked = true;
         return { requestId: 'upgraded-look', pngBytes: await sharp(collageBytes).resize(768, 960).png().toBuffer(), usage: { textInputTokens: 10, imageInputTokens: 200, outputTokens: 30, serviceTier: 'default', raw: { fixture: true } } };

@@ -25,14 +25,14 @@ import {
 import { withTransaction } from './database.js';
 import { pickShot, shotPrompt, shotStyle, shotWeights } from './look-shots.js';
 import { enqueueJob, type RemoteImageJob } from './jobs.js';
-import { collageModel, compactIdentityReference, createIdentityCollage } from './identity-collage.js';
+import { collageModel, prepareIdentityReference, createIdentityCollage } from './identity-collage.js';
 import { IdempotencyConflictError, OwnedResourceNotFoundError } from './media.js';
 import type { PrivateObjectStorage } from './storage.js';
 import sharp from 'sharp';
 
 export const lookModel = 'gpt-image-2.5-flare';
 export const lookPlannerModel = 'gpt-5.4-mini';
-export const lookPromptVersion = 'real-camera-identity-v4';
+export const lookPromptVersion = 'real-camera-identity-v6';
 export const tryOnPromptVersion = 'try-on-v1';
 
 type CharacterRow = {
@@ -791,7 +791,7 @@ async function writeAsset(
 // full outfit and a body-zone sentence for a `selected` completion.
 const lookStylePrompts: Record<LookStyle, (concept: LookConcept, framing: string | null) => string> = {
   candid: (c, framing) =>
-    `Create one photorealistic 4:5 snapshot as if a friend casually took it on an iPhone while the referenced person was ${c.activity}, in ${c.scene}. ${framing ?? `${c.framing} framing.`} The person is caught mid-moment and must not look directly at the camera. Avoid posed portraits and runway staging.`,
+    `Create one photorealistic 4:5 snapshot as if a friend casually took it on an iPhone while the referenced person was ${c.activity}, in ${c.scene}. ${framing ?? `${c.framing} framing.`} Keep the moment casual and avoid runway staging. Preserve the primary identity photo's head angle, gaze, and expression; looking toward the camera is allowed when the reference does.`,
   street: (c, framing) =>
     `Create one photorealistic 4:5 outfit photo that a friend took on an iPhone of the referenced person in ${c.scene}, casually posing for a fit pic while ${c.activity}. ${framing ?? 'Full-body framing, head to shoes, slightly off-centre, with a slightly tilted horizon.'} Smartphone look: deep depth of field with the background mostly in focus and typical phone processing, no telephoto compression or creamy bokeh.`,
   mirror: (c, framing) =>
@@ -858,7 +858,7 @@ export function lookPrompt(
   const garmentReferences = items.length > 1
     ? `The final garment reference is one ordered board. Its cells are row-major, from left to right and then top to bottom, matching this garment order: ${items.map((item, index) => `${index + 1}. ${item.name}`).join('; ')}. ${pairing} Use each cell only for its matching garment.`
     : `The final reference shows the garment. ${pairing}`;
-  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} ${garmentReferences} ${lookStylePrompts[style](concept, focus ? lookFocusFraming[focus] : null)}${shotPrompt(concept.shot) ? ` Camera: ${shotPrompt(concept.shot)}` : ''} ${lookLighting(occasion)} ${unpolished} Mood: ${concept.mood}. ${garmentInstruction} Every referenced garment must be fully visible and faithful to its reference. ${completion} Avoid ${style === 'mirror' ? '' : 'selfies, '}illustrations, text, watermarks, and collages in the output. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
+  return `The first reference shows the person whose identity must be preserved. It may be a single photo or a card containing several photos of the same person. Ignore background people and partial faces at the edges. For a single photo, use that photo as the primary identity reference. For a card, choose the photo with the clearest unobstructed face as the primary identity reference, regardless of its position in the card. Preserve its actual expression, whether smiling, laughing, or neutral; do not impose a preferred expression. Use the other photos only to confirm identity details, not to blend their expressions or head angles. Preserving the exact facial likeness of the person in this reference card is the highest priority. Use the original photos as the ground truth for identity. Preserve their facial proportions, face shape, jaw, cheeks, eyes, nose, mouth, hairline, facial hair, glasses when present, natural asymmetry, skin texture, and body proportions. Do not beautify, slim, symmetrize, or redesign their face. Copy the primary identity photo's head angle, gaze, and facial expression. Vary the outfit, body stance, and surroundings while keeping those facial details stable. Never borrow a face or identity from the clothing references. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} ${garmentReferences} ${lookStylePrompts[style](concept, focus ? lookFocusFraming[focus] : null)}${shotPrompt(concept.shot) ? ` Camera: ${shotPrompt(concept.shot)}` : ''} ${lookLighting(occasion)} ${unpolished} Mood of the scene: ${concept.mood}. The activity, camera shot, and mood describe the body and surroundings only. If they suggest laughing, looking down or away, or turning the head differently from the primary identity photo, adapt them to preserve that photo's head angle, gaze, and expression. ${garmentInstruction} Every referenced garment must be fully visible and faithful to its reference. ${completion} Avoid ${style === 'mirror' ? '' : 'selfies, '}illustrations, text, watermarks, and collages in the output. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
 }
 
 async function imageDimensions(bytes: Uint8Array, expected: '1024x1280' | '768x960') {
@@ -1096,7 +1096,7 @@ export async function executeInspirationJob(
     const refs = baseAssetId
       ? [await readAsset(database, storage, job.accountId, baseAssetId), board]
       : [
-          await compactIdentityReference(
+          await prepareIdentityReference(
             await readAsset(database, storage, job.accountId, characterAssetId!),
           ),
           board,
@@ -1109,7 +1109,7 @@ export async function executeInspirationJob(
       prompt: baseAssetId
         ? tryOnPrompt(selected)
         : referenceAssetId
-        ? `Recreate the first reference image with improved detail as one photorealistic 4:5 image. Preserve its composition, pose, outfit, person, lighting and background. The second reference shows the same person and is only for identity detail. ${selected.length > 1 ? 'The final reference is an ordered garment board whose cells match the garments in the requested order. Each cell contains a paired shelf view and original garment photo.' : 'The final reference shows the garment and is only for fabric and construction detail.'} Do not change the scene or add garments, text, watermarks or collage panels.`
+        ? `Recreate the first reference image with improved detail as one photorealistic 4:5 image. Preserve its composition, pose, outfit, person, lighting and background. The second reference is the original identity card and is the ground truth for facial likeness. Prioritize matching this person exactly: preserve facial proportions, face shape, eyes, nose, mouth, hairline, facial hair, glasses, and natural asymmetry. Correct any facial drift in the first image using this card; do not beautify or redesign the face. ${selected.length > 1 ? 'The final reference is an ordered garment board whose cells match the garments in the requested order. Each cell contains a paired shelf view and original garment photo.' : 'The final reference shows the garment and is only for fabric and construction detail.'} Do not change the scene or add garments, text, watermarks or collage panels.`
         : lookPrompt(concept!, selected, character.rows[0]?.note ?? null, completeWithWardrobe, {
             style,
             focus,
