@@ -220,6 +220,7 @@ abstract class LocaleKeys {
   static const lookCharacterReference = 'lookCharacterReference';
   static const lookPieces = 'lookPieces';
   static const inspireItem = 'inspireItem';
+  static const inspireItemHint = 'inspireItemHint';
   static const generatedLookCaption = 'generatedLookCaption';
   static const composerOccasionLabel = 'composerOccasionLabel';
   static const composerPickerTitle = 'composerPickerTitle';
@@ -277,6 +278,7 @@ abstract class LocaleKeys {
   static const flatLayMeta = 'flatLayMeta';
   static const composerQualityLabel = 'composerQualityLabel';
   static const composerQualityNote = 'composerQualityNote';
+  static const composerStyleLabel = 'composerStyleLabel';
   static const lookImageCost = 'lookImageCost';
   static const lookImageCostValue = 'lookImageCostValue';
   static const costs_title = 'costs.title';
@@ -536,4 +538,10 @@ abstract class LocaleKeys {
   static const auth_password = 'auth.password';
   static const auth_emailAction = 'auth.emailAction';
   static const auth = 'auth';
+  static const lookStyle_candid = 'lookStyle.candid';
+  static const lookStyle_street = 'lookStyle.street';
+  static const lookStyle_mirror = 'lookStyle.mirror';
+  static const lookStyle_close_up = 'lookStyle.close-up';
+  static const lookStyle = 'lookStyle';
+
 }

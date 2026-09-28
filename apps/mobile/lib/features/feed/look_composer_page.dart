@@ -159,6 +159,20 @@ class _ComposerPicker extends StatelessWidget {
           selected: state.quality,
           onSelected: cubit.setQuality,
         ),
+        const SizedBox(height: 20),
+        Text(
+          context.tr(LocaleKeys.composerStyleLabel),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        FormChoiceChips(
+          options: {
+            for (final style in lookStyles)
+              style: context.tr('lookStyle.$style'),
+          },
+          selected: state.style,
+          onSelected: cubit.setStyle,
+        ),
         const SizedBox(height: 24),
         _OccasionPresets(selected: state.occasion),
         const SizedBox(height: 28),

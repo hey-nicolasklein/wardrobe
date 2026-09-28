@@ -8,11 +8,15 @@ import 'package:form_mobile/utils/idempotency_key.dart';
 /// The contract accepts at most this many exact pieces per look.
 const maxComposerPieces = 12;
 
+/// Photo styles the API accepts for a look, in picker order.
+const lookStyles = ['candid', 'street', 'mirror', 'close-up'];
+
 class ComposerState {
   const ComposerState({
     this.selectedIds = const {},
     this.categories = const {},
     this.occasion,
+    this.style = 'candid',
     this.quality = 'low',
     this.completeWithWardrobe = true,
     this.selectedOnly = false,
@@ -32,6 +36,9 @@ class ComposerState {
   /// wardrobe, matching the PWA.
   final Set<String> categories;
   final String? occasion;
+
+  /// How the feed image is photographed. One of [lookStyles].
+  final String style;
 
   /// Chosen per look, as in the PWA composer. The Settings default arrives in
   /// Slice 6.
@@ -88,6 +95,7 @@ class ComposerState {
     Set<String>? selectedIds,
     Set<String>? categories,
     String? Function()? occasion,
+    String? style,
     String? quality,
     bool? completeWithWardrobe,
     bool? selectedOnly,
@@ -103,6 +111,7 @@ class ComposerState {
     selectedIds: selectedIds ?? this.selectedIds,
     categories: categories ?? this.categories,
     occasion: occasion == null ? this.occasion : occasion(),
+    style: style ?? this.style,
     quality: quality ?? this.quality,
     completeWithWardrobe: completeWithWardrobe ?? this.completeWithWardrobe,
     selectedOnly: selectedOnly ?? this.selectedOnly,
@@ -162,6 +171,8 @@ class ComposerCubit extends Cubit<ComposerState> {
   void setOccasion(String? occasion) =>
       emit(state.copyWith(occasion: () => occasion));
 
+  void setStyle(String style) => emit(state.copyWith(style: style));
+
   void setQuality(String quality) => emit(state.copyWith(quality: quality));
 
   void setQuery(String query) => emit(state.copyWith(query: query));
@@ -208,6 +219,7 @@ class ComposerCubit extends Cubit<ComposerState> {
     exactItemIds: state.selectedIds.toList(),
     categories: state.completeWithWardrobe ? state.categories.toList() : [],
     occasion: state.occasion,
+    style: state.style,
     completeWithWardrobe: state.completeWithWardrobe,
     quality: state.quality,
     idempotencyKey: idempotencyKey,

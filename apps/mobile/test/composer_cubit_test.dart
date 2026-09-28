@@ -153,6 +153,9 @@ void main() {
     expect(cubit.command().body['quality'], 'low');
     cubit.setQuality('high');
     expect(cubit.command().body['quality'], 'high');
+    expect(cubit.command().body['style'], 'candid');
+    cubit.setStyle('mirror');
+    expect(cubit.command().body['style'], 'mirror');
     cubit.toggleCompleteWithWardrobe();
     expect(cubit.command().body['categories'], isEmpty);
     expect(cubit.command().body['completeWithWardrobe'], isFalse);

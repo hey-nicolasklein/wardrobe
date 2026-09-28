@@ -226,6 +226,7 @@
   "lookCharacterReference": "Character reference",
   "lookPieces": "Pieces",
   "inspireItem": "Create inspiration",
+  "inspireItemHint": "See yourself wearing this",
   "generatedLookCaption": "Generated look · {date}",
   "composerOccasionLabel": "Occasion",
   "composerPickerTitle": "What should we combine?",
@@ -282,6 +283,7 @@
   "flatLayMeta": "{count} pieces · {date}",
   "composerQualityLabel": "Image quality",
   "composerQualityNote": "Choose directly for this look. Higher quality costs more.",
+  "composerStyleLabel": "Photo style",
   "lookImageCost": "Image generation",
   "lookImageCostValue": "{value} US cents",
   "costs": {
@@ -532,5 +534,11 @@
     "email": "Email",
     "password": "Password",
     "emailAction": "Sign in"
+  },
+  "lookStyle": {
+    "candid": "Snapshot",
+    "street": "Street style",
+    "mirror": "Mirror selfie",
+    "close-up": "Close-up"
   }
 }

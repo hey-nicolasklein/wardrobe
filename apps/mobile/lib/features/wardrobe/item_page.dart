@@ -10,6 +10,7 @@ import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/settings/quality_cubit.dart';
+import 'package:form_mobile/features/wardrobe/inspire_button.dart';
 import 'package:form_mobile/features/wardrobe/item_cubit.dart';
 import 'package:form_mobile/features/wardrobe/item_edit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -327,6 +328,17 @@ class _ItemViewState extends State<_ItemView> {
                           error: true,
                         ),
                       ),
+                    InspireButton(
+                      title: context.tr(LocaleKeys.inspireItem),
+                      subtitle: context.tr(LocaleKeys.inspireItemHint),
+                      onPressed: enabled
+                          ? () => openLookComposer(
+                              context,
+                              itemIds: [detail.wardrobeItem.id],
+                            )
+                          : null,
+                    ),
+                    const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(
@@ -355,36 +367,13 @@ class _ItemViewState extends State<_ItemView> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: enabled
-                            ? () => openLookComposer(
-                                context,
-                                itemIds: [detail.wardrobeItem.id],
-                              )
-                            : null,
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(50),
-                          backgroundColor: FormTokens.green,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(
-                              FormTokens.cardRadius,
-                            ),
-                          ),
-                        ),
-                        child: Text(context.tr(LocaleKeys.inspireItem)),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
                         onPressed: online && state.canGenerate
                             ? () => _openGenerate(context, cubit, detail)
                             : null,
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(50),
-                          backgroundColor: FormTokens.green,
-                          foregroundColor: Colors.white,
+                          backgroundColor: FormTokens.field,
+                          foregroundColor: FormTokens.green,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
                               FormTokens.cardRadius,

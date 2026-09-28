@@ -226,6 +226,7 @@
   "lookCharacterReference": "Personenreferenz",
   "lookPieces": "Stücke",
   "inspireItem": "Inspiration erstellen",
+  "inspireItemHint": "Sieh dich in diesem Stück",
   "generatedLookCaption": "Generierter Look · {date}",
   "composerOccasionLabel": "Anlass",
   "composerPickerTitle": "Was kombinieren wir?",
@@ -282,6 +283,7 @@
   "flatLayMeta": "{count} Stücke · {date}",
   "composerQualityLabel": "Bildqualität",
   "composerQualityNote": "Direkt im Test wählen. Höhere Qualität kostet mehr.",
+  "composerStyleLabel": "Bildstil",
   "lookImageCost": "Bildgenerierung",
   "lookImageCostValue": "{value} US-Cent",
   "costs": {
@@ -532,5 +534,11 @@
     "email": "E-Mail",
     "password": "Passwort",
     "emailAction": "Anmelden"
+  },
+  "lookStyle": {
+    "candid": "Schnappschuss",
+    "street": "Streetstyle",
+    "mirror": "Spiegel-Selfie",
+    "close-up": "Nah dran"
   }
 }
