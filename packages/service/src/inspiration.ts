@@ -821,17 +821,17 @@ const lookFocusFraming: Record<LookFocus, string> = {
 const garmentPairing = 'Each view pairs the clean generated shelf view on the left with the cropped original photo on the right. Treat the original photo as the ground truth for colors, material, texture, construction, and distinctive details; use the shelf view to clarify its complete silhouette.';
 
 /**
- * The edit prompt of a try-on: the first reference is the user's own photo.
- * Worded as a fashion styling task on purpose. An earlier version spoke of
- * skin, body shape, and replacing what the person wears, which the image
- * model's safety filter read as undressing a real person.
+ * The prompt of a try-on: the first reference is the user's own photo.
+ * Worded as recreating that photo with a given outfit, like the quality
+ * upgrade. Asking to change the clothes on a real photo was rejected as sexual
+ * by the image model's safety filter every time, whatever the photo showed.
  */
 export function tryOnPrompt(items: Array<{ name: string; category: string; colors: string[] }>) {
   const garments = items.map((i) => `${i.name} (${i.category}; ${i.colors.join(', ')})`).join('; ');
   const references = items.length > 1
     ? `The second reference is one ordered board of clothing items. Its cells are row-major, from left to right and then top to bottom, matching this order: ${items.map((item, index) => `${index + 1}. ${item.name}`).join('; ')}. ${garmentPairing} Use each cell only for its matching item.`
     : `The second reference shows the clothing item. ${garmentPairing}`;
-  return `Fashion try-on for a styling app. The first reference is an everyday photo of a fully clothed person. Show the same photo with the person wearing these clothing items from the references in place of their current ones in the same category: ${garments}. A dress takes the place of both top and trousers or skirt. ${references} Keep the photo itself unchanged: the same person and face, hairstyle, build, pose, hands, background, lighting, camera angle, framing, and photo quality. The new items drape naturally on the pose with realistic folds and shadows in the photo's light, faithful to their references in color, material, and details. All other clothing stays as it is. Do not add people, text, watermarks, or collage panels.`;
+  return `Recreate the first reference as one new photorealistic 4:5 photo that matches it closely: the same person, face, hairstyle, build, pose, framing, camera angle, background, light, and photo quality. The outfit is the one from the first reference, styled with ${garments} in that category. ${references} The referenced items are faithful in color, material, and details and sit naturally on the pose. No text, watermarks, or collage panels.`;
 }
 
 export function lookPrompt(

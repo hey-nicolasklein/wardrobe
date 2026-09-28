@@ -129,7 +129,7 @@ test('photo collages cost zero and become the first reference for a priced feed 
       generateComposite: async (request: { references: Uint8Array[]; prompt: string; moderation?: string }) => {
         assert.ok(Buffer.from(request.references[0]!).equals(collageBytes));
         assert.equal(request.references.length, 2);
-        assert.match(request.prompt, /^Fashion try-on/);
+        assert.match(request.prompt, /^Recreate the first reference/);
         assert.equal(request.moderation, 'low');
         tryOnChecked = true;
         return { requestId: 'look-try-on', pngBytes: await sharp(collageBytes).resize(768, 960).png().toBuffer(), usage: { textInputTokens: 10, imageInputTokens: 200, outputTokens: 30, serviceTier: 'default', raw: { fixture: true } } };
