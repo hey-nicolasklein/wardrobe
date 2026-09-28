@@ -576,10 +576,10 @@
     "mirror-step": "Schritt nach vorn"
   },
   "lookStyleHint": {
-    "auto": "Passend zum Anlass",
-    "candid": "Wie von Freunden geknipst",
-    "street": "Fit-Pic auf der Straße",
-    "mirror": "Selfie vor dem Spiegel"
+    "auto": "Wählt passend zum Anlass",
+    "candid": "Im Moment erwischt, ohne Pose",
+    "street": "Posiert fürs Outfit, draußen",
+    "mirror": "Selbst im Spiegel fotografiert"
   },
   "feedWeights": {
     "title": "Was deinen Feed prägt",

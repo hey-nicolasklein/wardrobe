@@ -216,13 +216,20 @@ class _StyleTileState extends State<_StyleTile>
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      context.tr('lookStyleHint.${widget.style}'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: colors.ink.withValues(alpha: 0.75),
+                    // Two lines reserved, so tiles in a row stay the same
+                    // height whether the hint wraps or not.
+                    SizedBox(
+                      height: 12 * 1.3 * 2,
+                      child: Text(
+                        context.tr('lookStyleHint.${widget.style}'),
+                        maxLines: 2,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.3,
+                          color: colors.ink.withValues(alpha: 0.75),
+                        ),
                       ),
                     ),
                   ],

@@ -576,10 +576,10 @@
     "mirror-step": "Stepping forward"
   },
   "lookStyleHint": {
-    "auto": "Matches the occasion",
-    "candid": "Like a friend's snapshot",
-    "street": "Street fit pic",
-    "mirror": "Selfie in the mirror"
+    "auto": "Picks one for the occasion",
+    "candid": "Caught in a moment, no pose",
+    "street": "Posing for the outfit, outdoors",
+    "mirror": "Taken yourself in a mirror"
   },
   "feedWeights": {
     "title": "What shapes your feed",
