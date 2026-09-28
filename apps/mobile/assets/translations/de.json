@@ -90,8 +90,8 @@
   },
   "collection": {
     "all": "Alle",
-    "owning": "Besitze ich",
-    "wanting": "Wünsche ich mir",
+    "owning": "Im Schrank",
+    "wanting": "Wunschliste",
     "archived": "Archiviert"
   },
   "quality": {
