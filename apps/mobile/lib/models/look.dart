@@ -44,6 +44,31 @@ class LookConcept {
   Map<String, dynamic> toJson() => _$LookConceptToJson(this);
 }
 
+/// How an inspiration look was requested, as the composer offered it.
+@JsonSerializable(checked: true, explicitToJson: true)
+class LookSettings {
+  const LookSettings({
+    required this.occasion,
+    required this.style,
+    required this.completion,
+    required this.categories,
+  });
+
+  factory LookSettings.fromJson(Map<String, dynamic> json) =>
+      _$LookSettingsFromJson(json);
+
+  @JsonKey(required: true)
+  final String? occasion;
+  @JsonKey(required: true)
+  final String style;
+  @JsonKey(required: true)
+  final String completion;
+  @JsonKey(required: true)
+  final List<String> categories;
+
+  Map<String, dynamic> toJson() => _$LookSettingsToJson(this);
+}
+
 @JsonSerializable(checked: true, explicitToJson: true)
 class Look {
   const Look({
@@ -63,6 +88,7 @@ class Look {
     required this.createdAt,
     required this.finishedAt,
     this.baseAssetId,
+    this.settings,
     this.liked = false,
   });
 
@@ -113,6 +139,11 @@ class Look {
   @JsonKey(includeIfNull: false)
   final String? baseAssetId;
   bool get isTryOn => baseAssetId != null;
+
+  /// The composer choices behind this look. Null for try-ons, unknown
+  /// requests, and looks cached before settings were reported.
+  @JsonKey(includeIfNull: false)
+  final LookSettings? settings;
 
   /// Hearted by the user. Stored on the server, where hearts weight the shot
   /// types of future looks. Absent in looks cached before that.

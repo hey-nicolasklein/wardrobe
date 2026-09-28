@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:form_mobile/features/feed/composer_cubit.dart';
+import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/media_repository.dart';
@@ -185,6 +186,36 @@ void main() {
     expect(body['occasion'], isNull);
     cubit.toggleItem(shirt.id);
     expect(cubit.state.canSubmit, isFalse);
+  });
+
+  test('a look reopens with its pieces and settings', () {
+    final inspired = ComposerCubit(
+      looks,
+      from: Look.fromJson({
+        ...lookJson(quality: 'medium', wardrobeItemIds: [shirt.id, boots.id]),
+        'settings': {
+          'occasion': 'party',
+          'style': 'mirror',
+          'completion': 'wardrobe',
+          'categories': ['shoes'],
+        },
+      }),
+    );
+    expect(inspired.command().body, containsPair('quality', 'medium'));
+    expect(inspired.command().body['exactItemIds'], [shirt.id, boots.id]);
+    expect(inspired.command().body['occasion'], 'party');
+    expect(inspired.command().body['style'], 'mirror');
+    expect(inspired.command().body['categories'], ['shoes']);
+
+    final tried = ComposerCubit(
+      looks,
+      from: Look.fromJson({
+        ...lookJson(wardrobeItemIds: [shirt.id]),
+        'baseAssetId': 'asset-base-photo',
+      }),
+    );
+    expect(tried.state.tryOn, isTrue);
+    expect(tried.command().body['baseAssetId'], 'asset-base-photo');
   });
 
   test('a failed submit retries with the same idempotency key', () async {

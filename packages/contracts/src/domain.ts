@@ -262,6 +262,17 @@ export const lookStyleSchema = z.enum(['candid', 'street', 'mirror']);
 // the image model invents, or nothing, with the photo framed on the picked pieces.
 export const lookCompletionSchema = z.enum(['wardrobe', 'model', 'selected']);
 export const lookSizeSchema = z.enum(['1024x1280', '768x960']);
+export const lookOccasionSchema = z.enum(['night-out', 'party', 'business', 'casual']);
+// How an inspiration look was requested, so a client can reopen the composer
+// with the same choices. Try-ons carry baseAssetId instead.
+export const lookSettingsSchema = z
+  .object({
+    occasion: lookOccasionSchema.nullable(),
+    style: lookStyleSchema,
+    completion: lookCompletionSchema,
+    categories: z.array(supportedCategorySchema),
+  })
+  .strict();
 export const lookSchema = z
   .object({
     id: opaqueIdSchema,
@@ -274,6 +285,8 @@ export const lookSchema = z
     baseAssetId: opaqueIdSchema.nullable(),
     liked: z.boolean(),
     concept: lookConceptSchema.nullable(),
+    // Null for try-ons and for looks whose request settings are unknown.
+    settings: lookSettingsSchema.nullable(),
     model: z.string().min(1).max(64),
     quality: generationQualitySchema,
     size: lookSizeSchema,

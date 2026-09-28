@@ -12,6 +12,7 @@ import 'package:form_mobile/features/settings/settings_page.dart';
 import 'package:form_mobile/features/wardrobe/item_page.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_page.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
+import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:form_mobile/widgets/foundation_page.dart';
 import 'package:go_router/go_router.dart';
@@ -54,6 +55,7 @@ GoRouter createRouter({bool onboarding = false}) => GoRouter(
                       preselectedIds:
                           state.uri.queryParametersAll['item'] ?? const [],
                       tryOn: state.uri.queryParameters['mode'] == 'try-on',
+                      from: state.extra as Look?,
                     ),
                   ),
                 ),

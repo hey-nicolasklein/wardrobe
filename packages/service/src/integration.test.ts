@@ -119,6 +119,7 @@ test('photo collages cost zero and become the first reference for a priced feed 
     assert.equal(costs.detectionTotalMicrounits, 0);
     assert.equal(costs.detectionRequestCount, 0);
     assert.equal(feed[0]!.quality, 'low');
+    assert.deepEqual(feed[0]!.settings, { occasion: null, style: 'candid', completion: 'wardrobe', categories: [] });
     // A try-on edits the uploaded photo itself: no planner, the photo goes first.
     const tryOnCommand = { accountId: input.accountId, exactItemIds: [fixtureIds.readyItem], categories: [], parentLookId: null, baseAssetId: fixtureIds.sourceAsset, idempotencyKey: randomUUID() };
     await assert.rejects(createLook(database, { ...tryOnCommand, exactItemIds: [], idempotencyKey: randomUUID() }), /Stück/);
@@ -141,6 +142,7 @@ test('photo collages cost zero and become the first reference for a priced feed 
     assert.equal(tried.state, 'ready');
     assert.equal(tried.baseAssetId, fixtureIds.sourceAsset);
     assert.equal(tried.concept, null);
+    assert.equal(tried.settings, null);
     assert.deepEqual(tried.wardrobeItemIds, [fixtureIds.readyItem]);
     // "Other perspective" keeps outfit and scene, changes only the shot, and
     // skips shots the user hid.

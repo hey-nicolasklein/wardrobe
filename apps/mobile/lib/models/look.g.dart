@@ -31,6 +31,32 @@ Map<String, dynamic> _$LookConceptToJson(LookConcept instance) =>
       'shot': ?instance.shot,
     };
 
+LookSettings _$LookSettingsFromJson(Map<String, dynamic> json) =>
+    $checkedCreate('LookSettings', json, ($checkedConvert) {
+      $checkKeys(
+        json,
+        requiredKeys: const ['occasion', 'style', 'completion', 'categories'],
+      );
+      final val = LookSettings(
+        occasion: $checkedConvert('occasion', (v) => v as String?),
+        style: $checkedConvert('style', (v) => v as String),
+        completion: $checkedConvert('completion', (v) => v as String),
+        categories: $checkedConvert(
+          'categories',
+          (v) => (v as List<dynamic>).map((e) => e as String).toList(),
+        ),
+      );
+      return val;
+    });
+
+Map<String, dynamic> _$LookSettingsToJson(LookSettings instance) =>
+    <String, dynamic>{
+      'occasion': instance.occasion,
+      'style': instance.style,
+      'completion': instance.completion,
+      'categories': instance.categories,
+    };
+
 Look _$LookFromJson(Map<String, dynamic> json) => $checkedCreate('Look', json, (
   $checkedConvert,
 ) {
@@ -86,6 +112,11 @@ Look _$LookFromJson(Map<String, dynamic> json) => $checkedCreate('Look', json, (
       (v) => v == null ? null : DateTime.parse(v as String),
     ),
     baseAssetId: $checkedConvert('baseAssetId', (v) => v as String?),
+    settings: $checkedConvert(
+      'settings',
+      (v) =>
+          v == null ? null : LookSettings.fromJson(v as Map<String, dynamic>),
+    ),
     liked: $checkedConvert('liked', (v) => v as bool? ?? false),
   );
   return val;
@@ -108,6 +139,7 @@ Map<String, dynamic> _$LookToJson(Look instance) => <String, dynamic>{
   'createdAt': instance.createdAt.toIso8601String(),
   'finishedAt': instance.finishedAt?.toIso8601String(),
   'baseAssetId': ?instance.baseAssetId,
+  'settings': ?instance.settings?.toJson(),
   'liked': instance.liked,
 };
 

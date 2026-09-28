@@ -1,13 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import type {
-  CharacterSheet,
-  Look,
-  LookCompletion,
-  LookConcept,
-  LookStyle,
-  SupportedCategory,
+import {
+  lookSettingsSchema,
+  type CharacterSheet,
+  type Look,
+  type LookCompletion,
+  type LookConcept,
+  type LookStyle,
+  type SupportedCategory,
 } from '@form/contracts';
 
 import {
@@ -60,6 +61,8 @@ type LookRow = {
   base_asset_id: string | null;
   liked: boolean;
   planned_concept: LookConcept | null;
+  category_constraints: string[];
+  job_payload: Record<string, unknown> | null;
   model: string;
   quality: Look['quality'];
   output_size: '1024x1280' | '768x960';
@@ -74,7 +77,9 @@ type LookRow = {
 const characterColumns = `id, state, reference_asset_ids, note, asset_id, active, model, quality,
   output_size, provider_request_id, cost_microunits, failure_category, created_at, finished_at`;
 const lookColumns = `l.id, l.state, l.asset_id, l.character_sheet_id, l.parent_look_id,
-  l.base_asset_id, l.liked_at IS NOT NULL AS liked, l.planned_concept, l.model, l.quality,
+  l.base_asset_id, l.liked_at IS NOT NULL AS liked, l.planned_concept, l.category_constraints,
+  (SELECT payload FROM remote_image_jobs rj WHERE rj.look_id=l.id ORDER BY rj.created_at DESC LIMIT 1) AS job_payload,
+  l.model, l.quality,
   COALESCE(pa.pixel_width::text || 'x' || pa.pixel_height::text,
     CASE WHEN (SELECT payload->>'outputSize' FROM remote_image_jobs rj WHERE rj.look_id=l.id ORDER BY rj.created_at DESC LIMIT 1) = '768x960'
       THEN '768x960' ELSE '1024x1280' END) AS output_size,
@@ -108,6 +113,7 @@ const mapLook = (row: LookRow): Look => ({
   baseAssetId: row.base_asset_id,
   liked: row.liked,
   concept: row.planned_concept,
+  settings: lookSettings(row),
   model: row.model,
   quality: row.quality,
   size: row.output_size,
@@ -117,6 +123,19 @@ const mapLook = (row: LookRow): Look => ({
   createdAt: row.created_at.toISOString(),
   finishedAt: row.finished_at?.toISOString() ?? null,
 });
+// Reads the composer choices back from the look's job payload, see createLook.
+const lookSettings = (row: LookRow): Look['settings'] => {
+  const payload = row.job_payload;
+  if (row.base_asset_id || !payload) return null;
+  const parsed = lookSettingsSchema.safeParse({
+    occasion: payload.occasion ?? null,
+    // Upgrades do not repeat the style, but their shot still implies it.
+    style: shotStyle(row.planned_concept?.shot) ?? payload.style ?? 'candid',
+    completion: payload.focus ? 'selected' : payload.completeWithWardrobe === false ? 'model' : 'wardrobe',
+    categories: row.category_constraints,
+  });
+  return parsed.success ? parsed.data : null;
+};
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 // Looks render at a reduced size. Older looks keep their stored 1024x1280.
 const lookOutputSize = '768x960' as const;

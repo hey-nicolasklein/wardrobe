@@ -16,6 +16,7 @@ import 'package:form_mobile/features/feed/look_style_picker.dart';
 import 'package:form_mobile/features/settings/quality_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
+import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
@@ -31,11 +32,15 @@ class LookComposerPage extends StatelessWidget {
   const LookComposerPage({
     this.preselectedIds = const [],
     this.tryOn = false,
+    this.from,
     super.key,
   });
 
   final List<String> preselectedIds;
   final bool tryOn;
+
+  /// An earlier look whose pieces and settings the composer starts with.
+  final Look? from;
 
   @override
   Widget build(BuildContext context) => BlocProvider(
@@ -44,6 +49,7 @@ class LookComposerPage extends StatelessWidget {
       preselectedIds: preselectedIds,
       defaultQuality: context.read<QualityCubit>().state.feed,
       tryOn: tryOn,
+      from: from,
     ),
     child: const _ComposerView(),
   );
@@ -163,8 +169,14 @@ class _ComposerPicker extends StatelessWidget {
           onSelected: (mode) => cubit.setTryOn(tryOn: mode == 'try-on'),
         ),
         const SizedBox(height: 20),
+        // Stays mounted in inspire mode so switching back shows the loaded
+        // photos at once.
+        Visibility(
+          visible: state.tryOn,
+          maintainState: true,
+          child: _TryOnBases(state: state, online: online),
+        ),
         if (state.tryOn) ...[
-          _TryOnBases(state: state, online: online),
           const SizedBox(height: 18),
           Text(
             context.tr(LocaleKeys.composerQualityLabel),
@@ -1100,6 +1112,7 @@ class _TryOnBases extends StatelessWidget {
                     previewPath: 'v1/assets/$assetId/content',
                     online: online,
                     fit: BoxFit.cover,
+                    entrance: MediaEntrance.fade,
                   ),
                 ),
             ],

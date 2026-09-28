@@ -15,6 +15,7 @@ import {
   sourcePhotoSchema,
   wardrobeItemSchema,
   characterSheetSchema,
+  lookOccasionSchema,
   lookSchema,
   lookStyleSchema,
   lookCompletionSchema,
@@ -276,7 +277,7 @@ export const createLookRequestSchema = z
   .object({
     exactItemIds: z.array(opaqueIdSchema).max(12).default([]),
     categories: z.array(supportedCategorySchema).max(9).default([]),
-    occasion: z.enum(['night-out', 'party', 'business', 'casual']).nullable().optional(),
+    occasion: lookOccasionSchema.nullable().optional(),
     style: lookStyleSchema.default('candid'),
     parentLookId: opaqueIdSchema.nullable().default(null),
     quality: generationQualitySchema.default('low'),

@@ -20,11 +20,13 @@ import 'package:go_router/go_router.dart';
 
 /// Opens the look composer, or character-reference setup when no active
 /// reference exists yet. [itemIds] preselects pieces; [tryOn] starts in
-/// try-on mode.
+/// try-on mode. [from] starts with an earlier look's pieces and settings
+/// instead.
 void openLookComposer(
   BuildContext context, {
   List<String> itemIds = const [],
   bool tryOn = false,
+  Look? from,
 }) {
   if (context.read<FeedCubit>().state.hasActiveCharacterReference == false) {
     unawaited(context.push('/feed/character-setup'));
@@ -35,7 +37,10 @@ void openLookComposer(
     if (tryOn) 'mode=try-on',
   ].join('&');
   unawaited(
-    context.push(query.isEmpty ? '/feed/composer' : '/feed/composer?$query'),
+    context.push(
+      query.isEmpty ? '/feed/composer' : '/feed/composer?$query',
+      extra: from,
+    ),
   );
 }
 
@@ -291,7 +296,7 @@ class FeedPage extends StatelessWidget {
             OutlinedButton(
               onPressed: () {
                 Navigator.pop(sheetContext);
-                openLookComposer(context, itemIds: look.wardrobeItemIds);
+                openLookComposer(context, from: look);
               },
               child: Text(context.tr(LocaleKeys.lookCombine)),
             ),

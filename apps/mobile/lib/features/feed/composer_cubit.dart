@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:form_mobile/features/feed/look_commands.dart';
+import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
@@ -57,6 +58,25 @@ class ComposerState {
     this.failure,
     this.createdLookId,
   });
+
+  /// The pieces and choices [look] was made with, so it can be redone as is.
+  factory ComposerState.fromLook(Look look) {
+    final settings = look.settings;
+    final occasion = settings?.occasion;
+    return ComposerState(
+      selectedIds: look.wardrobeItemIds.take(maxComposerPieces).toSet(),
+      categories: settings?.categories.toSet() ?? const {},
+      occasion: occasion,
+      // A style that matches the occasion stays automatic, as it was picked.
+      style: settings?.style == autoLookStyle(occasion)
+          ? null
+          : settings?.style,
+      quality: look.quality,
+      completion: settings?.completion ?? 'wardrobe',
+      tryOn: look.isTryOn,
+      baseAssetId: look.baseAssetId,
+    );
+  }
 
   final Set<String> selectedIds;
 
@@ -193,14 +213,17 @@ class ComposerCubit extends Cubit<ComposerState> {
     String? idempotencyKey,
     String defaultQuality = 'low',
     bool tryOn = false,
+    Look? from,
   }) : idempotencyKey = idempotencyKey ?? newIdempotencyKey(),
        _defaultQuality = defaultQuality,
        super(
-         ComposerState(
-           selectedIds: preselectedIds.toSet(),
-           quality: defaultQuality,
-           tryOn: tryOn,
-         ),
+         from != null
+             ? ComposerState.fromLook(from)
+             : ComposerState(
+                 selectedIds: preselectedIds.toSet(),
+                 quality: defaultQuality,
+                 tryOn: tryOn,
+               ),
        ) {
     unawaited(_loadBases());
   }
