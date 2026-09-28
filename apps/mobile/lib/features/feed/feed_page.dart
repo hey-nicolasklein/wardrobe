@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
@@ -56,111 +57,120 @@ class FeedPage extends StatelessWidget {
       return Scaffold(
         backgroundColor: FormTokens.paper,
         extendBodyBehindAppBar: true,
-        appBar: const FormScrollEdge(),
-        body: Builder(
-          builder: (context) => RefreshIndicator(
-            edgeOffset: MediaQuery.paddingOf(context).top,
-            onRefresh: cubit.refresh,
-            child: CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverSafeArea(
-                  left: false,
-                  right: false,
-                  bottom: false,
-                  sliver: SliverPadding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: FormTokens.gutter,
-                    ),
-                    sliver: SliverList.list(
-                      children: [
-                        FormWordmark(title: context.tr(LocaleKeys.appName)),
-                        if (state.stale && !state.online && state.looks != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: FormNotice(
-                              text: context.tr(LocaleKeys.feedStale),
-                            ),
-                          ),
-                        if (state.failure != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: FormNotice(
-                              text: context.tr(state.failureKey),
-                              error: true,
-                            ),
-                          ),
-                        FormHero(
-                          eyebrow: context.tr(LocaleKeys.feedHeroEyebrow),
-                          title: context.tr(LocaleKeys.feedHeroTitle),
-                          body: context.tr(LocaleKeys.feedHeroBody),
-                          addLabel: context.tr(LocaleKeys.createLook),
-                          onAdd: () => openLookComposer(context),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (looks.isEmpty)
-                  SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: FormEmptyState(
-                      title: context.tr(LocaleKeys.feedEmptyTitle),
-                      message: context.tr(
-                        state.hasActiveCharacterReference == false
-                            ? LocaleKeys.feedEmptyWithoutSheet
-                            : LocaleKeys.feedEmptyWithSheet,
+        // Look photos set the status bar style themselves, see
+        // MediaStatusBarRegion; everything else keeps dark icons.
+        appBar: const FormScrollEdge(adaptive: true),
+        body: AnnotatedRegion(
+          value: SystemUiOverlayStyle.dark,
+          child: Builder(
+            builder: (context) => RefreshIndicator(
+              edgeOffset: MediaQuery.paddingOf(context).top,
+              onRefresh: cubit.refresh,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverSafeArea(
+                    left: false,
+                    right: false,
+                    bottom: false,
+                    sliver: SliverPadding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: FormTokens.gutter,
                       ),
-                      icon: Icons.auto_awesome_outlined,
-                      action: FilledButton(
-                        onPressed: () => openLookComposer(context),
-                        child: Text(
-                          context.tr(
-                            state.hasActiveCharacterReference == false
-                                ? LocaleKeys.feedCharacterSetup
-                                : LocaleKeys.feedFirstLook,
+                      sliver: SliverList.list(
+                        children: [
+                          FormWordmark(title: context.tr(LocaleKeys.appName)),
+                          if (state.stale &&
+                              !state.online &&
+                              state.looks != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: FormNotice(
+                                text: context.tr(LocaleKeys.feedStale),
+                              ),
+                            ),
+                          if (state.failure != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: FormNotice(
+                                text: context.tr(state.failureKey),
+                                error: true,
+                              ),
+                            ),
+                          FormHero(
+                            eyebrow: context.tr(LocaleKeys.feedHeroEyebrow),
+                            title: context.tr(LocaleKeys.feedHeroTitle),
+                            body: context.tr(LocaleKeys.feedHeroBody),
+                            addLabel: context.tr(LocaleKeys.createLook),
+                            onAdd: () => openLookComposer(context),
                           ),
-                        ),
+                        ],
                       ),
                     ),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(
-                      FormTokens.gutter,
-                      0,
-                      FormTokens.gutter,
-                      24,
-                    ),
-                    sliver: SliverList.separated(
-                      itemCount: looks.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 16),
-                      itemBuilder: (context, index) {
-                        final record = looks[index];
-                        return LookCard(
-                          key: ValueKey(record.look.id),
-                          record: record,
-                          state: state,
-                          garments: _garments(state, record.look),
-                          online: state.online && !state.stale,
-                          onRetry: () => runFeedAction(
-                            context,
-                            () => cubit.retryLook(record.look.id),
+                  ),
+                  if (looks.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: FormEmptyState(
+                        title: context.tr(LocaleKeys.feedEmptyTitle),
+                        message: context.tr(
+                          state.hasActiveCharacterReference == false
+                              ? LocaleKeys.feedEmptyWithoutSheet
+                              : LocaleKeys.feedEmptyWithSheet,
+                        ),
+                        icon: Icons.auto_awesome_outlined,
+                        action: FilledButton(
+                          onPressed: () => openLookComposer(context),
+                          child: Text(
+                            context.tr(
+                              state.hasActiveCharacterReference == false
+                                  ? LocaleKeys.feedCharacterSetup
+                                  : LocaleKeys.feedFirstLook,
+                            ),
                           ),
-                          onDelete: () =>
-                              _confirmDelete(context, record.look.id),
-                          onShare: (origin) =>
-                              _share(context, state, record.look, origin),
-                          onMenu: () => _openLookMenu(context, record.look),
-                        );
-                      },
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(
+                        FormTokens.gutter,
+                        0,
+                        FormTokens.gutter,
+                        24,
+                      ),
+                      sliver: SliverList.separated(
+                        itemCount: looks.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 16),
+                        itemBuilder: (context, index) {
+                          final record = looks[index];
+                          return LookCard(
+                            key: ValueKey(record.look.id),
+                            record: record,
+                            state: state,
+                            garments: _garments(state, record.look),
+                            online: state.online && !state.stale,
+                            onRetry: () => runFeedAction(
+                              context,
+                              () => cubit.retryLook(record.look.id),
+                            ),
+                            onDelete: () =>
+                                _confirmDelete(context, record.look.id),
+                            onShare: (origin) =>
+                                _share(context, state, record.look, origin),
+                            onMenu: () => _openLookMenu(context, record.look),
+                          );
+                        },
+                      ),
+                    ),
+                  // Clears the translucent tab bar.
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: MediaQuery.paddingOf(context).bottom,
                     ),
                   ),
-                // Clears the translucent tab bar.
-                SliverToBoxAdapter(
-                  child: SizedBox(height: MediaQuery.paddingOf(context).bottom),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

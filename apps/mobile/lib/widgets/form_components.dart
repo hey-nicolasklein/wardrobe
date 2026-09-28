@@ -62,21 +62,31 @@ class FormPageHeader extends StatelessWidget implements PreferredSizeWidget {
 /// App bar slot for tab pages whose [FormWordmark] scrolls with the content.
 /// It takes no layout space, only the scroll edge blur. Use with
 /// `extendBodyBehindAppBar`.
+///
+/// [adaptive] is for pages whose content sets the status bar style per
+/// region, like dark photos in the feed: the edge then only blurs, without
+/// the paper wash, and leaves the style to the content below.
 class FormScrollEdge extends StatelessWidget implements PreferredSizeWidget {
-  const FormScrollEdge({super.key});
+  const FormScrollEdge({this.adaptive = false, super.key});
+  final bool adaptive;
 
   @override
   Size get preferredSize => Size.zero;
 
   @override
-  Widget build(BuildContext context) => const AnnotatedRegion(
-    value: SystemUiOverlayStyle.dark,
+  Widget build(BuildContext context) {
     // The scaffold only caps the app bar slot's height, so expand to fill it
     // instead of collapsing to zero.
-    child: SizedBox.expand(
-      child: Stack(clipBehavior: Clip.none, children: [_ScrollAwareBlur()]),
-    ),
-  );
+    final edge = SizedBox.expand(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [_ScrollAwareBlur(tinted: !adaptive)],
+      ),
+    );
+    return adaptive
+        ? edge
+        : AnnotatedRegion(value: SystemUiOverlayStyle.dark, child: edge);
+  }
 }
 
 /// Scroll edge behind an app bar slot. The blur covers the slot and hangs
@@ -86,8 +96,11 @@ class FormScrollEdge extends StatelessWidget implements PreferredSizeWidget {
 /// Either way it fades in once the page scrolls, keeping the content sharp at
 /// rest. The parent Stack must not clip.
 class _ScrollAwareBlur extends StatefulWidget {
-  const _ScrollAwareBlur({this.solid = false});
+  const _ScrollAwareBlur({this.solid = false, this.tinted = true});
   final bool solid;
+
+  /// Off leaves only the blur, without the paper wash.
+  final bool tinted;
 
   static const _overhang = 32.0;
 
@@ -158,7 +171,11 @@ class _ScrollAwareBlurState extends State<_ScrollAwareBlur> {
                 ],
               ),
             )
-          : _ScrollEdgeBlur(fadeCurve: Curves.linear, strength: _visibility),
+          : _ScrollEdgeBlur(
+              fadeCurve: Curves.linear,
+              strength: _visibility,
+              tinted: widget.tinted,
+            ),
     ),
   );
 }
@@ -190,8 +207,10 @@ class _ScrollEdgeBlur extends StatelessWidget {
   const _ScrollEdgeBlur({
     this.fadeCurve = Curves.easeInSine,
     this.strength = 1,
+    this.tinted = true,
   });
   final Curve fadeCurve;
+  final bool tinted;
 
   /// 0 to 1, scales both blur and tint.
   final double strength;
@@ -202,10 +221,12 @@ class _ScrollEdgeBlur extends StatelessWidget {
       sigma: 12 * strength,
       fadeCurve: fadeCurve,
     ),
-    child: Inspire.tint.topToBottom(
-      color: FormTokens.paper,
-      opacity: 0.9 * strength,
-    ),
+    child: tinted
+        ? Inspire.tint.topToBottom(
+            color: FormTokens.paper,
+            opacity: 0.9 * strength,
+          )
+        : const SizedBox.expand(),
   );
 }
 

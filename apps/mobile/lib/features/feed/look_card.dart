@@ -585,11 +585,21 @@ class _LookStageState extends State<_LookStage>
                     GestureDetector(
                       onTap: () =>
                           context.read<FeedCubit>().toggleRevealed(look.id),
-                      child: CachedMedia(
+                      // Only the worn photo can be dark; the flat lay and
+                      // the card chrome keep the page's dark icons.
+                      child: MediaStatusBarRegion(
                         identity: look.assetId!,
                         previewPath: widget.record.previewPath(look.assetId!),
                         online: widget.online,
-                        fit: BoxFit.cover,
+                        enabled: worn,
+                        child: CachedMedia(
+                          identity: look.assetId!,
+                          previewPath: widget.record.previewPath(
+                            look.assetId!,
+                          ),
+                          online: widget.online,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                   _WornGarments(
