@@ -583,11 +583,10 @@
   },
   "feedWeights": {
     "title": "What shapes your feed",
-    "body": "For each photo style FORM draws a perspective by weight. Every heart on a look makes its perspective more likely, recently used ones come less often, switched-off ones never.",
+    "body": "Every heart makes a perspective more frequent. Tap one to hide or show it.",
     "refresh": "Reload",
     "failed": "The weighting could not be loaded.",
     "weight": "weight {value}",
-    "recent": "recently used",
-    "hidden": "hidden"
+    "recent": "recently used"
   }
 }

@@ -583,11 +583,10 @@
   },
   "feedWeights": {
     "title": "Was deinen Feed prägt",
-    "body": "Pro Bildstil zieht FORM eine Perspektive nach Gewicht. Jedes Herz auf einem Look macht seine Perspektive wahrscheinlicher, zuletzt genutzte kommen seltener, ausgeschaltete gar nicht.",
+    "body": "Jedes Herz macht eine Perspektive häufiger. Tippe eine an, um sie aus- oder einzublenden.",
     "refresh": "Neu laden",
     "failed": "Die Gewichtung konnte nicht geladen werden.",
     "weight": "Gewicht {value}",
-    "recent": "zuletzt genutzt",
-    "hidden": "ausgeblendet"
+    "recent": "zuletzt genutzt"
   }
 }

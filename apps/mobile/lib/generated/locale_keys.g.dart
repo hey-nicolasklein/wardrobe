@@ -587,6 +587,5 @@ abstract class LocaleKeys {
   static const feedWeights_failed = 'feedWeights.failed';
   static const feedWeights_weight = 'feedWeights.weight';
   static const feedWeights_recent = 'feedWeights.recent';
-  static const feedWeights_hidden = 'feedWeights.hidden';
   static const feedWeights = 'feedWeights';
 }

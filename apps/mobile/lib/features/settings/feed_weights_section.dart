@@ -101,20 +101,29 @@ class _FeedWeightsSectionState extends State<FeedWeightsSection> {
             )
           else
             for (final style in lookStyles) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Text(
                 context.tr('lookStyle.$style').toUpperCase(),
                 style: FormTokens.eyebrow,
               ),
-              const SizedBox(height: 4),
-              for (final shot in shots.where((s) => s['style'] == style))
-                _ShotWeightRow(
-                  shot: shot,
-                  busy: _busy.contains(shot['shot']),
-                  onVisible: (visible) => unawaited(
-                    _setVisible(shot['shot'] as String, visible: visible),
-                  ),
-                ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final shot in shots.where((s) => s['style'] == style))
+                    _ShotChip(
+                      shot: shot,
+                      busy: _busy.contains(shot['shot']),
+                      onTap: () => unawaited(
+                        _setVisible(
+                          shot['shot'] as String,
+                          visible: shot['hidden'] as bool,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
         ],
       ),
@@ -122,16 +131,19 @@ class _FeedWeightsSectionState extends State<FeedWeightsSection> {
   }
 }
 
-class _ShotWeightRow extends StatelessWidget {
-  const _ShotWeightRow({
+/// One shot type as a pill: its chance of being drawn next, tinted by that
+/// chance, and its hearts. Tapping hides or shows it; a long press explains the
+/// weight behind the number.
+class _ShotChip extends StatelessWidget {
+  const _ShotChip({
     required this.shot,
     required this.busy,
-    required this.onVisible,
+    required this.onTap,
   });
 
   final Map<String, dynamic> shot;
   final bool busy;
-  final ValueChanged<bool> onVisible;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -139,72 +151,84 @@ class _ShotWeightRow extends StatelessWidget {
     final likes = (shot['likes'] as num).toInt();
     final hidden = shot['hidden'] as bool;
     final chance = (shot['chance'] as num).toDouble();
-    final weight = (shot['weight'] as num).toDouble();
-    final number = NumberFormat.decimalPatternDigits(
+    final weight = NumberFormat.decimalPatternDigits(
       locale: context.locale.toString(),
       decimalDigits: 2,
-    );
-    final facts = [
-      context.tr(
-        LocaleKeys.feedWeights_weight,
-        namedArgs: {'value': number.format(weight)},
-      ),
-      if (likes > 0) '$likes ♥',
+    ).format((shot['weight'] as num).toDouble());
+    final details = [
+      context.tr(LocaleKeys.feedWeights_weight, namedArgs: {'value': weight}),
       if (shot['recent'] == true) context.tr(LocaleKeys.feedWeights_recent),
-      if (hidden) context.tr(LocaleKeys.feedWeights_hidden),
-    ];
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Opacity(
-              opacity: hidden ? 0.5 : 1,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          context.tr('lookShot.$id'),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '${(chance * 100).round()} %',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontFeatures: [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(99),
-                    child: LinearProgressIndicator(
-                      value: chance,
-                      minHeight: 6,
-                      color: FormTokens.green,
-                      backgroundColor: FormTokens.costTrack,
+    ].join(' · ');
+    final ink = hidden ? FormTokens.muted : FormTokens.ink;
+    return Tooltip(
+      message: details,
+      triggerMode: TooltipTriggerMode.longPress,
+      child: Semantics(
+        button: true,
+        toggled: !hidden,
+        child: GestureDetector(
+          onTap: busy ? null : onTap,
+          child: AnimatedContainer(
+            duration: FormTokens.quick,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: hidden
+                  ? Colors.transparent
+                  : Color.lerp(
+                      FormTokens.pill,
+                      FormTokens.selectedTint,
+                      (chance * 2.5).clamp(0, 1),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(facts.join(' · '), style: FormTokens.small),
-                ],
+              borderRadius: BorderRadius.circular(FormTokens.chipRadius),
+              border: Border.all(
+                color: hidden ? FormTokens.line : Colors.transparent,
               ),
             ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hidden) ...[
+                  const Icon(
+                    Icons.visibility_off_outlined,
+                    size: 14,
+                    color: FormTokens.muted,
+                  ),
+                  const SizedBox(width: 5),
+                ],
+                Text(
+                  context.tr('lookShot.$id'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: ink,
+                    decoration: hidden ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+                if (!hidden) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '${(chance * 100).round()} %',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: FormTokens.green,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+                if (likes > 0) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '♥ $likes',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: FormTokens.liked,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-          const SizedBox(width: 10),
-          Switch.adaptive(
-            value: !hidden,
-            onChanged: busy ? null : onVisible,
-          ),
-        ],
+        ),
       ),
     );
   }
