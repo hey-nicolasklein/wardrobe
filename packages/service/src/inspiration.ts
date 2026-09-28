@@ -4,6 +4,7 @@ import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import type {
   CharacterSheet,
   Look,
+  LookCompletion,
   LookConcept,
   LookStyle,
   SupportedCategory,
@@ -348,6 +349,24 @@ export function normalizeAutomaticLookItems(
   return result;
 }
 
+export type LookFocus = 'upper' | 'lower' | 'feet';
+
+/**
+ * The body zone a `selected` completion photo frames, from the picked pieces'
+ * categories. Null when the pieces span zones (a jacket with shoes, or a dress)
+ * and only a full-body photo could show them. Bags and accessories fit any zone.
+ */
+export function lookFocus(categories: string[]): LookFocus | null {
+  const has = (...wanted: string[]) => categories.some((c) => wanted.includes(c));
+  const upper = has('top', 'jacket', 'hat', 'scarf');
+  const lower = has('pants', 'skirt');
+  const shoes = has('shoes');
+  if (has('dress') || (upper && (lower || shoes))) return null;
+  if (lower) return 'lower';
+  if (shoes) return 'feet';
+  return 'upper';
+}
+
 export function candidatesForLookPlan<T extends { id: string }>(
   candidates: T[],
   exactItemIds: string[],
@@ -392,10 +411,13 @@ export async function createLook(
     quality?: Look['quality'];
     preserveComposition?: boolean;
     completeWithWardrobe?: boolean;
+    completion?: LookCompletion;
     idempotencyKey: string;
   },
 ) {
-  const completeWithWardrobe = input.completeWithWardrobe ?? true;
+  const completion =
+    input.completion ?? ((input.completeWithWardrobe ?? true) ? 'wardrobe' : 'model');
+  const completeWithWardrobe = completion === 'wardrobe';
   const request = {
     exactItemIds: input.exactItemIds,
     categories: input.categories,
@@ -405,6 +427,8 @@ export async function createLook(
     quality: input.quality ?? 'low',
     preserveComposition: input.preserveComposition ?? false,
     completeWithWardrobe,
+    // Only when new, so replays of requests made before `completion` still match.
+    ...(completion === 'selected' ? { completion } : {}),
   };
   return withTransaction(database, async (client) => {
     const prior = await replay<{ jobId: string; lookId: string }>(
@@ -466,6 +490,17 @@ export async function createLook(
         'item-not-eligible',
         'Mindestens ein gewähltes Stück hat kein aktives Katalogbild.',
       );
+    const focus =
+      completion === 'selected'
+        ? lookFocus(
+            exactIds.map((id) => candidates.rows.find((row) => row.id === id)?.category ?? ''),
+          )
+        : null;
+    if (completion === 'selected' && !focus)
+      throw new InspirationValidationError(
+        'focus-unavailable',
+        'Nur deine Stücke geht, wenn alle im selben Bildausschnitt liegen, etwa nur Oberteile oder nur Schuhe.',
+      );
     if (!completeWithWardrobe && input.categories.length)
       throw new InspirationValidationError(
         'categories-require-wardrobe',
@@ -506,6 +541,7 @@ export async function createLook(
         occasion: input.occasion ?? null,
         style: input.style ?? 'candid',
         completeWithWardrobe,
+        ...(focus ? { focus } : {}),
         outputSize: lookOutputSize,
         ...(preserved ? { referenceAssetId: preserved.assetId } : {}),
       },
@@ -692,16 +728,21 @@ async function writeAsset(
   return id;
 }
 // The camera sentence of the Look prompt per style. `candid` is the original
-// friend snapshot. The others trade that for a distinct feed aesthetic.
-const lookStylePrompts: Record<LookStyle, (concept: LookConcept) => string> = {
-  candid: (c) =>
-    `Create one photorealistic 4:5 iPhone-style snapshot as if a friend naturally photographed the referenced person while ${c.activity}, in ${c.scene}. ${c.framing} framing. The person must not look directly at the camera. Avoid posed portraits, runway staging, and extreme editorial styling.`,
-  street: (c) =>
-    `Create one photorealistic 4:5 street-style fashion photograph, shot by a professional photographer on a telephoto lens with shallow depth of field, of the referenced person while ${c.activity}, in ${c.scene}. Full-body framing, head to shoes, with a confident mid-stride or relaxed pose and natural light.`,
-  mirror: (c) =>
-    `Create one photorealistic 4:5 mirror selfie: the referenced person holds a smartphone and photographs their reflection in a mirror in ${c.scene}, the phone partly covering one side of the face. Show the full outfit in the mirror, head to shoes, with casual real-world surroundings.`,
-  'close-up': (c) =>
-    `Create one photorealistic 4:5 close, intimate photograph of the referenced person while ${c.activity}, in ${c.scene}, framed from about mid-thigh up so the face, upper-body garments, and fabric texture fill the frame. Natural light, slight depth of field, the person looking away from the camera.`,
+// friend snapshot. The others trade that for a distinct feed aesthetic. `framing`
+// is null for a full outfit and a body-zone sentence for a `selected` completion.
+const lookStylePrompts: Record<LookStyle, (concept: LookConcept, framing: string | null) => string> = {
+  candid: (c, framing) =>
+    `Create one photorealistic 4:5 iPhone-style snapshot as if a friend naturally photographed the referenced person while ${c.activity}, in ${c.scene}. ${framing ?? `${c.framing} framing.`} The person must not look directly at the camera. Avoid posed portraits, runway staging, and extreme editorial styling.`,
+  street: (c, framing) =>
+    `Create one photorealistic 4:5 street-style fashion photograph, shot by a professional photographer on a telephoto lens with shallow depth of field, of the referenced person while ${c.activity}, in ${c.scene}. ${framing ?? 'Full-body framing, head to shoes.'} A confident mid-stride or relaxed pose and natural light.`,
+  mirror: (c, framing) =>
+    `Create one photorealistic 4:5 mirror selfie: the referenced person holds a smartphone and photographs their reflection in a mirror in ${c.scene}. ${framing ? `In the mirror: ${framing}` : 'The phone partly covers one side of the face. Show the full outfit in the mirror, head to shoes.'} Casual real-world surroundings.`,
+};
+
+const lookFocusFraming: Record<LookFocus, string> = {
+  upper: 'Frame from about the waist up so the referenced garments fill the frame; nothing below the waist is visible.',
+  lower: 'Frame from the waist down to the feet so the referenced garments fill the frame; the face and upper body stay out of frame.',
+  feet: 'Frame close on the lower legs and feet so the referenced shoes fill the frame; the upper body stays out of frame.',
 };
 
 export function lookPrompt(
@@ -710,19 +751,22 @@ export function lookPrompt(
   identityNote: string | null,
   completeWithWardrobe: boolean,
   style: LookStyle = 'candid',
+  focus: LookFocus | null = null,
 ) {
   const garments = items.map((i) => `${i.name} (${i.category}; ${i.colors.join(', ')})`).join('; ');
-  const garmentInstruction = completeWithWardrobe
+  const garmentInstruction = completeWithWardrobe || focus
     ? `Dress the person in exactly these referenced major garments: ${garments}.`
     : `Dress the person in these referenced garments: ${garments}.`;
-  const completion = completeWithWardrobe
-    ? 'Do not invent other major garments; plain incidental basics such as socks are allowed.'
-    : 'Complete the outfit with coherent unreferenced garments where needed. Do not replace, restyle, hide, or obscure any referenced garment.';
+  const completion = focus
+    ? 'Do not add other visible garments; only a plain, neutral base layer such as a simple T-shirt is allowed where skin would otherwise show.'
+    : completeWithWardrobe
+      ? 'Do not invent other major garments; plain incidental basics such as socks are allowed.'
+      : 'Complete the outfit with coherent unreferenced garments where needed. Do not replace, restyle, hide, or obscure any referenced garment.';
   const pairing = 'Each view pairs the clean generated shelf view on the left with the cropped original photo on the right. Treat the original photo as the ground truth for colors, material, texture, construction, and distinctive details; use the shelf view to clarify its complete silhouette.';
   const garmentReferences = items.length > 1
     ? `The final garment reference is one ordered board. Its cells are row-major, from left to right and then top to bottom, matching this garment order: ${items.map((item, index) => `${index + 1}. ${item.name}`).join('; ')}. ${pairing} Use each cell only for its matching garment.`
     : `The final reference shows the garment. ${pairing}`;
-  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} ${garmentReferences} ${lookStylePrompts[style](concept)} Mood: ${concept.mood}. ${garmentInstruction} ${style === 'close-up' ? 'Every referenced garment must be recognisable and faithful to its reference; lower-body pieces and shoes may be partly cropped by the frame.' : 'Every referenced garment must be fully visible and faithful to its reference.'} ${completion} Avoid ${style === 'mirror' ? '' : 'selfies, '}illustrations, text, watermarks, and collages in the output.${style === 'close-up' ? '' : ' Shoes, trousers, skirts, and dresses must never be cropped when selected.'}`;
+  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} ${garmentReferences} ${lookStylePrompts[style](concept, focus ? lookFocusFraming[focus] : null)} Mood: ${concept.mood}. ${garmentInstruction} Every referenced garment must be fully visible and faithful to its reference. ${completion} Avoid ${style === 'mirror' ? '' : 'selfies, '}illustrations, text, watermarks, and collages in the output. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
 }
 
 async function imageDimensions(bytes: Uint8Array, expected: '1024x1280' | '768x960') {
@@ -802,6 +846,7 @@ export async function executeInspirationJob(
     const outputSize = (job.payload as { outputSize?: '1024x1280' | '768x960' }).outputSize ?? lookOutputSize;
     // Jobs queued before styles existed carry no style and stay candid.
     const style = (job.payload as { style?: LookStyle }).style ?? 'candid';
+    const focus = (job.payload as { focus?: LookFocus }).focus ?? null;
     const started = await database.query<{
       character_sheet_id: string;
       exact_item_ids: string[];
@@ -949,7 +994,7 @@ export async function executeInspirationJob(
       references: refs,
       prompt: referenceAssetId
         ? `Recreate the first reference image with improved detail as one photorealistic 4:5 image. Preserve its composition, pose, outfit, person, lighting and background. The second reference shows the same person and is only for identity detail. ${selected.length > 1 ? 'The final reference is an ordered garment board whose cells match the garments in the requested order. Each cell contains a paired shelf view and original garment photo.' : 'The final reference shows the garment and is only for fabric and construction detail.'} Do not change the scene or add garments, text, watermarks or collage panels.`
-        : lookPrompt(concept, selected, character.rows[0].note, completeWithWardrobe, style),
+        : lookPrompt(concept, selected, character.rows[0].note, completeWithWardrobe, style, focus),
       model: row.model,
       quality: row.quality,
       size: outputSize,

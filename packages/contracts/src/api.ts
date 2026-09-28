@@ -17,6 +17,7 @@ import {
   characterSheetSchema,
   lookSchema,
   lookStyleSchema,
+  lookCompletionSchema,
   generationCostSummarySchema,
   supportedCategorySchema,
 } from './domain.js';
@@ -281,6 +282,8 @@ export const createLookRequestSchema = z
     quality: generationQualitySchema.default('low'),
     preserveComposition: z.boolean().default(false),
     completeWithWardrobe: z.boolean().default(true),
+    // Supersedes completeWithWardrobe when present. The PWA still sends the boolean.
+    completion: lookCompletionSchema.optional(),
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();

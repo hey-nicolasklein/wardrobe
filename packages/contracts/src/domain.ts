@@ -255,7 +255,10 @@ export const lookConceptSchema = z
   })
   .strict();
 // How a feed image is photographed. `candid` is the original friend-snapshot look.
-export const lookStyleSchema = z.enum(['candid', 'street', 'mirror', 'close-up']);
+export const lookStyleSchema = z.enum(['candid', 'street', 'mirror']);
+// What fills the outfit around the picked pieces: more wardrobe pieces, garments
+// the image model invents, or nothing, with the photo framed on the picked pieces.
+export const lookCompletionSchema = z.enum(['wardrobe', 'model', 'selected']);
 export const lookSizeSchema = z.enum(['1024x1280', '768x960']);
 export const lookSchema = z
   .object({
@@ -309,3 +312,4 @@ export type CharacterSheet = z.infer<typeof characterSheetSchema>;
 export type Look = z.infer<typeof lookSchema>;
 export type LookConcept = z.infer<typeof lookConceptSchema>;
 export type LookStyle = z.infer<typeof lookStyleSchema>;
+export type LookCompletion = z.infer<typeof lookCompletionSchema>;

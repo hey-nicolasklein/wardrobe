@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   candidatesForLookPlan,
+  lookFocus,
   lookPrompt,
   normalizeAutomaticLookItems,
   recentForLookPlan,
@@ -89,7 +90,7 @@ test('look prompts describe the ordered garment board for multiple pieces', () =
   assert.doesNotMatch(lookPrompt(concept, items.slice(0, 1), null, true), /ordered board/);
 });
 
-test('look styles change the camera and only close-ups may crop lower garments', () => {
+test('look styles change the camera', () => {
   const concept = { activity: 'walking', scene: 'a street', mood: 'calm', framing: 'full-body' as const };
   const item = [{ name: 'Black trousers', category: 'pants', colors: ['black'] }];
   const candid = lookPrompt(concept, item, null, true);
@@ -97,7 +98,21 @@ test('look styles change the camera and only close-ups may crop lower garments',
   assert.match(candid, /must never be cropped/);
   assert.match(lookPrompt(concept, item, null, true, 'mirror'), /mirror selfie/);
   assert.doesNotMatch(lookPrompt(concept, item, null, true, 'mirror'), /Avoid selfies/);
-  const closeUp = lookPrompt(concept, item, null, true, 'close-up');
-  assert.match(closeUp, /mid-thigh up/);
-  assert.doesNotMatch(closeUp, /must never be cropped/);
+});
+
+test('selected completion frames the body zone the picked pieces share', () => {
+  assert.equal(lookFocus(['jacket']), 'upper');
+  assert.equal(lookFocus(['top', 'scarf', 'bag']), 'upper');
+  assert.equal(lookFocus(['pants', 'shoes']), 'lower');
+  assert.equal(lookFocus(['shoes']), 'feet');
+  assert.equal(lookFocus(['jacket', 'shoes']), null);
+  assert.equal(lookFocus(['dress']), null);
+
+  const concept = { activity: 'walking', scene: 'a street', mood: 'calm', framing: 'full-body' as const };
+  const jacket = [{ name: 'Leather jacket', category: 'jacket', colors: ['black'] }];
+  const prompt = lookPrompt(concept, jacket, null, false, 'street', 'upper');
+  assert.match(prompt, /waist up/);
+  assert.doesNotMatch(prompt, /head to shoes/);
+  assert.match(prompt, /neutral base layer/);
+  assert.doesNotMatch(prompt, /Complete the outfit/);
 });

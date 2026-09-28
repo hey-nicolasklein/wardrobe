@@ -206,6 +206,13 @@ test('keeps Character Sheet and Look creation constrained and strict', () => {
     false,
   );
   assert.equal(
+    createLookRequestSchema.parse({
+      completion: 'selected',
+      idempotencyKey: 'look-command-0123456789',
+    }).completion,
+    'selected',
+  );
+  assert.equal(
     createLookRequestSchema.safeParse({
       idempotencyKey: 'look-command-0123456789',
       freeTextPrompt: 'invent something',
