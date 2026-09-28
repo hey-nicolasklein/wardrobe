@@ -143,6 +143,7 @@ export async function resetPersonalWardrobe(
       'detection_proposals',
       'source_photos',
       'idempotency_commands',
+      'look_shot_preferences',
     ]) {
       await client.query(`DELETE FROM ${table} WHERE account_id = $1`, [accountId]);
     }

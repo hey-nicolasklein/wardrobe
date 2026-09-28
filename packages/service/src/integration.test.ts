@@ -38,6 +38,7 @@ import {
   InsufficientCreditsError,
   signInWithIdentity,
   signupCredits,
+  setShotHidden,
 } from './index.js';
 import { compactIdentityReference } from './identity-collage.js';
 
@@ -138,6 +139,18 @@ test('photo collages cost zero and become the first reference for a priced feed 
     assert.equal(tried.baseAssetId, fixtureIds.sourceAsset);
     assert.equal(tried.concept, null);
     assert.deepEqual(tried.wardrobeItemIds, [fixtureIds.readyItem]);
+    // "Other perspective" keeps outfit and scene, changes only the shot, and
+    // skips shots the user hid.
+    assert.deepEqual(await setShotHidden(database, { accountId: input.accountId, shot: 'candid-seated', hidden: true }), ['candid-seated']);
+    const reshoot = await createLook(database, { accountId: input.accountId, exactItemIds: [], categories: [], parentLookId: look.lookId, reshoot: true, idempotencyKey: randomUUID() });
+    const reshotLook = (await listLooks(database, input.accountId)).find((entry) => entry.id === reshoot.lookId)!;
+    assert.equal(reshotLook.concept?.scene, concept.scene);
+    assert.match(reshotLook.concept?.shot ?? '', /^candid-/);
+    assert.notEqual(reshotLook.concept?.shot, 'candid-seated');
+    assert.deepEqual(reshotLook.wardrobeItemIds, [fixtureIds.readyItem]);
+    await assert.rejects(createLook(database, { accountId: input.accountId, exactItemIds: [], categories: [], parentLookId: tryOn.lookId, reshoot: true, idempotencyKey: randomUUID() }), /Perspektive/);
+    await database.query("UPDATE looks SET state='failed' WHERE id=$1", [reshoot.lookId]);
+    assert.deepEqual(await setShotHidden(database, { accountId: input.accountId, shot: 'candid-seated', hidden: false }), []);
     const upgradeCommand = { accountId: input.accountId, exactItemIds: [], categories: [], parentLookId: look.lookId, quality: 'high' as const, preserveComposition: true, idempotencyKey: randomUUID() };
     const upgraded = await createLook(database, upgradeCommand);
     assert.deepEqual(await createLook(database, upgradeCommand), upgraded);

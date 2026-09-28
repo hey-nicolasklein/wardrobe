@@ -252,6 +252,8 @@ export const lookConceptSchema = z
     scene: z.string().trim().min(1).max(300),
     framing: z.enum(['full-body', 'three-quarter']),
     mood: z.string().trim().min(1).max(200),
+    // The camera setup the planner picked, an id from the service's shot catalog.
+    shot: z.string().min(1).max(40).optional(),
   })
   .strict();
 // How a feed image is photographed. `candid` is the original friend-snapshot look.

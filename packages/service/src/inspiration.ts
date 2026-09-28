@@ -23,6 +23,7 @@ import {
   writeGarmentReferenceDebugGallery,
 } from './garment-reference-collage.js';
 import { withTransaction } from './database.js';
+import { hiddenShots, pickReshoot, shotPrompt, shotStyle, shotsFor } from './look-shots.js';
 import { enqueueJob, type RemoteImageJob } from './jobs.js';
 import { collageModel, compactIdentityReference, createIdentityCollage } from './identity-collage.js';
 import { IdempotencyConflictError, OwnedResourceNotFoundError } from './media.js';
@@ -416,6 +417,7 @@ export async function createLook(
     completeWithWardrobe?: boolean;
     completion?: LookCompletion;
     baseAssetId?: string;
+    reshoot?: boolean;
     idempotencyKey: string;
   },
 ) {
@@ -434,6 +436,7 @@ export async function createLook(
     // Only when new, so replays of requests made before `completion` still match.
     ...(completion === 'selected' ? { completion } : {}),
     ...(input.baseAssetId ? { baseAssetId: input.baseAssetId } : {}),
+    ...(input.reshoot ? { reshoot: true } : {}),
   };
   return withTransaction(database, async (client) => {
     const prior = await replay<{ jobId: string; lookId: string }>(
@@ -469,8 +472,13 @@ export async function createLook(
     let exactIds = input.exactItemIds;
     let parentId = input.parentLookId;
     let preserved: { concept: LookConcept; characterId: string; assetId: string } | null = null;
-    if (input.preserveComposition && !parentId)
+    // "Same outfit, other perspective": the parent's concept with a new shot,
+    // and the parent's job settings, so only the camera changes.
+    let reshot: { concept: LookConcept; payload: Record<string, unknown> } | null = null;
+    if ((input.preserveComposition || input.reshoot) && !parentId)
       throw new InspirationValidationError('parent-required', 'Wähle einen fertigen Look.');
+    if (input.reshoot && input.preserveComposition)
+      throw new InspirationValidationError('reshoot-invalid', 'Wähle entweder eine neue Perspektive oder bessere Qualität.');
     if (parentId) {
       const parent = await client.query<{ ids: string[] }>(
         `SELECT COALESCE(array_agg(li.wardrobe_item_id ORDER BY li.ordinal),'{}') ids FROM looks l LEFT JOIN look_items li ON li.look_id=l.id WHERE l.id=$1 AND l.account_id=$2 AND l.state='ready' GROUP BY l.id`,
@@ -478,6 +486,24 @@ export async function createLook(
       );
       if (!parent.rows[0]) throw new OwnedResourceNotFoundError();
       exactIds = parent.rows[0].ids;
+      if (input.reshoot) {
+        const original = await client.query<{ planned_concept: LookConcept | null; base_asset_id: string | null; payload: Record<string, unknown> | null }>(
+          `SELECT l.planned_concept,l.base_asset_id,(SELECT payload FROM remote_image_jobs rj WHERE rj.look_id=l.id ORDER BY rj.created_at DESC LIMIT 1) payload FROM looks l WHERE l.id=$1 AND l.account_id=$2 AND l.deleted_at IS NULL`,
+          [parentId, input.accountId],
+        );
+        const row = original.rows[0];
+        if (!row?.planned_concept || row.base_asset_id)
+          throw new InspirationValidationError('reshoot-unavailable', 'Für diesen Look gibt es keine andere Perspektive.');
+        const { lookId: _lookId, referenceAssetId: _reference, ...payload } = row.payload ?? {};
+        const style = shotStyle(row.planned_concept.shot) ?? (payload.style as LookStyle | undefined) ?? 'candid';
+        reshot = {
+          concept: {
+            ...row.planned_concept,
+            shot: pickReshoot(style, row.planned_concept.shot, await hiddenShots(client, input.accountId)),
+          },
+          payload: { ...payload, style },
+        };
+      }
       if (input.preserveComposition) {
         const original = await client.query<{
           planned_concept: LookConcept; character_sheet_id: string; asset_id: string;
@@ -544,11 +570,11 @@ export async function createLook(
         lookModel,
         input.baseAssetId ? tryOnPromptVersion : lookPromptVersion,
         input.quality ?? 'low',
-        preserved ? JSON.stringify(preserved.concept) : null,
+        preserved || reshot ? JSON.stringify((preserved ?? reshot)!.concept) : null,
         input.baseAssetId ?? null,
       ],
     );
-    if (preserved)
+    if (preserved || reshot)
       for (const [ordinal, itemId] of exactIds.entries())
         await client.query('INSERT INTO look_items(look_id,wardrobe_item_id,ordinal) VALUES($1,$2,$3)', [lookId, itemId, ordinal]);
     const jobId = await enqueueJob(client, {
@@ -562,6 +588,7 @@ export async function createLook(
         ...(focus ? { focus } : {}),
         outputSize: lookOutputSize,
         ...(preserved ? { referenceAssetId: preserved.assetId } : {}),
+        ...reshot?.payload,
       },
       idempotencyKey: `look:${input.idempotencyKey}`,
     });
@@ -752,7 +779,7 @@ const lookStylePrompts: Record<LookStyle, (concept: LookConcept, framing: string
   candid: (c, framing) =>
     `Create one photorealistic 4:5 snapshot as if a friend casually took it on an iPhone while the referenced person was ${c.activity}, in ${c.scene}. ${framing ?? `${c.framing} framing.`} The person is caught mid-moment and must not look directly at the camera. Avoid posed portraits and runway staging.`,
   street: (c, framing) =>
-    `Create one photorealistic 4:5 outfit photo that a friend took on an iPhone of the referenced person in ${c.scene}, casually posing for a fit pic while ${c.activity}. ${framing ?? 'Full-body framing, head to shoes, shot from about chest height and slightly off-centre, with a slightly tilted horizon.'} Smartphone look: deep depth of field with the background mostly in focus and typical phone processing, no telephoto compression or creamy bokeh.`,
+    `Create one photorealistic 4:5 outfit photo that a friend took on an iPhone of the referenced person in ${c.scene}, casually posing for a fit pic while ${c.activity}. ${framing ?? 'Full-body framing, head to shoes, slightly off-centre, with a slightly tilted horizon.'} Smartphone look: deep depth of field with the background mostly in focus and typical phone processing, no telephoto compression or creamy bokeh.`,
   mirror: (c, framing) =>
     `Create one photorealistic 4:5 mirror selfie: the referenced person holds a smartphone and photographs their reflection in a mirror in ${c.scene}. ${framing ? `In the mirror: ${framing}` : 'The phone partly covers one side of the face. Show the full outfit in the mirror, head to shoes.'} Casual real-world surroundings.`,
 };
@@ -812,7 +839,7 @@ export function lookPrompt(
   const garmentReferences = items.length > 1
     ? `The final garment reference is one ordered board. Its cells are row-major, from left to right and then top to bottom, matching this garment order: ${items.map((item, index) => `${index + 1}. ${item.name}`).join('; ')}. ${pairing} Use each cell only for its matching garment.`
     : `The final reference shows the garment. ${pairing}`;
-  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} ${garmentReferences} ${lookStylePrompts[style](concept, focus ? lookFocusFraming[focus] : null)} ${lookLighting(occasion)} ${unpolished} Mood: ${concept.mood}. ${garmentInstruction} Every referenced garment must be fully visible and faithful to its reference. ${completion} Avoid ${style === 'mirror' ? '' : 'selfies, '}illustrations, text, watermarks, and collages in the output. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
+  return `The first reference is an identity reference of one person, possibly a collage of cropped original photos. Every panel shows the same person. Preserve their facial likeness, hair, skin, and body proportions from those photos. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} ${garmentReferences} ${lookStylePrompts[style](concept, focus ? lookFocusFraming[focus] : null)}${shotPrompt(concept.shot) ? ` Camera: ${shotPrompt(concept.shot)}` : ''} ${lookLighting(occasion)} ${unpolished} Mood: ${concept.mood}. ${garmentInstruction} Every referenced garment must be fully visible and faithful to its reference. ${completion} Avoid ${style === 'mirror' ? '' : 'selfies, '}illustrations, text, watermarks, and collages in the output. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
 }
 
 async function imageDimensions(bytes: Uint8Array, expected: '1024x1280' | '768x960') {
@@ -965,6 +992,7 @@ export async function executeInspirationJob(
         categories: row.category_constraints,
         occasion: (job.payload as { occasion?: string | null }).occasion ?? null,
         style,
+        shots: shotsFor(style, await hiddenShots(database, job.accountId)),
         model: lookPlannerModel,
         signal: controller.signal,
       });

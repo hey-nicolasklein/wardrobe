@@ -96,6 +96,7 @@ export interface CatalogProvider {
     categories: string[];
     occasion?: string | null;
     style?: LookStyle;
+    shots?: Array<{ id: string; description: string }>;
     model: string;
     signal?: AbortSignal;
   }): Promise<LookPlanResult>;
@@ -568,9 +569,11 @@ export class OpenAICatalogProvider implements CatalogProvider {
     categories: string[];
     occasion?: string | null;
     style?: LookStyle;
+    shots?: Array<{ id: string; description: string }>;
     model: string;
     signal?: AbortSignal;
   }): Promise<LookPlanResult> {
+    const shotIds = (input.shots ?? []).map(({ id }) => id);
     const schema = {
       type: 'object',
       properties: {
@@ -587,8 +590,9 @@ export class OpenAICatalogProvider implements CatalogProvider {
             scene: { type: 'string', maxLength: 300 },
             framing: { type: 'string', enum: ['full-body', 'three-quarter'] },
             mood: { type: 'string', maxLength: 200 },
+            ...(shotIds.length ? { shot: { type: 'string', enum: shotIds } } : {}),
           },
-          required: ['activity', 'scene', 'framing', 'mood'],
+          required: ['activity', 'scene', 'framing', 'mood', ...(shotIds.length ? ['shot'] : [])],
           additionalProperties: false,
         },
       },
@@ -607,7 +611,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
         body: JSON.stringify({
           model: input.model,
           store: false,
-          input: `Plan one coherent candid outfit photograph. Exact item IDs are mandatory. Satisfy every requested category. Build a complete outfit around the exact items, adding complementary pieces from the candidates. For pieces you add automatically, choose at most one top, at most one jacket, and at most one lower-body piece (pants or skirt). A dress replaces the top and lower-body piece; a jacket may be layered over either. Do not select alternative garments in the same slot. Match the requested occasion in both clothing and scene when provided. Avoid recent combinations and situations, but never at the cost of an exact item: the exact items always stay in the outfit, and you vary the added pieces, scene, activity and mood instead. Do not use weather, season or the user's location. The scene must be a specific, lived-in real place (a street corner, café terrace, subway platform, park, kitchen, bar, gallery opening) with incidental background detail and other people where natural; never a plain studio, blank wall or empty backdrop.${input.style === 'street' ? ' The photo is a street-style fit pic, so the scene is outdoors in a city.' : ''} Candidates: ${JSON.stringify(input.candidates)}. Exact: ${JSON.stringify(input.exactItemIds)}. Categories: ${JSON.stringify(input.categories)}. Occasion: ${JSON.stringify(input.occasion ?? null)}.${input.style === 'mirror' ? ' The photo will be a mirror selfie, so choose an indoor scene with a mirror (bedroom, hallway, fitting room, elevator, restroom) and an activity that fits it.' : ''} Recent: ${JSON.stringify(input.recent)}.`,
+          input: `Plan one coherent candid outfit photograph. Exact item IDs are mandatory. Satisfy every requested category. Build a complete outfit around the exact items, adding complementary pieces from the candidates. For pieces you add automatically, choose at most one top, at most one jacket, and at most one lower-body piece (pants or skirt). A dress replaces the top and lower-body piece; a jacket may be layered over either. Do not select alternative garments in the same slot. Match the requested occasion in both clothing and scene when provided. Avoid recent combinations and situations, but never at the cost of an exact item: the exact items always stay in the outfit, and you vary the added pieces, scene, activity and mood instead. Do not use weather, season or the user's location. The scene must be a specific, lived-in real place (a street corner, café terrace, subway platform, park, kitchen, bar, gallery opening) with incidental background detail and other people where natural; never a plain studio, blank wall or empty backdrop.${input.style === 'street' ? ' The photo is a street-style fit pic, so the scene is outdoors in a city.' : ''} Candidates: ${JSON.stringify(input.candidates)}. Exact: ${JSON.stringify(input.exactItemIds)}. Categories: ${JSON.stringify(input.categories)}. Occasion: ${JSON.stringify(input.occasion ?? null)}.${input.style === 'mirror' ? ' The photo will be a mirror selfie, so choose an indoor scene with a mirror (bedroom, hallway, fitting room, elevator, restroom) and an activity that fits it.' : ''}${shotIds.length ? ` Pick the camera shot from Shots whose pose fits the activity, and avoid shots used in Recent. Shots: ${JSON.stringify(Object.fromEntries((input.shots ?? []).map(({ id, description }) => [id, description])))}.` : ''} Recent: ${JSON.stringify(input.recent)}.`,
           text: {
             format: {
               type: 'json_schema',
@@ -645,6 +649,10 @@ export class OpenAICatalogProvider implements CatalogProvider {
               scene: z.string().min(1).max(300),
               framing: z.enum(['full-body', 'three-quarter']),
               mood: z.string().min(1).max(200),
+              shot: z
+                .string()
+                .refine((shot) => shotIds.includes(shot))
+                .optional(),
             })
             .strict(),
         })

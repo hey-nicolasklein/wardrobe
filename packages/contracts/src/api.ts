@@ -287,9 +287,15 @@ export const createLookRequestSchema = z
     // A try-on: dress this uploaded source photo in exactItemIds 1:1 instead of
     // generating a new scene. Occasion, style, and completion do not apply.
     baseAssetId: opaqueIdSchema.optional(),
+    // With parentLookId: the same outfit and scene, shot from a different angle.
+    reshoot: z.boolean().optional(),
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();
+export const lookShotPreferencesResponseSchema = z
+  .object({ hiddenShots: z.array(z.string().min(1).max(40)) })
+  .strict();
+export const setLookShotPreferenceRequestSchema = z.object({ hidden: z.boolean() }).strict();
 export const retryLookRequestSchema = z.object({ idempotencyKey: idempotencyKeySchema }).strict();
 export const looksResponseSchema = z.object({ looks: z.array(lookSchema) }).strict();
 export const lookResponseSchema = z.object({ look: lookSchema }).strict();

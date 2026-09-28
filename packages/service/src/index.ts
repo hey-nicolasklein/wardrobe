@@ -9,6 +9,7 @@ export * from './fixtures.js';
 export * from './garment-reference-collage.js';
 export * from './health.js';
 export * from './jobs.js';
+export * from './look-shots.js';
 export * from './inspiration.js';
 export * from './media.js';
 export * from './ownership.js';

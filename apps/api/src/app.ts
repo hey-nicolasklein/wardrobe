@@ -29,6 +29,7 @@ import {
   devSignInRequestSchema,
   identitySignInRequestSchema,
   updateWardrobeItemRequestSchema,
+  setLookShotPreferenceRequestSchema,
   contractVersion,
   type ApiError,
 } from '@form/contracts';
@@ -77,6 +78,9 @@ import {
   listLooks,
   retryLook,
   removeCharacterSheet,
+  hiddenShots,
+  isLookShot,
+  setShotHidden,
 } from '@form/service';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { cors } from 'hono/cors';
@@ -515,6 +519,42 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       return issueSession(context, account, created, parsed.data.transport);
     });
   }
+
+  // Shot types the user asked to see less of; the look planner skips them.
+  app.get('/v1/look-shots', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    return context.json({ hiddenShots: await hiddenShots(database, authenticated.session.id) });
+  });
+
+  app.put('/v1/look-shots/:shot', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    const shot = context.req.param('shot');
+    const parsed = setLookShotPreferenceRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!isLookShot(shot) || !parsed.success)
+      return context.json(
+        errorPayload('validation', 'invalid-look-shot', 'Unknown shot type.'),
+        400,
+      );
+    return context.json({
+      hiddenShots: await setShotHidden(database, {
+        accountId: authenticated.session.id,
+        shot,
+        hidden: parsed.data.hidden,
+      }),
+    });
+  });
 
   app.get('/v1/credits', async (context) => {
     const authenticated = await currentSession(context);
