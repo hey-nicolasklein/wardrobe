@@ -106,6 +106,8 @@ export interface CatalogProvider {
     model: string;
     quality: GenerationQuality;
     size: '864x1536' | '1024x1280' | '768x960';
+    // `low` only for edits of the user's own photos, see tryOnPrompt.
+    moderation?: 'auto' | 'low';
     signal?: AbortSignal;
   }): Promise<GenerationProviderResult>;
 }
@@ -687,6 +689,8 @@ export class OpenAICatalogProvider implements CatalogProvider {
     model: string;
     quality: GenerationQuality;
     size: '864x1536' | '1024x1280' | '768x960';
+    // `low` only for edits of the user's own photos, see tryOnPrompt.
+    moderation?: 'auto' | 'low';
     signal?: AbortSignal;
   }): Promise<GenerationProviderResult> {
     const form = new FormData();
@@ -703,7 +707,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
     form.set('quality', input.quality);
     form.set('size', input.size);
     form.set('output_format', 'png');
-    form.set('moderation', 'auto');
+    form.set('moderation', input.moderation ?? 'auto');
     let response: Response;
     try {
       response = await fetch(`${this.baseUrl}/images/edits`, {

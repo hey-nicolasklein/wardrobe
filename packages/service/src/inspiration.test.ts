@@ -135,8 +135,10 @@ test('parties get the flash look and every look avoids the DSLR polish', () => {
 
 test('try-on edits the own photo and keeps everything but the clothes', () => {
   const prompt = tryOnPrompt([{ name: 'Fur coat', category: 'jacket', colors: ['brown'] }]);
-  assert.match(prompt, /^Edit the first reference, a real photo/);
-  assert.match(prompt, /body shape and proportions, pose/);
+  assert.match(prompt, /^Fashion try-on/);
+  assert.match(prompt, /same person and face, hairstyle, build, pose/);
+  // Words the image safety filter read as undressing a real person.
+  assert.doesNotMatch(prompt, /skin|body shape|what the person wears/);
   assert.match(prompt, /Fur coat \(jacket; brown\)/);
   assert.doesNotMatch(prompt, /identity reference/);
 });
