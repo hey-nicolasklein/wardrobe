@@ -7,7 +7,7 @@ void main() {
       exactItemIds: ['wardrobe-item-0001'],
       categories: ['top'],
       occasion: 'casual',
-      completeWithWardrobe: true,
+      completion: 'selected',
       parentLookId: 'look-parent',
       preserveComposition: true,
       quality: 'medium',
@@ -15,14 +15,13 @@ void main() {
     expect(command.path, 'v1/looks');
     expect(command.method, 'POST');
     expect(command.body['exactItemIds'], ['wardrobe-item-0001']);
-    expect(command.body['completeWithWardrobe'], isTrue);
+    expect(command.body['completion'], 'selected');
     expect(command.body['idempotencyKey'], hasLength(48));
     expect(
       LookCommand.create(
         exactItemIds: const [],
         categories: const [],
         occasion: null,
-        completeWithWardrobe: false,
         idempotencyKey: 'fixed-key',
       ).body['idempotencyKey'],
       'fixed-key',
@@ -34,7 +33,6 @@ void main() {
           exactItemIds: const [],
           categories: const [],
           occasion: null,
-          completeWithWardrobe: false,
         ).body['idempotencyKey'],
       ),
     );

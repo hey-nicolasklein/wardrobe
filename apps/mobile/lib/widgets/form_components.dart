@@ -614,17 +614,20 @@ class FormSearchField extends StatelessWidget {
 }
 
 /// Segmented control whose green pill slides between options. Changing the
-/// selection gives a light selection haptic.
+/// selection gives a light selection haptic. Keys in [disabled] are shown
+/// dimmed and cannot be picked.
 class FormChoiceChips extends StatelessWidget {
   const FormChoiceChips({
     required this.options,
     required this.selected,
     required this.onSelected,
+    this.disabled = const {},
     super.key,
   });
   final Map<String, String> options;
   final String selected;
   final ValueChanged<String>? onSelected;
+  final Set<String> disabled;
 
   static const _slide = Duration(milliseconds: 260);
 
@@ -672,7 +675,8 @@ class FormChoiceChips extends StatelessWidget {
                     child: Semantics(
                       selected: entry.key == selected,
                       child: TextButton(
-                        onPressed: onSelected == null
+                        onPressed:
+                            onSelected == null || disabled.contains(entry.key)
                             ? null
                             : () {
                                 if (entry.key != selected) {
@@ -698,6 +702,8 @@ class FormChoiceChips extends StatelessWidget {
                           tween: ColorTween(
                             end: entry.key == selected
                                 ? Colors.white
+                                : disabled.contains(entry.key)
+                                ? FormTokens.toggleOff
                                 : FormTokens.ink,
                           ),
                           builder: (context, color, _) => Text(

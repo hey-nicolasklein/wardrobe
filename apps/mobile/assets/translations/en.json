@@ -236,9 +236,11 @@
   "composerFilterAll": "All",
   "composerEmpty": "No pieces found.",
   "composerNoEligible": "No pieces with catalog images yet.",
-  "composerCompleteTitle": "Complete with wardrobe pieces",
+  "composerCompleteTitle": "Rest of the outfit",
   "composerCompleteHelpOn": "FORM chooses matching pieces from your wardrobe.",
   "composerCompleteHelpOff": "The image model completes missing clothing without using more wardrobe pieces.",
+  "composerCompleteHelpSelected": "The photo shows only your pieces, for a jacket roughly from the waist up.",
+  "composerCompleteHelpUnframable": "Only works when your pieces share one part of the body, like only tops or only shoes.",
   "composerCategoriesTitle": "Specify categories",
   "composerPreviewTitle": "Your selection as flat lay",
   "composerBack": "Continue selecting",
@@ -258,6 +260,7 @@
   "composerSummaryPieces": "{count} pieces",
   "composerSummaryWithWardrobe": "+ wardrobe",
   "composerSummaryFreeCompletion": "+ free completion",
+  "composerSummarySelectedOnly": "· just these",
   "composerSummaryCategories": "· {count} categories",
   "composerSummaryCategoriesOnly": "{count} categories selected",
   "composerSummaryDefault": "FORM combines for you",
@@ -538,7 +541,11 @@
   "lookStyle": {
     "candid": "Snapshot",
     "street": "Street style",
-    "mirror": "Mirror selfie",
-    "close-up": "Close-up"
+    "mirror": "Mirror selfie"
+  },
+  "lookCompletion": {
+    "wardrobe": "Wardrobe",
+    "model": "Fill freely",
+    "selected": "Only mine"
   }
 }

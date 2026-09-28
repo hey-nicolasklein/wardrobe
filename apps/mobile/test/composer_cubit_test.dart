@@ -88,13 +88,21 @@ void main() {
   test('clearing the selection turns wardrobe completion back on', () {
     final cubit = ComposerCubit(looks, preselectedIds: [shirt.id])
       ..toggleCategory('shoes')
-      ..toggleCompleteWithWardrobe();
-    expect(cubit.state.completeWithWardrobe, isFalse);
+      ..setCompletion('model');
+    expect(cubit.state.completion, 'model');
     expect(cubit.state.categories, isEmpty);
     cubit.toggleItem(shirt.id);
-    expect(cubit.state.completeWithWardrobe, isTrue);
-    cubit.toggleCompleteWithWardrobe();
-    expect(cubit.state.completeWithWardrobe, isTrue);
+    expect(cubit.state.completion, 'wardrobe');
+    cubit.setCompletion('selected');
+    expect(cubit.state.completion, 'wardrobe');
+  });
+
+  test('only pieces from one body zone can be framed alone', () {
+    expect(canFrameOnly(['jacket']), isTrue);
+    expect(canFrameOnly(['top', 'bag']), isTrue);
+    expect(canFrameOnly(['pants', 'shoes']), isTrue);
+    expect(canFrameOnly(['jacket', 'shoes']), isFalse);
+    expect(canFrameOnly(['dress']), isFalse);
   });
 
   test('tapping the highlighted preview piece again clears it', () {
@@ -156,9 +164,9 @@ void main() {
     expect(cubit.command().body['style'], 'candid');
     cubit.setStyle('mirror');
     expect(cubit.command().body['style'], 'mirror');
-    cubit.toggleCompleteWithWardrobe();
+    cubit.setCompletion('selected');
     expect(cubit.command().body['categories'], isEmpty);
-    expect(cubit.command().body['completeWithWardrobe'], isFalse);
+    expect(cubit.command().body['completion'], 'selected');
   });
 
   test('a failed submit retries with the same idempotency key', () async {

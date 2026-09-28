@@ -11,6 +11,7 @@ import 'package:form_mobile/features/feed/composer_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/feed/flat_lay_widget.dart';
+import 'package:form_mobile/features/feed/look_style_picker.dart';
 import 'package:form_mobile/features/settings/quality_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -164,16 +165,14 @@ class _ComposerPicker extends StatelessWidget {
           context.tr(LocaleKeys.composerStyleLabel),
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 8),
-        FormChoiceChips(
-          options: {
-            for (final style in lookStyles)
-              style: context.tr('lookStyle.$style'),
-          },
-          selected: state.style,
-          onSelected: cubit.setStyle,
+        const SizedBox(height: 12),
+        LookStylePicker(selected: state.style, onSelected: cubit.setStyle),
+        const SizedBox(height: 20),
+        Text(
+          context.tr(LocaleKeys.composerOccasionLabel),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
         _OccasionPresets(selected: state.occasion),
         const SizedBox(height: 28),
         Row(
@@ -281,7 +280,12 @@ class _ComposerPicker extends StatelessWidget {
             ],
           ),
         const SizedBox(height: 24),
-        _CompletionOptions(state: state),
+        _CompletionOptions(
+          state: state,
+          canFrameOnly: canFrameOnly(
+            state.selectedItems(eligible).map((item) => item.metadata.category),
+          ),
+        ),
       ],
     );
   }
@@ -633,9 +637,12 @@ class _CheckBadge extends StatelessWidget {
 }
 
 class _CompletionOptions extends StatefulWidget {
-  const _CompletionOptions({required this.state});
+  const _CompletionOptions({required this.state, required this.canFrameOnly});
 
   final ComposerState state;
+
+  /// Whether the picked pieces share one body zone, see [canFrameOnly].
+  final bool canFrameOnly;
 
   @override
   State<_CompletionOptions> createState() => _CompletionOptionsState();
@@ -659,17 +666,54 @@ class _CompletionOptionsState extends State<_CompletionOptions> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            FormToggleRow(
-              title: context.tr(LocaleKeys.composerCompleteTitle),
-              subtitle: context.tr(
-                state.completeWithWardrobe
-                    ? LocaleKeys.composerCompleteHelpOn
-                    : LocaleKeys.composerCompleteHelpOff,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(13, 11, 13, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    context.tr(LocaleKeys.composerCompleteTitle),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: FormTokens.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  FormChoiceChips(
+                    options: {
+                      for (final completion in lookCompletions)
+                        completion: context.tr('lookCompletion.$completion'),
+                    },
+                    selected: state.completion,
+                    disabled: {
+                      if (!state.canChooseCompletion) ...['model', 'selected'],
+                      if (!widget.canFrameOnly &&
+                          state.completion != 'selected')
+                        'selected',
+                    },
+                    onSelected: cubit.setCompletion,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    context.tr(switch (state.completion) {
+                      'model' => LocaleKeys.composerCompleteHelpOff,
+                      'selected' when widget.canFrameOnly =>
+                        LocaleKeys.composerCompleteHelpSelected,
+                      'selected' => LocaleKeys.composerCompleteHelpUnframable,
+                      _ => LocaleKeys.composerCompleteHelpOn,
+                    }),
+                    style: TextStyle(
+                      fontSize: 11,
+                      height: 16 / 11,
+                      color:
+                          state.completion == 'selected' && !widget.canFrameOnly
+                          ? FormTokens.danger
+                          : FormTokens.muted,
+                    ),
+                  ),
+                ],
               ),
-              value: state.completeWithWardrobe,
-              onChanged: state.canToggleCompletion
-                  ? (_) => cubit.toggleCompleteWithWardrobe()
-                  : null,
             ),
             if (state.completeWithWardrobe) ...[
               const Divider(height: 1, color: FormTokens.line),
@@ -882,7 +926,13 @@ class _ComposerFooter extends StatelessWidget {
             ],
             Expanded(
               child: FilledButton(
-                onPressed: state.submitting || !connected
+                onPressed:
+                    state.submitting ||
+                        !connected ||
+                        (state.completion == 'selected' &&
+                            !canFrameOnly(
+                              selected.map((item) => item.metadata.category),
+                            ))
                     ? null
                     : () => unawaited(cubit.submit()),
                 child: state.submitting

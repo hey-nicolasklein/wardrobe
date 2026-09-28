@@ -236,9 +236,11 @@
   "composerFilterAll": "Alle",
   "composerEmpty": "Keine Stücke gefunden.",
   "composerNoEligible": "Noch keine Stücke mit Katalogbild.",
-  "composerCompleteTitle": "Mit Schrankstücken ergänzen",
+  "composerCompleteTitle": "Rest des Outfits",
   "composerCompleteHelpOn": "FORM wählt passende weitere Stücke aus deinem Schrank.",
   "composerCompleteHelpOff": "Das Bildmodell ergänzt fehlende Kleidung, ohne weitere Schrankstücke zu verwenden.",
+  "composerCompleteHelpSelected": "Das Bild zeigt nur deine Stücke, bei einer Jacke etwa ab der Hüfte aufwärts.",
+  "composerCompleteHelpUnframable": "Geht nur, wenn deine Stücke im selben Bildausschnitt liegen, etwa nur Oberteile oder nur Schuhe.",
   "composerCategoriesTitle": "Kategorien vorgeben",
   "composerPreviewTitle": "Deine Auswahl als Flat Lay",
   "composerBack": "Weiter auswählen",
@@ -258,6 +260,7 @@
   "composerSummaryPieces": "{count} Stücke",
   "composerSummaryWithWardrobe": "+ Schrank",
   "composerSummaryFreeCompletion": "+ freie Ergänzung",
+  "composerSummarySelectedOnly": "· nur diese",
   "composerSummaryCategories": "· {count} Kategorien",
   "composerSummaryCategoriesOnly": "{count} Kategorien vorgegeben",
   "composerSummaryDefault": "FORM kombiniert für dich",
@@ -538,7 +541,11 @@
   "lookStyle": {
     "candid": "Schnappschuss",
     "street": "Streetstyle",
-    "mirror": "Spiegel-Selfie",
-    "close-up": "Nah dran"
+    "mirror": "Spiegel-Selfie"
+  },
+  "lookCompletion": {
+    "wardrobe": "Schrank",
+    "model": "Frei ergänzen",
+    "selected": "Nur meine"
   }
 }

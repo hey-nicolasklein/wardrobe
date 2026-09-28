@@ -233,6 +233,9 @@ abstract class LocaleKeys {
   static const composerCompleteTitle = 'composerCompleteTitle';
   static const composerCompleteHelpOn = 'composerCompleteHelpOn';
   static const composerCompleteHelpOff = 'composerCompleteHelpOff';
+  static const composerCompleteHelpSelected = 'composerCompleteHelpSelected';
+  static const composerCompleteHelpUnframable =
+      'composerCompleteHelpUnframable';
   static const composerCategoriesTitle = 'composerCategoriesTitle';
   static const composerPreviewTitle = 'composerPreviewTitle';
   static const composerBack = 'composerBack';
@@ -252,6 +255,7 @@ abstract class LocaleKeys {
   static const composerSummaryPieces = 'composerSummaryPieces';
   static const composerSummaryWithWardrobe = 'composerSummaryWithWardrobe';
   static const composerSummaryFreeCompletion = 'composerSummaryFreeCompletion';
+  static const composerSummarySelectedOnly = 'composerSummarySelectedOnly';
   static const composerSummaryCategories = 'composerSummaryCategories';
   static const composerSummaryCategoriesOnly = 'composerSummaryCategoriesOnly';
   static const composerSummaryDefault = 'composerSummaryDefault';
@@ -541,7 +545,9 @@ abstract class LocaleKeys {
   static const lookStyle_candid = 'lookStyle.candid';
   static const lookStyle_street = 'lookStyle.street';
   static const lookStyle_mirror = 'lookStyle.mirror';
-  static const lookStyle_close_up = 'lookStyle.close-up';
   static const lookStyle = 'lookStyle';
-
+  static const lookCompletion_wardrobe = 'lookCompletion.wardrobe';
+  static const lookCompletion_model = 'lookCompletion.model';
+  static const lookCompletion_selected = 'lookCompletion.selected';
+  static const lookCompletion = 'lookCompletion';
 }

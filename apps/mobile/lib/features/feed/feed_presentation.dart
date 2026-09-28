@@ -53,11 +53,11 @@ String composerSummaryText(BuildContext context, ComposerState state) {
           LocaleKeys.composerSummaryPieces,
           namedArgs: {'count': '$count'},
         ),
-      context.tr(
-        state.completeWithWardrobe
-            ? LocaleKeys.composerSummaryWithWardrobe
-            : LocaleKeys.composerSummaryFreeCompletion,
-      ),
+      context.tr(switch (state.completion) {
+        'model' => LocaleKeys.composerSummaryFreeCompletion,
+        'selected' => LocaleKeys.composerSummarySelectedOnly,
+        _ => LocaleKeys.composerSummaryWithWardrobe,
+      }),
       if (categories > 0)
         context.tr(
           LocaleKeys.composerSummaryCategories,

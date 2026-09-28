@@ -9,7 +9,22 @@ import 'package:form_mobile/utils/idempotency_key.dart';
 const maxComposerPieces = 12;
 
 /// Photo styles the API accepts for a look, in picker order.
-const lookStyles = ['candid', 'street', 'mirror', 'close-up'];
+const lookStyles = ['candid', 'street', 'mirror'];
+
+/// What fills the outfit around the picked pieces: more wardrobe pieces,
+/// garments the image model invents, or nothing, with the photo framed on the
+/// picked pieces.
+const lookCompletions = ['wardrobe', 'model', 'selected'];
+
+/// Whether a `selected` photo can frame [categories] in one body zone. Mirrors
+/// `lookFocus` in packages/service: tops with shoes, or a dress, need a
+/// full-body photo. Bags and accessories fit any zone.
+bool canFrameOnly(Iterable<String> categories) {
+  bool has(Set<String> wanted) => categories.any(wanted.contains);
+  final upper = has(const {'top', 'jacket', 'hat', 'scarf'});
+  final lowerOrShoes = has(const {'pants', 'skirt', 'shoes'});
+  return !has(const {'dress'}) && !(upper && lowerOrShoes);
+}
 
 class ComposerState {
   const ComposerState({
@@ -18,7 +33,7 @@ class ComposerState {
     this.occasion,
     this.style = 'candid',
     this.quality = 'low',
-    this.completeWithWardrobe = true,
+    this.completion = 'wardrobe',
     this.selectedOnly = false,
     this.itemCategory,
     this.query = '',
@@ -43,7 +58,10 @@ class ComposerState {
   /// Chosen per look, as in the PWA composer. The Settings default arrives in
   /// Slice 6.
   final String quality;
-  final bool completeWithWardrobe;
+
+  /// One of [lookCompletions].
+  final String completion;
+  bool get completeWithWardrobe => completion == 'wardrobe';
   final bool selectedOnly;
 
   /// The picker's category filter. Unrelated to [categories].
@@ -60,7 +78,8 @@ class ComposerState {
   /// Set once the server accepted the look. The page closes on it.
   final String? createdLookId;
 
-  bool get canToggleCompletion => selectedIds.isNotEmpty;
+  /// Without picked pieces there is nothing to complete freely or frame alone.
+  bool get canChooseCompletion => selectedIds.isNotEmpty;
 
   /// Pieces the picker shows. Selected-only mode ignores search and category,
   /// as in the PWA.
@@ -97,7 +116,7 @@ class ComposerState {
     String? Function()? occasion,
     String? style,
     String? quality,
-    bool? completeWithWardrobe,
+    String? completion,
     bool? selectedOnly,
     String? Function()? itemCategory,
     String? query,
@@ -113,7 +132,7 @@ class ComposerState {
     occasion: occasion == null ? this.occasion : occasion(),
     style: style ?? this.style,
     quality: quality ?? this.quality,
-    completeWithWardrobe: completeWithWardrobe ?? this.completeWithWardrobe,
+    completion: completion ?? this.completion,
     selectedOnly: selectedOnly ?? this.selectedOnly,
     itemCategory: itemCategory == null ? this.itemCategory : itemCategory(),
     query: query ?? this.query,
@@ -161,8 +180,7 @@ class ComposerCubit extends Cubit<ComposerState> {
     emit(
       state.copyWith(
         selectedIds: next,
-        // With nothing selected the model has nothing to complete freely.
-        completeWithWardrobe: next.isEmpty ? true : null,
+        completion: next.isEmpty ? 'wardrobe' : null,
         selectedPieceId: state.selectedPieceId == id ? () => null : null,
       ),
     );
@@ -184,14 +202,13 @@ class ComposerCubit extends Cubit<ComposerState> {
   void toggleSelectedOnly() =>
       emit(state.copyWith(selectedOnly: !state.selectedOnly));
 
-  /// Turning completion off also drops required categories, as in the PWA.
-  void toggleCompleteWithWardrobe() {
-    if (!state.canToggleCompletion) return;
-    final value = !state.completeWithWardrobe;
+  /// Leaving `wardrobe` also drops required categories, as in the PWA.
+  void setCompletion(String completion) {
+    if (!state.canChooseCompletion) return;
     emit(
       state.copyWith(
-        completeWithWardrobe: value,
-        categories: value ? null : const {},
+        completion: completion,
+        categories: completion == 'wardrobe' ? null : const {},
       ),
     );
   }
@@ -220,7 +237,7 @@ class ComposerCubit extends Cubit<ComposerState> {
     categories: state.completeWithWardrobe ? state.categories.toList() : [],
     occasion: state.occasion,
     style: state.style,
-    completeWithWardrobe: state.completeWithWardrobe,
+    completion: state.completion,
     quality: state.quality,
     idempotencyKey: idempotencyKey,
   );
