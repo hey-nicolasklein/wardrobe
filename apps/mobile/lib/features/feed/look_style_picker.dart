@@ -18,8 +18,11 @@ class LookStylePicker extends StatelessWidget {
     super.key,
   });
 
-  final String selected;
-  final ValueChanged<String> onSelected;
+  /// The chosen style, or null for automatic.
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  static const _auto = 'auto';
 
   @override
   // The side inset leaves room for the tilted, shadowed print: the composer
@@ -28,15 +31,15 @@ class LookStylePicker extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 10),
     child: Row(
       children: [
-        for (final (index, style) in lookStyles.indexed) ...[
-          if (index > 0) const SizedBox(width: 10),
+        for (final (index, style) in [_auto, ...lookStyles].indexed) ...[
+          if (index > 0) const SizedBox(width: 8),
           Expanded(
             child: _StyleTile(
               style: style,
               // Alternate the tilt so neighbouring prints don't look stamped.
               tilt: index.isEven ? -0.045 : 0.045,
-              selected: style == selected,
-              onTap: () => onSelected(style),
+              selected: style == (selected ?? _auto),
+              onTap: () => onSelected(style == _auto ? null : style),
             ),
           ),
         ],
@@ -151,13 +154,31 @@ class _StyleTileState extends State<_StyleTile>
                             return Stack(
                               fit: StackFit.expand,
                               children: [
-                                CustomPaint(
-                                  painter: _StyleSketch(
-                                    widget.style,
-                                    colors,
-                                    hop: math.sin(t * math.pi),
+                                if (widget.style == LookStylePicker._auto)
+                                  // Automatic has no single composition, so
+                                  // it shows a spark that pops on tap.
+                                  ColoredBox(
+                                    color: Color.alphaBlend(
+                                      Colors.white.withValues(alpha: 0.5),
+                                      colors.tint,
+                                    ),
+                                    child: Transform.scale(
+                                      scale: 1 + math.sin(t * math.pi) * 0.25,
+                                      child: Icon(
+                                        Icons.auto_awesome,
+                                        color: colors.ink,
+                                        size: 30,
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  CustomPaint(
+                                    painter: _StyleSketch(
+                                      widget.style,
+                                      colors,
+                                      hop: math.sin(t * math.pi),
+                                    ),
                                   ),
-                                ),
                                 ColoredBox(
                                   color: Colors.white.withValues(alpha: flash),
                                 ),

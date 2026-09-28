@@ -128,6 +128,7 @@ abstract final class FormTokens {
     'casual': (ink: Color(0xFF526D54), tint: Color(0xFFDFE9DF)),
   };
   static const Map<String, ({Color ink, Color tint})> lookStyles = {
+    'auto': (ink: Color(0xFF526D54), tint: Color(0xFFDFE9DF)),
     'candid': (ink: Color(0xFF75602F), tint: Color(0xFFEEE5CE)),
     'street': (ink: Color(0xFF4F6275), tint: Color(0xFFDDE4EC)),
     'mirror': (ink: Color(0xFF6C5884), tint: Color(0xFFE5E1F0)),

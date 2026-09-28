@@ -146,34 +146,13 @@ class _ComposerPicker extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          context.tr(LocaleKeys.composerQualityLabel),
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 6),
-        FormNotice(text: context.tr(LocaleKeys.composerQualityNote)),
-        const SizedBox(height: 8),
-        FormChoiceChips(
-          options: {
-            for (final quality in qualities)
-              quality: context.tr('quality.$quality'),
-          },
-          selected: state.quality,
-          onSelected: cubit.setQuality,
-        ),
-        const SizedBox(height: 20),
-        Text(
-          context.tr(LocaleKeys.composerStyleLabel),
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 12),
-        LookStylePicker(selected: state.style, onSelected: cubit.setStyle),
-        const SizedBox(height: 20),
-        Text(
           context.tr(LocaleKeys.composerOccasionLabel),
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 12),
         _OccasionPresets(selected: state.occasion),
+        const SizedBox(height: 16),
+        _FineTuning(state: state),
         const SizedBox(height: 28),
         Row(
           children: [
@@ -282,6 +261,132 @@ class _ComposerPicker extends StatelessWidget {
         const SizedBox(height: 24),
         _CategoryOptions(state: state),
       ],
+    );
+  }
+}
+
+/// Quality and photo style, folded into one row that summarizes the current
+/// choice. Most looks keep the defaults: quality from Settings and a style
+/// that follows the occasion.
+class _FineTuning extends StatefulWidget {
+  const _FineTuning({required this.state});
+
+  final ComposerState state;
+
+  @override
+  State<_FineTuning> createState() => _FineTuningState();
+}
+
+class _FineTuningState extends State<_FineTuning> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
+    final cubit = context.read<ComposerCubit>();
+    final style = context.tr('lookStyle.${state.resolvedStyle}');
+    final summary = [
+      if (state.style == null)
+        '${context.tr(LocaleKeys.lookStyle_auto)} ($style)'
+      else
+        style,
+      context.tr('quality.${state.quality}'),
+    ].join(' · ');
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: FormTokens.surface,
+        border: Border.all(color: FormTokens.line),
+        borderRadius: BorderRadius.circular(FormTokens.inputRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(FormTokens.inputRadius),
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+              child: Row(
+                children: [
+                  const Icon(Icons.tune_rounded, size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    context.tr(LocaleKeys.composerFineTuning),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      summary,
+                      textAlign: TextAlign.end,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: FormTokens.small,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  AnimatedRotation(
+                    turns: _open ? 0.5 : 0,
+                    duration: FormTokens.quick,
+                    child: const Icon(Icons.expand_more_rounded, size: 20),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 240),
+            curve: FormTokens.easeOut,
+            alignment: Alignment.topCenter,
+            child: !_open
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(13, 0, 13, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          context.tr(LocaleKeys.composerStyleLabel),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        LookStylePicker(
+                          selected: state.style,
+                          onSelected: cubit.setStyle,
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          context.tr(LocaleKeys.composerQualityLabel),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        FormNotice(
+                          text: context.tr(LocaleKeys.composerQualityNote),
+                        ),
+                        const SizedBox(height: 8),
+                        FormChoiceChips(
+                          options: {
+                            for (final quality in qualities)
+                              quality: context.tr('quality.$quality'),
+                          },
+                          selected: state.quality,
+                          onSelected: cubit.setQuality,
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

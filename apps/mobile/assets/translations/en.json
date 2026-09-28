@@ -284,6 +284,7 @@
   "composerQualityLabel": "Image quality",
   "composerQualityNote": "Choose directly for this look. Higher quality costs more.",
   "composerStyleLabel": "Photo style",
+  "composerFineTuning": "Fine-tuning",
   "lookImageCost": "Image generation",
   "lookImageCostValue": "{value} US cents",
   "costs": {
@@ -536,6 +537,7 @@
     "emailAction": "Sign in"
   },
   "lookStyle": {
+    "auto": "Auto",
     "candid": "Snapshot",
     "street": "Street style",
     "mirror": "Mirror selfie"

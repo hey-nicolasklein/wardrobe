@@ -161,9 +161,12 @@ void main() {
     expect(cubit.command().body['quality'], 'low');
     cubit.setQuality('high');
     expect(cubit.command().body['quality'], 'high');
-    expect(cubit.command().body['style'], 'candid');
+    // Automatic style follows the casual occasion.
+    expect(cubit.command().body['style'], 'street');
     cubit.setStyle('mirror');
     expect(cubit.command().body['style'], 'mirror');
+    cubit.setStyle(null);
+    expect(cubit.command().body['style'], 'street');
     cubit.setCompletion('selected');
     expect(cubit.command().body['categories'], isEmpty);
     expect(cubit.command().body['completion'], 'selected');

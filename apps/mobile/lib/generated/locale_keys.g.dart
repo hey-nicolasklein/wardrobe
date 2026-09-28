@@ -280,6 +280,7 @@ abstract class LocaleKeys {
   static const composerQualityLabel = 'composerQualityLabel';
   static const composerQualityNote = 'composerQualityNote';
   static const composerStyleLabel = 'composerStyleLabel';
+  static const composerFineTuning = 'composerFineTuning';
   static const lookImageCost = 'lookImageCost';
   static const lookImageCostValue = 'lookImageCostValue';
   static const costs_title = 'costs.title';
@@ -539,6 +540,7 @@ abstract class LocaleKeys {
   static const auth_password = 'auth.password';
   static const auth_emailAction = 'auth.emailAction';
   static const auth = 'auth';
+  static const lookStyle_auto = 'lookStyle.auto';
   static const lookStyle_candid = 'lookStyle.candid';
   static const lookStyle_street = 'lookStyle.street';
   static const lookStyle_mirror = 'lookStyle.mirror';

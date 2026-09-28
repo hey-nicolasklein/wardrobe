@@ -11,6 +11,12 @@ const maxComposerPieces = 12;
 /// Photo styles the API accepts for a look, in picker order.
 const lookStyles = ['candid', 'street', 'mirror'];
 
+/// The style an automatic look uses for [occasion]: everyday looks become
+/// street-style fit pics, everything else a candid snapshot (with flash at
+/// night, which the server derives from the occasion).
+String autoLookStyle(String? occasion) =>
+    occasion == 'casual' ? 'street' : 'candid';
+
 /// What fills the outfit around the picked pieces: more wardrobe pieces,
 /// garments the image model invents, or nothing, with the photo framed on the
 /// picked pieces.
@@ -31,7 +37,7 @@ class ComposerState {
     this.selectedIds = const {},
     this.categories = const {},
     this.occasion,
-    this.style = 'candid',
+    this.style,
     this.quality = 'low',
     this.completion = 'wardrobe',
     this.selectedOnly = false,
@@ -52,8 +58,10 @@ class ComposerState {
   final Set<String> categories;
   final String? occasion;
 
-  /// How the feed image is photographed. One of [lookStyles].
-  final String style;
+  /// How the feed image is photographed. One of [lookStyles], or null to
+  /// follow the occasion, see [autoLookStyle].
+  final String? style;
+  String get resolvedStyle => style ?? autoLookStyle(occasion);
 
   /// Chosen per look, as in the PWA composer. The Settings default arrives in
   /// Slice 6.
@@ -114,7 +122,7 @@ class ComposerState {
     Set<String>? selectedIds,
     Set<String>? categories,
     String? Function()? occasion,
-    String? style,
+    String? Function()? style,
     String? quality,
     String? completion,
     bool? selectedOnly,
@@ -130,7 +138,7 @@ class ComposerState {
     selectedIds: selectedIds ?? this.selectedIds,
     categories: categories ?? this.categories,
     occasion: occasion == null ? this.occasion : occasion(),
-    style: style ?? this.style,
+    style: style == null ? this.style : style(),
     quality: quality ?? this.quality,
     completion: completion ?? this.completion,
     selectedOnly: selectedOnly ?? this.selectedOnly,
@@ -189,7 +197,8 @@ class ComposerCubit extends Cubit<ComposerState> {
   void setOccasion(String? occasion) =>
       emit(state.copyWith(occasion: () => occasion));
 
-  void setStyle(String style) => emit(state.copyWith(style: style));
+  /// Null returns to the automatic style.
+  void setStyle(String? style) => emit(state.copyWith(style: () => style));
 
   void setQuality(String quality) => emit(state.copyWith(quality: quality));
 
@@ -236,7 +245,7 @@ class ComposerCubit extends Cubit<ComposerState> {
     exactItemIds: state.selectedIds.toList(),
     categories: state.completeWithWardrobe ? state.categories.toList() : [],
     occasion: state.occasion,
-    style: state.style,
+    style: state.resolvedStyle,
     completion: state.completion,
     quality: state.quality,
     idempotencyKey: idempotencyKey,

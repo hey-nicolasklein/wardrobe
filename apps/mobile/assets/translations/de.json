@@ -284,6 +284,7 @@
   "composerQualityLabel": "Bildqualität",
   "composerQualityNote": "Direkt im Test wählen. Höhere Qualität kostet mehr.",
   "composerStyleLabel": "Bildstil",
+  "composerFineTuning": "Feinschliff",
   "lookImageCost": "Bildgenerierung",
   "lookImageCostValue": "{value} US-Cent",
   "costs": {
@@ -536,6 +537,7 @@
     "emailAction": "Anmelden"
   },
   "lookStyle": {
+    "auto": "Auto",
     "candid": "Schnappschuss",
     "street": "Streetstyle",
     "mirror": "Spiegel-Selfie"
