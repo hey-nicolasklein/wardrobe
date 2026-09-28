@@ -463,7 +463,8 @@ export async function createLook(
         `SELECT 1 FROM private_assets WHERE id=$1 AND account_id=$2 AND purpose='source-photo' AND state='ready' AND deleted_at IS NULL`,
         [input.baseAssetId, input.accountId],
       );
-      if (!base.rows[0]) throw new OwnedResourceNotFoundError();
+      if (!base.rows[0])
+        throw new InspirationValidationError('try-on-photo-missing', 'Dein Foto ist nicht mehr verfügbar. Lade es neu hoch.');
     }
     let exactIds = input.exactItemIds;
     let parentId = input.parentLookId;
