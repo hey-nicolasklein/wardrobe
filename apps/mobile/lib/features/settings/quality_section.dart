@@ -19,11 +19,6 @@ class QualitySection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            context.tr(LocaleKeys.settings_qualityTitle),
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
             context.tr(LocaleKeys.settings_qualityBody),
             style: FormTokens.small,
           ),

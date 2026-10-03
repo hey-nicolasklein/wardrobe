@@ -22,10 +22,6 @@ class CharacterSection extends StatelessWidget {
             spacing: 12,
             children: [
               Text(
-                context.tr(LocaleKeys.character_title),
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              Text(
                 context.tr(LocaleKeys.character_subtitle),
                 style: FormTokens.small,
               ),

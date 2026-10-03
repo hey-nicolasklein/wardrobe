@@ -6,26 +6,22 @@ import 'package:form_mobile/app/app_config.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/settings/about_section.dart';
-import 'package:form_mobile/features/settings/account_section.dart';
-import 'package:form_mobile/features/settings/cache_section.dart';
-import 'package:form_mobile/features/settings/character/character_section.dart';
-import 'package:form_mobile/features/settings/cost_section.dart';
+import 'package:form_mobile/features/settings/character/character_cubit.dart';
+import 'package:form_mobile/features/settings/character/character_presentation.dart';
 import 'package:form_mobile/features/settings/credit_wallet.dart';
-import 'package:form_mobile/features/settings/feed_weights_section.dart';
-import 'package:form_mobile/features/settings/language_section.dart';
-import 'package:form_mobile/features/settings/quality_section.dart';
-import 'package:form_mobile/features/settings/reset_section.dart';
+import 'package:form_mobile/features/settings/language_cubit.dart';
 import 'package:form_mobile/features/settings/setting_row.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/server_info.dart';
+import 'package:form_mobile/repository/auth_repository.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
+/// The Settings tab: credits up top, then short groups of rows that each
+/// open a subpage (see [SettingsSubpage]).
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
-
-  static const _sectionGap = SizedBox(height: 20);
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +33,9 @@ class SettingsPage extends StatelessWidget {
             ?.where((item) => item.item.state == 'archived')
             .length ??
         0;
+    final character = context.watch<CharacterCubit>().state.current;
+    final language = context.watch<LanguageCubit>().state;
+    final signedIn = context.read<AuthRepository>().isSignedIn;
     return Scaffold(
       backgroundColor: FormTokens.paper,
       extendBodyBehindAppBar: true,
@@ -56,47 +55,60 @@ class SettingsPage extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 4, bottom: 22),
               child: Text(
-                context.tr(LocaleKeys.settings_heroTitle),
+                context.tr(LocaleKeys.settings_title),
                 style: FormTokens.display.copyWith(fontSize: 36),
               ),
             ),
-            const CreditWallet(),
-            const CharacterSection(),
-            _sectionGap,
-            const CostSection(),
+            CreditWallet(onTap: () => context.push('/settings/credits')),
             _SectionTitle(context.tr(LocaleKeys.settings_groupPreferences)),
-            const LanguageSection(),
-            _sectionGap,
-            const QualitySection(),
-            _SectionTitle(context.tr(LocaleKeys.settings_groupData)),
-            FormPanel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  SettingRow(
-                    label: context.tr(LocaleKeys.settings_archive),
-                    value: archivedCount > 0 ? '$archivedCount' : null,
-                    onTap: () => context.push('/settings/archive'),
-                  ),
-                  const SettingDivider(),
-                  const CacheRow(),
-                ],
+            SettingGroup([
+              SettingRow(
+                label: context.tr(LocaleKeys.character_reference),
+                value: character == null
+                    ? null
+                    : characterStatus(context, character),
+                onTap: () => context.push('/settings/character'),
               ),
-            ),
+              SettingRow(
+                label: context.tr(LocaleKeys.language),
+                value: context.tr(
+                  language == 'en' ? LocaleKeys.english : LocaleKeys.german,
+                ),
+                onTap: () => context.push('/settings/language'),
+              ),
+              SettingRow(
+                label: context.tr(LocaleKeys.settings_qualityTitle),
+                onTap: () => context.push('/settings/quality'),
+              ),
+            ]),
+            _SectionTitle(context.tr(LocaleKeys.settings_groupData)),
+            SettingGroup([
+              SettingRow(
+                label: context.tr(LocaleKeys.settings_archive),
+                value: archivedCount > 0 ? '$archivedCount' : null,
+                onTap: () => context.push('/settings/archive'),
+              ),
+              SettingRow(
+                label: context.tr(LocaleKeys.settings_storage),
+                onTap: () => context.push('/settings/storage'),
+              ),
+            ]),
             _SectionTitle(context.tr(LocaleKeys.settings_groupAbout)),
             const AboutSection(),
-            _SectionTitle(context.tr(LocaleKeys.auth_accountTitle)),
-            const AccountSection(),
-            if (kDebugMode) ...[
-              _SectionTitle(context.tr(LocaleKeys.settings_debugTitle)),
-              const FeedWeightsSection(),
-              _sectionGap,
-              OutlinedButton(
-                onPressed: () => context.push('/onboarding'),
-                child: Text(context.tr(LocaleKeys.settings_replayOnboarding)),
-              ),
-              _sectionGap,
-              const ResetSection(),
+            if (signedIn || kDebugMode) ...[
+              const SizedBox(height: 32),
+              SettingGroup([
+                if (signedIn)
+                  SettingRow(
+                    label: context.tr(LocaleKeys.auth_accountTitle),
+                    onTap: () => context.push('/settings/account'),
+                  ),
+                if (kDebugMode)
+                  SettingRow(
+                    label: context.tr(LocaleKeys.settings_debugTitle),
+                    onTap: () => context.push('/settings/debug'),
+                  ),
+              ]),
             ],
           ],
         ),
@@ -121,6 +133,56 @@ class _SectionTitle extends StatelessWidget {
         fontWeight: FontWeight.w600,
       ),
     ),
+  );
+}
+
+/// A page one level below Settings: serif title in the header and the
+/// [children] stacked with the usual gap between panels.
+class SettingsSubpage extends StatelessWidget {
+  const SettingsSubpage({
+    required this.title,
+    required this.children,
+    super.key,
+  });
+
+  /// Locale key of the header title.
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: FormTokens.paper,
+    extendBodyBehindAppBar: true,
+    appBar: FormPageHeader(title: context.tr(title)),
+    body: Builder(
+      builder: (context) => ListView(
+        padding: EdgeInsets.fromLTRB(
+          FormTokens.gutter,
+          MediaQuery.paddingOf(context).top + 12,
+          FormTokens.gutter,
+          FormTokens.gutter + MediaQuery.paddingOf(context).bottom,
+        ),
+        children: [
+          for (final (index, child) in children.indexed) ...[
+            if (index > 0) const SizedBox(height: 20),
+            child,
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+/// Explains what a subpage holds, below its last panel.
+class SettingsFootnote extends StatelessWidget {
+  const SettingsFootnote(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    child: Text(text, style: FormTokens.small),
   );
 }
 

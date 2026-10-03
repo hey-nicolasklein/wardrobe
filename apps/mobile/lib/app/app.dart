@@ -67,9 +67,10 @@ class _FormAppState extends State<FormApp> {
   }
 
   // Generations spend credits anywhere in the app, so the balance refreshes
-  // whenever Settings, where it is shown, comes into view.
+  // whenever Settings or its credits page comes into view.
   void _creditsVisibility() {
-    if (_router.routeInformationProvider.value.uri.path == '/settings') {
+    final path = _router.routeInformationProvider.value.uri.path;
+    if (path == '/settings' || path == '/settings/credits') {
       unawaited(context.read<CreditsCubit>().refresh());
     }
   }

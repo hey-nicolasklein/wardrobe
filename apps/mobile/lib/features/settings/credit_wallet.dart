@@ -10,11 +10,14 @@ import 'package:form_mobile/features/settings/credits_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/repository/credits_repository.dart';
 
-/// The credit balance as a small wallet: a coin that flips whenever the
-/// balance changes (or on tap, which also refreshes) and a number that
-/// counts to the new value. Hidden until a balance is known.
+/// The credit balance as a quiet panel: a stamped coin that turns over
+/// whenever the balance changes, the balance in serif counting to its new
+/// value, and what it still buys. With [onTap] the panel links on, like a
+/// settings row. Hidden until a balance is known.
 class CreditWallet extends StatelessWidget {
-  const CreditWallet({super.key});
+  const CreditWallet({this.onTap, super.key});
+
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => BlocBuilder<CreditsCubit, Credits?>(
@@ -24,27 +27,25 @@ class CreditWallet extends StatelessWidget {
       alignment: Alignment.topCenter,
       child: credits == null
           ? const SizedBox(width: double.infinity)
-          : Padding(
-              padding: const EdgeInsets.only(bottom: 20),
-              child: _Wallet(credits),
-            ),
+          : _Wallet(credits, onTap: onTap),
     ),
   );
 }
 
 class _Wallet extends StatefulWidget {
-  const _Wallet(this.credits);
+  const _Wallet(this.credits, {this.onTap});
 
   final Credits credits;
+  final VoidCallback? onTap;
 
   @override
   State<_Wallet> createState() => _WalletState();
 }
 
 class _WalletState extends State<_Wallet> with SingleTickerProviderStateMixin {
-  late final AnimationController _flip = AnimationController(
+  late final AnimationController _turn = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1100),
+    duration: const Duration(milliseconds: 760),
   );
 
   @override
@@ -61,19 +62,18 @@ class _WalletState extends State<_Wallet> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
-    _flip.dispose();
+    _turn.dispose();
     super.dispose();
   }
 
   void _spin() {
     if (!mounted || MediaQuery.disableAnimationsOf(context)) return;
-    unawaited(_flip.forward(from: 0));
+    unawaited(_turn.forward(from: 0));
   }
 
   void _tap() {
-    unawaited(HapticFeedback.lightImpact());
-    _spin();
-    unawaited(context.read<CreditsCubit>().refresh());
+    unawaited(HapticFeedback.selectionClick());
+    widget.onTap!();
   }
 
   @override
@@ -81,215 +81,154 @@ class _WalletState extends State<_Wallet> with SingleTickerProviderStateMixin {
     final credits = widget.credits;
     final empty = credits.metered && credits.looksLeft == 0;
     final animate = !MediaQuery.disableAnimationsOf(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: empty
-              ? const [FormTokens.surface, FormTokens.dangerTint]
-              : const [FormTokens.surface, FormTokens.coinTint],
-        ),
-        border: Border.all(color: FormTokens.line),
-        borderRadius: BorderRadius.circular(FormTokens.panelRadius),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(21),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    final panel = Padding(
+      padding: const EdgeInsets.fromLTRB(18, 18, 14, 18),
+      child: Row(
+        children: [
+          AnimatedBuilder(
+            animation: _turn,
+            builder: (context, child) => Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..setEntry(3, 2, 0.002)
+                ..rotateY(
+                  FormTokens.easeOut.transform(_turn.value) * 2 * math.pi,
+                ),
+              child: child,
+            ),
+            child: _Coin(empty: empty),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Semantics(
-                  button: true,
-                  label: context.tr(LocaleKeys.credits_refresh),
-                  child: GestureDetector(
-                    onTap: _tap,
-                    child: AnimatedBuilder(
-                      animation: _flip,
-                      builder: (context, child) => Transform(
-                        alignment: Alignment.center,
-                        transform: Matrix4.identity()
-                          ..setEntry(3, 2, 0.0015)
-                          ..rotateY(
-                            FormTokens.easeOut.transform(_flip.value) *
-                                4 *
-                                math.pi,
-                          ),
-                        child: child,
+                if (credits.metered)
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: credits.balance.toDouble()),
+                    duration: animate
+                        ? const Duration(milliseconds: 760)
+                        : Duration.zero,
+                    curve: FormTokens.easeOut,
+                    builder: (context, value, _) => Text(
+                      context.tr(
+                        value.round() == 1
+                            ? LocaleKeys.credits_balanceOne
+                            : LocaleKeys.credits_balanceMany,
+                        namedArgs: {'count': '${value.round()}'},
                       ),
-                      child: const _Coin(),
+                      style: FormTokens.heading
+                          .copyWith(
+                            fontSize: 24,
+                            height: 1.15,
+                            color: empty ? FormTokens.danger : FormTokens.ink,
+                          )
+                          .merge(FormTokens.numerals),
+                    ),
+                  )
+                else
+                  Text(
+                    context.tr(LocaleKeys.credits_unlimitedTitle),
+                    style: FormTokens.heading.copyWith(
+                      fontSize: 24,
+                      height: 1.15,
                     ),
                   ),
-                ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.tr(LocaleKeys.credits_title).toUpperCase(),
-                        style: FormTokens.eyebrow,
-                      ),
-                      const SizedBox(height: 6),
-                      if (credits.metered)
-                        TweenAnimationBuilder<double>(
-                          tween: Tween(
-                            begin: 0,
-                            end: credits.balance.toDouble(),
-                          ),
-                          duration: animate
-                              ? const Duration(milliseconds: 900)
-                              : Duration.zero,
-                          curve: FormTokens.easeOut,
-                          builder: (context, value, _) => Text(
-                            '${value.round()}',
-                            style: FormTokens.display
-                                .copyWith(
-                                  height: 1,
-                                  color: empty
-                                      ? FormTokens.danger
-                                      : FormTokens.ink,
-                                )
-                                .merge(FormTokens.numerals),
-                          ),
-                        )
-                      else
-                        Text(
-                          '∞',
-                          style: FormTokens.display.copyWith(height: 1),
+                const SizedBox(height: 4),
+                Text(
+                  !credits.metered
+                      ? context.tr(LocaleKeys.credits_unlimited)
+                      : empty
+                      ? context.tr(LocaleKeys.credits_empty)
+                      : context.tr(
+                          LocaleKeys.credits_enoughFor,
+                          namedArgs: {
+                            'looks': context.tr(
+                              credits.looksLeft == 1
+                                  ? LocaleKeys.credits_lookOne
+                                  : LocaleKeys.credits_lookMany,
+                              namedArgs: {'count': '${credits.looksLeft}'},
+                            ),
+                            'images': context.tr(
+                              credits.shelfImagesLeft == 1
+                                  ? LocaleKeys.credits_shelfImageOne
+                                  : LocaleKeys.credits_shelfImageMany,
+                              namedArgs: {
+                                'count': '${credits.shelfImagesLeft}',
+                              },
+                            ),
+                          },
                         ),
-                    ],
+                  style: FormTokens.small.copyWith(
+                    color: empty ? FormTokens.danger : null,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            if (!credits.metered)
-              Text(
-                context.tr(LocaleKeys.credits_unlimited),
-                style: FormTokens.small,
-              )
-            else if (empty)
-              Text(
-                context.tr(LocaleKeys.credits_empty),
-                style: FormTokens.body.copyWith(color: FormTokens.danger),
-              )
-            else ...[
-              Text(
-                context.tr(LocaleKeys.credits_enoughFor),
-                style: FormTokens.small,
+          ),
+          if (widget.onTap != null)
+            const Padding(
+              padding: EdgeInsets.only(left: 8),
+              child: Icon(
+                Icons.chevron_right,
+                size: 18,
+                color: FormTokens.muted,
               ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _Pill(
-                    icon: Icons.auto_awesome,
-                    label: context.tr(
-                      credits.looksLeft == 1
-                          ? LocaleKeys.credits_lookOne
-                          : LocaleKeys.credits_lookMany,
-                      namedArgs: {'count': '${credits.looksLeft}'},
-                    ),
-                    colors: FormTokens.lookStyles['auto']!,
-                  ),
-                  _Pill(
-                    icon: Icons.checkroom,
-                    label: context.tr(
-                      credits.shelfImagesLeft == 1
-                          ? LocaleKeys.credits_shelfImageOne
-                          : LocaleKeys.credits_shelfImageMany,
-                      namedArgs: {'count': '${credits.shelfImagesLeft}'},
-                    ),
-                    colors: FormTokens.lookStyles['candid']!,
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
+            ),
+        ],
       ),
+    );
+    return Material(
+      color: FormTokens.surface,
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: FormTokens.line),
+        borderRadius: BorderRadius.circular(FormTokens.panelRadius),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: widget.onTap == null ? panel : InkWell(onTap: _tap, child: panel),
     );
   }
 }
 
-/// A gold coin stamped with the FORM initial.
+/// A flat coin pressed into the paper: a pale gold disc with a fine rim
+/// and the FORM initial, no shine or glow. Turns brick when empty.
 class _Coin extends StatelessWidget {
-  const _Coin();
+  const _Coin({required this.empty});
+
+  final bool empty;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: 64,
-    height: 64,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: const RadialGradient(
-        center: Alignment(-0.35, -0.45),
-        radius: 0.95,
-        colors: [FormTokens.coinShine, FormTokens.coinFace, FormTokens.coinRim],
-        stops: [0, 0.55, 1],
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: FormTokens.coinRim.withValues(alpha: 0.35),
-          blurRadius: 14,
-          offset: const Offset(0, 6),
-        ),
-      ],
-    ),
-    padding: const EdgeInsets.all(6),
-    child: DecoratedBox(
+  Widget build(BuildContext context) {
+    final ink = empty ? FormTokens.danger : FormTokens.coinInk;
+    return Container(
+      width: 46,
+      height: 46,
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
+        color: empty ? FormTokens.dangerTint : FormTokens.coinTint,
         border: Border.all(
-          color: FormTokens.coinInk.withValues(alpha: 0.35),
-          width: 1.5,
+          color: empty
+              ? FormTokens.danger.withValues(alpha: 0.4)
+              : FormTokens.coinRim,
         ),
       ),
-      child: Center(
-        child: Text(
-          'F',
-          style: FormTokens.heading.copyWith(
-            fontSize: 26,
-            height: 1,
-            color: FormTokens.coinInk,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: ink.withValues(alpha: 0.22)),
+        ),
+        child: Center(
+          child: Text(
+            'F',
+            style: FormTokens.heading.copyWith(
+              fontSize: 19,
+              height: 1,
+              color: ink,
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({required this.icon, required this.label, required this.colors});
-
-  final IconData icon;
-  final String label;
-  final ({Color ink, Color tint}) colors;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-    decoration: BoxDecoration(
-      color: colors.tint,
-      borderRadius: BorderRadius.circular(FormTokens.chipRadius),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: colors.ink),
-        const SizedBox(width: 5),
-        Text(
-          label,
-          style: FormTokens.small.copyWith(
-            color: colors.ink,
-            fontWeight: FontWeight.w600,
-            height: 1.2,
-          ),
-        ),
-      ],
-    ),
-  );
+    );
+  }
 }

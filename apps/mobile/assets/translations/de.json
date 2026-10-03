@@ -90,7 +90,7 @@
     "archived": "Archiviert"
   },
   "quality": {
-    "low": "Niedrig",
+    "low": "Basis",
     "medium": "Mittel",
     "high": "Hoch"
   },
@@ -390,7 +390,6 @@
   },
   "settings": {
     "title": "Einstellungen",
-    "heroTitle": "Ganz dein Ding.",
     "qualityTitle": "Bildqualität",
     "qualityBody": "Standard für neue Bilder auf diesem Gerät. Höhere Qualität kostet mehr. Einzelne Bilder kannst du später in höherer Qualität neu erstellen.",
     "appVersion": "App-Version",
@@ -579,17 +578,17 @@
     "recent": "zuletzt genutzt"
   },
   "credits": {
-    "title": "Verbleibende Credits",
-    "refresh": "Credits aktualisieren",
     "unlimited": "Unbegrenzte Credits für dieses Konto.",
-    "enoughFor": "Reicht für",
-    "lookOne": "{count} Look",
-    "lookMany": "{count} Looks",
-    "shelfImageOne": "{count} Katalogbild",
-    "shelfImageMany": "{count} Katalogbilder",
+    "enoughFor": "Reicht für {looks} oder {images}.",
+    "lookOne": "{count} Look",
+    "lookMany": "{count} Looks",
+    "shelfImageOne": "{count} Katalogbild",
+    "shelfImageMany": "{count} Katalogbilder",
     "empty": "Reicht für keinen weiteren Look. Katalogbilder kosten 1 Credit, Looks 2.",
+    "pageTitle": "Credits",
     "balanceOne": "{count} Credit",
-    "balanceMany": "{count} Credits"
+    "balanceMany": "{count} Credits",
+    "unlimitedTitle": "Unbegrenzt"
   },
   "lookCostBadge": "{cost} Credits",
   "lookNeedsConnection": "Braucht eine Verbindung",

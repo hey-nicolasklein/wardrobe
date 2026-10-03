@@ -6,7 +6,6 @@ import 'package:form_mobile/app/app_info.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/features/settings/setting_row.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
-import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
 /// App version and the connection state. Server, environment and contract
@@ -19,28 +18,22 @@ class AboutSection extends StatelessWidget {
     final config = context.read<AppConfig>();
     final status = context.watch<ConnectionCubit>().state;
     const version = '${AppInfo.version} (${AppInfo.buildNumber})';
-    return FormPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SettingRow(
-            label: context.tr(LocaleKeys.settings_appVersion),
-            value: config.flavor == 'production'
-                ? version
-                : '$version · ${context.tr(LocaleKeys.development)}',
-          ),
-          const SettingDivider(),
-          SettingRow(
-            label: context.tr(LocaleKeys.server),
-            value: context.tr(switch (status) {
-              ConnectionStatus.ready => LocaleKeys.connected,
-              ConnectionStatus.checking => LocaleKeys.checking,
-              _ => LocaleKeys.unavailable,
-            }),
-            onTap: () => context.push('/settings/server'),
-          ),
-        ],
+    return SettingGroup([
+      SettingRow(
+        label: context.tr(LocaleKeys.settings_appVersion),
+        value: config.flavor == 'production'
+            ? version
+            : '$version · ${context.tr(LocaleKeys.development)}',
       ),
-    );
+      SettingRow(
+        label: context.tr(LocaleKeys.server),
+        value: context.tr(switch (status) {
+          ConnectionStatus.ready => LocaleKeys.connected,
+          ConnectionStatus.checking => LocaleKeys.checking,
+          _ => LocaleKeys.unavailable,
+        }),
+        onTap: () => context.push('/settings/server'),
+      ),
+    ]);
   }
 }

@@ -383,7 +383,6 @@ abstract class LocaleKeys {
   static const character_newReference = 'character.newReference';
   static const character = 'character';
   static const settings_title = 'settings.title';
-  static const settings_heroTitle = 'settings.heroTitle';
   static const settings_qualityTitle = 'settings.qualityTitle';
   static const settings_qualityBody = 'settings.qualityBody';
   static const settings_appVersion = 'settings.appVersion';
@@ -410,58 +409,44 @@ abstract class LocaleKeys {
   static const settings_groupData = 'settings.groupData';
   static const settings_groupAbout = 'settings.groupAbout';
   static const settings_archive = 'settings.archive';
+  static const settings_storage = 'settings.storage';
+  static const settings_storageBody = 'settings.storageBody';
   static const settings = 'settings';
-  static const apiErrors_activeCharacterSheet =
-      'apiErrors.activeCharacterSheet';
+  static const apiErrors_activeCharacterSheet = 'apiErrors.activeCharacterSheet';
   static const apiErrors_assetContentMissing = 'apiErrors.assetContentMissing';
   static const apiErrors_assetNotFound = 'apiErrors.assetNotFound';
-  static const apiErrors_characterSheetProcessing =
-      'apiErrors.characterSheetProcessing';
-  static const apiErrors_confirmationRequired =
-      'apiErrors.confirmationRequired';
-  static const apiErrors_generationInProgress =
-      'apiErrors.generationInProgress';
-  static const apiErrors_idempotencyKeyReused =
-      'apiErrors.idempotencyKeyReused';
+  static const apiErrors_characterSheetProcessing = 'apiErrors.characterSheetProcessing';
+  static const apiErrors_confirmationRequired = 'apiErrors.confirmationRequired';
+  static const apiErrors_generationInProgress = 'apiErrors.generationInProgress';
+  static const apiErrors_idempotencyKeyReused = 'apiErrors.idempotencyKeyReused';
   static const apiErrors_invalidActivation = 'apiErrors.invalidActivation';
-  static const apiErrors_invalidCharacterSheet =
-      'apiErrors.invalidCharacterSheet';
-  static const apiErrors_invalidDetectionRequest =
-      'apiErrors.invalidDetectionRequest';
-  static const apiErrors_invalidGenerationRequest =
-      'apiErrors.invalidGenerationRequest';
+  static const apiErrors_invalidCharacterSheet = 'apiErrors.invalidCharacterSheet';
+  static const apiErrors_invalidDetectionRequest = 'apiErrors.invalidDetectionRequest';
+  static const apiErrors_invalidGenerationRequest = 'apiErrors.invalidGenerationRequest';
   static const apiErrors_invalidItemState = 'apiErrors.invalidItemState';
   static const apiErrors_invalidKeepRequest = 'apiErrors.invalidKeepRequest';
   static const apiErrors_invalidLook = 'apiErrors.invalidLook';
-  static const apiErrors_invalidPermanentDeletion =
-      'apiErrors.invalidPermanentDeletion';
+  static const apiErrors_invalidPermanentDeletion = 'apiErrors.invalidPermanentDeletion';
   static const apiErrors_invalidPhotoItem = 'apiErrors.invalidPhotoItem';
-  static const apiErrors_invalidRejectRequest =
-      'apiErrors.invalidRejectRequest';
-  static const apiErrors_invalidRestoreRequest =
-      'apiErrors.invalidRestoreRequest';
+  static const apiErrors_invalidRejectRequest = 'apiErrors.invalidRejectRequest';
+  static const apiErrors_invalidRestoreRequest = 'apiErrors.invalidRestoreRequest';
   static const apiErrors_invalidRetry = 'apiErrors.invalidRetry';
-  static const apiErrors_invalidSignInRequest =
-      'apiErrors.invalidSignInRequest';
+  static const apiErrors_invalidSignInRequest = 'apiErrors.invalidSignInRequest';
   static const apiErrors_invalidUploadIntent = 'apiErrors.invalidUploadIntent';
   static const apiErrors_invalidWardrobeEdit = 'apiErrors.invalidWardrobeEdit';
   static const apiErrors_invalidWardrobeItem = 'apiErrors.invalidWardrobeItem';
-  static const apiErrors_invalidWardrobeTransition =
-      'apiErrors.invalidWardrobeTransition';
+  static const apiErrors_invalidWardrobeTransition = 'apiErrors.invalidWardrobeTransition';
   static const apiErrors_originNotAllowed = 'apiErrors.originNotAllowed';
   static const apiErrors_resetInProgress = 'apiErrors.resetInProgress';
   static const apiErrors_sourcePhotoNotFound = 'apiErrors.sourcePhotoNotFound';
   static const apiErrors_staleRecordVersion = 'apiErrors.staleRecordVersion';
-  static const apiErrors_uploadIntentNotFound =
-      'apiErrors.uploadIntentNotFound';
+  static const apiErrors_uploadIntentNotFound = 'apiErrors.uploadIntentNotFound';
   static const apiErrors_uploadMissing = 'apiErrors.uploadMissing';
-  static const apiErrors_wardrobeItemNotFound =
-      'apiErrors.wardrobeItemNotFound';
+  static const apiErrors_wardrobeItemNotFound = 'apiErrors.wardrobeItemNotFound';
   static const apiErrors_insufficientCredits = 'apiErrors.insufficientCredits';
   static const apiErrors_tooManyActiveJobs = 'apiErrors.tooManyActiveJobs';
   static const apiErrors_rateLimited = 'apiErrors.rateLimited';
-  static const apiErrors_invalidIdentityToken =
-      'apiErrors.invalidIdentityToken';
+  static const apiErrors_invalidIdentityToken = 'apiErrors.invalidIdentityToken';
   static const apiErrors = 'apiErrors';
   static const onboarding_skip = 'onboarding.skip';
   static const onboarding_next = 'onboarding.next';
@@ -565,8 +550,6 @@ abstract class LocaleKeys {
   static const feedWeights_weight = 'feedWeights.weight';
   static const feedWeights_recent = 'feedWeights.recent';
   static const feedWeights = 'feedWeights';
-  static const credits_title = 'credits.title';
-  static const credits_refresh = 'credits.refresh';
   static const credits_unlimited = 'credits.unlimited';
   static const credits_enoughFor = 'credits.enoughFor';
   static const credits_lookOne = 'credits.lookOne';
@@ -574,8 +557,10 @@ abstract class LocaleKeys {
   static const credits_shelfImageOne = 'credits.shelfImageOne';
   static const credits_shelfImageMany = 'credits.shelfImageMany';
   static const credits_empty = 'credits.empty';
+  static const credits_pageTitle = 'credits.pageTitle';
   static const credits_balanceOne = 'credits.balanceOne';
   static const credits_balanceMany = 'credits.balanceMany';
+  static const credits_unlimitedTitle = 'credits.unlimitedTitle';
   static const credits = 'credits';
   static const lookCostBadge = 'lookCostBadge';
   static const lookNeedsConnection = 'lookNeedsConnection';

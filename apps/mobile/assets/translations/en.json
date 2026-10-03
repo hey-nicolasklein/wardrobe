@@ -90,7 +90,7 @@
     "archived": "Archived"
   },
   "quality": {
-    "low": "Low",
+    "low": "Basic",
     "medium": "Medium",
     "high": "High"
   },
@@ -390,7 +390,6 @@
   },
   "settings": {
     "title": "Settings",
-    "heroTitle": "All yours.",
     "qualityTitle": "Image quality",
     "qualityBody": "Default for new images on this device. Higher quality costs more. You can recreate individual images in higher quality later.",
     "appVersion": "App version",
@@ -579,17 +578,17 @@
     "recent": "recently used"
   },
   "credits": {
-    "title": "Credits left",
-    "refresh": "Refresh credits",
     "unlimited": "Unlimited credits on this account.",
-    "enoughFor": "Enough for",
-    "lookOne": "{count} look",
-    "lookMany": "{count} looks",
-    "shelfImageOne": "{count} catalog image",
-    "shelfImageMany": "{count} catalog images",
+    "enoughFor": "Enough for {looks} or {images}.",
+    "lookOne": "{count} look",
+    "lookMany": "{count} looks",
+    "shelfImageOne": "{count} catalog image",
+    "shelfImageMany": "{count} catalog images",
     "empty": "Not enough for another look. Catalog images cost 1 credit, looks cost 2.",
+    "pageTitle": "Credits",
     "balanceOne": "{count} credit",
-    "balanceMany": "{count} credits"
+    "balanceMany": "{count} credits",
+    "unlimitedTitle": "Unlimited"
   },
   "lookCostBadge": "{cost} credits",
   "lookNeedsConnection": "Needs a connection",

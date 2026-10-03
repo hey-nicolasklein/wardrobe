@@ -13,11 +13,6 @@ class LanguageSection extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          context.tr(LocaleKeys.language),
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 16),
         FormChoiceChips(
           options: {
             'de': context.tr(LocaleKeys.german),

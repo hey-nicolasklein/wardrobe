@@ -34,26 +34,20 @@ class _AccountSectionState extends State<AccountSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FormPanel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SettingRow(
-                label: context.tr(LocaleKeys.auth_signOut),
-                onTap: _busy ? null : () => unawaited(_signOut()),
-                chevron: false,
-              ),
-              const SettingDivider(),
-              SettingRow(
-                label: context.tr(LocaleKeys.auth_deleteAccount),
-                color: _busy ? FormTokens.muted : FormTokens.danger,
-                onTap: _busy ? null : () => unawaited(_delete()),
-                chevron: false,
-                value: _busy ? context.tr(LocaleKeys.auth_deleting) : null,
-              ),
-            ],
+        SettingGroup([
+          SettingRow(
+            label: context.tr(LocaleKeys.auth_signOut),
+            onTap: _busy ? null : () => unawaited(_signOut()),
+            chevron: false,
           ),
-        ),
+          SettingRow(
+            label: context.tr(LocaleKeys.auth_deleteAccount),
+            color: _busy ? FormTokens.muted : FormTokens.danger,
+            onTap: _busy ? null : () => unawaited(_delete()),
+            chevron: false,
+            value: _busy ? context.tr(LocaleKeys.auth_deleting) : null,
+          ),
+        ]),
         if (_error != null) ...[
           const SizedBox(height: 10),
           FormNotice(text: _error!, error: true),

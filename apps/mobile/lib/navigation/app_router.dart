@@ -9,6 +9,7 @@ import 'package:form_mobile/features/settings/character/character_detail_page.da
 import 'package:form_mobile/features/settings/character/character_section.dart';
 import 'package:form_mobile/features/settings/character/character_setup_page.dart';
 import 'package:form_mobile/features/settings/settings_page.dart';
+import 'package:form_mobile/features/settings/settings_subpages.dart';
 import 'package:form_mobile/features/wardrobe/item_page.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_page.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -131,6 +132,7 @@ GoRouter createRouter({bool onboarding = false}) {
                   child: const SettingsPage(),
                 ),
                 routes: [
+                  ...settingsSubpageRoutes,
                   GoRoute(
                     path: 'server',
                     builder: (_, _) => const ServerPage(),

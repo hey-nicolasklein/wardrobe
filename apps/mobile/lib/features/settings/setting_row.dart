@@ -23,7 +23,7 @@ class SettingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final row = ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 44),
+      constraints: const BoxConstraints(minHeight: 50),
       child: Row(
         children: [
           Text(label, style: FormTokens.body.copyWith(color: color)),
