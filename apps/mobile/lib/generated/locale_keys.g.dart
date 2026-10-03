@@ -2,7 +2,7 @@
 
 // ignore_for_file: constant_identifier_names
 
-abstract class LocaleKeys {
+abstract class  LocaleKeys {
   static const appName = 'appName';
   static const feed = 'feed';
   static const wardrobe = 'wardrobe';
@@ -233,8 +233,7 @@ abstract class LocaleKeys {
   static const composerNothingSelected = 'composerNothingSelected';
   static const composerShowAll = 'composerShowAll';
   static const composerCompleteTitle = 'composerCompleteTitle';
-  static const composerCompleteHelpUnframable =
-      'composerCompleteHelpUnframable';
+  static const composerCompleteHelpUnframable = 'composerCompleteHelpUnframable';
   static const composerCategoriesTitle = 'composerCategoriesTitle';
   static const composerPreviewTitle = 'composerPreviewTitle';
   static const composerBack = 'composerBack';
@@ -258,8 +257,7 @@ abstract class LocaleKeys {
   static const composerSummaryCategories = 'composerSummaryCategories';
   static const composerSummaryCategoriesOnly = 'composerSummaryCategoriesOnly';
   static const composerSummaryDefault = 'composerSummaryDefault';
-  static const composerOccasionSuffixNightOut =
-      'composerOccasionSuffixNightOut';
+  static const composerOccasionSuffixNightOut = 'composerOccasionSuffixNightOut';
   static const composerOccasionSuffixParty = 'composerOccasionSuffixParty';
   static const composerOccasionSuffixCasual = 'composerOccasionSuffixCasual';
   static const composerTrayLabel = 'composerTrayLabel';
@@ -270,12 +268,31 @@ abstract class LocaleKeys {
   static const lookLike = 'lookLike';
   static const lookShare = 'lookShare';
   static const lookSave = 'lookSave';
+  static const lookUnsave = 'lookUnsave';
   static const lookActions = 'lookActions';
+  static const lookWouldWear = 'lookWouldWear';
+  static const lookNotForMe = 'lookNotForMe';
+  static const lookFittingHint = 'lookFittingHint';
+  static const lookOpenPiece = 'lookOpenPiece';
+  static const lookOwnedAll = 'lookOwnedAll';
+  static const lookOwnedSome = 'lookOwnedSome';
+  static const lookOwnedNone = 'lookOwnedNone';
+  static const lookWantingOne = 'lookWantingOne';
+  static const lookWantingMany = 'lookWantingMany';
+  static const listAnd = 'listAnd';
+  static const itemLooks = 'itemLooks';
+  static const lookElsewhereTitle = 'lookElsewhereTitle';
+  static const lookElsewhereOne = 'lookElsewhereOne';
+  static const lookElsewhereMany = 'lookElsewhereMany';
   static const lookSavedToPhotos = 'lookSavedToPhotos';
   static const lookPhotosDenied = 'lookPhotosDenied';
   static const lookImageUnavailable = 'lookImageUnavailable';
   static const lookFlatMissingPieces = 'lookFlatMissingPieces';
   static const lookCreating = 'lookCreating';
+  static const lookView = 'lookView';
+  static const lookReadyNotice = 'lookReadyNotice';
+  static const lookFailedNotice = 'lookFailedNotice';
+  static const lookDevelopingBadge = 'lookDevelopingBadge';
   static const flatLayHeading = 'flatLayHeading';
   static const flatLayMoodFallback = 'flatLayMoodFallback';
   static const flatLayMeta = 'flatLayMeta';

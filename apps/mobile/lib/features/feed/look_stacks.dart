@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/feed/look_card.dart';
+import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
@@ -178,6 +181,10 @@ class _StackPressableState extends State<StackPressable>
 
 /// Up to three look photos fanned like prints dropped on a table. The first
 /// look lies on top. [spread] comes from [StackPressable].
+///
+/// With [developingFace], looks that are still being made join the fan as
+/// prints that show that face under a drifting sheen, so a new look visibly
+/// lands on its stack.
 class PhotoFan extends StatelessWidget {
   const PhotoFan({
     required this.looks,
@@ -186,10 +193,12 @@ class PhotoFan extends StatelessWidget {
     required this.spread,
     this.angle = 0.11,
     this.offset = 0.36,
+    this.developingFace,
     super.key,
   });
 
   final List<CachedLook> looks;
+  final Widget Function(CachedLook record)? developingFace;
   final bool online;
   final Size photoSize;
   final double spread;
@@ -202,7 +211,14 @@ class PhotoFan extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final photos = looks.where((r) => r.look.assetId != null).take(3).toList();
+    final photos = looks
+        .where(
+          (r) =>
+              r.look.assetId != null ||
+              (developingFace != null && r.look.isActive),
+        )
+        .take(3)
+        .toList();
     // Back to front: right, left, then the top print.
     final layers = <(int, double)>[
       if (photos.length > 2) (2, 1),
@@ -229,6 +245,7 @@ class PhotoFan extends StatelessWidget {
                   online: online,
                   size: photoSize,
                   elevated: side == 0,
+                  developingFace: developingFace,
                 ),
               ),
             ),
@@ -244,12 +261,14 @@ class _Print extends StatelessWidget {
     required this.online,
     required this.size,
     required this.elevated,
+    this.developingFace,
   });
 
   final CachedLook? record;
   final bool online;
   final Size size;
   final bool elevated;
+  final Widget Function(CachedLook record)? developingFace;
 
   @override
   Widget build(BuildContext context) {
@@ -279,7 +298,26 @@ class _Print extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius - frame),
         child: ColoredBox(
           color: FormTokens.flatLayPaper,
-          child: assetId == null
+          child: record != null && record!.look.isActive && assetId == null
+              ? Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Faded like an underexposed print until the photo is in.
+                    if (developingFace case final face?)
+                      Opacity(
+                        opacity: 0.4,
+                        child: Center(child: face(record!)),
+                      ),
+                    const DevelopingSheen(active: true),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: size.height * 0.08,
+                      child: const Center(child: _DevelopingBadge()),
+                    ),
+                  ],
+                )
+              : assetId == null
               ? const SizedBox.expand()
               : CachedMedia(
                   identity: assetId,
@@ -340,7 +378,7 @@ class PiecePile extends StatelessWidget {
               height: 84,
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: FormTokens.surface,
+                color: FormTokens.tileTint(item.id, item.metadata.colors),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: const [
                   BoxShadow(
@@ -620,6 +658,7 @@ class _WardrobeCloudState extends State<WardrobeCloud>
   void _press() {
     if (_opening) return;
     setState(() => _pressed = true);
+    unawaited(HapticFeedback.selectionClick());
     if (MediaQuery.disableAnimationsOf(context)) return;
     unawaited(
       _gather.animateTo(
@@ -633,6 +672,7 @@ class _WardrobeCloudState extends State<WardrobeCloud>
   void _cancel() {
     if (_opening) return;
     setState(() => _pressed = false);
+    unawaited(HapticFeedback.selectionClick());
     unawaited(
       _gather.animateBack(
         0,
@@ -657,6 +697,8 @@ class _WardrobeCloudState extends State<WardrobeCloud>
       );
     }
     if (!mounted) return;
+    // A firmer thud as the pieces land inside the plus.
+    unawaited(HapticFeedback.mediumImpact());
     widget.onCreate();
     // Let the composer cover the cloud before it scatters again.
     await Future<void>.delayed(const Duration(milliseconds: 500));
@@ -805,4 +847,106 @@ class _WardrobeCloudState extends State<WardrobeCloud>
       0, 0, 0, 1, 0,
     ]);
   }
+}
+
+/// A pulsing dot and "developing" on a dark pill, over a print still being
+/// made.
+class _DevelopingBadge extends StatelessWidget {
+  const _DevelopingBadge();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.fromLTRB(10, 7, 12, 7),
+    decoration: BoxDecoration(
+      color: FormTokens.toast,
+      borderRadius: BorderRadius.circular(FormTokens.chipRadius),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 7,
+      children: [
+        const _PulsingDot(),
+        Text(
+          context.tr(LocaleKeys.lookDevelopingBadge),
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// A small dot that breathes while rings ripple out from it, like a
+/// recording light.
+class _PulsingDot extends StatefulWidget {
+  const _PulsingDot();
+
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 0.3;
+    } else if (!_controller.isAnimating) {
+      unawaited(_controller.repeat());
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: 14,
+    child: AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+        final ring = FormTokens.easeOut.transform(t);
+        final breath = 0.5 - 0.5 * math.cos(2 * math.pi * t);
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 6 + 8 * ring,
+              height: 6 + 8 * ring,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: FormTokens.selectedTint.withValues(
+                  alpha: 0.55 * (1 - ring),
+                ),
+              ),
+            ),
+            Transform.scale(
+              scale: 0.85 + 0.15 * breath,
+              child: Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: FormTokens.selectedTint,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }

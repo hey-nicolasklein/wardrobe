@@ -9,17 +9,18 @@ import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
-import 'package:form_mobile/features/feed/feed_presentation.dart';
+import 'package:form_mobile/features/feed/look_stacks.dart';
 import 'package:form_mobile/features/settings/credits_cubit.dart';
 import 'package:form_mobile/features/settings/quality_cubit.dart';
 import 'package:form_mobile/features/settings/setting_row.dart';
 import 'package:form_mobile/features/wardrobe/inspire_button.dart';
 import 'package:form_mobile/features/wardrobe/item_cubit.dart';
 import 'package:form_mobile/features/wardrobe/item_edit.dart';
+import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
-import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/credits_repository.dart';
+import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
 import 'package:form_mobile/widgets/form_components.dart';
@@ -221,18 +222,10 @@ class _ItemViewState extends State<_ItemView> {
                       ),
                     // Keyed so notices appearing above it after a refresh do
                     // not rebuild the gallery and replay its image entrances.
-                    BlocBuilder<FeedCubit, FeedState>(
+                    _ItemGallery(
                       key: const ValueKey('gallery'),
-                      builder: (context, feedState) => _ItemGallery(
-                        detail: detail,
-                        looks: readyLooksForItem(
-                          detail.wardrobeItem.id,
-                          (feedState.looks ?? []).map(
-                            (record) => record.look,
-                          ),
-                        ),
-                        online: online && !state.stale,
-                      ),
+                      detail: detail,
+                      online: online && !state.stale,
                     ),
                     const SizedBox(height: 20),
                     Text(
@@ -256,12 +249,12 @@ class _ItemViewState extends State<_ItemView> {
                       Padding(
                         padding: const EdgeInsets.only(top: 9),
                         child: Wrap(
-                          spacing: 12,
-                          runSpacing: 7,
+                          spacing: 6,
+                          runSpacing: 6,
                           children: [
                             for (final color
                                 in detail.wardrobeItem.metadata.colors)
-                              _ItemColorSwatch(label: color),
+                              _ItemColorChip(label: color),
                           ],
                         ),
                       ),
@@ -305,17 +298,55 @@ class _ItemViewState extends State<_ItemView> {
                         },
                         onSelected: enabled ? cubit.move : null,
                       ),
-                    if (!archived)
-                      InspireButton(
-                        title: context.tr(LocaleKeys.inspireItem),
-                        subtitle: context.tr(LocaleKeys.inspireItemHint),
-                        onPressed: enabled
+                    // Making a look and browsing the piece's looks are one
+                    // thing: the button until a look exists, then the strip.
+                    BlocBuilder<FeedCubit, FeedState>(
+                      builder: (context, feedState) {
+                        final ready = readyLooksForItem(
+                          detail.wardrobeItem.id,
+                          (feedState.looks ?? []).map((record) => record.look),
+                        ).toSet();
+                        final looks =
+                            [
+                              for (final record
+                                  in feedState.looks ?? <CachedLook>[])
+                                if (ready.contains(record.look)) record,
+                            ]..sort(
+                              (a, b) =>
+                                  b.look.createdAt.compareTo(a.look.createdAt),
+                            );
+                        final create = enabled && !archived
                             ? () => openLookComposer(
                                 context,
                                 itemIds: [detail.wardrobeItem.id],
                               )
-                            : null,
-                      ),
+                            : null;
+                        if (looks.isEmpty) {
+                          return archived
+                              ? const SizedBox.shrink()
+                              : InspireButton(
+                                  title: context.tr(LocaleKeys.inspireItem),
+                                  subtitle: context.tr(
+                                    LocaleKeys.inspireItemHint,
+                                  ),
+                                  onPressed: create,
+                                );
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: _ItemLooks(
+                            looks: looks,
+                            online: online && !state.stale,
+                            showCreate: !archived,
+                            onCreate: create,
+                            onOpen: () => openLookStack(
+                              context,
+                              PieceStack(detail.wardrobeItem.id),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                     const SizedBox(height: 22),
                     if (detail.generating)
                       const Padding(
@@ -457,16 +488,15 @@ class _ArchivedNotice extends StatelessWidget {
   );
 }
 
-/// Horizontal strip of every image of an item: the current shelf image, the
-/// original source photo, then the generated looks it appears in.
+/// Horizontal strip of the item's own images: the current shelf image and
+/// the original source photo. Its looks open from [_ItemLooks].
 class _ItemGallery extends StatelessWidget {
   const _ItemGallery({
     required this.detail,
-    required this.looks,
     required this.online,
+    super.key,
   });
   final ItemDetail detail;
-  final List<Look> looks;
   final bool online;
 
   @override
@@ -486,19 +516,6 @@ class _ItemGallery extends StatelessWidget {
             fit: BoxFit.cover,
             caption: context.tr(LocaleKeys.sourcePhoto),
           ),
-          for (final look in looks)
-            if (look.assetId != null)
-              (
-                identity: look.assetId!,
-                previewPath: 'v1/assets/${look.assetId!}/content',
-                fit: BoxFit.cover,
-                caption: context.tr(
-                  look.isTryOn
-                      ? LocaleKeys.tryOnLookCaption
-                      : LocaleKeys.generatedLookCaption,
-                  namedArgs: {'date': lookDateText(context, look.createdAt)},
-                ),
-              ),
         ];
     // The caption line grows with the reader's text size.
     final captionHeight =
@@ -598,37 +615,138 @@ final List<String> _colorFamilyKeys = FormTokens.colorSwatches.keys
     .where((key) => key != 'other')
     .toList();
 
-class _ItemColorSwatch extends StatelessWidget {
-  const _ItemColorSwatch({required this.label});
+/// One of the piece's colours. Colours FORM can group open the looks in
+/// that colour family.
+class _ItemColorChip extends StatelessWidget {
+  const _ItemColorChip({required this.label});
   final String label;
 
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      _SwatchDot(color: FormTokens.colorForName(label)),
-      const SizedBox(width: 6),
-      Text(
-        _colorLabel(context, label),
-        style: FormTokens.small.copyWith(color: FormTokens.ink),
-      ),
-    ],
-  );
+  Widget build(BuildContext context) {
+    final family = colorFamilies(label).where((f) => f != 'other').firstOrNull;
+    return ColorChip(
+      label: _colorLabel(context, label),
+      swatch: FormTokens.colorForName(label),
+      onTap: family == null
+          ? null
+          : () => openLookStack(context, ColorStack(family)),
+    );
+  }
 }
 
-class _SwatchDot extends StatelessWidget {
-  const _SwatchDot({required this.color, this.size = 18});
-  final Color color;
-  final double size;
+/// A preview of the looks this piece appears in: the newest few fanned as
+/// prints, with the count beside them. It hints rather than lists, the
+/// whole tile opens the piece's stack. "+ Neu" starts another look.
+class _ItemLooks extends StatelessWidget {
+  const _ItemLooks({
+    required this.looks,
+    required this.online,
+    required this.showCreate,
+    required this.onCreate,
+    required this.onOpen,
+  });
+
+  final List<CachedLook> looks;
+  final bool online;
+  final bool showCreate;
+  final VoidCallback? onCreate;
+  final VoidCallback onOpen;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      color: color,
-      shape: BoxShape.circle,
-      border: Border.all(color: FormTokens.line),
+  Widget build(BuildContext context) => StackPressable(
+    semanticLabel: context.tr(LocaleKeys.itemLooks),
+    onTap: onOpen,
+    builder: (context, spread) => Container(
+      padding: const EdgeInsets.fromLTRB(8, 14, 12, 14),
+      decoration: BoxDecoration(
+        color: FormTokens.field,
+        borderRadius: BorderRadius.circular(FormTokens.cardRadius),
+      ),
+      child: Row(
+        children: [
+          PhotoFan(
+            looks: looks,
+            online: online,
+            photoSize: const Size(88, 110),
+            spread: spread,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.tr(LocaleKeys.itemLooks),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: FormTokens.ink,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      looks.length == 1
+                          ? context.tr(LocaleKeys.lookElsewhereOne)
+                          : context.tr(
+                              LocaleKeys.lookElsewhereMany,
+                              namedArgs: {'count': '${looks.length}'},
+                            ),
+                      style: FormTokens.small.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: FormTokens.muted,
+                    ),
+                  ],
+                ),
+                if (showCreate) ...[
+                  const SizedBox(height: 12),
+                  _Pressable(
+                    onTap: onCreate,
+                    label: context.tr(LocaleKeys.createLook),
+                    child: Opacity(
+                      opacity: onCreate == null ? 0.45 : 1,
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
+                        decoration: BoxDecoration(
+                          color: FormTokens.selectedTint,
+                          borderRadius: BorderRadius.circular(
+                            FormTokens.chipRadius,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          spacing: 4,
+                          children: [
+                            const Icon(
+                              Icons.add,
+                              size: 18,
+                              color: FormTokens.green,
+                            ),
+                            Text(
+                              context.tr(LocaleKeys.stackNew),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: FormTokens.green,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -1029,7 +1147,7 @@ class _EditItemState extends State<_EditItem> {
                       FormPill(
                         label: _colorLabel(context, color),
                         selected: isSelected(color),
-                        leading: _SwatchDot(
+                        leading: ColorDot(
                           color: FormTokens.colorForName(color),
                           size: 14,
                         ),

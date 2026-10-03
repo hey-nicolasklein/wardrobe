@@ -359,11 +359,15 @@ class FormTabBar extends StatelessWidget {
     required this.selectedIndex,
     required this.onSelected,
     required this.labels,
+    this.badged = const {},
     super.key,
   });
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final List<String> labels;
+
+  /// Tabs that show a dot because something is under way there.
+  final Set<int> badged;
 
   // Frosted paper: mostly opaque, with a hint of blurred content showing
   // through. Needs `extendBody` on the hosting scaffold.
@@ -388,6 +392,7 @@ class FormTabBar extends StatelessWidget {
                       icon: FormIconName.values[i],
                       label: labels[i],
                       selected: i == selectedIndex,
+                      badged: badged.contains(i),
                       onPressed: () {
                         if (i != selectedIndex) {
                           unawaited(HapticFeedback.lightImpact());
@@ -412,11 +417,13 @@ class _FormTab extends StatefulWidget {
     required this.icon,
     required this.label,
     required this.selected,
+    required this.badged,
     required this.onPressed,
   });
   final FormIconName icon;
   final String label;
   final bool selected;
+  final bool badged;
   final VoidCallback onPressed;
 
   @override
@@ -469,7 +476,33 @@ class _FormTabState extends State<_FormTab> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _FormTabIcon(widget.icon, selected: widget.selected),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _FormTabIcon(widget.icon, selected: widget.selected),
+                  Positioned(
+                    top: -2,
+                    right: -4,
+                    child: AnimatedScale(
+                      scale: widget.badged ? 1 : 0,
+                      duration: FormTokens.sheetDuration,
+                      curve: FormTokens.pop,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: FormTokens.green,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: FormTokens.paper,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 6),
               Text(
                 widget.label,
@@ -1243,12 +1276,26 @@ class FormToggleRow extends StatelessWidget {
 }
 
 /// Short feedback after an action, styled like the PWA's `#toast`.
-void showFormToast(BuildContext context, String message) {
+/// [onAction] adds a trailing [action] button, e.g. a way to the thing the
+/// message is about.
+void showFormToast(
+  BuildContext context,
+  String message, {
+  String? action,
+  VoidCallback? onAction,
+}) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
         content: Text(message, style: const TextStyle(fontSize: 14)),
+        action: action != null && onAction != null
+            ? SnackBarAction(
+                label: action,
+                textColor: FormTokens.selectedTint,
+                onPressed: onAction,
+              )
+            : null,
         behavior: SnackBarBehavior.floating,
         backgroundColor: FormTokens.toast,
         shape: RoundedRectangleBorder(

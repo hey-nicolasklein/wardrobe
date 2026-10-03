@@ -10,6 +10,8 @@ import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
+import 'package:form_mobile/features/feed/fitting_room_card.dart';
+import 'package:form_mobile/features/feed/flat_lay_widget.dart';
 import 'package:form_mobile/features/feed/look_card.dart';
 import 'package:form_mobile/features/feed/look_commands.dart';
 import 'package:form_mobile/features/feed/look_stacks.dart';
@@ -17,11 +19,14 @@ import 'package:form_mobile/features/feed/occasion_tile.dart';
 import 'package:form_mobile/features/settings/credits_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
+import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/credits_repository.dart';
 import 'package:form_mobile/repository/look_repository.dart';
+import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/services/look_output_service.dart';
 import 'package:form_mobile/utils/idempotency_key.dart';
+import 'package:form_mobile/widgets/cached_media.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
@@ -52,6 +57,10 @@ void openLookComposer(
     ),
   );
 }
+
+/// Opens [stack]'s looks to leaf through, from anywhere in the app.
+void openLookStack(BuildContext context, LookStack stack) =>
+    const FeedPage()._openStack(context, stack);
 
 /// Lifecycle and connection changes reach [FeedCubit] through `FormApp`.
 class FeedPage extends StatelessWidget {
@@ -101,8 +110,13 @@ class FeedPage extends StatelessWidget {
                     ),
                     sliver: SliverList.list(
                       children: [
+                        // The cloud carries the create action once there are
+                        // enough pieces to fill it.
                         _LooksHeader(
-                          onCreate: looks.isEmpty || loading
+                          onCreate:
+                              looks.isEmpty ||
+                                  loading ||
+                                  _cloudItems(state).length >= _cloudMinimum
                               ? null
                               : () => openLookComposer(context),
                         ),
@@ -177,6 +191,19 @@ class FeedPage extends StatelessWidget {
       );
     },
   );
+
+  static const _cloudMinimum = 6;
+
+  /// Up to 18 pieces with a catalog image for the create cloud, in a fixed
+  /// shuffled order so the cloud does not reshuffle on every rebuild.
+  static List<WardrobeItem> _cloudItems(FeedState state) {
+    final items = [
+      for (final item in state.itemsById.values)
+        if (item.state != 'archived' && item.currentShelfImageVersionId != null)
+          item,
+    ]..sort((a, b) => a.id.hashCode.compareTo(b.id.hashCode));
+    return items.take(18).toList();
+  }
 
   static List<CachedLook> _stackLooks(FeedState state, LookStack stack) => [
     for (final record in state.looks ?? const <CachedLook>[])
@@ -254,7 +281,25 @@ class FeedPage extends StatelessWidget {
         );
 
     final heroPhoto = Size(width * 0.42, width * 0.42 * 5 / 4);
+    final cloudItems = _cloudItems(state);
     return [
+      if (cloudItems.length >= _cloudMinimum)
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            FormTokens.gutter,
+            4,
+            FormTokens.gutter,
+            0,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: WardrobeCloud(
+              items: cloudItems,
+              online: online,
+              label: context.tr(LocaleKeys.createLook),
+              onCreate: () => openLookComposer(context),
+            ),
+          ),
+        ),
       SliverScrollProgress(
         distance: heroPhoto.height,
         builder: (context, progress) => Padding(
@@ -286,6 +331,16 @@ class FeedPage extends StatelessWidget {
                         spread: spread * (1 + pull * 0.9) * (1 - away * 0.75),
                         angle: 0.09,
                         offset: 0.42,
+                        // New looks develop on top of this pile, wherever
+                        // they were started. Their pieces rise onto the print.
+                        developingFace: (record) => Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: FlatLayBoard(
+                            garments: _garments(state, record.look),
+                            online: online,
+                            arrive: true,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -493,6 +548,17 @@ class FeedPage extends StatelessWidget {
 
   Widget _lookCard(BuildContext context, FeedState state, CachedLook record) {
     final cubit = context.read<FeedCubit>();
+    if (fittingRoomApplies(record)) {
+      return FittingRoomCard(
+        key: ValueKey('fitting-${record.look.id}'),
+        record: record,
+        state: state,
+        garments: _garments(state, record.look),
+        online: state.online && !state.stale,
+        onMenu: () => _openLookMenu(context, record.look),
+        onOpenStack: (stack) => _openStack(context, stack),
+      );
+    }
     return LookCard(
       key: ValueKey(record.look.id),
       record: record,
@@ -561,6 +627,7 @@ class FeedPage extends StatelessWidget {
             namedArgs: {'cost': '$lookCreditCost'},
           );
     final offline = online ? null : context.tr(LocaleKeys.lookNeedsConnection);
+    final saved = cubit.state.saved[look.id] ?? false;
     // Actions run on the page context, which outlives the closed sheet.
     void run(
       BuildContext sheetContext,
@@ -679,6 +746,30 @@ class FeedPage extends StatelessWidget {
             ),
             _MenuGroup(
               children: [
+                _MenuRow(
+                  label: context.tr(
+                    saved ? LocaleKeys.lookUnsave : LocaleKeys.lookSave,
+                  ),
+                  disabledReason: offline,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    unawaited(cubit.toggleMark(look.id, liked: false));
+                  },
+                ),
+                _MenuRow(
+                  label: context.tr(LocaleKeys.lookShare),
+                  onTap: () {
+                    // Phones ignore the anchor; it only places the iPad
+                    // popover, so the screen centre is enough.
+                    final origin = Rect.fromCenter(
+                      center: MediaQuery.sizeOf(context).center(Offset.zero),
+                      width: 1,
+                      height: 1,
+                    );
+                    Navigator.pop(sheetContext);
+                    unawaited(_share(context, cubit.state, look, origin));
+                  },
+                ),
                 _MenuRow(
                   label: context.tr(LocaleKeys.lookDownloadWorn),
                   onTap: () => run(
@@ -894,6 +985,13 @@ class FeedPage extends StatelessWidget {
                                     ),
                                     success: context.tr(
                                       LocaleKeys.lookCreating,
+                                    ),
+                                    successAction: context.tr(
+                                      LocaleKeys.lookView,
+                                    ),
+                                    onAction: () => openLookStack(
+                                      context,
+                                      const AllLooksStack(),
                                     ),
                                   ),
                                 );
@@ -1289,6 +1387,11 @@ class _StackPageState extends State<_StackPage> {
                           color: FormTokens.ink,
                         ),
                       ),
+                      if (_origin(state) case final origin?)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: origin,
+                        ),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1336,6 +1439,37 @@ class _StackPageState extends State<_StackPage> {
       );
     },
   );
+
+  /// What the stack was gathered from, beside its title: the piece's image
+  /// or the colour's swatch. Other stacks are named well enough by title.
+  Widget? _origin(FeedState state) => switch (widget.stack) {
+    PieceStack(:final itemId) => switch (state.itemsById[itemId]) {
+      final item? => ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          width: 40,
+          height: 50,
+          child: ColoredBox(
+            color: FormTokens.tileTint(item.id, item.metadata.colors),
+            child: Padding(
+              padding: const EdgeInsets.all(3),
+              child: CachedMedia(
+                identity: item.previewIdentity,
+                previewPath: item.previewPath,
+                online: state.online && !state.stale,
+              ),
+            ),
+          ),
+        ),
+      ),
+      null => null,
+    },
+    ColorStack(:final family) => ColorDot(
+      color: colorFamilySwatches[family],
+      size: 34,
+    ),
+    _ => null,
+  };
 }
 
 /// "+ New" in a stack's header, in the selected tint.

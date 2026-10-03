@@ -661,7 +661,7 @@ class _LookStageState extends State<_LookStage>
               ),
             ),
           ),
-          _DevelopingSheen(active: widget.developing),
+          DevelopingSheen(active: widget.developing),
         ],
       ),
     );
@@ -723,16 +723,16 @@ class _FailedLookCard extends StatelessWidget {
 
 /// Soft bands of light that drift across the stage while a look develops,
 /// then fade away once the worn image is in.
-class _DevelopingSheen extends StatefulWidget {
-  const _DevelopingSheen({required this.active});
+class DevelopingSheen extends StatefulWidget {
+  const DevelopingSheen({required this.active, super.key});
 
   final bool active;
 
   @override
-  State<_DevelopingSheen> createState() => _DevelopingSheenState();
+  State<DevelopingSheen> createState() => DevelopingSheenState();
 }
 
-class _DevelopingSheenState extends State<_DevelopingSheen>
+class DevelopingSheenState extends State<DevelopingSheen>
     with SingleTickerProviderStateMixin {
   // One long cycle holds several passes at a steady pace while the brightness
   // swells on its own rhythm, so no two passes in a row look alike and the
@@ -752,7 +752,7 @@ class _DevelopingSheenState extends State<_DevelopingSheen>
   }
 
   @override
-  void didUpdateWidget(_DevelopingSheen oldWidget) {
+  void didUpdateWidget(DevelopingSheen oldWidget) {
     super.didUpdateWidget(oldWidget);
     _sync();
   }

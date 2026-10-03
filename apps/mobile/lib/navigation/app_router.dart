@@ -1,6 +1,8 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
 import 'package:form_mobile/features/feed/look_composer_page.dart';
 import 'package:form_mobile/features/intake/intake_page.dart';
@@ -15,6 +17,7 @@ import 'package:form_mobile/features/wardrobe/wardrobe_page.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/navigation/tab_reselect.dart';
+import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:form_mobile/widgets/foundation_page.dart';
 import 'package:go_router/go_router.dart';
@@ -29,23 +32,38 @@ GoRouter createRouter({bool onboarding = false}) {
     overridePlatformDefaultLocation: true,
     routes: [
       StatefulShellRoute.indexedStack(
-        builder: (context, state, shell) => Scaffold(
-          // Lets content scroll under the translucent tab bar.
-          extendBody: true,
-          body: shell,
-          bottomNavigationBar: FormTabBar(
-            selectedIndex: shell.currentIndex,
-            onSelected: (index) {
-              final active = index == shell.currentIndex;
-              if (active) reselect.reselect(index);
-              // Re-tapping the active tab also returns it to its first page.
-              shell.goBranch(index, initialLocation: active);
-            },
-            labels: [
-              context.tr(LocaleKeys.feed),
-              context.tr(LocaleKeys.visual_wardrobeTab),
-              context.tr(LocaleKeys.settings_title),
-            ],
+        builder: (context, state, shell) => BlocListener<FeedCubit, FeedState>(
+          listener: (context, feed) => _announceFinishedLooks(context, shell),
+          listenWhen: (previous, next) {
+            _finished = _finishedLooks(previous, next);
+            return _finished.isNotEmpty;
+          },
+          child: Scaffold(
+            // Lets content scroll under the translucent tab bar.
+            extendBody: true,
+            body: shell,
+            bottomNavigationBar: FormTabBar(
+              selectedIndex: shell.currentIndex,
+              // Points back to Looks while a look develops there.
+              badged: {
+                if (context.select<FeedCubit, bool>(
+                  (cubit) =>
+                      cubit.state.looks?.any((r) => r.look.isActive) ?? false,
+                ))
+                  0,
+              },
+              onSelected: (index) {
+                final active = index == shell.currentIndex;
+                if (active) reselect.reselect(index);
+                // Re-tapping the active tab also returns it to its first page.
+                shell.goBranch(index, initialLocation: active);
+              },
+              labels: [
+                context.tr(LocaleKeys.feed),
+                context.tr(LocaleKeys.visual_wardrobeTab),
+                context.tr(LocaleKeys.settings_title),
+              ],
+            ),
           ),
         ),
         branches: [
@@ -240,5 +258,37 @@ class FormSheetPage extends Page<void> {
           : FormTokens.sheetDuration,
     ),
     builder: (_) => formSheetDraggableWrapper(child, maxExtent: maxExtent),
+  );
+}
+
+var _finished = <Look>[];
+
+/// Looks that stopped developing between [previous] and [next].
+List<Look> _finishedLooks(FeedState previous, FeedState next) {
+  final active = {
+    for (final record in previous.looks ?? const <CachedLook>[])
+      if (record.look.isActive) record.look.id,
+  };
+  return [
+    for (final record in next.looks ?? const <CachedLook>[])
+      if (active.contains(record.look.id) && !record.look.isActive) record.look,
+  ];
+}
+
+/// Tells the user a look finished while they were outside Looks, with a way
+/// back to it. On the Looks tab the pile itself shows the change.
+void _announceFinishedLooks(
+  BuildContext context,
+  StatefulNavigationShell shell,
+) {
+  if (shell.currentIndex == 0) return;
+  final failed = _finished.any((look) => look.state == 'failed');
+  showFormToast(
+    context,
+    context.tr(
+      failed ? LocaleKeys.lookFailedNotice : LocaleKeys.lookReadyNotice,
+    ),
+    action: context.tr(LocaleKeys.lookView),
+    onAction: () => shell.goBranch(0),
   );
 }

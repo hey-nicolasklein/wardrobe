@@ -108,6 +108,8 @@ Future<void> runFeedAction(
   BuildContext context,
   Future<void> Function() action, {
   String? success,
+  String? successAction,
+  VoidCallback? onAction,
 }) async {
   String? message;
   try {
@@ -127,5 +129,13 @@ Future<void> runFeedAction(
     if (!context.mounted) return;
     message = context.tr(LocaleKeys.feedActionFailed);
   }
-  if (message != null && context.mounted) showFormToast(context, message);
+  if (message != null && context.mounted) {
+    showFormToast(
+      context,
+      message,
+      // The action belongs to the success message only.
+      action: message == success ? successAction : null,
+      onAction: onAction,
+    );
+  }
 }
