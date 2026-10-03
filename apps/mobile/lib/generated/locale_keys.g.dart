@@ -645,4 +645,7 @@ abstract class LocaleKeys {
   static const tryOnPhotos_deleteBody = 'tryOnPhotos.deleteBody';
   static const tryOnPhotos = 'tryOnPhotos';
   static const photosOfYou = 'photosOfYou';
+  static const photosOfYouCollage = 'photosOfYouCollage';
+  static const photosOfYouTryOn = 'photosOfYouTryOn';
+  static const photosOfYouEmpty = 'photosOfYouEmpty';
 }

@@ -6,10 +6,9 @@ import 'package:form_mobile/app/app_config.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/settings/about_section.dart';
-import 'package:form_mobile/features/settings/character/character_cubit.dart';
-import 'package:form_mobile/features/settings/character/character_presentation.dart';
 import 'package:form_mobile/features/settings/credit_wallet.dart';
 import 'package:form_mobile/features/settings/language_cubit.dart';
+import 'package:form_mobile/features/settings/photos_of_you_card.dart';
 import 'package:form_mobile/features/settings/setting_row.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -33,7 +32,6 @@ class SettingsPage extends StatelessWidget {
             ?.where((item) => item.item.state == 'archived')
             .length ??
         0;
-    final character = context.watch<CharacterCubit>().state.current;
     final language = context.watch<LanguageCubit>().state;
     final signedIn = context.read<AuthRepository>().isSignedIn;
     return Scaffold(
@@ -59,16 +57,11 @@ class SettingsPage extends StatelessWidget {
                 style: FormTokens.display.copyWith(fontSize: 36),
               ),
             ),
+            const PhotosOfYouCard(),
+            const SizedBox(height: 12),
             CreditWallet(onTap: () => context.push('/settings/credits')),
             _SectionTitle(context.tr(LocaleKeys.settings_groupPreferences)),
             SettingGroup([
-              SettingRow(
-                label: context.tr(LocaleKeys.photosOfYou),
-                value: character == null
-                    ? null
-                    : characterStatus(context, character),
-                onTap: () => context.push('/settings/character'),
-              ),
               SettingRow(
                 label: context.tr(LocaleKeys.language),
                 value: context.tr(

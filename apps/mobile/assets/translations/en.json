@@ -659,5 +659,8 @@
     "deleteTitle": "Delete photo?",
     "deleteBody": "The photo is deleted for good. Finished try-ons stay, but can no longer be redone with this photo."
   },
-  "photosOfYou": "Photos of you"
+  "photosOfYou": "Photos of you",
+  "photosOfYouTryOn": "{count} for try-ons",
+  "photosOfYouCollage": "{count} in the collage",
+  "photosOfYouEmpty": "So looks on you actually look like you."
 }

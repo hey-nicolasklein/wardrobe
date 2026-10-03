@@ -659,5 +659,8 @@
     "deleteTitle": "Foto löschen?",
     "deleteBody": "Das Foto wird endgültig gelöscht. Fertige Anproben bleiben, lassen sich mit diesem Foto aber nicht mehr wiederholen."
   },
-  "photosOfYou": "Fotos von dir"
+  "photosOfYou": "Fotos von dir",
+  "photosOfYouTryOn": "{count} für die Anprobe",
+  "photosOfYouCollage": "{count} in der Collage",
+  "photosOfYouEmpty": "Damit Looks an dir aussehen wie du."
 }
