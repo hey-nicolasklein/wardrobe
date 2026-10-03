@@ -72,6 +72,11 @@ abstract final class FormTokens {
     letterSpacing: -0.5,
     color: ink,
   );
+  static const title = TextStyle(
+    fontSize: 17,
+    fontWeight: FontWeight.w600,
+    color: ink,
+  );
   static const body = TextStyle(fontSize: 14, height: 1.55, color: ink);
   static const small = TextStyle(fontSize: 12, height: 1.6, color: muted);
   static const eyebrow = TextStyle(

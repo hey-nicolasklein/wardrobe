@@ -1043,13 +1043,7 @@ class FormSheet extends StatelessWidget {
                       const SizedBox(width: 8),
                     ],
                     Expanded(
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      child: Text(title, style: FormTokens.title),
                     ),
                     IconButton(
                       onPressed: () => context.pop(),

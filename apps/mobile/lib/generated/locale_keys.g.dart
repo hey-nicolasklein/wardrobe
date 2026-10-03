@@ -51,11 +51,9 @@ abstract class LocaleKeys {
   static const filters = 'filters';
   static const resetFilters = 'resetFilters';
   static const filteredEmpty = 'filteredEmpty';
-  static const itemDetails = 'itemDetails';
   static const itemActionFailed = 'itemActionFailed';
   static const retryCommand = 'retryCommand';
   static const generationRunning = 'generationRunning';
-  static const generationRefresh = 'generationRefresh';
   static const generationFailed = 'generationFailed';
   static const editItem = 'editItem';
   static const generateImage = 'generateImage';
@@ -64,7 +62,6 @@ abstract class LocaleKeys {
   static const imageVersions = 'imageVersions';
   static const currentImage = 'currentImage';
   static const restoreImage = 'restoreImage';
-  static const restoreTo = 'restoreTo';
   static const archiveItem = 'archiveItem';
   static const deleteItem = 'deleteItem';
   static const deleteItemConfirm = 'deleteItemConfirm';
@@ -74,11 +71,9 @@ abstract class LocaleKeys {
   static const requiredField = 'requiredField';
   static const category = 'category';
   static const itemColors = 'itemColors';
-  static const invalidColors = 'invalidColors';
   static const notes = 'notes';
   static const collectionState = 'collectionState';
   static const customFeedback = 'customFeedback';
-  static const requestPaidImage = 'requestPaidImage';
   static const generationExplanation = 'generationExplanation';
   static const categories_top = 'categories.top';
   static const categories_jacket = 'categories.jacket';
@@ -294,7 +289,6 @@ abstract class LocaleKeys {
   static const composerTryOnAddPhoto = 'composerTryOnAddPhoto';
   static const composerTryOnAction = 'composerTryOnAction';
   static const composerSummaryTryOn = 'composerSummaryTryOn';
-  static const tryOnItem = 'tryOnItem';
   static const tryOnBadge = 'tryOnBadge';
   static const tryOnLookCaption = 'tryOnLookCaption';
   static const tryOnAgain = 'tryOnAgain';
@@ -580,6 +574,8 @@ abstract class LocaleKeys {
   static const credits_shelfImageOne = 'credits.shelfImageOne';
   static const credits_shelfImageMany = 'credits.shelfImageMany';
   static const credits_empty = 'credits.empty';
+  static const credits_balanceOne = 'credits.balanceOne';
+  static const credits_balanceMany = 'credits.balanceMany';
   static const credits = 'credits';
   static const lookCostBadge = 'lookCostBadge';
   static const lookNeedsConnection = 'lookNeedsConnection';
@@ -599,4 +595,18 @@ abstract class LocaleKeys {
   static const stackSectionCollections = 'stackSectionCollections';
   static const stackSectionPieces = 'stackSectionPieces';
   static const stackSectionColors = 'stackSectionColors';
+  static const imageVersionsHint = 'imageVersionsHint';
+  static const generationAutoRefresh = 'generationAutoRefresh';
+  static const imageQuality = 'imageQuality';
+  static const improveFeedback = 'improveFeedback';
+  static const qualityDowngrade = 'qualityDowngrade';
+  static const imageCostActionOne = 'imageCostActionOne';
+  static const imageCreditsEmpty = 'imageCreditsEmpty';
+  static const itemArchivedNotice = 'itemArchivedNotice';
+  static const restoreToOwning = 'restoreToOwning';
+  static const restoreToWanting = 'restoreToWanting';
+  static const reviewMetadataNotice = 'reviewMetadataNotice';
+  static const edit = 'edit';
+  static const itemColorsPick = 'itemColorsPick';
+  static const chooseColors = 'chooseColors';
 }

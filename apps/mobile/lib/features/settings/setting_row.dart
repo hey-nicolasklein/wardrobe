@@ -51,6 +51,36 @@ class SettingRow extends StatelessWidget {
   }
 }
 
+/// [SettingRow]s in one white panel, separated by hairlines. Tighter than a
+/// regular panel vertically, so the rows set the rhythm.
+class SettingGroup extends StatelessWidget {
+  const SettingGroup(this.rows, {super.key});
+
+  final List<Widget> rows;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: FormTokens.surface,
+    shape: RoundedRectangleBorder(
+      side: const BorderSide(color: FormTokens.line),
+      borderRadius: BorderRadius.circular(FormTokens.panelRadius),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 21, vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (index, row) in rows.indexed) ...[
+            if (index > 0) const SettingDivider(),
+            row,
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
 /// Hairline between [SettingRow]s inside one panel.
 class SettingDivider extends StatelessWidget {
   const SettingDivider({super.key});

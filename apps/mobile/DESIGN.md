@@ -151,7 +151,7 @@ components:
 
 FORM looks like opening a well-kept closet. Shelves are lined with warm, unbleached paper, everything is folded in its place, and the clothes themselves supply the color. The interface stays in a narrow band of linen, sage and charcoal tones so that every photo of a jacket or sneaker reads as the brightest thing on screen. A single deep forest green marks what you can act on.
 
-Calm does not mean stiff. Inside the order there is warmth and play. Pills spring between options, tabs sink and bounce back on press, the Inspire button glints, and onboarding pieces can be tossed around. Delight comes from motion and touch, never from loud color or decoration. Serif headlines in Libre Baskerville give the closet a personal, editorial voice. The platform sans does the everyday work.
+Calm does not mean stiff. Inside the order there is warmth and play. Pills spring between options, tabs and buttons sink and bounce back on press, and onboarding pieces can be tossed around. Delight comes from motion and touch, never from loud color or decoration. Serif headlines in Libre Baskerville give the closet a personal, editorial voice. The platform sans does the everyday work.
 
 FORM must never look like stock Material (ripples, elevation shadows, seed-generated tonal palettes), a fast-fashion shop (sale colors, dense product grids, badges everywhere), or a techy AI app (neon gradients, purple glow, decorative sparkles).
 
@@ -168,7 +168,7 @@ FORM must never look like stock Material (ripples, elevation shadows, seed-gener
 A restrained palette of linen, sage and charcoal with a single forest accent. Saturation is kept for the content: garment photos, category tints and color swatches.
 
 ### Primary
-- **Forest Green** (forest): filled buttons, the round add button, selected filter chips, the sliding segment pill, focused input borders, progress, list icons. It is the one color that means "you can do this". **Forest Deep** (forest-deep) backs toasts and the darkest end of the Inspire gradient.
+- **Forest Green** (forest): filled buttons, the round add button, selected filter chips, the sliding segment pill, focused input borders, progress, list icons. It is the one color that means "you can do this". **Forest Deep** (forest-deep) backs toasts.
 
 ### Neutral
 - **Linen Paper** (linen-paper): scaffold, sheets, dialogs, app bar and the frosted tab bar. The ground everything rests on.
@@ -238,9 +238,8 @@ Depth appears only for things that actually float above the page:
 - **Lifted panel** (`0 6px 18px rgba(29,40,28,0.08)`): a panel that animates into view over the grid, and the floating add button on the feed.
 - **Resting knob** (`0 1px 4px rgba(39,55,27,0.04)`): the selected thumb of a segmented switch.
 - **Badge lift** (`0 2px 8px rgba(38,53,29,0.07)`): check badges on flat-lay pieces.
-- **Hero glow** (`0 8px 18px rgba(46,74,58,0.28)`): the Inspire button only, tinted with its own green.
 
-All shadows are tinted with green-black, never neutral grey, and stay below 10% opacity except the hero glow.
+All shadows are tinted with green-black, never neutral grey, and stay below 10% opacity.
 
 ### Named Rules
 **The Flat-By-Default Rule.** A surface at rest has no shadow. A shadow means "this floats" or "this is the one thing to tap".
@@ -300,8 +299,8 @@ Every paid generation asks first, in a sheet that says what will happen, what it
 ### Loading
 Before the first sync, a list shows placeholders in the shape of its cards (chrome card, look-stage photo area) instead of the empty state. The empty state only appears once the list is known to be empty.
 
-### Inspire Button (signature)
-The item page's hero action. A forest-to-sage gradient (`#2E4A3A` to `#5E7F5A`) with a soft gold spark (`#F3D98B`), a sheen that sweeps across it, a twinkling sparkle, a tinted glow and a squish on press. It is the one place where gradient, glow and sparkle are allowed, and it stops moving when disabled or when Reduce Motion is on.
+### Inspire Button
+The item page's one look action. A flat forest row with 14px corners: the looks icon in a faint white circle, a 15px semibold title, a small subtitle at 75% white and a chevron. No gradient, glow or idle motion. It sinks and springs back on press like the tabs, with a light haptic, and drops to 45% opacity when disabled.
 
 ## Do's and Don'ts
 
@@ -318,7 +317,7 @@ The item page's hero action. A forest-to-sage gradient (`#2E4A3A` to `#5E7F5A`) 
 ### Don't:
 - **Don't** use Material ripples, elevation shadows, surface tint or seed-generated tonal palettes.
 - **Don't** make it look like a fast-fashion shop: no loud sale colors, dense product grids or badges on every card.
-- **Don't** make it look like a techy AI app: no neon gradients, purple glows or decorative sparkles. The Inspire button is the single sanctioned exception.
+- **Don't** make it look like a techy AI app: no neon gradients, purple glows or decorative sparkles, including on AI actions.
 - **Don't** use pure black (#000) for text or pure grey for neutrals.
 - **Don't** use the coin gold palette anywhere except credits and costs.
 - **Don't** put the serif on buttons, chips, inputs or labels.
