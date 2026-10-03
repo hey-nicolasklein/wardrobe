@@ -1,0 +1,558 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-03T12:02:57.545Z",
+  "title": "Design System: FORM",
+  "extensions": {
+    "colorMeta": {
+      "forest": {
+        "role": "primary",
+        "displayName": "Forest Green",
+        "canonical": "oklch(39.5% 0.039 159.5)",
+        "tonalRamp": [
+          "#001006",
+          "#132B1E",
+          "#30483B",
+          "#4E6859",
+          "#6F8A7A",
+          "#91AD9C",
+          "#B5D1C0",
+          "#D9F7E5"
+        ]
+      },
+      "forest-deep": {
+        "role": "primary",
+        "displayName": "Forest Deep",
+        "canonical": "oklch(33.6% 0.037 158.8)",
+        "tonalRamp": [
+          "#001006",
+          "#142B1E",
+          "#31483B",
+          "#50685A",
+          "#70897A",
+          "#92AD9D",
+          "#B6D1C0",
+          "#DBF7E6"
+        ]
+      },
+      "linen-paper": {
+        "role": "neutral",
+        "displayName": "Linen Paper",
+        "canonical": "oklch(97.0% 0.005 95.1)",
+        "tonalRamp": [
+          "#0C0B09",
+          "#262522",
+          "#43423F",
+          "#62615E",
+          "#83827F",
+          "#A6A5A1",
+          "#CAC9C5",
+          "#EFEEEA"
+        ]
+      },
+      "charcoal-moss": {
+        "role": "neutral",
+        "displayName": "Charcoal Moss",
+        "canonical": "oklch(27.4% 0.013 140.5)",
+        "tonalRamp": [
+          "#080D08",
+          "#222721",
+          "#3E443D",
+          "#5D635C",
+          "#7E847D",
+          "#A1A7A0",
+          "#C5CBC3",
+          "#EAF1E9"
+        ]
+      },
+      "sage-muted": {
+        "role": "neutral",
+        "displayName": "Sage Muted",
+        "canonical": "oklch(57.7% 0.014 126.5)",
+        "tonalRamp": [
+          "#0A0C06",
+          "#23261F",
+          "#40433B",
+          "#5F635A",
+          "#80847B",
+          "#A3A79D",
+          "#C7CBC1",
+          "#ECF0E6"
+        ]
+      },
+      "note-ink": {
+        "role": "neutral",
+        "displayName": "Note Ink",
+        "canonical": "oklch(52.3% 0.029 137.9)",
+        "tonalRamp": [
+          "#060E04",
+          "#1E281B",
+          "#3B4637",
+          "#596556",
+          "#7A8776",
+          "#9DAA98",
+          "#C0CEBC",
+          "#E6F3E1"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(91.5% 0.011 118.0)",
+        "tonalRamp": [
+          "#0B0C07",
+          "#242620",
+          "#41433C",
+          "#60625B",
+          "#81837C",
+          "#A4A69E",
+          "#C8CAC2",
+          "#EEF0E7"
+        ]
+      },
+      "chrome": {
+        "role": "neutral",
+        "displayName": "Chrome",
+        "canonical": "oklch(92.8% 0.016 102.8)",
+        "tonalRamp": [
+          "#0C0B05",
+          "#26251D",
+          "#434239",
+          "#636257",
+          "#848378",
+          "#A7A69A",
+          "#CBCABE",
+          "#F0EFE3"
+        ]
+      },
+      "field": {
+        "role": "neutral",
+        "displayName": "Field",
+        "canonical": "oklch(94.0% 0.010 119.6)",
+        "tonalRamp": [
+          "#0B0C07",
+          "#242621",
+          "#41433D",
+          "#60625C",
+          "#81837D",
+          "#A4A69F",
+          "#C8CAC3",
+          "#EDEFE8"
+        ]
+      },
+      "pill": {
+        "role": "neutral",
+        "displayName": "Pill",
+        "canonical": "oklch(94.5% 0.008 98.9)",
+        "tonalRamp": [
+          "#0C0B08",
+          "#262521",
+          "#43423D",
+          "#62615C",
+          "#83827D",
+          "#A6A5A0",
+          "#CAC9C3",
+          "#F0EFE9"
+        ]
+      },
+      "selected-tint": {
+        "role": "neutral",
+        "displayName": "Selected Tint",
+        "canonical": "oklch(91.8% 0.031 125.2)",
+        "tonalRamp": [
+          "#080D02",
+          "#212817",
+          "#3E4533",
+          "#5D6552",
+          "#7E8672",
+          "#A0A994",
+          "#C4CDB8",
+          "#E9F3DC"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface White",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "brick": {
+        "role": "semantic",
+        "displayName": "Brick",
+        "canonical": "oklch(52.2% 0.120 31.4)",
+        "tonalRamp": [
+          "#2D0000",
+          "#510000",
+          "#752014",
+          "#994234",
+          "#BF6454",
+          "#E68776",
+          "#FFAB99",
+          "#FFD0BD"
+        ]
+      },
+      "brick-tint": {
+        "role": "semantic",
+        "displayName": "Brick Tint",
+        "canonical": "oklch(94.3% 0.015 37.9)",
+        "tonalRamp": [
+          "#110907",
+          "#2C2320",
+          "#4A3F3C",
+          "#695E5B",
+          "#8B7F7C",
+          "#AEA29E",
+          "#D3C6C2",
+          "#F8EBE7"
+        ]
+      },
+      "coin-gold": {
+        "role": "semantic",
+        "displayName": "Coin Gold",
+        "canonical": "oklch(82.7% 0.094 85.2)",
+        "tonalRamp": [
+          "#1C0300",
+          "#391F00",
+          "#583D00",
+          "#795C12",
+          "#9C7E3A",
+          "#C0A15D",
+          "#E5C581",
+          "#FFEAA5"
+        ]
+      },
+      "coin-rim": {
+        "role": "semantic",
+        "displayName": "Coin Rim",
+        "canonical": "oklch(71.2% 0.088 74.2)",
+        "tonalRamp": [
+          "#1F0100",
+          "#3D1B00",
+          "#5D3900",
+          "#7F591F",
+          "#A27A43",
+          "#C69D65",
+          "#ECC188",
+          "#FFE6AC"
+        ]
+      },
+      "coin-ink": {
+        "role": "semantic",
+        "displayName": "Coin Ink",
+        "canonical": "oklch(50.6% 0.079 77.8)",
+        "tonalRamp": [
+          "#1C0300",
+          "#391E00",
+          "#593C00",
+          "#7A5B28",
+          "#9D7C4A",
+          "#C19F6C",
+          "#E6C38F",
+          "#FFE9B3"
+        ]
+      },
+      "coin-tint": {
+        "role": "semantic",
+        "displayName": "Coin Tint",
+        "canonical": "oklch(95.6% 0.024 88.2)",
+        "tonalRamp": [
+          "#0F0B02",
+          "#2A2518",
+          "#474134",
+          "#676152",
+          "#888273",
+          "#ABA595",
+          "#CFC9B8",
+          "#F5EEDD"
+        ]
+      },
+      "flat-lay-paper": {
+        "role": "neutral",
+        "displayName": "Flat-Lay Paper",
+        "canonical": "oklch(94.8% 0.011 95.2)",
+        "tonalRamp": [
+          "#0D0B06",
+          "#27251F",
+          "#44423C",
+          "#63615A",
+          "#84827B",
+          "#A7A59E",
+          "#CBC9C1",
+          "#F1EFE7"
+        ]
+      },
+      "look-stage": {
+        "role": "neutral",
+        "displayName": "Look Stage",
+        "canonical": "oklch(93.1% 0.010 119.6)",
+        "tonalRamp": [
+          "#0B0C07",
+          "#242621",
+          "#41433D",
+          "#60625C",
+          "#81837D",
+          "#A4A69F",
+          "#C8CAC3",
+          "#EDEFE8"
+        ]
+      },
+      "liked": {
+        "role": "semantic",
+        "displayName": "Liked",
+        "canonical": "oklch(73.4% 0.166 14.4)",
+        "tonalRamp": [
+          "#370000",
+          "#5D0008",
+          "#830025",
+          "#AA2843",
+          "#D24F63",
+          "#FB7384",
+          "#FF98A7",
+          "#FFBDCC"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page heroes; 36px inside FormHero on tab pages."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page headers, sheet titles, empty-state titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "App bar and section titles in sans."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running text and descriptions; 16px in inputs."
+      },
+      "small": {
+        "displayName": "Small",
+        "purpose": "Captions, counts, subtitles, notices."
+      },
+      "label": {
+        "displayName": "Eyebrow",
+        "purpose": "Uppercase sage kicker above a hero headline."
+      },
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "The FORM wordmark in widely tracked capitals."
+      }
+    },
+    "shadows": [
+      {
+        "name": "lifted-panel",
+        "value": "0 6px 18px rgba(29,40,28,0.08)",
+        "purpose": "A panel animating into view over the grid."
+      },
+      {
+        "name": "resting-knob",
+        "value": "0 1px 4px rgba(39,55,27,0.04)",
+        "purpose": "Selected thumb of a segmented switch."
+      },
+      {
+        "name": "badge-lift",
+        "value": "0 2px 8px rgba(38,53,29,0.07)",
+        "purpose": "Check badges on flat-lay pieces."
+      },
+      {
+        "name": "hero-glow",
+        "value": "0 8px 18px rgba(46,74,58,0.28)",
+        "purpose": "Inspire button only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "pop",
+        "value": "cubic-bezier(0.34, 1.56, 0.64, 1)",
+        "purpose": "Springy overshoot for playful entrances and press release."
+      },
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Default for slides and state changes."
+      },
+      {
+        "name": "sheet-curve",
+        "value": "cubic-bezier(0.32, 0.72, 0, 1)",
+        "purpose": "Bottom sheets rising and dismissing."
+      },
+      {
+        "name": "quick",
+        "value": "180ms",
+        "purpose": "Fades and small state changes."
+      },
+      {
+        "name": "slide",
+        "value": "260ms",
+        "purpose": "Segmented control selection pill."
+      },
+      {
+        "name": "sheet",
+        "value": "340ms",
+        "purpose": "Sheet transitions."
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main action on a screen or sheet.",
+      "html": "<button class=\"ds-btn-primary\">Save</button>",
+      "css": ".ds-btn-primary { font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; background: #344D3F; color: #fff; border: none; border-radius: 14px; min-height: 50px; padding: 15px 20px; font-size: 15px; font-weight: 500; cursor: pointer; transition: transform 180ms cubic-bezier(0.34,1.56,0.64,1), opacity 180ms; } .ds-btn-primary:active { transform: scale(0.97); opacity: 0.9; } .ds-btn-primary:focus-visible { outline: 2px solid #344D3F; outline-offset: 3px; } .ds-btn-primary:disabled { background: rgba(52,77,63,0.45); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Alternative action next to a primary.",
+      "html": "<button class=\"ds-btn-secondary\">Cancel</button>",
+      "css": ".ds-btn-secondary { font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; background: #EAECE5; color: #344D3F; border: none; border-radius: 14px; min-height: 50px; padding: 15px 20px; font-size: 15px; font-weight: 500; cursor: pointer; transition: transform 180ms cubic-bezier(0.34,1.56,0.64,1); } .ds-btn-secondary:active { transform: scale(0.97); } .ds-btn-secondary:focus-visible { outline: 2px solid #344D3F; outline-offset: 3px; }"
+    },
+    {
+      "name": "Round Add Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Circular add action at the bottom of a hero. On the feed it floats above the tab bar at 54px with the lifted panel shadow.",
+      "html": "<button class=\"ds-btn-add\" aria-label=\"Add\"><svg viewBox=\"0 0 24 24\" width=\"24\" height=\"24\"><path d=\"M12 5v14M5 12h14\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg></button>",
+      "css": ".ds-btn-add { width: 48px; height: 48px; border-radius: 50%; background: #344D3F; border: none; display: grid; place-items: center; cursor: pointer; transition: transform 180ms cubic-bezier(0.34,1.56,0.64,1); } .ds-btn-add:active { transform: scale(0.92); } .ds-btn-add:focus-visible { outline: 2px solid #344D3F; outline-offset: 3px; } .ds-btn-add--floating { width: 54px; height: 54px; box-shadow: 0 6px 18px rgba(29,40,28,0.08); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Form input on white with hairline border.",
+      "html": "<input class=\"ds-input\" placeholder=\"Name\" />",
+      "css": ".ds-input { font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; background: #fff; color: #242923; border: 1px solid #E2E4DC; border-radius: 12px; padding: 13px; font-size: 16px; outline: none; transition: border-color 180ms; } .ds-input::placeholder { color: #777B72; } .ds-input:focus-visible, .ds-input:focus { border-color: #344D3F; }"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "input-search",
+      "description": "Borderless search on field tone.",
+      "html": "<label class=\"ds-search\"><svg viewBox=\"0 0 24 24\" width=\"19\" height=\"19\"><circle cx=\"11\" cy=\"11\" r=\"6.5\" fill=\"none\" stroke=\"#777B72\" stroke-width=\"2\"/><path d=\"M16 16l4 4\" stroke=\"#777B72\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg><input placeholder=\"Search\" /></label>",
+      "css": ".ds-search { display: flex; align-items: center; gap: 8px; background: #EAECE5; border-radius: 12px; padding: 0 13px; height: 48px; } .ds-search input { font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; flex: 1; border: none; background: transparent; font-size: 16px; color: #242923; outline: none; } .ds-search:focus-within { box-shadow: inset 0 0 0 1px #344D3F; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip-filter",
+      "description": "Category and color filters; selected turns forest.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip\">Tops</button><button class=\"ds-chip is-selected\" aria-pressed=\"true\">Shoes</button></div>",
+      "css": ".ds-chips { display: flex; gap: 8px; } .ds-chip { font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; background: #F6F5F1; color: #242923; border: 1px solid #E2E4DC; border-radius: 30px; padding: 9px 14px; font-size: 13px; cursor: pointer; transition: background 180ms, color 180ms; } .ds-chip.is-selected { background: #344D3F; border-color: #344D3F; color: #fff; } .ds-chip:focus-visible { outline: 2px solid #344D3F; outline-offset: 2px; }"
+    },
+    {
+      "name": "Collection Toggle",
+      "kind": "custom",
+      "refersTo": "pill-selected",
+      "description": "Owning/Wanting segmented control with a sliding pill.",
+      "html": "<div class=\"ds-seg\" role=\"tablist\"><span class=\"ds-seg-thumb\"></span><button role=\"tab\" aria-selected=\"true\">Owning</button><button role=\"tab\">Wanting</button></div>",
+      "css": ".ds-seg { position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; padding: 4px; background: #EAECE5; border: 1px solid #E2E4DC; border-radius: 999px; } .ds-seg button { font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; position: relative; z-index: 1; border: none; background: none; min-height: 44px; padding: 0 18px; font-size: 13px; color: #606855; cursor: pointer; } .ds-seg button[aria-selected=\"true\"] { color: #242923; font-weight: 600; } .ds-seg-thumb { position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); background: #FFFDF7; border-radius: 999px; box-shadow: 0 1px 4px rgba(39,55,27,0.04); transition: transform 260ms cubic-bezier(0.22,1,0.36,1); } .ds-seg:has(button:nth-of-type(2)[aria-selected=\"true\"]) .ds-seg-thumb { transform: translateX(100%); }"
+    },
+    {
+      "name": "Image Card",
+      "kind": "card",
+      "refersTo": "image-card",
+      "description": "Wardrobe grid tile: 3:4 photo on field, name below.",
+      "html": "<figure class=\"ds-card\"><div class=\"ds-card-photo\"></div><figcaption>Olive jacket</figcaption></figure>",
+      "css": ".ds-card { margin: 0; width: 160px; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; } .ds-card-photo { aspect-ratio: 3 / 4; background: #EAECE5; border-radius: 14px; } .ds-card figcaption { margin-top: 8px; font-size: 13px; color: #242923; }"
+    },
+    {
+      "name": "Hero",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "Intro of the Wardrobe and Settings tabs: eyebrow, serif headline, sage summary. The Feed has none.",
+      "html": "<header class=\"ds-hero\"><p class=\"ds-eyebrow\">WARDROBE</p><h1>A home for your favourites.</h1><p class=\"ds-summary\">24 pieces, 6 wanted.</p></header>",
+      "css": ".ds-hero { background: #F6F5F1; padding: 22px; } .ds-eyebrow { font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 10px; letter-spacing: 2px; font-weight: 600; color: #777B72; margin: 0 0 6px; } .ds-hero h1 { font-family: 'Libre Baskerville', Georgia, serif; font-weight: 400; font-size: 36px; line-height: 1.08; letter-spacing: -1.8px; color: #242923; margin: 0 0 6px; } .ds-summary { font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 14px; line-height: 1.55; color: #777B72; margin: 0; }"
+    },
+    {
+      "name": "Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-bar",
+      "description": "Frosted paper bottom navigation.",
+      "html": "<nav class=\"ds-tabs\"><button aria-current=\"page\">Feed</button><button>Wardrobe</button><button>Settings</button></nav>",
+      "css": ".ds-tabs { display: flex; background: rgba(246,245,241,0.85); backdrop-filter: blur(20px); border-top: 1px solid #E2E4DC; padding: 9px 12px 8px; } .ds-tabs button { font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; flex: 1; border: none; background: none; min-height: 44px; font-size: 11px; color: #777B72; cursor: pointer; transition: transform 90ms, opacity 90ms; } .ds-tabs button[aria-current=\"page\"] { color: #344D3F; font-weight: 600; } .ds-tabs button:active { transform: translateY(1px); opacity: 0.6; } .ds-tabs button:focus-visible { outline: 2px solid #344D3F; outline-offset: -2px; border-radius: 10px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Linen Closet",
+    "overview": "FORM looks like opening a well-kept closet. Shelves are lined with warm, unbleached paper, everything is folded in its place, and the clothes themselves supply the color. The interface stays in a narrow band of linen, sage and charcoal tones so that every photo of a jacket or sneaker reads as the brightest thing on screen. A single deep forest green marks what you can act on.\n\nCalm does not mean stiff. Inside the order there is warmth and play. Pills spring between options, tabs sink and bounce back on press, the Inspire button glints, and onboarding pieces can be tossed around. Delight comes from motion and touch, never from loud color or decoration. Serif headlines in Libre Baskerville give the closet a personal, editorial voice. The platform sans does the everyday work.\n\nFORM must never look like stock Material (ripples, elevation shadows, seed-generated tonal palettes), a fast-fashion shop (sale colors, dense product grids, badges everywhere), or a techy AI app (neon gradients, purple glow, decorative sparkles).",
+    "keyCharacteristics": [
+      "Warm off-white paper ground with green-grey neutrals. The clothes provide the color.",
+      "One forest-green accent for actions and selection.",
+      "Serif display headlines over a quiet system sans.",
+      "Flat surfaces separated by tone and hairlines.",
+      "Generous, soft corners from 12 to 25px.",
+      "Springy, haptic micro-motion in place of ripples."
+    ],
+    "rules": [
+      {
+        "name": "The Clothes Are the Color Rule",
+        "body": "UI chrome stays inside the linen, sage and charcoal band. If something on screen is more saturated than the garment photos, it has to justify itself.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Green Rule",
+        "body": "Forest green marks actions and selection only. Don't use it for decoration, section backgrounds or illustrations.",
+        "section": "colors"
+      },
+      {
+        "name": "The Gold Means Money Rule",
+        "body": "The coin palette appears only where credits or costs are shown.",
+        "section": "colors"
+      },
+      {
+        "name": "The Serif Speaks, Sans Works Rule",
+        "body": "Libre Baskerville appears only in display and headline roles. Buttons, chips, inputs, labels and lists are always in the platform sans.",
+        "section": "typography"
+      },
+      {
+        "name": "The Quiet Eyebrow Rule",
+        "body": "Every serif hero headline may carry one uppercase sage eyebrow above it. Never stack two, and never put an eyebrow on body content.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "A surface at rest has no shadow. A shadow means \"this floats\" or \"this is the one thing to tap\".",
+        "section": "elevation"
+      },
+      {
+        "name": "The Frosted Paper Rule",
+        "body": "Bars that overlay content use blurred, paper-tinted translucency, never a solid opaque bar or a drop shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep chrome inside linen, sage and charcoal so garment photos stay the most colorful thing on screen.",
+      "Do use forest green (#344D3F) only for actions, selection and focus.",
+      "Do set hero and page headlines in Libre Baskerville, and everything interactive in the platform sans.",
+      "Do separate surfaces with tone and 1px hairlines (#E2E4DC) before reaching for a shadow.",
+      "Do give touch feedback through sink-and-spring motion and light haptics, and respect Reduce Motion by dropping to instant changes.",
+      "Do tint shadows and scrims with green-black (rgba(29,40,28,…)), never neutral grey.",
+      "Do keep every tappable control at least 44 × 44px.",
+      "Do confirm every paid generation and show its price on the button."
+    ],
+    "donts": [
+      "Don't use Material ripples, elevation shadows, surface tint or seed-generated tonal palettes.",
+      "Don't make it look like a fast-fashion shop: no loud sale colors, dense product grids or badges on every card.",
+      "Don't make it look like a techy AI app: no neon gradients, purple glows or decorative sparkles. The Inspire button is the single sanctioned exception.",
+      "Don't use pure black (#000) for text or pure grey for neutrals.",
+      "Don't use the coin gold palette anywhere except credits and costs.",
+      "Don't put the serif on buttons, chips, inputs or labels."
+    ]
+  }
+}
