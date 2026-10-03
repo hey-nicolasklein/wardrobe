@@ -274,6 +274,9 @@ abstract class LocaleKeys {
   static const lookActions = 'lookActions';
   static const lookWouldWear = 'lookWouldWear';
   static const lookNotForMe = 'lookNotForMe';
+  static const lookDecidedWear = 'lookDecidedWear';
+  static const lookDecidedNotForMe = 'lookDecidedNotForMe';
+  static const lookDecisionChange = 'lookDecisionChange';
   static const lookFittingHint = 'lookFittingHint';
   static const lookOpenPiece = 'lookOpenPiece';
   static const lookOwnedAll = 'lookOwnedAll';

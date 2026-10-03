@@ -278,6 +278,9 @@
   "lookActions": "Look actions",
   "lookWouldWear": "I'd wear this",
   "lookNotForMe": "Not for me",
+  "lookDecidedWear": "You'd wear this",
+  "lookDecidedNotForMe": "Not for you",
+  "lookDecisionChange": "Change",
   "lookFittingHint": "Tap a piece to find it in the photo.",
   "lookOpenPiece": "Open",
   "lookOwnedAll": "Everything is from your wardrobe.",
@@ -660,7 +663,7 @@
     "deleteBody": "The photo is deleted for good. Finished try-ons stay, but can no longer be redone with this photo."
   },
   "photosOfYou": "Photos of you",
-  "photosOfYouTryOn": "{count} for try-ons",
   "photosOfYouCollage": "{count} in the collage",
+  "photosOfYouTryOn": "{count} for try-ons",
   "photosOfYouEmpty": "So looks on you actually look like you."
 }

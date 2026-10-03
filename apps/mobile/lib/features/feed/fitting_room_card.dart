@@ -76,21 +76,22 @@ class _FittingRoomCardState extends State<FittingRoomCard> {
 
   void _decide({required bool wear}) {
     final look = widget.record.look;
-    final liked = widget.state.liked[look.id] ?? false;
     unawaited(HapticFeedback.lightImpact());
     if (wear) {
-      setState(() => _notForMe.remove(look.id));
-      if (!liked) {
-        unawaited(context.read<FeedCubit>().toggleMark(look.id, liked: true));
-      }
+      unawaited(context.read<FeedCubit>().toggleMark(look.id, liked: true));
     } else {
-      setState(() {
-        if (!_notForMe.remove(look.id)) _notForMe.add(look.id);
-      });
-      if (liked) {
-        unawaited(context.read<FeedCubit>().toggleMark(look.id, liked: true));
-      }
+      setState(() => _notForMe.add(look.id));
     }
+  }
+
+  /// Clears the decision so both choices show again.
+  void _undecide() {
+    final look = widget.record.look;
+    unawaited(HapticFeedback.selectionClick());
+    if (widget.state.liked[look.id] ?? false) {
+      unawaited(context.read<FeedCubit>().toggleMark(look.id, liked: true));
+    }
+    setState(() => _notForMe.remove(look.id));
   }
 
   /// The piece whose body region centre is closest to [point], given in
@@ -281,26 +282,41 @@ class _FittingRoomCardState extends State<FittingRoomCard> {
             ),
           ),
           const SizedBox(height: 22),
-          Row(
-            children: [
-              Expanded(
-                child: _DecisionButton(
-                  label: context.tr(LocaleKeys.lookNotForMe),
-                  selected: notForMe,
-                  primary: false,
-                  onTap: widget.online ? () => _decide(wear: false) : null,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _DecisionButton(
-                  label: context.tr(LocaleKeys.lookWouldWear),
-                  selected: liked,
-                  primary: true,
-                  onTap: widget.online ? () => _decide(wear: true) : null,
-                ),
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: AnimatedSwitcher(
+              duration: FormTokens.quick,
+              child: liked || notForMe
+                  ? _DecisionResult(
+                      key: const ValueKey('decided'),
+                      wear: liked,
+                      onChange: widget.online ? _undecide : null,
+                    )
+                  : Row(
+                      key: const ValueKey('undecided'),
+                      children: [
+                        Expanded(
+                          child: _DecisionButton(
+                            icon: FormIconName.close,
+                            label: context.tr(LocaleKeys.lookNotForMe),
+                            onTap: widget.online
+                                ? () => _decide(wear: false)
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _DecisionButton(
+                            icon: FormIconName.heart,
+                            label: context.tr(LocaleKeys.lookWouldWear),
+                            onTap: widget.online
+                                ? () => _decide(wear: true)
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           ),
         ],
       ),
@@ -699,76 +715,137 @@ class _PieceMarker extends StatelessWidget {
   }
 }
 
-/// One half of the fitting room decision. The primary side fills forest when
-/// chosen, the other side settles into the chrome tone.
+/// One of the two fitting room choices. Both look the same so neither reads
+/// as preselected. The icon tells them apart.
 class _DecisionButton extends StatelessWidget {
   const _DecisionButton({
+    required this.icon,
     required this.label,
-    required this.selected,
-    required this.primary,
     required this.onTap,
   });
 
+  final FormIconName icon;
   final String label;
-  final bool selected;
-  final bool primary;
   final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) {
-    final background = !selected
-        ? FormTokens.field
-        : primary
-        ? FormTokens.green
-        : FormTokens.chrome;
-    final foreground = selected && primary ? Colors.white : FormTokens.ink;
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 240),
-          curve: FormTokens.easeOut,
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: label,
+    excludeSemantics: true,
+    child: GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: onTap == null ? 0.45 : 1,
+        child: Container(
           height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: background,
+            color: FormTokens.field,
             borderRadius: BorderRadius.circular(FormTokens.cardRadius),
           ),
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Opacity(
-            opacity: onTap == null ? 0.45 : 1,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 240),
-                  curve: FormTokens.easeOut,
-                  child: selected
-                      ? Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: Icon(
-                            Icons.check_rounded,
-                            size: 16,
-                            color: foreground,
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: foreground,
-                    ),
+                FormIcon(icon, size: 18, color: FormTokens.ink),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: FormTokens.ink,
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Replaces the two choices once one is made, so there is no selected state
+/// to tell apart. Tapping the chip calls [onChange] to bring the choices back.
+class _DecisionResult extends StatelessWidget {
+  const _DecisionResult({
+    required this.wear,
+    required this.onChange,
+    super.key,
+  });
+
+  final bool wear;
+  final VoidCallback? onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = wear ? FormTokens.green : FormTokens.ink;
+    final label = context.tr(
+      wear ? LocaleKeys.lookDecidedWear : LocaleKeys.lookDecidedNotForMe,
+    );
+    final change = context.tr(LocaleKeys.lookDecisionChange);
+    return SizedBox(
+      height: 50,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Semantics(
+          button: true,
+          label: '$label, $change',
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: onChange,
+            child: Opacity(
+              opacity: onChange == null ? 0.45 : 1,
+              child: Container(
+                height: 42,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: wear ? FormTokens.selectedTint : FormTokens.field,
+                  borderRadius: BorderRadius.circular(21),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FormIcon(
+                      wear ? FormIconName.heartFilled : FormIconName.close,
+                      size: 18,
+                      color: ink,
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: ink,
+                        ),
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        '·',
+                        style: TextStyle(fontSize: 15, color: FormTokens.muted),
+                      ),
+                    ),
+                    Text(
+                      change,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: FormTokens.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),

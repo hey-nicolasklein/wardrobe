@@ -278,6 +278,9 @@
   "lookActions": "Aktionen für Look",
   "lookWouldWear": "Würde ich tragen",
   "lookNotForMe": "Nicht mein Ding",
+  "lookDecidedWear": "Würdest du tragen",
+  "lookDecidedNotForMe": "Nicht dein Ding",
+  "lookDecisionChange": "Ändern",
   "lookFittingHint": "Tippe ein Teil, um es im Bild zu finden.",
   "lookOpenPiece": "Öffnen",
   "lookOwnedAll": "Alles aus deinem Schrank.",
@@ -660,7 +663,7 @@
     "deleteBody": "Das Foto wird endgültig gelöscht. Fertige Anproben bleiben, lassen sich mit diesem Foto aber nicht mehr wiederholen."
   },
   "photosOfYou": "Fotos von dir",
-  "photosOfYouTryOn": "{count} für die Anprobe",
   "photosOfYouCollage": "{count} in der Collage",
+  "photosOfYouTryOn": "{count} für die Anprobe",
   "photosOfYouEmpty": "Damit Looks an dir aussehen wie du."
 }
