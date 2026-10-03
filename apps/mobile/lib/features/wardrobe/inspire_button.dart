@@ -5,17 +5,23 @@ import 'package:flutter/services.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/widgets/form_icon.dart';
 
-/// The item page's one look action: a forest row with the looks icon, a title
-/// and a subtitle. Like the tabs it sinks on press and springs back, and it
-/// stays flat at rest.
+/// A look action on the item page: an icon, a title and a subtitle that says
+/// what the action does. Two sit side by side. The primary card is forest,
+/// the secondary one white with a hairline. Like the tabs it sinks on press
+/// and springs back, and it stays flat at rest.
 class InspireButton extends StatefulWidget {
   const InspireButton({
     required this.title,
     required this.subtitle,
     required this.onPressed,
+    this.icon = const FormIcon(FormIconName.feed, size: 21),
+    this.primary = true,
     super.key,
   });
 
+  /// Drawn in the card's ink colour, see [IconTheme].
+  final Widget icon;
+  final bool primary;
   final String title;
   final String subtitle;
   final VoidCallback? onPressed;
@@ -36,6 +42,7 @@ class _InspireButtonState extends State<InspireButton> {
     final enabled = widget.onPressed != null;
     final animate = !MediaQuery.disableAnimationsOf(context);
     final duration = animate ? FormTokens.quick : Duration.zero;
+    final ink = widget.primary ? FormTokens.surface : FormTokens.green;
     return Semantics(
       button: true,
       enabled: enabled,
@@ -60,59 +67,51 @@ class _InspireButtonState extends State<InspireButton> {
             duration: duration,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: FormTokens.green,
+                color: widget.primary ? FormTokens.green : FormTokens.surface,
+                border: widget.primary
+                    ? null
+                    : Border.all(color: FormTokens.line),
                 borderRadius: BorderRadius.circular(FormTokens.cardRadius),
               ),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
-                child: Row(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      width: 44,
-                      height: 44,
+                      width: 36,
+                      height: 36,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: FormTokens.surface.withValues(alpha: 0.12),
+                        color: widget.primary
+                            ? FormTokens.surface.withValues(alpha: 0.14)
+                            : FormTokens.selectedTint,
                       ),
-                      child: const FormIcon(
-                        FormIconName.feed,
-                        size: 21,
-                        color: FormTokens.surface,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            widget.title,
-                            style: const TextStyle(
-                              color: FormTokens.surface,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            widget.subtitle,
-                            style: FormTokens.small.copyWith(
-                              color: FormTokens.surface.withValues(alpha: 0.75),
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
+                      child: IconTheme(
+                        data: IconThemeData(color: ink, size: 19),
+                        child: widget.icon,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    const RotatedBox(
-                      quarterTurns: 2,
-                      child: FormIcon(
-                        FormIconName.arrow,
-                        size: 20,
-                        color: FormTokens.surface,
+                    const SizedBox(height: 12),
+                    Text(
+                      widget.title,
+                      style: TextStyle(
+                        color: widget.primary
+                            ? FormTokens.surface
+                            : FormTokens.ink,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      widget.subtitle,
+                      style: FormTokens.small.copyWith(
+                        color: widget.primary
+                            ? FormTokens.surface.withValues(alpha: 0.85)
+                            : FormTokens.noteInk,
+                        height: 1.4,
                       ),
                     ),
                   ],

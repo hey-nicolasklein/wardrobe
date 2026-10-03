@@ -63,7 +63,7 @@ class SettingsPage extends StatelessWidget {
             _SectionTitle(context.tr(LocaleKeys.settings_groupPreferences)),
             SettingGroup([
               SettingRow(
-                label: context.tr(LocaleKeys.character_reference),
+                label: context.tr(LocaleKeys.photosOfYou),
                 value: character == null
                     ? null
                     : characterStatus(context, character),

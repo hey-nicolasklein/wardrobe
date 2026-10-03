@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:form_mobile/features/feed/look_commands.dart';
+import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
 import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/look_repository.dart';
@@ -50,6 +51,7 @@ class ComposerState {
     this.baseAssetId,
     this.uploadingBase = false,
     this.itemCategory,
+    this.itemColor,
     this.query = '',
     this.previewExpanded = false,
     this.selectedPieceId,
@@ -115,6 +117,10 @@ class ComposerState {
 
   /// The picker's category filter. Unrelated to [categories].
   final String? itemCategory;
+
+  /// The picker's colour family filter, see [colorFamilies]. A colour often
+  /// is the starting point of a look.
+  final String? itemColor;
   final String query;
   final bool previewExpanded;
   final String? selectedPieceId;
@@ -143,6 +149,10 @@ class ComposerState {
     return [
       for (final item in eligible)
         if ((itemCategory == null || item.metadata.category == itemCategory) &&
+            (itemColor == null ||
+                item.metadata.colors.any(
+                  (color) => colorFamilies(color).contains(itemColor),
+                )) &&
             _searchText(item).contains(needle))
           item,
     ];
@@ -172,6 +182,7 @@ class ComposerState {
     String? Function()? baseAssetId,
     bool? uploadingBase,
     String? Function()? itemCategory,
+    String? Function()? itemColor,
     String? query,
     bool? previewExpanded,
     String? Function()? selectedPieceId,
@@ -192,6 +203,7 @@ class ComposerState {
     baseAssetId: baseAssetId == null ? this.baseAssetId : baseAssetId(),
     uploadingBase: uploadingBase ?? this.uploadingBase,
     itemCategory: itemCategory == null ? this.itemCategory : itemCategory(),
+    itemColor: itemColor == null ? this.itemColor : itemColor(),
     query: query ?? this.query,
     previewExpanded: previewExpanded ?? this.previewExpanded,
     selectedPieceId: selectedPieceId == null
@@ -212,16 +224,19 @@ class ComposerCubit extends Cubit<ComposerState> {
     List<String> preselectedIds = const [],
     String? idempotencyKey,
     String defaultQuality = 'low',
+    String? defaultStyle,
     bool tryOn = false,
     Look? from,
   }) : idempotencyKey = idempotencyKey ?? newIdempotencyKey(),
        _defaultQuality = defaultQuality,
+       _defaultStyle = defaultStyle,
        super(
          from != null
              ? ComposerState.fromLook(from)
              : ComposerState(
                  selectedIds: preselectedIds.toSet(),
                  quality: defaultQuality,
+                 style: defaultStyle,
                  tryOn: tryOn,
                ),
        ) {
@@ -243,6 +258,7 @@ class ComposerCubit extends Cubit<ComposerState> {
   final LookRepository looks;
   final String idempotencyKey;
   final String _defaultQuality;
+  final String? _defaultStyle;
 
   void toggleItem(String id) {
     final next = {...state.selectedIds};
@@ -304,6 +320,14 @@ class ComposerCubit extends Cubit<ComposerState> {
     state.copyWith(itemCategory: () => category, selectedOnly: false),
   );
 
+  /// Tapping the active colour again clears it.
+  void setItemColor(String family) => emit(
+    state.copyWith(
+      itemColor: () => state.itemColor == family ? null : family,
+      selectedOnly: false,
+    ),
+  );
+
   void toggleSelectedOnly() =>
       emit(state.copyWith(selectedOnly: !state.selectedOnly));
 
@@ -338,6 +362,7 @@ class ComposerCubit extends Cubit<ComposerState> {
   void reset() => emit(
     ComposerState(
       quality: _defaultQuality,
+      style: _defaultStyle,
       tryOn: state.tryOn,
       tryOnBases: state.tryOnBases,
       baseAssetId: state.baseAssetId,

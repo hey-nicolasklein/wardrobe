@@ -12,11 +12,12 @@ import 'package:form_mobile/features/feed/composer_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/feed/flat_lay_widget.dart';
-import 'package:form_mobile/features/feed/look_style_picker.dart';
+import 'package:form_mobile/features/feed/look_stacks.dart';
 import 'package:form_mobile/features/feed/occasion_tile.dart';
 import 'package:form_mobile/features/settings/credits_cubit.dart';
 import 'package:form_mobile/features/settings/quality_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
+import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
@@ -55,6 +56,7 @@ class LookComposerPage extends StatelessWidget {
         context.read<LookRepository>(),
         preselectedIds: preselectedIds,
         defaultQuality: context.read<QualityCubit>().state.feed,
+        defaultStyle: context.read<QualityCubit>().state.lookStyle,
         tryOn: tryOn,
         from: from,
       );
@@ -111,7 +113,11 @@ class _ComposerViewState extends State<_ComposerView> {
             if (!didPop) cubit.closePreview();
           },
           child: FormSheet(
-            title: context.tr(LocaleKeys.createLook),
+            title: context.tr(
+              state.tryOn
+                  ? LocaleKeys.composerTryOnTitle
+                  : LocaleKeys.createLook,
+            ),
             leading: state.previewExpanded
                 ? IconButton(
                     onPressed: cubit.closePreview,
@@ -172,54 +178,25 @@ class _ComposerPicker extends StatelessWidget {
         if (eligible.any((item) => item.metadata.category == category))
           category,
     ];
+    final colors = [
+      for (final family in FormTokens.colorSwatches.keys)
+        if (family != 'other' &&
+            eligible.any(
+              (item) => item.metadata.colors.any(
+                (color) => colorFamilies(color).contains(family),
+              ),
+            ))
+          family,
+    ];
     return SliverMainAxisGroup(
       slivers: [
         SliverToBoxAdapter(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              FormChoiceChips(
-                options: {
-                  'inspire': context.tr(LocaleKeys.composerModeInspire),
-                  'try-on': context.tr(LocaleKeys.composerModeTryOn),
-                },
-                selected: state.tryOn ? 'try-on' : 'inspire',
-                onSelected: (mode) => cubit.setTryOn(tryOn: mode == 'try-on'),
-              ),
-              if (!state.tryOn) ...[
-                const SizedBox(height: 8),
-                Text(
-                  context.tr(LocaleKeys.composerInspireHint),
-                  style: FormTokens.small,
-                ),
-              ],
-              const SizedBox(height: 20),
-              // Stays mounted in inspire mode so switching back shows the
-              // loaded photos at once.
-              Visibility(
-                visible: state.tryOn,
-                maintainState: true,
-                child: _TryOnBases(state: state, online: online),
-              ),
-              if (state.tryOn) ...[
-                const SizedBox(height: 18),
-                Text(
-                  context.tr(LocaleKeys.composerQualityLabel),
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                FormChoiceChips(
-                  options: {
-                    for (final quality in qualities)
-                      quality: context.tr('quality.$quality'),
-                  },
-                  selected: state.quality,
-                  onSelected: cubit.setQuality,
-                ),
-              ] else ...[
+              if (state.tryOn)
+                _TryOnBases(state: state, online: online)
+              else ...[
                 Text(
                   context.tr(LocaleKeys.composerOccasionLabel),
                   style: const TextStyle(
@@ -229,8 +206,6 @@ class _ComposerPicker extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _OccasionPresets(selected: state.occasion),
-                const SizedBox(height: 12),
-                _FineTuning(state: state),
               ],
               const SizedBox(height: 28),
               Row(
@@ -319,6 +294,20 @@ class _ComposerPicker extends StatelessWidget {
                               !state.selectedOnly &&
                               state.itemCategory == category,
                           onTap: () => cubit.setItemCategory(category),
+                        ),
+                      ),
+                    for (final family in colors)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FormPill(
+                          leading: ColorDot(
+                            color: FormTokens.colorSwatches[family],
+                            size: 14,
+                          ),
+                          label: context.tr('colorFamilies.$family'),
+                          selected:
+                              !state.selectedOnly && state.itemColor == family,
+                          onTap: () => cubit.setItemColor(family),
                         ),
                       ),
                   ],
@@ -462,149 +451,6 @@ class _PinnedPills extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(_PinnedPills oldDelegate) => oldDelegate.child != child;
-}
-
-/// Photo style and quality as two compact buttons showing the current value.
-/// Each opens its picker in a sheet, so the composer stays short. Most looks
-/// keep the defaults: a style that follows the occasion and quality from
-/// Settings.
-class _FineTuning extends StatelessWidget {
-  const _FineTuning({required this.state});
-
-  final ComposerState state;
-
-  Future<void> _open(BuildContext context, String title, Widget picker) {
-    final cubit = context.read<ComposerCubit>();
-    return showFormSheet<void>(
-      context: context,
-      builder: (_) => BlocProvider.value(
-        value: cubit,
-        child: FormSheet(title: title, child: picker),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final style = context.tr('lookStyle.${state.resolvedStyle}');
-    return Row(
-      children: [
-        Expanded(
-          child: _SettingTile(
-            icon: Icons.photo_camera_outlined,
-            label: context.tr(LocaleKeys.composerStyleLabel),
-            value: state.style == null
-                ? '$style · ${context.tr(LocaleKeys.lookStyle_auto)}'
-                : style,
-            onTap: () => _open(
-              context,
-              context.tr(LocaleKeys.composerStyleLabel),
-              BlocBuilder<ComposerCubit, ComposerState>(
-                builder: (context, state) => Padding(
-                  padding: const EdgeInsets.only(top: 8, bottom: 16),
-                  child: LookStylePicker(
-                    selected: state.style,
-                    onSelected: context.read<ComposerCubit>().setStyle,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _SettingTile(
-            icon: Icons.high_quality_outlined,
-            label: context.tr(LocaleKeys.composerQualityLabel),
-            value: context.tr('quality.${state.quality}'),
-            onTap: () => _open(
-              context,
-              context.tr(LocaleKeys.composerQualityLabel),
-              BlocBuilder<ComposerCubit, ComposerState>(
-                builder: (context, state) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    FormNotice(
-                      text: context.tr(LocaleKeys.composerQualityNote),
-                    ),
-                    const SizedBox(height: 12),
-                    FormChoiceChips(
-                      options: {
-                        for (final quality in qualities)
-                          quality: context.tr('quality.$quality'),
-                      },
-                      selected: state.quality,
-                      onSelected: context.read<ComposerCubit>().setQuality,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SettingTile extends StatelessWidget {
-  const _SettingTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  // One compact line, so the wardrobe grid stays above the fold.
-  @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: '$label: $value',
-    excludeSemantics: true,
-    child: Material(
-      color: FormTokens.pill,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
-            child: Row(
-              children: [
-                Icon(icon, size: 16, color: FormTokens.muted),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: FormTokens.ink,
-                    ),
-                  ),
-                ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: FormTokens.muted,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
 }
 
 class _OccasionPresets extends StatelessWidget {
@@ -1377,15 +1223,20 @@ class _ComposerFooter extends StatelessWidget {
                           color: Colors.white,
                         ),
                       )
-                    : Text(
-                        lookCostLabel(
-                          context,
-                          context.tr(
-                            state.tryOn
-                                ? LocaleKeys.composerTryOnAction
-                                : LocaleKeys.createLook,
+                    // Stays on one line beside the tray. Long labels shrink.
+                    : FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          lookCostLabel(
+                            context,
+                            context.tr(
+                              state.tryOn
+                                  ? LocaleKeys.composerTryOnAction
+                                  : LocaleKeys.createLook,
+                            ),
+                            context.watch<CreditsCubit>().state,
                           ),
-                          context.watch<CreditsCubit>().state,
+                          maxLines: 1,
                         ),
                       ),
               ),
@@ -1403,8 +1254,8 @@ class _Tray extends StatelessWidget {
   const _Tray({required this.selected, required this.online});
 
   static const _thumb = 44.0;
-  static const _step = 30.0;
-  static const _maxShown = 4;
+  static const _step = 24.0;
+  static const _maxShown = 3;
 
   final List<WardrobeItem> selected;
   final bool online;

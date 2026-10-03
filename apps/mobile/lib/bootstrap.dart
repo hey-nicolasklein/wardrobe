@@ -57,6 +57,7 @@ Future<void> bootstrap(
   final savedLanguage = await preferences.language();
   final feedQuality = await preferences.feedQuality();
   final wardrobeQuality = await preferences.wardrobeQuality();
+  final lookStyle = await preferences.lookStyle();
   final onboardingSeen = await preferences.onboardingSeen();
   final deviceLanguage =
       WidgetsBinding.instance.platformDispatcher.locale.languageCode;
@@ -216,6 +217,7 @@ Future<void> bootstrap(
               QualityPreferences(
                 feed: feedQuality,
                 wardrobe: wardrobeQuality,
+                lookStyle: lookStyle,
               ),
             ),
           ),

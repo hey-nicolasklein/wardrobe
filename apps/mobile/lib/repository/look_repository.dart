@@ -53,14 +53,29 @@ class LookRepository {
           .map(CachedLook.fromRecord)
           .toList();
 
-  /// Photos earlier try-ons were made from, newest first. Reusing one keeps
-  /// new try-ons comparable with the old ones.
-  Future<List<String>> tryOnBases() async => [
-    ...{
-      for (final cached in await cached())
-        if (cached.look.baseAssetId != null) cached.look.baseAssetId!,
-    },
-  ];
+  /// The user's try-on photos, newest first. Reusing one keeps new try-ons
+  /// comparable with the old ones. Offline, the photos of cached try-on looks
+  /// stand in.
+  Future<List<String>> tryOnBases() async {
+    try {
+      final response = await _request('v1/try-on-photos');
+      return [
+        for (final photo in response['photos'] as List<dynamic>)
+          (photo as Map<String, dynamic>)['assetId'] as String,
+      ];
+    } on FormApiException {
+      return [
+        ...{
+          for (final cached in await cached())
+            if (cached.look.baseAssetId != null) cached.look.baseAssetId!,
+        },
+      ];
+    }
+  }
+
+  /// Deletes a try-on photo and its file. Finished try-on looks stay.
+  Future<void> deleteTryOnPhoto(String assetId) =>
+      _request('v1/try-on-photos/$assetId', method: 'DELETE');
 
   /// Hearts a look on the server and in the cached copy.
   Future<void> setLiked(String lookId, {required bool liked}) async {
@@ -144,7 +159,15 @@ class LookRepository {
         'idempotencyKey': newIdempotencyKey(),
       },
     );
-    return (completed['asset'] as Map<String, dynamic>)['id'] as String;
+    final assetId =
+        (completed['asset'] as Map<String, dynamic>)['id'] as String;
+    // Kept in the try-on photo list even before a try-on uses it.
+    await _request(
+      'v1/try-on-photos',
+      method: 'POST',
+      data: {'assetId': assetId},
+    );
+    return assetId;
   }
 
   Future<bool> hasSnapshot() async =>

@@ -12,6 +12,7 @@ import 'package:form_mobile/features/settings/quality_section.dart';
 import 'package:form_mobile/features/settings/reset_section.dart';
 import 'package:form_mobile/features/settings/setting_row.dart';
 import 'package:form_mobile/features/settings/settings_page.dart';
+import 'package:form_mobile/features/settings/try_on_photos_section.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:go_router/go_router.dart';
 
@@ -27,8 +28,8 @@ final settingsSubpageRoutes = <RouteBase>[
   GoRoute(
     path: 'character',
     builder: (_, _) => const SettingsSubpage(
-      title: LocaleKeys.character_reference,
-      children: [CharacterSection()],
+      title: LocaleKeys.photosOfYou,
+      children: [CharacterSection(), TryOnPhotosSection()],
     ),
   ),
   GoRoute(

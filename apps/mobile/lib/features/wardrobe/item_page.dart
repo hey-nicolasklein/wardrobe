@@ -298,8 +298,8 @@ class _ItemViewState extends State<_ItemView> {
                         },
                         onSelected: enabled ? cubit.move : null,
                       ),
-                    // Making a look and browsing the piece's looks are one
-                    // thing: the button until a look exists, then the strip.
+                    // The two ways to make a new look, then the piece's
+                    // existing ones.
                     BlocBuilder<FeedCubit, FeedState>(
                       builder: (context, feedState) {
                         final ready = readyLooksForItem(
@@ -321,29 +321,70 @@ class _ItemViewState extends State<_ItemView> {
                                 itemIds: [detail.wardrobeItem.id],
                               )
                             : null;
-                        if (looks.isEmpty) {
-                          return archived
-                              ? const SizedBox.shrink()
-                              : InspireButton(
-                                  title: context.tr(LocaleKeys.inspireItem),
-                                  subtitle: context.tr(
-                                    LocaleKeys.inspireItemHint,
+                        final tryOn = enabled && !archived
+                            ? () => openLookComposer(
+                                context,
+                                itemIds: [detail.wardrobeItem.id],
+                                tryOn: true,
+                              )
+                            : null;
+                        // Two separate offers, each saying what it does:
+                        // a look styled around the piece, or the piece on
+                        // the user's own photo.
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (!archived)
+                              // Equal height, so the two offers read as a
+                              // pair of options.
+                              IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: InspireButton(
+                                        title: context.tr(
+                                          LocaleKeys.inspireItem,
+                                        ),
+                                        subtitle: context.tr(
+                                          LocaleKeys.inspireItemHint,
+                                        ),
+                                        onPressed: create,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: InspireButton(
+                                        primary: false,
+                                        icon: const Icon(
+                                          Icons.person_outline_rounded,
+                                        ),
+                                        title: context.tr(LocaleKeys.lookTryOn),
+                                        subtitle: context.tr(
+                                          LocaleKeys.tryOnItemHint,
+                                        ),
+                                        onPressed: tryOn,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (looks.isNotEmpty)
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  top: archived ? 0 : 14,
+                                ),
+                                child: _ItemLooks(
+                                  looks: looks,
+                                  online: online && !state.stale,
+                                  onOpen: () => openLookStack(
+                                    context,
+                                    PieceStack(detail.wardrobeItem.id),
                                   ),
-                                  onPressed: create,
-                                );
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 14),
-                          child: _ItemLooks(
-                            looks: looks,
-                            online: online && !state.stale,
-                            showCreate: !archived,
-                            onCreate: create,
-                            onOpen: () => openLookStack(
-                              context,
-                              PieceStack(detail.wardrobeItem.id),
-                            ),
-                          ),
+                                ),
+                              ),
+                          ],
                         );
                       },
                     ),
@@ -370,8 +411,9 @@ class _ItemViewState extends State<_ItemView> {
                                 ? LocaleKeys.generateImage
                                 : LocaleKeys.improveImage,
                           ),
-                          value: _imageCost(
+                          value: _creditCost(
                             context,
+                            shelfImageCreditCost,
                             context.watch<CreditsCubit>().state,
                           ),
                           onTap: openGenerate,
@@ -641,15 +683,11 @@ class _ItemLooks extends StatelessWidget {
   const _ItemLooks({
     required this.looks,
     required this.online,
-    required this.showCreate,
-    required this.onCreate,
     required this.onOpen,
   });
 
   final List<CachedLook> looks;
   final bool online;
-  final bool showCreate;
-  final VoidCallback? onCreate;
   final VoidCallback onOpen;
 
   @override
@@ -667,7 +705,7 @@ class _ItemLooks extends StatelessWidget {
           PhotoFan(
             looks: looks,
             online: online,
-            photoSize: const Size(88, 110),
+            photoSize: const Size(56, 70),
             spread: spread,
           ),
           const SizedBox(width: 8),
@@ -678,7 +716,7 @@ class _ItemLooks extends StatelessWidget {
                 Text(
                   context.tr(LocaleKeys.itemLooks),
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: FormTokens.ink,
                   ),
@@ -704,44 +742,6 @@ class _ItemLooks extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (showCreate) ...[
-                  const SizedBox(height: 12),
-                  _Pressable(
-                    onTap: onCreate,
-                    label: context.tr(LocaleKeys.createLook),
-                    child: Opacity(
-                      opacity: onCreate == null ? 0.45 : 1,
-                      child: Container(
-                        padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
-                        decoration: BoxDecoration(
-                          color: FormTokens.selectedTint,
-                          borderRadius: BorderRadius.circular(
-                            FormTokens.chipRadius,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          spacing: 4,
-                          children: [
-                            const Icon(
-                              Icons.add,
-                              size: 18,
-                              color: FormTokens.green,
-                            ),
-                            Text(
-                              context.tr(LocaleKeys.stackNew),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: FormTokens.green,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -809,17 +809,16 @@ class _PressableState extends State<_Pressable> {
   }
 }
 
-/// What a catalog image costs, e.g. "1 Credit". Unmetered accounts see no
-/// price. While credits are unknown the cost shows, since most accounts are
-/// metered.
-String? _imageCost(BuildContext context, Credits? credits) =>
+/// What an action costs, e.g. "1 Credit". Unmetered accounts see no price.
+/// While credits are unknown the cost shows, since most accounts are metered.
+String? _creditCost(BuildContext context, int cost, Credits? credits) =>
     credits?.metered == false
     ? null
     : context.tr(
-        shelfImageCreditCost == 1
+        cost == 1
             ? LocaleKeys.credits_balanceOne
             : LocaleKeys.credits_balanceMany,
-        namedArgs: {'count': '$shelfImageCreditCost'},
+        namedArgs: {'count': '$cost'},
       );
 
 /// A [SettingRow] in the item's options that dims while it cannot be used.

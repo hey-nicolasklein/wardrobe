@@ -224,7 +224,7 @@
   "lookCreated": "Created",
   "lookPieces": "Pieces",
   "inspireItem": "Create a look",
-  "inspireItemHint": "Style a look around it or try it on",
+  "inspireItemHint": "FORM styles an outfit around this piece.",
   "generatedLookCaption": "Generated look · {date}",
   "composerOccasionLabel": "Occasion",
   "composerPickerTitle": "What should we combine?",
@@ -409,7 +409,7 @@
   },
   "settings": {
     "title": "Settings",
-    "qualityTitle": "Image quality",
+    "qualityTitle": "Images",
     "qualityBody": "Default for new images on this device. Higher quality costs more. You can recreate individual images in higher quality later.",
     "appVersion": "App version",
     "cacheTitle": "Clear downloaded images",
@@ -643,10 +643,21 @@
   "edit": "Edit",
   "itemColorsPick": "Colors",
   "chooseColors": "Choose 1 to 6 colors.",
-  "composerInspireHint": "FORM lays out a look from your wardrobe. Try-on puts it on your photo.",
   "composerBlockedOffline": "You're offline. Connect to create a look.",
   "composerBlockedPhoto": "Pick a photo of yourself for the try-on.",
   "composerBlockedPieces": "Pick at least one piece to try on.",
   "composerBlockedFrame": "“Only these” needs pieces from the same part of the frame.",
-  "composerBlockedCredits": "You don't have enough credits for a look."
+  "composerBlockedCredits": "You don't have enough credits for a look.",
+  "composerTryOnTitle": "Show on me",
+  "lookTryOn": "Show on me",
+  "tryOnItemHint": "Puts this piece on a photo of you.",
+  "tryOnPhotos": {
+    "title": "Photos for try-ons",
+    "body": "Full-body photos of you. Add several so try-ons give you a choice. Deleted photos are gone for good, finished try-ons stay.",
+    "add": "Add photos",
+    "delete": "Delete photo",
+    "deleteTitle": "Delete photo?",
+    "deleteBody": "The photo is deleted for good. Finished try-ons stay, but can no longer be redone with this photo."
+  },
+  "photosOfYou": "Photos of you"
 }

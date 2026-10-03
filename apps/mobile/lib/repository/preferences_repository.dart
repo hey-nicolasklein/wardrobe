@@ -1,3 +1,4 @@
+import 'package:form_mobile/features/feed/composer_cubit.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/services/app_database.dart';
 
@@ -10,6 +11,7 @@ class PreferencesRepository {
   static const feedQualityKey = 'feed-quality';
   static const wardrobeQualityKey = 'wardrobe-quality';
   static const onboardingKey = 'onboarding-seen';
+  static const lookStyleKey = 'look-style';
 
   Future<String?> language() async {
     final value = await _database.preference('language');
@@ -40,6 +42,21 @@ class PreferencesRepository {
 
   Future<void> setWardrobeQuality(String quality) =>
       _setQuality(wardrobeQualityKey, quality);
+
+  /// The photo style new looks use. Null follows the occasion, see
+  /// [autoLookStyle].
+  Future<String?> lookStyle() async {
+    final value = await _database.preference(lookStyleKey);
+    return lookStyles.contains(value) ? value : null;
+  }
+
+  /// Null returns to the automatic style.
+  Future<void> setLookStyle(String? style) {
+    if (style != null && !lookStyles.contains(style)) {
+      throw ArgumentError.value(style, 'style');
+    }
+    return _database.setPreference(lookStyleKey, style ?? 'auto');
+  }
 
   Future<String> _quality(String key) async {
     final value = await _database.preference(key);

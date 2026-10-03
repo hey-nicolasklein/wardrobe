@@ -2,7 +2,7 @@
 
 // ignore_for_file: constant_identifier_names
 
-abstract class  LocaleKeys {
+abstract class LocaleKeys {
   static const appName = 'appName';
   static const feed = 'feed';
   static const wardrobe = 'wardrobe';
@@ -233,7 +233,8 @@ abstract class  LocaleKeys {
   static const composerNothingSelected = 'composerNothingSelected';
   static const composerShowAll = 'composerShowAll';
   static const composerCompleteTitle = 'composerCompleteTitle';
-  static const composerCompleteHelpUnframable = 'composerCompleteHelpUnframable';
+  static const composerCompleteHelpUnframable =
+      'composerCompleteHelpUnframable';
   static const composerCategoriesTitle = 'composerCategoriesTitle';
   static const composerPreviewTitle = 'composerPreviewTitle';
   static const composerBack = 'composerBack';
@@ -257,7 +258,8 @@ abstract class  LocaleKeys {
   static const composerSummaryCategories = 'composerSummaryCategories';
   static const composerSummaryCategoriesOnly = 'composerSummaryCategoriesOnly';
   static const composerSummaryDefault = 'composerSummaryDefault';
-  static const composerOccasionSuffixNightOut = 'composerOccasionSuffixNightOut';
+  static const composerOccasionSuffixNightOut =
+      'composerOccasionSuffixNightOut';
   static const composerOccasionSuffixParty = 'composerOccasionSuffixParty';
   static const composerOccasionSuffixCasual = 'composerOccasionSuffixCasual';
   static const composerTrayLabel = 'composerTrayLabel';
@@ -429,41 +431,57 @@ abstract class  LocaleKeys {
   static const settings_storage = 'settings.storage';
   static const settings_storageBody = 'settings.storageBody';
   static const settings = 'settings';
-  static const apiErrors_activeCharacterSheet = 'apiErrors.activeCharacterSheet';
+  static const apiErrors_activeCharacterSheet =
+      'apiErrors.activeCharacterSheet';
   static const apiErrors_assetContentMissing = 'apiErrors.assetContentMissing';
   static const apiErrors_assetNotFound = 'apiErrors.assetNotFound';
-  static const apiErrors_characterSheetProcessing = 'apiErrors.characterSheetProcessing';
-  static const apiErrors_confirmationRequired = 'apiErrors.confirmationRequired';
-  static const apiErrors_generationInProgress = 'apiErrors.generationInProgress';
-  static const apiErrors_idempotencyKeyReused = 'apiErrors.idempotencyKeyReused';
+  static const apiErrors_characterSheetProcessing =
+      'apiErrors.characterSheetProcessing';
+  static const apiErrors_confirmationRequired =
+      'apiErrors.confirmationRequired';
+  static const apiErrors_generationInProgress =
+      'apiErrors.generationInProgress';
+  static const apiErrors_idempotencyKeyReused =
+      'apiErrors.idempotencyKeyReused';
   static const apiErrors_invalidActivation = 'apiErrors.invalidActivation';
-  static const apiErrors_invalidCharacterSheet = 'apiErrors.invalidCharacterSheet';
-  static const apiErrors_invalidDetectionRequest = 'apiErrors.invalidDetectionRequest';
-  static const apiErrors_invalidGenerationRequest = 'apiErrors.invalidGenerationRequest';
+  static const apiErrors_invalidCharacterSheet =
+      'apiErrors.invalidCharacterSheet';
+  static const apiErrors_invalidDetectionRequest =
+      'apiErrors.invalidDetectionRequest';
+  static const apiErrors_invalidGenerationRequest =
+      'apiErrors.invalidGenerationRequest';
   static const apiErrors_invalidItemState = 'apiErrors.invalidItemState';
   static const apiErrors_invalidKeepRequest = 'apiErrors.invalidKeepRequest';
   static const apiErrors_invalidLook = 'apiErrors.invalidLook';
-  static const apiErrors_invalidPermanentDeletion = 'apiErrors.invalidPermanentDeletion';
+  static const apiErrors_invalidPermanentDeletion =
+      'apiErrors.invalidPermanentDeletion';
   static const apiErrors_invalidPhotoItem = 'apiErrors.invalidPhotoItem';
-  static const apiErrors_invalidRejectRequest = 'apiErrors.invalidRejectRequest';
-  static const apiErrors_invalidRestoreRequest = 'apiErrors.invalidRestoreRequest';
+  static const apiErrors_invalidRejectRequest =
+      'apiErrors.invalidRejectRequest';
+  static const apiErrors_invalidRestoreRequest =
+      'apiErrors.invalidRestoreRequest';
   static const apiErrors_invalidRetry = 'apiErrors.invalidRetry';
-  static const apiErrors_invalidSignInRequest = 'apiErrors.invalidSignInRequest';
+  static const apiErrors_invalidSignInRequest =
+      'apiErrors.invalidSignInRequest';
   static const apiErrors_invalidUploadIntent = 'apiErrors.invalidUploadIntent';
   static const apiErrors_invalidWardrobeEdit = 'apiErrors.invalidWardrobeEdit';
   static const apiErrors_invalidWardrobeItem = 'apiErrors.invalidWardrobeItem';
-  static const apiErrors_invalidWardrobeTransition = 'apiErrors.invalidWardrobeTransition';
+  static const apiErrors_invalidWardrobeTransition =
+      'apiErrors.invalidWardrobeTransition';
   static const apiErrors_originNotAllowed = 'apiErrors.originNotAllowed';
   static const apiErrors_resetInProgress = 'apiErrors.resetInProgress';
   static const apiErrors_sourcePhotoNotFound = 'apiErrors.sourcePhotoNotFound';
   static const apiErrors_staleRecordVersion = 'apiErrors.staleRecordVersion';
-  static const apiErrors_uploadIntentNotFound = 'apiErrors.uploadIntentNotFound';
+  static const apiErrors_uploadIntentNotFound =
+      'apiErrors.uploadIntentNotFound';
   static const apiErrors_uploadMissing = 'apiErrors.uploadMissing';
-  static const apiErrors_wardrobeItemNotFound = 'apiErrors.wardrobeItemNotFound';
+  static const apiErrors_wardrobeItemNotFound =
+      'apiErrors.wardrobeItemNotFound';
   static const apiErrors_insufficientCredits = 'apiErrors.insufficientCredits';
   static const apiErrors_tooManyActiveJobs = 'apiErrors.tooManyActiveJobs';
   static const apiErrors_rateLimited = 'apiErrors.rateLimited';
-  static const apiErrors_invalidIdentityToken = 'apiErrors.invalidIdentityToken';
+  static const apiErrors_invalidIdentityToken =
+      'apiErrors.invalidIdentityToken';
   static const apiErrors = 'apiErrors';
   static const onboarding_skip = 'onboarding.skip';
   static const onboarding_next = 'onboarding.next';
@@ -611,11 +629,20 @@ abstract class  LocaleKeys {
   static const edit = 'edit';
   static const itemColorsPick = 'itemColorsPick';
   static const chooseColors = 'chooseColors';
-  static const composerInspireHint = 'composerInspireHint';
   static const composerBlockedOffline = 'composerBlockedOffline';
   static const composerBlockedPhoto = 'composerBlockedPhoto';
   static const composerBlockedPieces = 'composerBlockedPieces';
   static const composerBlockedFrame = 'composerBlockedFrame';
   static const composerBlockedCredits = 'composerBlockedCredits';
-
+  static const composerTryOnTitle = 'composerTryOnTitle';
+  static const lookTryOn = 'lookTryOn';
+  static const tryOnItemHint = 'tryOnItemHint';
+  static const tryOnPhotos_title = 'tryOnPhotos.title';
+  static const tryOnPhotos_body = 'tryOnPhotos.body';
+  static const tryOnPhotos_add = 'tryOnPhotos.add';
+  static const tryOnPhotos_delete = 'tryOnPhotos.delete';
+  static const tryOnPhotos_deleteTitle = 'tryOnPhotos.deleteTitle';
+  static const tryOnPhotos_deleteBody = 'tryOnPhotos.deleteBody';
+  static const tryOnPhotos = 'tryOnPhotos';
+  static const photosOfYou = 'photosOfYou';
 }

@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/feed/composer_cubit.dart';
 import 'package:form_mobile/features/settings/quality_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/wardrobe.dart';
@@ -33,6 +34,26 @@ class QualitySection extends StatelessWidget {
             label: context.tr(LocaleKeys.visual_wardrobeTab),
             selected: qualities.wardrobe,
             onSelected: cubit.setWardrobe,
+          ),
+          const SizedBox(height: 24),
+          Text(
+            context.tr(LocaleKeys.composerStyleLabel),
+            style: FormTokens.body.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            context.tr('lookStyleHint.${qualities.lookStyle ?? 'auto'}'),
+            style: FormTokens.small,
+          ),
+          const SizedBox(height: 9),
+          FormChoiceChips(
+            options: {
+              for (final style in ['auto', ...lookStyles])
+                style: context.tr('lookStyle.$style'),
+            },
+            selected: qualities.lookStyle ?? 'auto',
+            onSelected: (style) =>
+                cubit.setLookStyle(style == 'auto' ? null : style),
           ),
         ],
       ),

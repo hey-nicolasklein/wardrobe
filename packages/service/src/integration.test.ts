@@ -30,6 +30,9 @@ import {
   listLooks,
   listCharacterSheets,
   removeCharacterSheet,
+  addTryOnPhoto,
+  listTryOnPhotos,
+  removeTryOnPhoto,
   creditBalance,
   creditSummary,
   deleteAccount,
@@ -383,6 +386,47 @@ test(
     }
   },
 );
+
+test('try-on photos can be listed and deleted with their file', { skip: !enabled }, async () => {
+  const database = createDatabase(readDatabaseConfig());
+  const storage = createPrivateObjectStorage(readObjectStorageConfig());
+  try {
+    await migrateDatabase(database);
+    await ensurePrivateBucket(storage);
+    await resetFixtures(database, storage);
+    const accountId = fixtureIds.populatedAccount;
+    const photoId = randomUUID();
+    const objectKey = `fixtures/try-on-${photoId}.png`;
+    const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#888' } }).png().toBuffer();
+    await storage.client.send(new PutObjectCommand({ Bucket: storage.bucket, Key: objectKey, Body: png }));
+    await database.query(
+      `INSERT INTO private_assets (id, account_id, purpose, object_key, content_type, byte_size, state, ready_at)
+       VALUES ($1, $2, 'source-photo', $3, 'image/png', $4, 'ready', now())`,
+      [photoId, accountId, objectKey, png.byteLength],
+    );
+
+    await addTryOnPhoto(database, { accountId, assetId: photoId });
+    await addTryOnPhoto(database, { accountId, assetId: photoId });
+    assert.deepEqual((await listTryOnPhotos(database, accountId)).map(({ assetId }) => assetId), [photoId]);
+    await assert.rejects(addTryOnPhoto(database, { accountId: fixtureIds.emptyAccount, assetId: photoId }));
+
+    // The source photo of a wardrobe piece only leaves the list.
+    await addTryOnPhoto(database, { accountId, assetId: fixtureIds.sourceAsset });
+    await removeTryOnPhoto(database, storage, { accountId, assetId: fixtureIds.sourceAsset });
+    const kept = await database.query('SELECT state FROM private_assets WHERE id = $1', [fixtureIds.sourceAsset]);
+    assert.equal(kept.rows[0].state, 'ready');
+
+    await removeTryOnPhoto(database, storage, { accountId, assetId: photoId });
+    assert.deepEqual(await listTryOnPhotos(database, accountId), []);
+    await assert.rejects(
+      storage.client.send(new GetObjectCommand({ Bucket: storage.bucket, Key: objectKey })),
+    );
+    await assert.rejects(removeTryOnPhoto(database, storage, { accountId, assetId: photoId }));
+  } finally {
+    storage.client.destroy();
+    await database.end();
+  }
+});
 
 test('old Character Sheets can be hidden without breaking history', { skip: !enabled }, async () => {
   const database = createDatabase(readDatabaseConfig());

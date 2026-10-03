@@ -31,6 +31,7 @@ import {
   updateWardrobeItemRequestSchema,
   setLookShotPreferenceRequestSchema,
   setLookLikedRequestSchema,
+  addTryOnPhotoRequestSchema,
   contractVersion,
   type ApiError,
 } from '@form/contracts';
@@ -79,6 +80,9 @@ import {
   listLooks,
   retryLook,
   removeCharacterSheet,
+  addTryOnPhoto,
+  listTryOnPhotos,
+  removeTryOnPhoto,
   hiddenShots,
   isLookShot,
   setShotHidden,
@@ -970,6 +974,72 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       await removeCharacterSheet(database, {
         accountId: authenticated.session.id,
         characterSheetId: context.req.param('characterSheetId'),
+      });
+      return context.body(null, 204);
+    } catch (error) {
+      if (error instanceof InspirationValidationError)
+        return context.json(errorPayload('conflict', error.code, error.message), 409);
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.get('/v1/try-on-photos', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    const photos = await listTryOnPhotos(database, authenticated.session.id);
+    return context.json({
+      photos: photos.map((photo) => ({
+        assetId: photo.assetId,
+        createdAt: photo.createdAt.toISOString(),
+      })),
+    });
+  });
+
+  app.post('/v1/try-on-photos', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    const parsed = addTryOnPhotoRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!parsed.success)
+      return context.json(
+        errorPayload('validation', 'invalid-try-on-photo', 'Choose an uploaded photo.'),
+        400,
+      );
+    try {
+      await addTryOnPhoto(database, {
+        accountId: authenticated.session.id,
+        assetId: parsed.data.assetId,
+      });
+      return context.body(null, 204);
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.delete('/v1/try-on-photos/:assetId', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    try {
+      await removeTryOnPhoto(database, storage, {
+        accountId: authenticated.session.id,
+        assetId: context.req.param('assetId'),
       });
       return context.body(null, 204);
     } catch (error) {

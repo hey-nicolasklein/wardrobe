@@ -595,6 +595,12 @@ export async function createLook(
         input.baseAssetId ?? null,
       ],
     );
+    // The photo stays pickable, and deletable, from the try-on photo list.
+    if (input.baseAssetId)
+      await client.query(
+        `INSERT INTO try_on_photos (account_id, asset_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [input.accountId, input.baseAssetId],
+      );
     if (preserved || reshot)
       for (const [ordinal, itemId] of exactIds.entries())
         await client.query('INSERT INTO look_items(look_id,wardrobe_item_id,ordinal) VALUES($1,$2,$3)', [lookId, itemId, ordinal]);

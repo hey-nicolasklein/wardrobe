@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/feed/composer_cubit.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
@@ -732,6 +733,24 @@ class FeedPage extends StatelessWidget {
                     onTap: () {
                       Navigator.pop(sheetContext);
                       unawaited(_upgradeLook(context, look));
+                    },
+                  ),
+                // Try-on starts from a finished look, so the composer never
+                // has to ask which kind of look to make.
+                if (!look.isTryOn)
+                  _MenuRow(
+                    label: context.tr(LocaleKeys.lookTryOn),
+                    cost: cost,
+                    disabledReason: offline,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      openLookComposer(
+                        context,
+                        itemIds: look.wardrobeItemIds
+                            .take(maxComposerPieces)
+                            .toList(),
+                        tryOn: true,
+                      );
                     },
                   ),
                 _MenuRow(

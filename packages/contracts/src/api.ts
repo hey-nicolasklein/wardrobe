@@ -298,6 +298,13 @@ export const lookShotPreferencesResponseSchema = z
   .strict();
 export const setLookShotPreferenceRequestSchema = z.object({ hidden: z.boolean() }).strict();
 export const setLookLikedRequestSchema = z.object({ liked: z.boolean() }).strict();
+// Photos of the user for try-ons, see `try_on_photos`.
+export const addTryOnPhotoRequestSchema = z.object({ assetId: opaqueIdSchema }).strict();
+export const tryOnPhotosResponseSchema = z
+  .object({
+    photos: z.array(z.object({ assetId: opaqueIdSchema, createdAt: z.string().datetime() }).strict()),
+  })
+  .strict();
 // Why the feed picks the shots it picks: per shot the hearts, whether it was
 // used recently or hidden, and the resulting weight and chance within its style.
 export const lookShotWeightsResponseSchema = z

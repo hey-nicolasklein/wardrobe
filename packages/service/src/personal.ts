@@ -141,6 +141,7 @@ export async function resetPersonalWardrobe(
       'wardrobe_items',
       'detection_attempts',
       'detection_proposals',
+      'try_on_photos',
       'source_photos',
       'idempotency_commands',
       'look_shot_preferences',
