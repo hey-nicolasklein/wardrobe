@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -23,6 +25,10 @@ import 'package:form_mobile/widgets/foundation_page.dart';
 import 'package:go_router/go_router.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
+final List<GlobalKey<NavigatorState>> _branchNavigatorKeys = List.generate(
+  3,
+  (_) => GlobalKey<NavigatorState>(),
+);
 
 GoRouter createRouter({bool onboarding = false}) {
   final reselect = TabReselect();
@@ -53,10 +59,18 @@ GoRouter createRouter({bool onboarding = false}) {
                   0,
               },
               onSelected: (index) {
-                final active = index == shell.currentIndex;
-                if (active) reselect.reselect(index);
-                // Re-tapping the active tab also returns it to its first page.
-                shell.goBranch(index, initialLocation: active);
+                if (index != shell.currentIndex) {
+                  shell.goBranch(index);
+                  return;
+                }
+                // Re-tapping the active tab steps back one page per tap.
+                // On the tab's first page it scrolls to the top instead.
+                final branch = _branchNavigatorKeys[index].currentState;
+                if (branch != null && branch.canPop()) {
+                  unawaited(branch.maybePop());
+                } else {
+                  reselect.reselect(index);
+                }
               },
               labels: [
                 context.tr(LocaleKeys.feed),
@@ -68,6 +82,7 @@ GoRouter createRouter({bool onboarding = false}) {
         ),
         branches: [
           StatefulShellBranch(
+            navigatorKey: _branchNavigatorKeys[0],
             routes: [
               GoRoute(
                 path: '/feed',
@@ -111,6 +126,7 @@ GoRouter createRouter({bool onboarding = false}) {
             ],
           ),
           StatefulShellBranch(
+            navigatorKey: _branchNavigatorKeys[1],
             routes: [
               GoRoute(
                 path: '/wardrobe',
@@ -141,6 +157,7 @@ GoRouter createRouter({bool onboarding = false}) {
             ],
           ),
           StatefulShellBranch(
+            navigatorKey: _branchNavigatorKeys[2],
             routes: [
               GoRoute(
                 path: '/settings',
