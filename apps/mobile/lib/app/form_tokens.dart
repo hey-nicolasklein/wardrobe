@@ -128,6 +128,27 @@ abstract final class FormTokens {
     'other': Color(0xFFB8BBA9),
   };
 
+  /// A piece's tile background, varied by id so neighbouring tiles in the
+  /// Schrank and a look's piece strip don't read as one flat surface. Pale
+  /// pieces get a deeper shade of the same tint so they don't fade into it.
+  static Color tileTint(String id, List<String> colors) {
+    var sum = 0;
+    for (final code in id.codeUnits) {
+      sum = (sum + code) % 3;
+    }
+    final pale =
+        colors.isNotEmpty &&
+        colorForName(colors.first).computeLuminance() > 0.6;
+    return switch ((sum, pale)) {
+      (1, false) => const Color(0xFFEBE7E0),
+      (2, false) => const Color(0xFFE5E9E6),
+      (_, false) => field,
+      (1, true) => const Color(0xFFD9D1C4),
+      (2, true) => const Color(0xFFCFD7D2),
+      (_, true) => const Color(0xFFD5D9CD),
+    };
+  }
+
   static Color colorForName(String name) =>
       colorSwatches[colorFamilies(name).firstOrNull] ?? colorSwatches['other']!;
 

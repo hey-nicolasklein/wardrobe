@@ -22,6 +22,7 @@ class CachedMedia extends StatefulWidget {
     this.previewPath,
     this.fit = BoxFit.contain,
     this.entrance = MediaEntrance.none,
+    this.placeholder = true,
     super.key,
   });
   final String identity;
@@ -29,6 +30,10 @@ class CachedMedia extends StatefulWidget {
   final bool online;
   final BoxFit fit;
   final MediaEntrance entrance;
+
+  /// Whether a field-coloured box stands in while the image loads. Off where
+  /// a box would look broken, such as the floating pieces of a cloud.
+  final bool placeholder;
   @override
   State<CachedMedia> createState() => _CachedMediaState();
 }
@@ -93,7 +98,8 @@ class _CachedMediaState extends State<CachedMedia>
     });
   }
 
-  Widget _placeholder() => const ColoredBox(color: FormTokens.field);
+  Widget _placeholder() =>
+      widget.placeholder ? const _LoadingPulse() : const SizedBox.shrink();
 
   Widget _wrapEntrance(Widget child) {
     final entrance = widget.entrance;
@@ -102,15 +108,27 @@ class _CachedMediaState extends State<CachedMedia>
       child: child,
       builder: (context, child) {
         final t = FormTokens.easeOut.transform(_controller.value);
-        if (entrance == MediaEntrance.fade) {
-          return Opacity(opacity: t, child: child);
-        }
-        return Opacity(
-          opacity: t,
-          child: Transform.translate(
-            offset: Offset(0, 14 * (1 - t)),
-            child: Transform.scale(scale: 0.88 + 0.12 * t, child: child),
-          ),
+        final image = entrance == MediaEntrance.fade
+            ? Opacity(opacity: t, child: child)
+            : Opacity(
+                opacity: t,
+                child: Transform.translate(
+                  offset: Offset(0, 14 * (1 - t)),
+                  child: Transform.scale(scale: 0.88 + 0.12 * t, child: child),
+                ),
+              );
+        if (t == 1 || !widget.placeholder) return image;
+        // The placeholder fades out beneath the arriving image, so the slot
+        // never flashes empty in between. Passthrough keeps the image's
+        // constraints identical to the settled state, so it doesn't jump.
+        return Stack(
+          fit: StackFit.passthrough,
+          children: [
+            Positioned.fill(
+              child: Opacity(opacity: 1 - t, child: _placeholder()),
+            ),
+            image,
+          ],
         );
       },
     );
@@ -136,6 +154,51 @@ class _CachedMediaState extends State<CachedMedia>
             const Icon(Icons.image_not_supported_outlined),
       );
     },
+  );
+}
+
+/// The field-coloured stand-in for an image that is still loading. It
+/// breathes slowly so the slot reads as pending, and holds still when
+/// animations are off.
+class _LoadingPulse extends StatefulWidget {
+  const _LoadingPulse();
+
+  @override
+  State<_LoadingPulse> createState() => _LoadingPulseState();
+}
+
+class _LoadingPulseState extends State<_LoadingPulse>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 1;
+    } else if (!_controller.isAnimating) {
+      unawaited(_controller.repeat(reverse: true));
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+    opacity: _controller.drive(
+      Tween<double>(
+        begin: 0.45,
+        end: 1,
+      ).chain(CurveTween(curve: Curves.easeInOut)),
+    ),
+    child: const ColoredBox(color: FormTokens.field),
   );
 }
 

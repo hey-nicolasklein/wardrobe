@@ -48,18 +48,6 @@ class _WardrobePageState extends State<WardrobePage> {
     super.dispose();
   }
 
-  Color _photoTint(String id) {
-    var sum = 0;
-    for (final code in id.codeUnits) {
-      sum = (sum + code) % 3;
-    }
-    return switch (sum) {
-      1 => const Color(0xFFEBE7E0),
-      2 => const Color(0xFFE5E9E6),
-      _ => FormTokens.field,
-    };
-  }
-
   Future<void> _openFilterSheet() async {
     if (View.of(context).viewInsets.bottom > 0) {
       FocusManager.instance.primaryFocus?.unfocus();
@@ -399,7 +387,10 @@ class _WardrobePageState extends State<WardrobePage> {
                                                     ),
                                                 child: _TileMedia(
                                                   record: record,
-                                                  tint: _photoTint(item.id),
+                                                  tint: FormTokens.tileTint(
+                                                    item.id,
+                                                    item.metadata.colors,
+                                                  ),
                                                   online: !state.stale,
                                                 ),
                                               ),
