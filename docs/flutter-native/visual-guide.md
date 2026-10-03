@@ -1,15 +1,15 @@
 # FORM visual guide
 
-The phone PWA (`apps/web/public/style.css` and `app.js`) is the reference for
-native presentation. Business state, repositories and commands do not belong in
-this design layer.
+`apps/mobile/DESIGN.md` defines the visual system: palette, typography, layout,
+elevation, shapes, components and their rules. Read it before changing how a
+screen looks. This guide only covers how the Flutter code maps to the phone PWA
+(`apps/web/public/style.css` and `app.js`) and how parity is checked. Business
+state, repositories and commands do not belong in this design layer.
 
 ## Tokens
 
-`apps/mobile/lib/app/form_tokens.dart` owns the palette, typography, spacing,
-radii, category and occasion tints, and motion constants. `form_theme.dart`
-applies them to Flutter controls without Material ripples, elevated surfaces or
-seed-generated tonal colors. Native page transitions and scrolling remain.
+`apps/mobile/lib/app/form_tokens.dart` holds the values DESIGN.md describes.
+`form_theme.dart` applies them to Flutter controls.
 
 | Token | PWA source |
 | --- | --- |
@@ -17,14 +17,14 @@ seed-generated tonal colors. Native page transitions and scrolling remain.
 | `surface`, `field`, `dangerTint`, `uploadTint` | inputs, `.secondary`, `.danger`, `.upload-area` |
 | `display`, `heading`, `body`, `small`, `eyebrow`, `wordmark` | `h1`, `h2`, `.muted`, `.note`, `.eyebrow`, `.wordmark` |
 | `numerals` | tabular number presentation |
-| `gutter` (22), input (12), card (14), panel (18), sheet (25) radii | `.shell`, inputs, `.photo`, `.panel`, `dialog` |
+| `gutter`, input, card, panel, sheet radii | `.shell`, inputs, `.photo`, `.panel`, `dialog` |
 | `pop`, `easeOut`, `sheetCurve`, `sheetDuration` | `--pop`, `--ease-out`, `dialog` transition |
 | `category`, `colorSwatches`, `occasions` | `.category-*`, `wardrobeColors`, `.composer-presets` |
 
-UI text uses the platform sans serif. Display text bundles Libre Baskerville
-under the SIL Open Font License in `assets/fonts/OFL.txt`. This is a documented
-cross-platform substitute for the PWA's platform-dependent `ui-serif` / Georgia.
-It is not a claim of identical glyph metrics. Keep the bundled font offline.
+Libre Baskerville is bundled under the SIL Open Font License in
+`assets/fonts/OFL.txt` as a cross-platform substitute for the PWA's
+platform-dependent `ui-serif` / Georgia. It is not a claim of identical glyph
+metrics. Keep the bundled font offline.
 
 ## Components
 
