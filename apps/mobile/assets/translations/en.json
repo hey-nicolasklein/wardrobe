@@ -621,5 +621,11 @@
   "reviewMetadataNotice": "FORM suggested a name, category and colors. Tap to check them.",
   "edit": "Edit",
   "itemColorsPick": "Colors",
-  "chooseColors": "Choose 1 to 6 colors."
+  "chooseColors": "Choose 1 to 6 colors.",
+  "composerInspireHint": "FORM lays out a look from your wardrobe. Try-on puts it on your photo.",
+  "composerBlockedOffline": "You're offline. Connect to create a look.",
+  "composerBlockedPhoto": "Pick a photo of yourself for the try-on.",
+  "composerBlockedPieces": "Pick at least one piece to try on.",
+  "composerBlockedFrame": "“Only these” needs pieces from the same part of the frame.",
+  "composerBlockedCredits": "You don't have enough credits for a look."
 }

@@ -621,5 +621,11 @@
   "reviewMetadataNotice": "FORM hat Name, Kategorie und Farben vorgeschlagen. Tippe, um sie zu prüfen.",
   "edit": "Bearbeiten",
   "itemColorsPick": "Farben",
-  "chooseColors": "Wähle 1 bis 6 Farben."
+  "chooseColors": "Wähle 1 bis 6 Farben.",
+  "composerInspireHint": "FORM legt einen Look aus deinem Schrank flach aus. Für die Anprobe trägst du ihn auf deinem Foto.",
+  "composerBlockedOffline": "Du bist offline. Verbinde dich, um einen Look zu erstellen.",
+  "composerBlockedPhoto": "Wähle ein Foto von dir für die Anprobe.",
+  "composerBlockedPieces": "Wähle mindestens ein Stück zum Anprobieren.",
+  "composerBlockedFrame": "„Nur diese“ geht nur mit Stücken im selben Bildausschnitt.",
+  "composerBlockedCredits": "Deine Credits reichen nicht für einen Look."
 }

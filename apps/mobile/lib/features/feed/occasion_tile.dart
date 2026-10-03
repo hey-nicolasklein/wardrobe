@@ -41,6 +41,7 @@ class OccasionTile extends StatefulWidget {
     required this.selected,
     required this.onTap,
     this.caption,
+    this.compact = false,
     super.key,
   });
 
@@ -52,6 +53,10 @@ class OccasionTile extends StatefulWidget {
 
   /// A second line under the label, e.g. how many looks it holds.
   final String? caption;
+
+  /// A single-line chip with the icon beside the label, for tight rows like
+  /// the composer.
+  final bool compact;
 
   @override
   State<OccasionTile> createState() => OccasionTileState();
@@ -125,48 +130,78 @@ class OccasionTileState extends State<OccasionTile>
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
+            padding: widget.compact
+                ? const EdgeInsets.fromLTRB(12, 10, 16, 10)
+                : const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
             decoration: BoxDecoration(
               color: colors.tint,
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(widget.compact ? 30 : 15),
               border: Border.all(
                 color: widget.selected ? colors.ink : Colors.transparent,
                 width: 2,
               ),
             ),
-            child: Column(
-              children: [
-                AnimatedScale(
-                  scale: widget.selected ? 1.15 : 1,
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutBack,
-                  child: AnimatedBuilder(
-                    animation: _tap,
-                    builder: (context, icon) => _animateIcon(_tap.value, icon!),
-                    child: FormIcon(widget.icon, color: colors.ink),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  widget.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: colors.ink),
-                ),
-                if (widget.caption case final caption?)
-                  Text(
-                    caption,
-                    maxLines: 1,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: colors.ink.withValues(alpha: 0.65),
-                    ),
-                  ),
-              ],
-            ),
+            child: widget.compact ? _compactContent() : _tileContent(),
           ),
         ),
       ),
     );
   }
+
+  Widget _icon() => AnimatedScale(
+    scale: widget.selected ? 1.15 : 1,
+    duration: const Duration(milliseconds: 260),
+    curve: Curves.easeOutBack,
+    child: AnimatedBuilder(
+      animation: _tap,
+      builder: (context, icon) => _animateIcon(_tap.value, icon!),
+      child: FormIcon(
+        widget.icon,
+        color: widget.colors.ink,
+        size: widget.compact ? 18 : 23,
+      ),
+    ),
+  );
+
+  Widget _compactContent() => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      _icon(),
+      const SizedBox(width: 8),
+      Text(
+        widget.label,
+        maxLines: 1,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          color: widget.colors.ink,
+        ),
+      ),
+    ],
+  );
+
+  Widget _tileContent() => Column(
+    children: [
+      _icon(),
+      const SizedBox(height: 12),
+      // Long German labels shrink a little instead of cutting off.
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          widget.label,
+          maxLines: 1,
+          style: TextStyle(fontSize: 11, color: widget.colors.ink),
+        ),
+      ),
+      if (widget.caption case final caption?)
+        Text(
+          caption,
+          maxLines: 1,
+          style: TextStyle(
+            fontSize: 11,
+            color: widget.colors.ink.withValues(alpha: 0.65),
+          ),
+        ),
+    ],
+  );
 }

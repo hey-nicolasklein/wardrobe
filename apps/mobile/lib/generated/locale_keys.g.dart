@@ -594,4 +594,11 @@ abstract class LocaleKeys {
   static const edit = 'edit';
   static const itemColorsPick = 'itemColorsPick';
   static const chooseColors = 'chooseColors';
+  static const composerInspireHint = 'composerInspireHint';
+  static const composerBlockedOffline = 'composerBlockedOffline';
+  static const composerBlockedPhoto = 'composerBlockedPhoto';
+  static const composerBlockedPieces = 'composerBlockedPieces';
+  static const composerBlockedFrame = 'composerBlockedFrame';
+  static const composerBlockedCredits = 'composerBlockedCredits';
+
 }

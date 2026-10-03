@@ -84,7 +84,7 @@ class _ComposerViewState extends State<_ComposerView> {
   void _onState(BuildContext context, ComposerState state) {
     if (_search.text != state.query) _search.text = state.query;
     if (state.createdLookId != null) {
-      // The new look is the newest card, so it sits at the top of the feed.
+      // The new look develops on top of the All looks pile.
       context.go('/feed');
       showFormToast(context, context.tr(LocaleKeys.lookCreating));
     }
@@ -186,6 +186,13 @@ class _ComposerPicker extends StatelessWidget {
                 selected: state.tryOn ? 'try-on' : 'inspire',
                 onSelected: (mode) => cubit.setTryOn(tryOn: mode == 'try-on'),
               ),
+              if (!state.tryOn) ...[
+                const SizedBox(height: 8),
+                Text(
+                  context.tr(LocaleKeys.composerInspireHint),
+                  style: FormTokens.small,
+                ),
+              ],
               const SizedBox(height: 20),
               // Stays mounted in inspire mode so switching back shows the
               // loaded photos at once.
@@ -246,7 +253,9 @@ class _ComposerPicker extends StatelessWidget {
                       selected: state.selectedOnly,
                       child: TextButton.icon(
                         onPressed: cubit.toggleSelectedOnly,
-                        icon: const FormIcon(FormIconName.check, size: 18),
+                        icon: state.selectedIds.isEmpty
+                            ? null
+                            : const FormIcon(FormIconName.check, size: 18),
                         label: Text(
                           context.tr(
                             LocaleKeys.composerSelectedCount,
@@ -455,9 +464,10 @@ class _PinnedPills extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_PinnedPills oldDelegate) => oldDelegate.child != child;
 }
 
-/// Photo style and quality as two tiles showing the current value. Each opens
-/// its picker in a sheet, so the composer stays short. Most looks keep the
-/// defaults: a style that follows the occasion and quality from Settings.
+/// Photo style and quality as two compact buttons showing the current value.
+/// Each opens its picker in a sheet, so the composer stays short. Most looks
+/// keep the defaults: a style that follows the occasion and quality from
+/// Settings.
 class _FineTuning extends StatelessWidget {
   const _FineTuning({required this.state});
 
@@ -482,11 +492,10 @@ class _FineTuning extends StatelessWidget {
         Expanded(
           child: _SettingTile(
             icon: Icons.photo_camera_outlined,
-            label: state.style == null
-                ? '${context.tr(LocaleKeys.composerStyleLabel)} · '
-                      '${context.tr(LocaleKeys.lookStyle_auto)}'
-                : context.tr(LocaleKeys.composerStyleLabel),
-            value: style,
+            label: context.tr(LocaleKeys.composerStyleLabel),
+            value: state.style == null
+                ? '$style · ${context.tr(LocaleKeys.lookStyle_auto)}'
+                : style,
             onTap: () => _open(
               context,
               context.tr(LocaleKeys.composerStyleLabel),
@@ -552,59 +561,46 @@ class _SettingTile extends StatelessWidget {
   final String value;
   final VoidCallback onTap;
 
+  // One compact line, so the wardrobe grid stays above the fold.
   @override
-  Widget build(BuildContext context) => Material(
-    color: FormTokens.pill,
-    borderRadius: BorderRadius.circular(15),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(15),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 10, 13),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(icon, size: 15, color: FormTokens.muted),
-                      const SizedBox(width: 5),
-                      Flexible(
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: FormTokens.small,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
-                  // Long German names shrink a little instead of cutting off.
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      value,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: FormTokens.ink,
-                      ),
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: '$label: $value',
+    excludeSemantics: true,
+    child: Material(
+      color: FormTokens.pill,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: FormTokens.muted),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: FormTokens.ink,
                     ),
                   ),
-                ],
-              ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: FormTokens.muted,
+                ),
+              ],
             ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              size: 20,
-              color: FormTokens.muted,
-            ),
-          ],
+          ),
         ),
       ),
     ),
@@ -616,14 +612,19 @@ class _OccasionPresets extends StatelessWidget {
 
   final String? selected;
 
+  // One scrolling row of chips keeps full labels in every language.
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      for (final (index, preset) in occasionPresets.indexed) ...[
-        if (index > 0) const SizedBox(width: 10),
-        Expanded(child: _preset(context, preset)),
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    clipBehavior: Clip.none,
+    child: Row(
+      children: [
+        for (final (index, preset) in occasionPresets.indexed) ...[
+          if (index > 0) const SizedBox(width: 8),
+          _preset(context, preset),
+        ],
       ],
-    ],
+    ),
   );
 
   Widget _preset(
@@ -634,6 +635,7 @@ class _OccasionPresets extends StatelessWidget {
     label: context.tr(preset.label),
     colors: FormTokens.occasions[preset.value ?? '']!,
     selected: preset.value == selected,
+    compact: true,
     onTap: () {
       unawaited(HapticFeedback.selectionClick());
       context.read<ComposerCubit>().setOccasion(preset.value);
@@ -1187,11 +1189,22 @@ class _ComposerPreview extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          context.tr(LocaleKeys.composerPreviewHint),
-          style: FormTokens.small,
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                composerSummaryText(context, state),
+                style: FormTokens.small.copyWith(color: FormTokens.ink),
+              ),
+            ),
+            if (selected.isNotEmpty)
+              TextButton(
+                onPressed: cubit.reset,
+                child: Text(context.tr(LocaleKeys.composerReset)),
+              ),
+          ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         if (selected.isEmpty) ...[
           Text(
             context.tr(LocaleKeys.composerPreviewEmpty),
@@ -1218,6 +1231,15 @@ class _ComposerPreview extends StatelessWidget {
               ),
             ),
           ),
+        if (selected.isNotEmpty && !state.tryOn) ...[
+          const SizedBox(height: 16),
+          _CompletionChoice(
+            completion: state.completion,
+            canFrameOnly: canFrameOnly(
+              selected.map((item) => item.metadata.category),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         // Fixed height, so the hint and a highlighted piece swap without
         // moving the sheet footer.
@@ -1286,9 +1308,29 @@ class _ComposerFooter extends StatelessWidget {
     final frameable = canFrameOnly(
       selected.map((item) => item.metadata.category),
     );
+    final credits = context.watch<CreditsCubit>().state;
+    // Why the action is disabled, so a grey button never goes unexplained.
+    final blocked = !connected
+        ? LocaleKeys.composerBlockedOffline
+        : state.tryOn && state.baseAssetId == null
+        ? LocaleKeys.composerBlockedPhoto
+        : state.tryOn && selected.isEmpty
+        ? LocaleKeys.composerBlockedPieces
+        : !state.tryOn && state.completion == 'selected' && !frameable
+        ? LocaleKeys.composerBlockedFrame
+        : credits != null && credits.metered && credits.looksLeft == 0
+        ? LocaleKeys.composerBlockedCredits
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (blocked != null && !state.previewExpanded) ...[
+          Text(
+            context.tr(blocked),
+            style: FormTokens.small.copyWith(color: FormTokens.danger),
+          ),
+          const SizedBox(height: 10),
+        ],
         // Toasts would land behind the sheet, so problems show inline here.
         if (state.failure != null || state.limitReached) ...[
           FormNotice(
@@ -1299,56 +1341,32 @@ class _ComposerFooter extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        // Grows and collapses instead of making the sheet jump. The preview
-        // already shows the selection, so it gets no summary here.
-        AnimatedSize(
-          duration: const Duration(milliseconds: 300),
-          curve: _TrayGarment.curve,
-          alignment: Alignment.topCenter,
-          child: state.previewExpanded
-              ? const SizedBox(width: double.infinity)
-              : selected.isNotEmpty
-              ? _Tray(
-                  selected: selected,
-                  summary: composerSummaryText(context, state),
-                  online: online,
-                )
-              : Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: Text(
-                      composerSummaryText(context, state),
-                      style: FormTokens.small.copyWith(color: FormTokens.ink),
-                    ),
-                  ),
-                ),
-        ),
-        if (selected.isNotEmpty && !state.tryOn) ...[
-          _CompletionChoice(
-            completion: state.completion,
-            canFrameOnly: frameable,
+        // With nothing picked, the line says what FORM will do instead.
+        if (selected.isEmpty && !state.previewExpanded && blocked == null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              composerSummaryText(context, state),
+              style: FormTokens.small.copyWith(color: FormTokens.ink),
+            ),
           ),
-          const SizedBox(height: 14),
-        ],
+        // The selection shares the row with the action, so picking pieces
+        // never grows the footer over the grid.
         Row(
           children: [
-            // Emptying everything from the preview would compete with
-            // removing the highlighted piece, so it lives in the picker only.
-            if (!state.previewExpanded) ...[
-              TextButton(
-                onPressed: cubit.reset,
-                child: Text(context.tr(LocaleKeys.composerReset)),
-              ),
-              const SizedBox(width: 12),
-            ],
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: _TrayGarment.curve,
+              child: selected.isNotEmpty && !state.previewExpanded
+                  ? Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: _Tray(selected: selected, online: online),
+                    )
+                  : const SizedBox.shrink(),
+            ),
             Expanded(
               child: FilledButton(
-                onPressed:
-                    state.submitting ||
-                        !connected ||
-                        !state.canSubmit ||
-                        (state.completion == 'selected' && !frameable)
+                onPressed: state.submitting || blocked != null
                     ? null
                     : () => unawaited(cubit.submit()),
                 child: state.submitting
@@ -1379,21 +1397,16 @@ class _ComposerFooter extends StatelessWidget {
   }
 }
 
-/// The selection as one tappable row: overlapping thumbnails, the summary and
-/// a chevron into the flat-lay preview.
+/// The selection as overlapping thumbnails beside the action. Tapping opens
+/// the flat-lay preview, where the outfit's rest is chosen.
 class _Tray extends StatelessWidget {
-  const _Tray({
-    required this.selected,
-    required this.summary,
-    required this.online,
-  });
+  const _Tray({required this.selected, required this.online});
 
   static const _thumb = 44.0;
   static const _step = 30.0;
   static const _maxShown = 4;
 
   final List<WardrobeItem> selected;
-  final String summary;
   final bool online;
 
   @override
@@ -1411,9 +1424,10 @@ class _Tray extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => context.read<ComposerCubit>().openPreview(),
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 14),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               AnimatedContainer(
                 duration: _TrayGarment.duration,
@@ -1449,28 +1463,7 @@ class _Tray extends StatelessWidget {
                   style: const TextStyle(fontSize: 12, color: FormTokens.muted),
                 ),
               ],
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      summary,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: FormTokens.ink,
-                      ),
-                    ),
-                    Text(
-                      context.tr(LocaleKeys.composerTrayAction),
-                      style: FormTokens.small,
-                    ),
-                  ],
-                ),
-              ),
+              const SizedBox(width: 2),
               const Icon(
                 Icons.chevron_right,
                 size: 20,
