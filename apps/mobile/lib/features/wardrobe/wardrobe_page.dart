@@ -4,8 +4,8 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:form_mobile/app/app_info.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
@@ -26,19 +26,25 @@ class WardrobePage extends StatefulWidget {
 
 class _WardrobePageState extends State<WardrobePage> {
   final _search = TextEditingController();
-  final GlobalKey _filterBarKey = GlobalKey();
-  String? _expandedFilter;
-  bool _searchExpanded = false;
+  final _searchFocus = FocusNode();
 
-  /// Whether the inline filter bar has scrolled under the status bar, so the
-  /// compact docked bar takes over.
-  bool _docked = false;
+  /// Height of the tab bar under the find bar. The shell drops it from the
+  /// padding while the keyboard is up, so the last value seen without the
+  /// keyboard is kept.
+  double _tabBarInset = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchFocus.addListener(() => setState(() {}));
+  }
 
   bool get archived => widget.archived;
 
   @override
   void dispose() {
     _search.dispose();
+    _searchFocus.dispose();
     super.dispose();
   }
 
@@ -54,69 +60,78 @@ class _WardrobePageState extends State<WardrobePage> {
     };
   }
 
-  bool _onScroll(ScrollNotification notification) {
-    if (notification.depth != 0) return false;
-    final box = _filterBarKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return false;
-    final bottom = box.localToGlobal(Offset(0, box.size.height)).dy;
-    final docked = bottom < MediaQuery.paddingOf(context).top;
-    if (docked != _docked) setState(() => _docked = docked);
-    return false;
+  Future<void> _openFilterSheet() async {
+    if (View.of(context).viewInsets.bottom > 0) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      // Let the keyboard slide away first, so it and the sheet don't move
+      // the find bar at the same time.
+      await Future<void>.delayed(const Duration(milliseconds: 320));
+      if (!mounted) return;
+    }
+    return showFormSheet<void>(
+      context: context,
+      builder: (_) => BlocBuilder<WardrobeCubit, WardrobeState>(
+        builder: (context, state) {
+          final filter = state.filter;
+          final cubit = context.read<WardrobeCubit>();
+          final records = state.items ?? [];
+          return FormSheet(
+            title: context.tr(LocaleKeys.filters),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(context.tr(LocaleKeys.category), style: FormTokens.small),
+                const SizedBox(height: 8),
+                _CategoryOptions(
+                  records: records,
+                  filter: filter,
+                  archived: archived,
+                  onChanged: cubit.filter,
+                ),
+                Text(
+                  context.tr(LocaleKeys.visual_colorFilter),
+                  style: FormTokens.small,
+                ),
+                const SizedBox(height: 8),
+                _ColorOptions(
+                  records: records,
+                  filter: filter,
+                  archived: archived,
+                  onChanged: cubit.filter,
+                ),
+                // Always laid out, only disabled, so the sheet keeps its
+                // height when the first filter is picked.
+                TextButton(
+                  onPressed: filter.categories.isEmpty && filter.colors.isEmpty
+                      ? null
+                      : () => cubit.filter(
+                          filter.copyWith(categories: {}, colors: {}),
+                        ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: FormTokens.green,
+                    disabledForegroundColor: FormTokens.toggleOff,
+                    minimumSize: const Size(44, 44),
+                    padding: EdgeInsets.zero,
+                  ),
+                  child: Text(context.tr(LocaleKeys.resetFilters)),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
-  Future<void> _openFilterSheet() => showFormSheet<void>(
-    context: context,
-    builder: (_) => BlocBuilder<WardrobeCubit, WardrobeState>(
-      builder: (context, state) {
-        final filter = state.filter;
-        final cubit = context.read<WardrobeCubit>();
-        final records = state.items ?? [];
-        return FormSheet(
-          title: context.tr(LocaleKeys.filters),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(context.tr(LocaleKeys.category), style: FormTokens.small),
-              const SizedBox(height: 8),
-              _CategoryOptions(
-                records: records,
-                filter: filter,
-                archived: archived,
-                onChanged: cubit.filter,
-              ),
-              Text(
-                context.tr(LocaleKeys.visual_colorFilter),
-                style: FormTokens.small,
-              ),
-              const SizedBox(height: 8),
-              _ColorOptions(
-                records: records,
-                filter: filter,
-                archived: archived,
-                onChanged: cubit.filter,
-              ),
-              // Always laid out, only disabled, so the sheet keeps its
-              // height when the first filter is picked.
-              TextButton(
-                onPressed: filter.categories.isEmpty && filter.colors.isEmpty
-                    ? null
-                    : () => cubit.filter(
-                        filter.copyWith(categories: {}, colors: {}),
-                      ),
-                style: TextButton.styleFrom(
-                  foregroundColor: FormTokens.green,
-                  disabledForegroundColor: FormTokens.toggleOff,
-                  minimumSize: const Size(44, 44),
-                  padding: EdgeInsets.zero,
-                ),
-                child: Text(context.tr(LocaleKeys.resetFilters)),
-              ),
-            ],
-          ),
-        );
-      },
-    ),
-  );
+  /// Keeps the find bar just above whichever is taller, the tab bar or the
+  /// keyboard. The shell lifts the body's bottom edge to the keyboard frame
+  /// by frame, so the bar follows it smoothly in both directions.
+  double _findBarBottom(BuildContext context) {
+    final view = View.of(context);
+    final keyboard = view.viewInsets.bottom / view.devicePixelRatio;
+    if (keyboard == 0) _tabBarInset = MediaQuery.paddingOf(context).bottom;
+    return math.max(_tabBarInset - keyboard, 0) + _FindBar.gap;
+  }
 
   @override
   Widget build(
@@ -131,9 +146,6 @@ class _WardrobePageState extends State<WardrobePage> {
           selection: TextSelection.collapsed(offset: filter.query.length),
         );
       }
-      if (filter.query.isNotEmpty) {
-        _searchExpanded = true;
-      }
       final categoryLabels = {
         for (final c in categories) c: context.tr('categories.$c'),
       };
@@ -145,8 +157,6 @@ class _WardrobePageState extends State<WardrobePage> {
       final count = (state.items ?? [])
           .where((r) => (r.item.state == 'archived') == archived)
           .length;
-      final records = state.items ?? [];
-      final colorFilterLabel = context.tr(LocaleKeys.visual_colorFilter);
 
       return Scaffold(
         backgroundColor: FormTokens.paper,
@@ -154,278 +164,207 @@ class _WardrobePageState extends State<WardrobePage> {
         appBar: const FormScrollEdge(),
         body: Stack(
           children: [
-            NotificationListener<ScrollNotification>(
-              onNotification: _onScroll,
-              child: RefreshIndicator(
-                edgeOffset: MediaQuery.paddingOf(context).top,
-                onRefresh: cubit.refresh,
-                child: CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: [
-                    SliverSafeArea(
-                      left: false,
-                      right: false,
-                      bottom: false,
-                      sliver: SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(
-                          FormTokens.gutter,
-                          0,
-                          FormTokens.gutter,
-                          16,
-                        ),
-                        sliver: SliverList.list(
-                          children: [
-                            FormWordmark(
-                              title: context.tr(LocaleKeys.appName),
-                              action: Text(
-                                '${AppInfo.version} (${AppInfo.buildNumber})',
-                                style: FormTokens.small.copyWith(
-                                  color: FormTokens.muted,
-                                ),
+            RefreshIndicator(
+              edgeOffset: MediaQuery.paddingOf(context).top,
+              onRefresh: cubit.refresh,
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                slivers: [
+                  SliverSafeArea(
+                    left: false,
+                    right: false,
+                    bottom: false,
+                    sliver: SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(
+                        FormTokens.gutter,
+                        0,
+                        FormTokens.gutter,
+                        16,
+                      ),
+                      sliver: SliverList.list(
+                        children: [
+                          FormWordmark(
+                            title: context.tr(LocaleKeys.appName),
+                          ),
+                          if (state.stale && state.items != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: FormNotice(
+                                text: context.tr(LocaleKeys.wardrobeStale),
                               ),
                             ),
-                            if (state.stale && state.items != null)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: FormNotice(
-                                  text: context.tr(LocaleKeys.wardrobeStale),
-                                ),
+                          if (state.failure != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: FormNotice(
+                                text: context.tr(state.failureKey),
+                                error: true,
                               ),
-                            if (state.failure != null)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: FormNotice(
-                                  text: context.tr(state.failureKey),
-                                  error: true,
-                                ),
-                              ),
-                            _WardrobeHero(
-                              archived: archived,
-                              totalCount: count,
-                              onAdd: archived
-                                  ? null
-                                  : () => context.push('/wardrobe/intake'),
                             ),
-                            if (!archived)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: FormChoiceChips(
-                                  options: {
-                                    'all': context.tr(
-                                      LocaleKeys.collection_all,
-                                    ),
-                                    'owning': context.tr(
-                                      LocaleKeys.collection_owning,
-                                    ),
-                                    'wanting': context.tr(
-                                      LocaleKeys.collection_wanting,
-                                    ),
-                                  },
-                                  selected: filter.state,
-                                  onSelected: (value) => cubit.filter(
-                                    filter.copyWith(state: value),
-                                  ),
+                          _WardrobeHero(
+                            archived: archived,
+                            totalCount: count,
+                            onAdd: archived
+                                ? null
+                                : () => context.push('/wardrobe/intake'),
+                          ),
+                          if (!archived)
+                            _CollectionTabs(
+                              selected: filter.state,
+                              counts: {
+                                'all': count,
+                                for (final kind in const ['owning', 'wanting'])
+                                  kind: (state.items ?? [])
+                                      .where((r) => r.item.state == kind)
+                                      .length,
+                              },
+                              options: {
+                                'all': context.tr(LocaleKeys.collection_all),
+                                'owning': context.tr(
+                                  LocaleKeys.collection_owning,
                                 ),
+                                'wanting': context.tr(
+                                  LocaleKeys.collection_wanting,
+                                ),
+                              },
+                              onSelected: (value) => cubit.filter(
+                                filter.copyWith(state: value),
                               ),
-                            _WardrobeFilterBar(
-                              key: _filterBarKey,
-                              categoryLabel:
-                                  context.tr(LocaleKeys.category) +
-                                  (filter.categories.isEmpty
-                                      ? ''
-                                      : ' · ${filter.categories.length}'),
-                              colorLabel:
-                                  colorFilterLabel +
-                                  (filter.colors.isEmpty
-                                      ? ''
-                                      : ' · ${filter.colors.length}'),
-                              categoryExpanded: _expandedFilter == 'category',
-                              colorExpanded: _expandedFilter == 'color',
-                              searchExpanded:
-                                  _searchExpanded || filter.query.isNotEmpty,
-                              onCategory: () => setState(
-                                () => _expandedFilter =
-                                    _expandedFilter == 'category'
-                                    ? null
-                                    : 'category',
-                              ),
-                              onColor: () => setState(
-                                () => _expandedFilter =
-                                    _expandedFilter == 'color' ? null : 'color',
-                              ),
-                              onToggleSearch: () => setState(() {
-                                _searchExpanded =
-                                    !(_searchExpanded ||
-                                        filter.query.isNotEmpty);
-                                if (!_searchExpanded) {
-                                  cubit.filter(filter.copyWith(query: ''));
-                                }
-                              }),
                             ),
-                            if (_expandedFilter == 'category')
-                              _CategoryOptions(
-                                records: records,
-                                filter: filter,
-                                archived: archived,
-                                onChanged: cubit.filter,
-                              ),
-                            if (_expandedFilter == 'color')
-                              _ColorOptions(
-                                records: records,
-                                filter: filter,
-                                archived: archived,
-                                onChanged: cubit.filter,
-                              ),
-                            if (_searchExpanded || filter.query.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 18),
-                                child: FormSearchField(
-                                  controller: _search,
-                                  hint: context.tr(
-                                    LocaleKeys.visual_searchHint,
-                                  ),
-                                  onChanged: (value) => cubit.filter(
-                                    filter.copyWith(query: value),
-                                  ),
-                                  onClear: () =>
-                                      cubit.filter(filter.copyWith(query: '')),
-                                ),
-                              ),
-                            if (filter.categories.isNotEmpty ||
-                                filter.colors.isNotEmpty ||
-                                filter.query.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  children: [
-                                    for (final category in filter.categories)
-                                      _ActiveFilterChip(
-                                        label: context.tr(
-                                          'categories.$category',
-                                        ),
-                                        onRemove: () => cubit.filter(
-                                          filter.copyWith(
-                                            categories: {...filter.categories}
-                                              ..remove(category),
-                                          ),
+                          if (filter.categories.isNotEmpty ||
+                              filter.colors.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  for (final category in filter.categories)
+                                    _ActiveFilterChip(
+                                      label: context.tr(
+                                        'categories.$category',
+                                      ),
+                                      onRemove: () => cubit.filter(
+                                        filter.copyWith(
+                                          categories: {...filter.categories}
+                                            ..remove(category),
                                         ),
                                       ),
-                                    for (final color in filter.colors)
-                                      _ActiveFilterChip(
-                                        label: context.tr(
-                                          'colorFamilies.$color',
-                                        ),
-                                        swatch: FormTokens.colorSwatches[color],
-                                        onRemove: () => cubit.filter(
-                                          filter.copyWith(
-                                            colors: {...filter.colors}
-                                              ..remove(color),
-                                          ),
+                                    ),
+                                  for (final color in filter.colors)
+                                    _ActiveFilterChip(
+                                      label: context.tr(
+                                        'colorFamilies.$color',
+                                      ),
+                                      swatch: FormTokens.colorSwatches[color],
+                                      onRemove: () => cubit.filter(
+                                        filter.copyWith(
+                                          colors: {...filter.colors}
+                                            ..remove(color),
                                         ),
                                       ),
-                                    if (filter.isFiltered)
-                                      TextButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            _searchExpanded = false;
-                                            _expandedFilter = null;
-                                          });
-                                          cubit.filter(const WardrobeFilter());
-                                        },
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: FormTokens.green,
-                                          minimumSize: const Size(44, 44),
-                                        ),
-                                        child: Text(
-                                          context.tr(LocaleKeys.resetFilters),
-                                        ),
+                                    ),
+                                  if (filter.isFiltered)
+                                    TextButton(
+                                      onPressed: () => cubit.filter(
+                                        const WardrobeFilter(),
                                       ),
-                                  ],
-                                ),
-                              ),
-                            if (state.items != null && items.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 17),
-                                child: Row(
-                                  children: [
-                                    Expanded(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: FormTokens.green,
+                                        minimumSize: const Size(44, 44),
+                                      ),
                                       child: Text(
-                                        context.tr(
-                                          LocaleKeys.itemCount,
-                                          namedArgs: {
-                                            'shown': '${items.length}',
-                                            'total': '$count',
-                                          },
-                                        ),
-                                        style: FormTokens.small.merge(
-                                          FormTokens.numerals,
-                                        ),
+                                        context.tr(LocaleKeys.resetFilters),
                                       ),
                                     ),
-                                    Text(
-                                      context.tr(LocaleKeys.visual_recentFirst),
-                                      style: FormTokens.small,
-                                    ),
-                                  ],
+                                ],
+                              ),
+                            ),
+                          // The hero already states the total, so the count
+                          // only appears once a filter narrows the grid.
+                          if (state.items != null &&
+                              items.isNotEmpty &&
+                              (filter.query.isNotEmpty ||
+                                  filter.categories.isNotEmpty ||
+                                  filter.colors.isNotEmpty))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 17),
+                              child: Text(
+                                context.tr(
+                                  LocaleKeys.itemCount,
+                                  namedArgs: {
+                                    'shown': '${items.length}',
+                                    'total': '$count',
+                                  },
+                                ),
+                                style: FormTokens.small.merge(
+                                  FormTokens.numerals.copyWith(
+                                    color: FormTokens.noteInk,
+                                  ),
                                 ),
                               ),
-                          ],
-                        ),
+                            ),
+                        ],
                       ),
                     ),
-                    if (items.isEmpty)
-                      SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: FormEmptyState(
-                          title: context.tr(
-                            state.items == null
-                                ? (state.loading
-                                      ? LocaleKeys.checking
-                                      : state.failureKey)
-                                : filter.isFiltered
-                                ? LocaleKeys.filteredEmpty
-                                : LocaleKeys.wardrobeEmpty,
-                          ),
-                          action:
-                              state.items != null &&
-                                  !filter.isFiltered &&
-                                  !archived &&
-                                  !state.loading
-                              ? FilledButton(
-                                  onPressed: () =>
-                                      context.push('/wardrobe/intake'),
-                                  child: Text(
-                                    context.tr(LocaleKeys.intake_title),
-                                  ),
-                                )
-                              : null,
+                  ),
+                  if (items.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: FormEmptyState(
+                        title: context.tr(
+                          state.items == null
+                              ? (state.loading
+                                    ? LocaleKeys.checking
+                                    : state.failureKey)
+                              : filter.isFiltered
+                              ? LocaleKeys.filteredEmpty
+                              : LocaleKeys.wardrobeEmpty,
                         ),
-                      )
-                    else
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(
-                          FormTokens.gutter,
-                          0,
-                          FormTokens.gutter,
-                          24,
-                        ),
-                        sliver: SliverGrid.builder(
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                crossAxisSpacing: 13,
-                                mainAxisSpacing: 22,
-                                childAspectRatio: 0.54,
-                              ),
-                          itemCount: items.length,
-                          itemBuilder: (context, index) {
-                            final record = items[index];
-                            final item = record.item;
-                            final status = item.status.replaceAll('-', '_');
-                            return Material(
+                        action:
+                            state.items != null &&
+                                !filter.isFiltered &&
+                                !archived &&
+                                !state.loading
+                            ? FilledButton(
+                                onPressed: () =>
+                                    context.push('/wardrobe/intake'),
+                                child: Text(
+                                  context.tr(LocaleKeys.intake_title),
+                                ),
+                              )
+                            : null,
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(
+                        FormTokens.gutter,
+                        0,
+                        FormTokens.gutter,
+                        24,
+                      ),
+                      sliver: SliverGrid.builder(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 13,
+                              mainAxisSpacing: 22,
+                              childAspectRatio: 0.6,
+                            ),
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final record = items[index];
+                          final item = record.item;
+                          final status = item.status.replaceAll('-', '_');
+                          final category =
+                              'categories.${item.metadata.category}';
+                          return Semantics(
+                            button: true,
+                            child: Material(
                               color: Colors.transparent,
                               child: InkWell(
                                 onTap: () => context.push(
@@ -470,31 +409,22 @@ class _WardrobePageState extends State<WardrobePage> {
                                       ),
                                     ),
                                     const SizedBox(height: 8),
-                                    SizedBox(
-                                      height: 14 * 1.35 * 2 + 4,
-                                      child: Align(
-                                        alignment: Alignment.topLeft,
-                                        child: Text(
-                                          item.metadata.name,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: FormTokens.body.copyWith(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            height: 1.35,
-                                          ),
-                                        ),
+                                    Text(
+                                      item.metadata.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: FormTokens.body.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.35,
                                       ),
                                     ),
-                                    const SizedBox(height: 4),
+                                    const SizedBox(height: 2),
                                     Text(
-                                      context.tr(
-                                        'categories.${item.metadata.category}',
-                                      ),
+                                      context.tr(category),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: FormTokens.small.copyWith(
-                                        fontSize: 11,
+                                        color: FormTokens.noteInk,
                                       ),
                                     ),
                                     // Generating and failed show on the tile.
@@ -505,46 +435,51 @@ class _WardrobePageState extends State<WardrobePage> {
                                       'failed',
                                     }.contains(item.status))
                                       Padding(
-                                        padding: const EdgeInsets.only(top: 4),
+                                        padding: const EdgeInsets.only(
+                                          top: 4,
+                                        ),
                                         child: Text(
                                           context.tr('itemStatus.$status'),
                                           style: FormTokens.small.copyWith(
-                                            fontSize: 11,
+                                            color: FormTokens.noteInk,
                                           ),
                                         ),
                                       ),
                                   ],
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                      ),
-                    // Clears the translucent tab bar.
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: MediaQuery.paddingOf(context).bottom,
+                            ),
+                          );
+                        },
                       ),
                     ),
-                  ],
-                ),
+                  // Clears the translucent tab bar and the find bar.
+                  SliverToBoxAdapter(
+                    child: SizedBox(
+                      height:
+                          MediaQuery.paddingOf(context).bottom +
+                          _FindBar.height,
+                    ),
+                  ),
+                ],
               ),
             ),
-            _DockedFilters(
-              visible: _docked,
-              archived: archived,
-              filter: filter,
-              countLabel: context.tr(
-                LocaleKeys.itemCount,
-                namedArgs: {'shown': '${items.length}', 'total': '$count'},
+            // While typing, a tap anywhere behind the keyboard only closes
+            // it, instead of also opening the piece underneath.
+            if (_searchFocus.hasFocus)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _searchFocus.unfocus,
+                ),
               ),
-              collectionOptions: {
-                'all': context.tr(LocaleKeys.collection_all),
-                'owning': context.tr(LocaleKeys.collection_owning),
-                'wanting': context.tr(LocaleKeys.collection_wanting),
-              },
-              onCollection: (value) =>
-                  cubit.filter(filter.copyWith(state: value)),
+            _FindBar(
+              controller: _search,
+              focusNode: _searchFocus,
+              bottom: _findBarBottom(context),
+              hint: context.tr(LocaleKeys.visual_searchHint),
+              activeFilters: filter.categories.length + filter.colors.length,
+              onChanged: (value) => cubit.filter(filter.copyWith(query: value)),
               onFilters: _openFilterSheet,
             ),
           ],
@@ -586,113 +521,10 @@ Set<String> _availableOptions(
       .toSet();
 }
 
-/// Compact filters that dock below the status bar once the inline ones have
-/// scrolled away: the collection switch (or the count in the archive) and a
-/// button opening category and color in a sheet.
-class _DockedFilters extends StatelessWidget {
-  const _DockedFilters({
-    required this.visible,
-    required this.archived,
-    required this.filter,
-    required this.countLabel,
-    required this.collectionOptions,
-    required this.onCollection,
-    required this.onFilters,
-  });
-
-  final bool visible;
-  final bool archived;
-  final WardrobeFilter filter;
-  final String countLabel;
-  final Map<String, String> collectionOptions;
-  final ValueChanged<String> onCollection;
-  final VoidCallback onFilters;
-
-  @override
-  Widget build(BuildContext context) {
-    final duration = MediaQuery.disableAnimationsOf(context)
-        ? Duration.zero
-        : FormTokens.sheetDuration;
-    final active = filter.categories.length + filter.colors.length;
-    return Positioned(
-      top: MediaQuery.paddingOf(context).top + 6,
-      left: 14,
-      right: 14,
-      child: IgnorePointer(
-        ignoring: !visible,
-        child: AnimatedSlide(
-          offset: visible ? Offset.zero : const Offset(0, -0.4),
-          duration: duration,
-          curve: FormTokens.easeOut,
-          child: AnimatedOpacity(
-            opacity: visible ? 1 : 0,
-            duration: duration,
-            curve: FormTokens.easeOut,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(FormTokens.panelRadius),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x141D281C),
-                    blurRadius: 18,
-                    offset: Offset(0, 6),
-                  ),
-                ],
-              ),
-              // Frosted paper like the tab bar.
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(FormTokens.panelRadius),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: FormTokens.paper.withValues(alpha: 0.85),
-                      borderRadius: BorderRadius.circular(
-                        FormTokens.panelRadius,
-                      ),
-                      border: Border.all(color: FormTokens.line),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: archived
-                                ? Padding(
-                                    padding: const EdgeInsets.only(left: 12),
-                                    child: Text(
-                                      countLabel,
-                                      style: FormTokens.small.merge(
-                                        FormTokens.numerals,
-                                      ),
-                                    ),
-                                  )
-                                : FormChoiceChips(
-                                    options: collectionOptions,
-                                    selected: filter.state,
-                                    onSelected: onCollection,
-                                  ),
-                          ),
-                          const SizedBox(width: 4),
-                          _DockedFilterButton(active: active, onTap: onFilters),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Round filter button that turns green and shows how many category and
 /// color filters are on.
-class _DockedFilterButton extends StatelessWidget {
-  const _DockedFilterButton({required this.active, required this.onTap});
+class _FilterButton extends StatelessWidget {
+  const _FilterButton({required this.active, required this.onTap});
 
   final int active;
   final VoidCallback onTap;
@@ -703,7 +535,7 @@ class _DockedFilterButton extends StatelessWidget {
     label: context.tr(LocaleKeys.filters),
     value: active == 0 ? null : '$active',
     child: Material(
-      color: active == 0 ? FormTokens.field : FormTokens.green,
+      color: active == 0 ? Colors.transparent : FormTokens.green,
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -719,7 +551,7 @@ class _DockedFilterButton extends StatelessWidget {
                     style: FormTokens.numerals.copyWith(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: FormTokens.surface,
                     ),
                   ),
           ),
@@ -729,6 +561,8 @@ class _DockedFilterButton extends StatelessWidget {
   );
 }
 
+/// Serif headline with the tagline beneath it and the add button aligned to
+/// its baseline. The archive shows its item count in place of the tagline.
 class _WardrobeHero extends StatelessWidget {
   const _WardrobeHero({
     required this.archived,
@@ -741,89 +575,291 @@ class _WardrobeHero extends StatelessWidget {
   final VoidCallback? onAdd;
 
   @override
-  Widget build(BuildContext context) => FormHero(
-    eyebrow: archived
-        ? context.tr(LocaleKeys.archive)
-        : context.tr(LocaleKeys.visual_wardrobeEyebrow),
-    title: archived
-        ? context.tr(LocaleKeys.archive)
-        : context.tr(LocaleKeys.visual_wardrobeHeading),
-    body: archived
-        ? context.tr(
-            LocaleKeys.itemCount,
-            namedArgs: {'shown': '$totalCount', 'total': '$totalCount'},
-          )
-        : context.tr(
-            LocaleKeys.visual_collectedCount,
-            namedArgs: {'count': '$totalCount'},
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(top: 4, bottom: archived ? 22 : 10),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                archived
+                    ? context.tr(LocaleKeys.archive)
+                    : context.tr(LocaleKeys.visual_wardrobeHeading),
+                style: FormTokens.display.copyWith(fontSize: 36),
+              ),
+              if (archived) ...[
+                const SizedBox(height: 4),
+                Text(
+                  context.tr(
+                    LocaleKeys.itemCount,
+                    namedArgs: {
+                      'shown': '$totalCount',
+                      'total': '$totalCount',
+                    },
+                  ),
+                  style: FormTokens.body.copyWith(color: FormTokens.noteInk),
+                ),
+              ],
+            ],
           ),
-    addLabel: context.tr(LocaleKeys.intake_title),
-    onAdd: onAdd,
+        ),
+        if (onAdd != null) ...[
+          const SizedBox(width: 15),
+          FormAddButton(
+            label: context.tr(LocaleKeys.intake_title),
+            onPressed: onAdd!,
+          ),
+        ],
+      ],
+    ),
   );
 }
 
-class _WardrobeFilterBar extends StatelessWidget {
-  const _WardrobeFilterBar({
-    required this.categoryLabel,
-    required this.colorLabel,
-    required this.categoryExpanded,
-    required this.colorExpanded,
-    required this.searchExpanded,
-    required this.onCategory,
-    required this.onColor,
-    required this.onToggleSearch,
-    super.key,
+/// Owning and Wanting as quiet text tabs under the headline, each with its
+/// piece count. The active one is set in ink with a forest underline.
+class _CollectionTabs extends StatelessWidget {
+  const _CollectionTabs({
+    required this.options,
+    required this.counts,
+    required this.selected,
+    required this.onSelected,
   });
 
-  final String categoryLabel;
-  final String colorLabel;
-  final bool categoryExpanded;
-  final bool colorExpanded;
-  final bool searchExpanded;
-  final VoidCallback onCategory;
-  final VoidCallback onColor;
-  final VoidCallback onToggleSearch;
+  final Map<String, String> options;
+  final Map<String, int> counts;
+  final String selected;
+  final ValueChanged<String> onSelected;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 16),
-    child: Row(
-      children: [
-        _WardrobeFilterChip(
-          label: '$categoryLabel ${categoryExpanded ? '▴' : '▾'}',
-          selected: categoryExpanded,
-          onTap: onCategory,
-        ),
-        const SizedBox(width: 8),
-        _WardrobeFilterChip(
-          label: '$colorLabel ${colorExpanded ? '▴' : '▾'}',
-          selected: colorExpanded,
-          onTap: onColor,
-        ),
-        const Spacer(),
-        Semantics(
-          button: true,
-          selected: searchExpanded,
-          label: context.tr(LocaleKeys.visual_searchHint),
-          child: Material(
-            color: FormTokens.green,
-            shape: const CircleBorder(),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: onToggleSearch,
+  Widget build(BuildContext context) {
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 240);
+    final style = FormTokens.body.copyWith(fontSize: 15);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Row(
+        children: [
+          for (final entry in options.entries)
+            Semantics(
+              button: true,
+              selected: entry.key == selected,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  if (entry.key == selected) return;
+                  unawaited(HapticFeedback.selectionClick());
+                  onSelected(entry.key);
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 22),
+                  child: SizedBox(
+                    height: 44,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Regular and semibold crossfade on top of each
+                        // other. The semibold copy sizes the stack, so the
+                        // weight change never reflows the row.
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Stack(
+                              children: [
+                                AnimatedOpacity(
+                                  duration: duration,
+                                  curve: FormTokens.easeOut,
+                                  opacity: entry.key == selected ? 1 : 0,
+                                  child: Text(
+                                    entry.value,
+                                    style: style.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: FormTokens.ink,
+                                    ),
+                                  ),
+                                ),
+                                AnimatedOpacity(
+                                  duration: duration,
+                                  curve: FormTokens.easeOut,
+                                  opacity: entry.key == selected ? 0 : 1,
+                                  child: Text(
+                                    entry.value,
+                                    style: style.copyWith(
+                                      color: FormTokens.noteInk,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              '${counts[entry.key] ?? 0}',
+                              style: FormTokens.small.merge(
+                                FormTokens.numerals.copyWith(
+                                  color: FormTokens.noteInk,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        AnimatedContainer(
+                          duration: duration,
+                          curve: FormTokens.easeOut,
+                          height: 2,
+                          width: entry.key == selected ? 18 : 0,
+                          decoration: BoxDecoration(
+                            color: FormTokens.green,
+                            borderRadius: BorderRadius.circular(1),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Search and filters in the thumb zone, floating above the tab bar like
+/// search in iOS's own apps. Rises with the keyboard while typing.
+class _FindBar extends StatelessWidget {
+  const _FindBar({
+    required this.controller,
+    required this.focusNode,
+    required this.bottom,
+    required this.hint,
+    required this.activeFilters,
+    required this.onChanged,
+    required this.onFilters,
+  });
+
+  /// Space the bar takes above the tab bar, for content to clear.
+  static const double height = 48 + 2 * gap;
+  static const gap = 10.0;
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+
+  /// Distance from the body's bottom edge, see `_findBarBottom`.
+  final double bottom;
+  final String hint;
+  final int activeFilters;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onFilters;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: 14,
+      right: 14,
+      bottom: bottom,
+      child: Row(
+        children: [
+          Expanded(
+            child: _Frosted(
+              radius: FormTokens.chipRadius,
               child: SizedBox(
-                width: 48,
                 height: 48,
-                child: Icon(
-                  searchExpanded ? Icons.close : Icons.search,
-                  color: Colors.white,
-                  size: 22,
+                child: ListenableBuilder(
+                  listenable: controller,
+                  builder: (context, _) => TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    onChanged: onChanged,
+                    textInputAction: TextInputAction.search,
+                    style: FormTokens.body.copyWith(fontSize: 16),
+                    cursorColor: FormTokens.green,
+                    decoration: InputDecoration(
+                      hintText: hint,
+                      hintStyle: FormTokens.body.copyWith(
+                        fontSize: 16,
+                        color: FormTokens.noteInk,
+                      ),
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        size: 20,
+                        color: FormTokens.ink,
+                      ),
+                      suffixIcon: controller.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: MaterialLocalizations.of(
+                                context,
+                              ).deleteButtonTooltip,
+                              onPressed: () {
+                                controller.clear();
+                                onChanged('');
+                              },
+                              icon: const Icon(
+                                Icons.cancel,
+                                size: 18,
+                                color: FormTokens.muted,
+                              ),
+                            ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
+          const SizedBox(width: 8),
+          _Frosted(
+            radius: 24,
+            child: _FilterButton(active: activeFilters, onTap: onFilters),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Frosted paper like the tab bar, lifted off the grid it floats over.
+class _Frosted extends StatelessWidget {
+  const _Frosted({required this.radius, required this.child});
+
+  final double radius;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(radius),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x141D281C),
+          blurRadius: 18,
+          offset: Offset(0, 6),
         ),
       ],
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: FormTokens.paper.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(color: FormTokens.line),
+          ),
+          child: child,
+        ),
+      ),
     ),
   );
 }
@@ -963,7 +999,7 @@ class _WardrobeFilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final background = selected ? FormTokens.green : FormTokens.surface;
-    final foreground = selected ? Colors.white : FormTokens.ink;
+    final foreground = selected ? FormTokens.surface : FormTokens.ink;
     return Semantics(
       button: true,
       enabled: enabled,
@@ -984,7 +1020,7 @@ class _WardrobeFilterChip extends StatelessWidget {
           child: InkWell(
             onTap: enabled ? onTap : null,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1034,7 +1070,7 @@ class _ActiveFilterChip extends StatelessWidget {
       child: InkWell(
         onTap: onRemove,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1044,7 +1080,7 @@ class _ActiveFilterChip extends StatelessWidget {
               ],
               Text(label, style: FormTokens.body.copyWith(fontSize: 13)),
               const SizedBox(width: 7),
-              const Icon(Icons.close, size: 14, color: FormTokens.muted),
+              const Icon(Icons.close, size: 16, color: FormTokens.noteInk),
             ],
           ),
         ),
@@ -1179,7 +1215,7 @@ class _GeneratingTileState extends State<_GeneratingTile>
           alignment: const Alignment(0, 0.55),
           child: Text(
             widget.label,
-            style: FormTokens.small.copyWith(fontSize: 11),
+            style: FormTokens.small.copyWith(color: FormTokens.noteInk),
           ),
         ),
       ],
