@@ -38,11 +38,8 @@ class ResetSection extends StatelessWidget {
           style: FormTokens.small,
         ),
         const SizedBox(height: 16),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: FormTokens.dangerTint,
-            foregroundColor: FormTokens.ink,
-          ),
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(foregroundColor: FormTokens.danger),
           onPressed: () => _openResetSheet(context),
           child: Text(context.tr(LocaleKeys.settings_resetAction)),
         ),
@@ -188,8 +185,8 @@ class _ResetSheetState extends State<_ResetSheet> {
         const SizedBox(height: 20),
         FilledButton(
           style: FilledButton.styleFrom(
-            backgroundColor: FormTokens.dangerTint,
-            foregroundColor: FormTokens.ink,
+            backgroundColor: FormTokens.danger,
+            foregroundColor: FormTokens.surface,
             minimumSize: const Size.fromHeight(50),
           ),
           onPressed: _submitting ? null : () => unawaited(_submit()),
@@ -197,7 +194,10 @@ class _ResetSheetState extends State<_ResetSheet> {
               ? const SizedBox(
                   height: 20,
                   width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: FormTokens.danger,
+                  ),
                 )
               : Text(context.tr(LocaleKeys.settings_resetConfirm)),
         ),

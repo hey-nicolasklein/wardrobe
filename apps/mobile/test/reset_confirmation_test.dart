@@ -8,6 +8,7 @@ void main() {
     expect(matchesResetPhrase('de', 'ALLES LÖSCHEN'), isTrue);
     expect(matchesResetPhrase('en', 'DELETE EVERYTHING'), isTrue);
     expect(matchesResetPhrase('de', 'DELETE EVERYTHING'), isFalse);
+    expect(matchesResetPhrase('de', ' alles  löschen '), isTrue);
     expect(personalResetApiConfirmation, 'DELETE EVERYTHING');
   });
 }

@@ -1,18 +1,21 @@
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/app_config.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/settings/about_section.dart';
 import 'package:form_mobile/features/settings/account_section.dart';
-import 'package:form_mobile/features/settings/app_info_section.dart';
 import 'package:form_mobile/features/settings/cache_section.dart';
 import 'package:form_mobile/features/settings/character/character_section.dart';
 import 'package:form_mobile/features/settings/cost_section.dart';
 import 'package:form_mobile/features/settings/credit_wallet.dart';
 import 'package:form_mobile/features/settings/feed_weights_section.dart';
+import 'package:form_mobile/features/settings/language_section.dart';
 import 'package:form_mobile/features/settings/quality_section.dart';
 import 'package:form_mobile/features/settings/reset_section.dart';
+import 'package:form_mobile/features/settings/setting_row.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/server_info.dart';
@@ -21,6 +24,8 @@ import 'package:go_router/go_router.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
+
+  static const _sectionGap = SizedBox(height: 20);
 
   @override
   Widget build(BuildContext context) {
@@ -46,58 +51,77 @@ class SettingsPage extends StatelessWidget {
           ),
           children: [
             FormWordmark(title: context.tr(LocaleKeys.appName)),
-            FormHero(
-              eyebrow: context.tr(LocaleKeys.settings_heroEyebrow),
-              title: context.tr(LocaleKeys.settings_heroTitle),
-              body: context.tr(LocaleKeys.settings_heroSubtitle),
+            // Same offsets as the wardrobe hero, so wordmark and title stay
+            // put when switching tabs.
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 22),
+              child: Text(
+                context.tr(LocaleKeys.settings_heroTitle),
+                style: FormTokens.display.copyWith(fontSize: 36),
+              ),
             ),
             const CreditWallet(),
             const CharacterSection(),
-            const SizedBox(height: 20),
+            _sectionGap,
             const CostSection(),
-            const SizedBox(height: 20),
+            _SectionTitle(context.tr(LocaleKeys.settings_groupPreferences)),
+            const LanguageSection(),
+            _sectionGap,
             const QualitySection(),
-            const SizedBox(height: 20),
-            const AppInfoSection(),
-            const SizedBox(height: 20),
-            OutlinedButton(
-              onPressed: () => context.push('/settings/archive'),
-              child: Text(
-                context.tr(
-                  LocaleKeys.settings_openArchive,
-                  namedArgs: {'count': '$archivedCount'},
-                ),
+            _SectionTitle(context.tr(LocaleKeys.settings_groupData)),
+            FormPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SettingRow(
+                    label: context.tr(LocaleKeys.settings_archive),
+                    value: archivedCount > 0 ? '$archivedCount' : null,
+                    onTap: () => context.push('/settings/archive'),
+                  ),
+                  const SettingDivider(),
+                  const CacheRow(),
+                ],
               ),
             ),
-            const SizedBox(height: 20),
-            const CacheSection(),
-            const SizedBox(height: 20),
-            const ResetSection(),
-            const SizedBox(height: 20),
+            _SectionTitle(context.tr(LocaleKeys.settings_groupAbout)),
+            const AboutSection(),
+            _SectionTitle(context.tr(LocaleKeys.auth_accountTitle)),
             const AccountSection(),
-            const SizedBox(height: 20),
-            Text(
-              context.tr(LocaleKeys.settings_debugTitle).toUpperCase(),
-              style: FormTokens.eyebrow,
-            ),
-            const SizedBox(height: 8),
-            const FeedWeightsSection(),
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: () => context.push('/onboarding'),
-              child: Text(context.tr(LocaleKeys.settings_replayOnboarding)),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              context.tr(LocaleKeys.settings_footer),
-              textAlign: TextAlign.center,
-              style: FormTokens.small.copyWith(fontSize: 11),
-            ),
+            if (kDebugMode) ...[
+              _SectionTitle(context.tr(LocaleKeys.settings_debugTitle)),
+              const FeedWeightsSection(),
+              _sectionGap,
+              OutlinedButton(
+                onPressed: () => context.push('/onboarding'),
+                child: Text(context.tr(LocaleKeys.settings_replayOnboarding)),
+              ),
+              _sectionGap,
+              const ResetSection(),
+            ],
           ],
         ),
       ),
     );
   }
+}
+
+/// Sans heading that opens a group of panels, with more room above than below.
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(4, 32, 4, 10),
+    child: Text(
+      text,
+      style: FormTokens.body.copyWith(
+        color: FormTokens.muted,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  );
 }
 
 class ServerPage extends StatelessWidget {
