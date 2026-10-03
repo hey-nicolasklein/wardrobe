@@ -111,6 +111,8 @@ class _TryOnPhotosSectionState extends State<TryOnPhotosSection> {
               crossAxisSpacing: 10,
               childAspectRatio: 4 / 5,
               shrinkWrap: true,
+              // Without it the grid inherits the safe-area inset as padding.
+              padding: EdgeInsets.zero,
               physics: const NeverScrollableScrollPhysics(),
               children: [
                 _AddTile(
