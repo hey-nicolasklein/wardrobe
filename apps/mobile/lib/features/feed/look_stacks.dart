@@ -462,65 +462,142 @@ class ColorPile extends StatelessWidget {
 
 /// The looks of one stack as large cards to leaf through sideways. The
 /// neighbours peek in, shrunk and turned slightly, and straighten as they
-/// arrive. [onPage] reports the visible card's index.
+/// arrive. [onPage] reports the visible card's index. Pulling a card down
+/// past its top drags the cards along and, far enough, calls [onDismiss].
 class LookPager extends StatefulWidget {
   const LookPager({
     required this.itemCount,
     required this.itemBuilder,
     required this.onPage,
+    required this.onDismiss,
+    this.topInset = 0,
     super.key,
   });
 
   final int itemCount;
   final Widget Function(BuildContext context, int index) itemBuilder;
   final ValueChanged<int> onPage;
+  final VoidCallback onDismiss;
+
+  /// Space above each card, for a header the cards scroll under.
+  final double topInset;
 
   @override
   State<LookPager> createState() => _LookPagerState();
 }
 
-class _LookPagerState extends State<LookPager> {
+class _LookPagerState extends State<LookPager>
+    with SingleTickerProviderStateMixin {
+  static const _dismissDistance = 110.0;
+
   final _controller = PageController(viewportFraction: 0.86);
+
+  /// How far the cards are pulled down past the top.
+  late final _pull = AnimationController.unbounded(vsync: this);
+  var _dismissed = false;
 
   @override
   void dispose() {
     _controller.dispose();
+    _pull.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) => PageView.builder(
-    controller: _controller,
-    itemCount: widget.itemCount,
-    onPageChanged: (index) {
+  // Only the card's own vertical scroll counts, not the piece carousels in
+  // it. Clamping physics reports the pull past the top as overscroll.
+  bool _onScroll(ScrollNotification notification) {
+    if (_dismissed ||
+        notification.depth != 0 ||
+        notification.metrics.axis != Axis.vertical) {
+      return false;
+    }
+    switch (notification) {
+      case OverscrollNotification(:final overscroll, dragDetails: _?)
+          when overscroll < 0:
+        _setPull(_pull.value - overscroll * 0.6);
+      case ScrollUpdateNotification(:final scrollDelta?, dragDetails: _?)
+          when _pull.value > 0 && scrollDelta > 0:
+        _setPull(math.max(0, _pull.value - scrollDelta));
+      case ScrollEndNotification(:final dragDetails):
+        final fling = (dragDetails?.primaryVelocity ?? 0) > 700;
+        if (_pull.value >= _dismissDistance || (fling && _pull.value > 20)) {
+          _dismissed = true;
+          widget.onDismiss();
+        } else if (_pull.value > 0) {
+          unawaited(
+            _pull.animateTo(
+              0,
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : FormTokens.quick,
+              curve: FormTokens.easeOut,
+            ),
+          );
+        }
+    }
+    return false;
+  }
+
+  void _setPull(double value) {
+    if ((_pull.value < _dismissDistance) != (value < _dismissDistance)) {
       unawaited(HapticFeedback.selectionClick());
-      widget.onPage(index);
-    },
-    itemBuilder: (context, index) => AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final page =
-            _controller.hasClients && _controller.position.haveDimensions
-            ? _controller.page!
-            : _controller.initialPage.toDouble();
-        final delta = (index - page).clamp(-1.0, 1.0);
-        final distance = delta.abs();
-        return Opacity(
-          opacity: 1 - distance * 0.35,
-          child: Transform.translate(
-            offset: Offset(0, distance * 18),
-            child: Transform.rotate(
-              angle: delta * 0.05,
-              child: Transform.scale(scale: 1 - distance * 0.07, child: child),
+    }
+    _pull.value = value;
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _pull,
+    builder: (context, child) => Transform.translate(
+      offset: Offset(0, _pull.value),
+      child: Opacity(
+        opacity: (1 - _pull.value / 500).clamp(0.0, 1.0),
+        child: child,
+      ),
+    ),
+    child: PageView.builder(
+      controller: _controller,
+      itemCount: widget.itemCount,
+      onPageChanged: (index) {
+        unawaited(HapticFeedback.selectionClick());
+        widget.onPage(index);
+      },
+      itemBuilder: (context, index) => AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final page =
+              _controller.hasClients && _controller.position.haveDimensions
+              ? _controller.page!
+              : _controller.initialPage.toDouble();
+          final delta = (index - page).clamp(-1.0, 1.0);
+          final distance = delta.abs();
+          return Opacity(
+            opacity: 1 - distance * 0.35,
+            child: Transform.translate(
+              offset: Offset(0, distance * 18),
+              child: Transform.rotate(
+                angle: delta * 0.05,
+                child: Transform.scale(
+                  scale: 1 - distance * 0.07,
+                  child: child,
+                ),
+              ),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _onScroll,
+            child: SingleChildScrollView(
+              // Always scrollable, so short cards can be pulled down too.
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: ClampingScrollPhysics(),
+              ),
+              padding: EdgeInsets.only(top: widget.topInset),
+              child: widget.itemBuilder(context, index),
             ),
           ),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5),
-        child: SingleChildScrollView(
-          physics: const ClampingScrollPhysics(),
-          child: widget.itemBuilder(context, index),
         ),
       ),
     ),

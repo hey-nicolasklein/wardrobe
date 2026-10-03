@@ -1358,6 +1358,8 @@ class _StackPage extends StatefulWidget {
   final VoidCallback? Function(BuildContext, LookStack) createIn;
   final Widget Function(BuildContext, FeedState, CachedLook) cardBuilder;
 
+  static const headerHeight = 68.0;
+
   @override
   State<_StackPage> createState() => _StackPageState();
 }
@@ -1380,79 +1382,102 @@ class _StackPageState extends State<_StackPage> {
       final create = widget.createIn(context, widget.stack);
       return Scaffold(
         backgroundColor: FormTokens.paper,
-        body: AnnotatedRegion(
-          value: SystemUiOverlayStyle.dark,
-          child: SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                Padding(
+        // The cards scroll under the frosted header.
+        extendBodyBehindAppBar: true,
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(_StackPage.headerHeight),
+          child: AnnotatedRegion(
+            value: SystemUiOverlayStyle.dark,
+            child: FormFrostedBar(
+              border: const Border(bottom: BorderSide(color: FormTokens.line)),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
                   padding: const EdgeInsets.fromLTRB(
                     4,
                     4,
                     FormTokens.gutter,
-                    12,
+                    8,
                   ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        tooltip: MaterialLocalizations.of(
-                          context,
-                        ).backButtonTooltip,
-                        icon: const Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          size: 20,
-                          color: FormTokens.ink,
+                  child: SizedBox(
+                    height: _StackPage.headerHeight - 12,
+                    child: Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          tooltip: MaterialLocalizations.of(
+                            context,
+                          ).backButtonTooltip,
+                          icon: const Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            size: 20,
+                            color: FormTokens.ink,
+                          ),
                         ),
-                      ),
-                      if (_origin(state) case final origin?)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: origin,
-                        ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.titleOf(context, state, widget.stack),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: FormTokens.heading.copyWith(fontSize: 23),
-                            ),
-                            AnimatedSwitcher(
-                              duration: FormTokens.quick,
-                              child: Text(
-                                looks.isEmpty
-                                    ? ''
-                                    : '${index + 1} / ${looks.length}',
-                                key: ValueKey('$index/${looks.length}'),
-                                style: FormTokens.small.copyWith(
-                                  fontFeatures: const [
-                                    FontFeature.tabularFigures(),
-                                  ],
+                        if (_origin(state) case final origin?)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: origin,
+                          ),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.titleOf(context, state, widget.stack),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: FormTokens.heading.copyWith(
+                                  fontSize: 23,
                                 ),
                               ),
-                            ),
-                          ],
+                              AnimatedSwitcher(
+                                duration: FormTokens.quick,
+                                child: Text(
+                                  looks.isEmpty
+                                      ? ''
+                                      : '${index + 1} / ${looks.length}',
+                                  key: ValueKey('$index/${looks.length}'),
+                                  style: FormTokens.small.copyWith(
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      if (create != null) _NewPill(onPressed: create),
-                    ],
+                        if (create != null) _NewPill(onPressed: create),
+                      ],
+                    ),
                   ),
                 ),
-                Expanded(
-                  child: LookPager(
+              ),
+            ),
+          ),
+        ),
+        body: AnnotatedRegion(
+          value: SystemUiOverlayStyle.dark,
+          child: Column(
+            children: [
+              Expanded(
+                child: Builder(
+                  builder: (context) => LookPager(
+                    // Below the header, which the scaffold adds to the top
+                    // padding.
+                    topInset: MediaQuery.paddingOf(context).top + 12,
                     itemCount: looks.length,
                     itemBuilder: (context, i) =>
                         widget.cardBuilder(context, state, looks[i]),
                     onPage: (value) => setState(() => _index = value),
+                    onDismiss: () => Navigator.of(context).pop(),
                   ),
                 ),
-                SizedBox(height: MediaQuery.paddingOf(context).bottom + 8),
-              ],
-            ),
+              ),
+              SizedBox(height: MediaQuery.paddingOf(context).bottom + 8),
+            ],
           ),
         ),
       );

@@ -369,8 +369,45 @@ class FormTabBar extends StatelessWidget {
   /// Tabs that show a dot because something is under way there.
   final Set<int> badged;
 
-  // Frosted paper: mostly opaque, with a hint of blurred content showing
-  // through. Needs `extendBody` on the hosting scaffold.
+  // Needs `extendBody` on the hosting scaffold.
+  @override
+  Widget build(BuildContext context) => FormFrostedBar(
+    border: const Border(top: BorderSide(color: FormTokens.line)),
+    child: SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 9, 12, 8),
+        child: Row(
+          children: [
+            for (var i = 0; i < labels.length; i++)
+              Expanded(
+                child: _FormTab(
+                  icon: FormIconName.values[i],
+                  label: labels[i],
+                  selected: i == selectedIndex,
+                  badged: badged.contains(i),
+                  onPressed: () {
+                    if (i != selectedIndex) {
+                      unawaited(HapticFeedback.lightImpact());
+                    }
+                    onSelected(i);
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// Frosted paper behind bars that float over content: mostly opaque, with a
+/// hint of the blurred content showing through.
+class FormFrostedBar extends StatelessWidget {
+  const FormFrostedBar({required this.border, required this.child, super.key});
+  final Border border;
+  final Widget child;
+
   @override
   Widget build(BuildContext context) => ClipRect(
     child: BackdropFilter(
@@ -378,33 +415,9 @@ class FormTabBar extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: FormTokens.paper.withValues(alpha: 0.85),
-          border: const Border(top: BorderSide(color: FormTokens.line)),
+          border: border,
         ),
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 9, 12, 8),
-            child: Row(
-              children: [
-                for (var i = 0; i < labels.length; i++)
-                  Expanded(
-                    child: _FormTab(
-                      icon: FormIconName.values[i],
-                      label: labels[i],
-                      selected: i == selectedIndex,
-                      badged: badged.contains(i),
-                      onPressed: () {
-                        if (i != selectedIndex) {
-                          unawaited(HapticFeedback.lightImpact());
-                        }
-                        onSelected(i);
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
+        child: child,
       ),
     ),
   );
