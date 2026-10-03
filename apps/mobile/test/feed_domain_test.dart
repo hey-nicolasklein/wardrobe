@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
+import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 
 import 'support/look_fixtures.dart';
@@ -62,5 +63,72 @@ void main() {
     expect(higherQualities('low'), ['medium', 'high']);
     expect(higherQualities('medium'), ['high']);
     expect(higherQualities('high'), isEmpty);
+  });
+
+  group('look stacks', () {
+    Look look({
+      String id = 'look-0001',
+      String? occasion,
+      String? baseAssetId,
+      List<String> items = const [],
+    }) => Look.fromJson({
+      ...lookJson(id: id),
+      'wardrobeItemIds': items,
+      'settings': {
+        'occasion': occasion,
+        'style': 'candid',
+        'completion': 'wardrobe',
+        'categories': <String>[],
+      },
+      'baseAssetId': baseAssetId,
+    });
+    final white = WardrobeItem.fromJson({
+      ...itemJson(id: 'white'),
+      'metadata': {
+        ...itemJson()['metadata'] as Map<String, dynamic>,
+        'colors': ['Off-White'],
+      },
+    });
+    final red = WardrobeItem.fromJson({
+      ...itemJson(id: 'red'),
+      'metadata': {
+        ...itemJson()['metadata'] as Map<String, dynamic>,
+        'colors': ['bordeaux'],
+      },
+    });
+    final byId = {white.id: white, red.id: red};
+
+    bool inStack(LookStack stack, Look look, {bool saved = false}) =>
+        inLookStack(stack, look, itemsById: byId, saved: saved);
+
+    test('occasion stacks keep try-ons apart', () {
+      expect(inStack(const OccasionStack(null), look()), isTrue);
+      final tryOn = look(baseAssetId: 'asset-1');
+      expect(inStack(const OccasionStack(null), tryOn), isFalse);
+      expect(inStack(const TryOnStack(), tryOn), isTrue);
+      expect(
+        inStack(const OccasionStack('party'), look(occasion: 'night-out')),
+        isFalse,
+      );
+      expect(inStack(const SavedStack(), look(), saved: true), isTrue);
+    });
+
+    test('pieces and colours gather the looks they appear in', () {
+      final looks = [
+        CachedLook(look(id: 'a', items: ['red'])),
+        CachedLook(look(id: 'b', items: ['white', 'red'])),
+        CachedLook(look(id: 'c', items: ['white'])),
+        CachedLook(look(id: 'd', items: ['white'])),
+      ];
+      expect(inStack(const ColorStack('white'), looks[1].look), isTrue);
+      expect(inStack(const PieceStack('red'), looks[2].look), isFalse);
+
+      final pieces = pieceStacks(looks, byId);
+      expect(pieces.map((s) => s.$1.id), ['white', 'red']);
+      expect(pieces.first.$2.map((r) => r.look.id), ['b', 'c', 'd']);
+
+      final colors = colorStacks(looks, byId);
+      expect(colors.map((s) => s.$1), ['white', 'red']);
+    });
   });
 }

@@ -70,6 +70,7 @@ GoRouter createRouter({bool onboarding = false}) {
                         preselectedIds:
                             state.uri.queryParametersAll['item'] ?? const [],
                         tryOn: state.uri.queryParameters['mode'] == 'try-on',
+                        occasion: state.uri.queryParameters['occasion'],
                         from: state.extra as Look?,
                       ),
                     ),

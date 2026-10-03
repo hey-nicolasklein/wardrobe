@@ -127,7 +127,7 @@ class _LookCardState extends State<LookCard> {
                     ),
                     const Spacer(),
                     IconButton(
-                      onPressed: online ? widget.onMenu : null,
+                      onPressed: widget.onMenu,
                       tooltip: context.tr(LocaleKeys.lookActions),
                       icon: const FormIcon(FormIconName.more),
                     ),
@@ -249,7 +249,7 @@ class _LookCardState extends State<LookCard> {
                         const SizedBox(height: 6),
                         Text(
                           lookDateText(context, look.createdAt),
-                          style: FormTokens.small.copyWith(fontSize: 11),
+                          style: FormTokens.small,
                         ),
                       ],
                     ),
@@ -463,14 +463,14 @@ class _LookViewSwitch extends StatelessWidget {
                         behavior: HitTestBehavior.opaque,
                         onTap: () => onSelected(view),
                         child: Container(
-                          constraints: const BoxConstraints(minHeight: 38),
+                          constraints: const BoxConstraints(minHeight: 40),
                           padding: const EdgeInsets.symmetric(horizontal: 18),
                           alignment: Alignment.center,
                           child: AnimatedDefaultTextStyle(
                             duration: _duration,
                             curve: FormTokens.easeOut,
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 13,
                               color: view == selected
                                   ? FormTokens.flatLayInk
                                   : FormTokens.switchInk,
@@ -582,23 +582,29 @@ class _LookStageState extends State<_LookStage>
                 fit: StackFit.expand,
                 children: [
                   if (look.assetId != null && !widget.developing)
-                    GestureDetector(
-                      onTap: () =>
-                          context.read<FeedCubit>().toggleRevealed(look.id),
-                      // Only the worn photo can be dark; the flat lay and
-                      // the card chrome keep the page's dark icons.
-                      child: MediaStatusBarRegion(
-                        identity: look.assetId!,
-                        previewPath: widget.record.previewPath(look.assetId!),
-                        online: widget.online,
-                        enabled: worn,
-                        child: CachedMedia(
+                    Semantics(
+                      button: true,
+                      label: context.tr(LocaleKeys.lookRevealPieces),
+                      child: GestureDetector(
+                        onTap: () {
+                          _RevealHint.seen = true;
+                          context.read<FeedCubit>().toggleRevealed(look.id);
+                        },
+                        // Only the worn photo can be dark; the flat lay and
+                        // the card chrome keep the page's dark icons.
+                        child: MediaStatusBarRegion(
                           identity: look.assetId!,
-                          previewPath: widget.record.previewPath(
-                            look.assetId!,
-                          ),
+                          previewPath: widget.record.previewPath(look.assetId!),
                           online: widget.online,
-                          fit: BoxFit.cover,
+                          enabled: worn,
+                          child: CachedMedia(
+                            identity: look.assetId!,
+                            previewPath: widget.record.previewPath(
+                              look.assetId!,
+                            ),
+                            online: widget.online,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                     ),
@@ -609,6 +615,10 @@ class _LookStageState extends State<_LookStage>
                     online: widget.online,
                     onGarmentTap: openItem,
                   ),
+                  if (look.assetId != null &&
+                      !widget.developing &&
+                      widget.garments.isNotEmpty)
+                    _RevealHint(visible: !widget.revealed),
                   if (look.isTryOn)
                     Positioned(
                       top: 12,
@@ -637,7 +647,7 @@ class _LookStageState extends State<_LookStage>
                               Text(
                                 context.tr(LocaleKeys.tryOnBadge),
                                 style: const TextStyle(
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: FormTokens.green,
                                 ),
@@ -956,4 +966,46 @@ class _WornGarmentsState extends State<_WornGarments>
       ),
     );
   }
+}
+
+/// A one-time pill on the worn photo saying it can be tapped to show the
+/// pieces. Hides for the rest of the session once any photo was tapped.
+class _RevealHint extends StatelessWidget {
+  const _RevealHint({required this.visible});
+
+  static bool seen = false;
+
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+    left: 0,
+    right: 0,
+    bottom: 14,
+    child: IgnorePointer(
+      child: Center(
+        child: AnimatedOpacity(
+          opacity: visible && !seen ? 1 : 0,
+          duration: FormTokens.quick,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(FormTokens.chipRadius),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Text(
+                context.tr(LocaleKeys.lookRevealPieces),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: FormTokens.green,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }

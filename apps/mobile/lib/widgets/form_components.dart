@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:form_mobile/app/form_tokens.dart';
@@ -271,25 +272,84 @@ class FormHero extends StatelessWidget {
         ),
         if (onAdd != null) ...[
           const SizedBox(width: 15),
-          Semantics(
-            button: true,
-            label: addLabel,
-            child: Material(
-              color: FormTokens.green,
-              shape: const CircleBorder(),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: onAdd,
-                child: const SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: Icon(Icons.add, color: Colors.white),
-                ),
-              ),
-            ),
-          ),
+          FormAddButton(label: addLabel ?? '', onPressed: onAdd!),
         ],
       ],
+    ),
+  );
+}
+
+/// Round green add button. While held it sinks and dims, then springs back,
+/// in place of a ripple. [floating] lifts it with a shadow for use above
+/// content.
+class FormAddButton extends StatefulWidget {
+  const FormAddButton({
+    required this.label,
+    required this.onPressed,
+    this.floating = false,
+    super.key,
+  });
+  final String label;
+  final VoidCallback onPressed;
+  final bool floating;
+
+  @override
+  State<FormAddButton> createState() => _FormAddButtonState();
+}
+
+class _FormAddButtonState extends State<FormAddButton> {
+  var _pressed = false;
+
+  void _setPressed(bool pressed) {
+    if (pressed != _pressed) setState(() => _pressed = pressed);
+  }
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: widget.label,
+    excludeSemantics: true,
+    child: GestureDetector(
+      onTapDown: (_) => _setPressed(true),
+      onTapUp: (_) => _setPressed(false),
+      onTapCancel: () => _setPressed(false),
+      onTap: () {
+        unawaited(HapticFeedback.lightImpact());
+        widget.onPressed();
+      },
+      child: AnimatedScale(
+        scale: _pressed ? 0.92 : 1,
+        duration: _pressed
+            ? const Duration(milliseconds: 90)
+            : FormTokens.sheetDuration,
+        curve: _pressed ? FormTokens.easeOut : FormTokens.pop,
+        child: AnimatedOpacity(
+          opacity: _pressed ? 0.8 : 1,
+          duration: _pressed
+              ? const Duration(milliseconds: 90)
+              : FormTokens.quick,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: FormTokens.green,
+              shape: BoxShape.circle,
+              boxShadow: widget.floating
+                  ? const [
+                      // The lifted panel shadow from DESIGN.md.
+                      BoxShadow(
+                        color: Color(0x141D281C),
+                        blurRadius: 18,
+                        offset: Offset(0, 6),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: SizedBox.square(
+              dimension: widget.floating ? 54 : 48,
+              child: const Icon(Icons.add, color: Colors.white),
+            ),
+          ),
+        ),
+      ),
     ),
   );
 }
@@ -1021,6 +1081,8 @@ class FormSheet extends StatelessWidget {
   }
 }
 
+/// Asks before a destructive action such as deleting or discarding. On iOS the
+/// confirm action uses the system's red destructive style.
 Future<bool> confirmFormAction({
   required BuildContext context,
   required String title,
@@ -1029,20 +1091,42 @@ Future<bool> confirmFormAction({
 }) async =>
     await showAdaptiveDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog.adaptive(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => dialogContext.pop(false),
-            child: Text(dialogContext.tr(LocaleKeys.cancel)),
-          ),
-          TextButton(
-            onPressed: () => dialogContext.pop(true),
-            child: Text(confirmLabel),
-          ),
-        ],
-      ),
+      builder: (dialogContext) {
+        final cupertino = switch (Theme.of(dialogContext).platform) {
+          TargetPlatform.iOS || TargetPlatform.macOS => true,
+          _ => false,
+        };
+        return AlertDialog.adaptive(
+          title: Text(title),
+          content: Text(message),
+          actions: cupertino
+              ? [
+                  CupertinoDialogAction(
+                    isDefaultAction: true,
+                    onPressed: () => dialogContext.pop(false),
+                    child: Text(dialogContext.tr(LocaleKeys.cancel)),
+                  ),
+                  CupertinoDialogAction(
+                    isDestructiveAction: true,
+                    onPressed: () => dialogContext.pop(true),
+                    child: Text(confirmLabel),
+                  ),
+                ]
+              : [
+                  TextButton(
+                    onPressed: () => dialogContext.pop(false),
+                    child: Text(dialogContext.tr(LocaleKeys.cancel)),
+                  ),
+                  TextButton(
+                    onPressed: () => dialogContext.pop(true),
+                    style: TextButton.styleFrom(
+                      foregroundColor: FormTokens.danger,
+                    ),
+                    child: Text(confirmLabel),
+                  ),
+                ],
+        );
+      },
     ) ??
     false;
 

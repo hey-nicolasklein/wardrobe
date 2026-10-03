@@ -13,6 +13,8 @@ import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/feed/flat_lay_widget.dart';
 import 'package:form_mobile/features/feed/look_style_picker.dart';
+import 'package:form_mobile/features/feed/occasion_tile.dart';
+import 'package:form_mobile/features/settings/credits_cubit.dart';
 import 'package:form_mobile/features/settings/quality_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -32,6 +34,7 @@ class LookComposerPage extends StatelessWidget {
   const LookComposerPage({
     this.preselectedIds = const [],
     this.tryOn = false,
+    this.occasion,
     this.from,
     super.key,
   });
@@ -39,18 +42,25 @@ class LookComposerPage extends StatelessWidget {
   final List<String> preselectedIds;
   final bool tryOn;
 
+  /// Preselects an occasion, e.g. when started from a feed shelf.
+  final String? occasion;
+
   /// An earlier look whose pieces and settings the composer starts with.
   final Look? from;
 
   @override
   Widget build(BuildContext context) => BlocProvider(
-    create: (context) => ComposerCubit(
-      context.read<LookRepository>(),
-      preselectedIds: preselectedIds,
-      defaultQuality: context.read<QualityCubit>().state.feed,
-      tryOn: tryOn,
-      from: from,
-    ),
+    create: (context) {
+      final cubit = ComposerCubit(
+        context.read<LookRepository>(),
+        preselectedIds: preselectedIds,
+        defaultQuality: context.read<QualityCubit>().state.feed,
+        tryOn: tryOn,
+        from: from,
+      );
+      if (occasion != null) cubit.setOccasion(occasion);
+      return cubit;
+    },
     child: const _ComposerView(),
   );
 }
@@ -606,34 +616,10 @@ class _OccasionPresets extends StatelessWidget {
 
   final String? selected;
 
-  static const List<({FormIconName icon, String label, String? value})>
-  _presets = [
-    (
-      value: null,
-      icon: FormIconName.shuffle,
-      label: LocaleKeys.composerOccasionSurprise,
-    ),
-    (
-      value: 'night-out',
-      icon: FormIconName.moon,
-      label: LocaleKeys.composerOccasionNightOut,
-    ),
-    (
-      value: 'party',
-      icon: FormIconName.party,
-      label: LocaleKeys.composerOccasionParty,
-    ),
-    (
-      value: 'casual',
-      icon: FormIconName.top,
-      label: LocaleKeys.composerOccasionCasual,
-    ),
-  ];
-
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      for (final (index, preset) in _presets.indexed) ...[
+      for (final (index, preset) in occasionPresets.indexed) ...[
         if (index > 0) const SizedBox(width: 10),
         Expanded(child: _preset(context, preset)),
       ],
@@ -643,7 +629,7 @@ class _OccasionPresets extends StatelessWidget {
   Widget _preset(
     BuildContext context,
     ({String? value, FormIconName icon, String label}) preset,
-  ) => _OccasionTile(
+  ) => OccasionTile(
     icon: preset.icon,
     label: context.tr(preset.label),
     colors: FormTokens.occasions[preset.value ?? '']!,
@@ -653,132 +639,6 @@ class _OccasionPresets extends StatelessWidget {
       context.read<ComposerCubit>().setOccasion(preset.value);
     },
   );
-}
-
-/// An occasion preset that shrinks while pressed and plays an icon-specific
-/// animation on every tap.
-class _OccasionTile extends StatefulWidget {
-  const _OccasionTile({
-    required this.icon,
-    required this.label,
-    required this.colors,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final FormIconName icon;
-  final String label;
-  final ({Color tint, Color ink}) colors;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  State<_OccasionTile> createState() => _OccasionTileState();
-}
-
-class _OccasionTileState extends State<_OccasionTile>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _tap = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 650),
-  );
-  bool _pressed = false;
-
-  @override
-  void dispose() {
-    _tap.dispose();
-    super.dispose();
-  }
-
-  void _handleTap() {
-    unawaited(_tap.forward(from: 0));
-    widget.onTap();
-  }
-
-  /// Transforms the icon for tap progress [t] (0 → 1), one motion per preset:
-  /// shuffle spins, moon swings, party pops and shakes, top hops.
-  Widget _animateIcon(double t, Widget icon) {
-    final fade = 1 - t;
-    return switch (widget.icon) {
-      FormIconName.shuffle => Transform.rotate(
-        angle: Curves.easeInOutBack.transform(t) * 2 * math.pi,
-        child: icon,
-      ),
-      FormIconName.moon => Transform.rotate(
-        angle: math.sin(t * 3 * math.pi) * fade * 0.6,
-        child: icon,
-      ),
-      FormIconName.party => Transform.rotate(
-        angle: math.sin(t * 5 * math.pi) * fade * 0.35,
-        child: Transform.scale(
-          scale: 1 + math.sin(t * math.pi) * 0.3,
-          child: icon,
-        ),
-      ),
-      _ => Transform.translate(
-        offset: Offset(0, -math.sin(t * math.pi) * 10),
-        child: icon,
-      ),
-    };
-  }
-
-  void _setPressed(bool value) {
-    if (_pressed != value) setState(() => _pressed = value);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = widget.colors;
-    return Semantics(
-      button: true,
-      selected: widget.selected,
-      child: GestureDetector(
-        onTapDown: (_) => _setPressed(true),
-        onTapUp: (_) => _setPressed(false),
-        onTapCancel: () => _setPressed(false),
-        onTap: _handleTap,
-        child: AnimatedScale(
-          scale: _pressed ? 0.94 : 1,
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 4),
-            decoration: BoxDecoration(
-              color: colors.tint,
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(
-                color: widget.selected ? colors.ink : Colors.transparent,
-                width: 2,
-              ),
-            ),
-            child: Column(
-              children: [
-                AnimatedScale(
-                  scale: widget.selected ? 1.15 : 1,
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutBack,
-                  child: AnimatedBuilder(
-                    animation: _tap,
-                    builder: (context, icon) => _animateIcon(_tap.value, icon!),
-                    child: FormIcon(widget.icon, color: colors.ink),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  widget.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: colors.ink),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _SelectItem extends StatelessWidget {
@@ -1500,10 +1360,14 @@ class _ComposerFooter extends StatelessWidget {
                         ),
                       )
                     : Text(
-                        context.tr(
-                          state.tryOn
-                              ? LocaleKeys.composerTryOnAction
-                              : LocaleKeys.createLook,
+                        lookCostLabel(
+                          context,
+                          context.tr(
+                            state.tryOn
+                                ? LocaleKeys.composerTryOnAction
+                                : LocaleKeys.createLook,
+                          ),
+                          context.watch<CreditsCubit>().state,
                         ),
                       ),
               ),

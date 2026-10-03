@@ -4,6 +4,7 @@ import 'package:form_mobile/features/feed/composer_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
+import 'package:form_mobile/repository/credits_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/services/look_output_service.dart';
 import 'package:form_mobile/utils/api_error_message.dart';
@@ -22,6 +23,17 @@ String lookDateText(BuildContext context, DateTime createdAt) {
     _ => DateFormat.yMd(context.locale.toString()).format(createdAt.toLocal()),
   };
 }
+
+/// [action] followed by what a look costs, e.g. "Look erstellen · 2 Credits".
+/// Unmetered accounts see the bare action. While [credits] is unknown the cost
+/// shows, since most accounts are metered.
+String lookCostLabel(BuildContext context, String action, Credits? credits) =>
+    credits?.metered == false
+    ? action
+    : context.tr(
+        LocaleKeys.lookCostAction,
+        namedArgs: {'action': action, 'cost': '$lookCreditCost'},
+      );
 
 FlatLayLabels flatLayLabels(BuildContext context, Look look, int pieces) =>
     FlatLayLabels(

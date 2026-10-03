@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,8 +12,12 @@ import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/feed/look_card.dart';
 import 'package:form_mobile/features/feed/look_commands.dart';
+import 'package:form_mobile/features/feed/look_stacks.dart';
+import 'package:form_mobile/features/feed/occasion_tile.dart';
+import 'package:form_mobile/features/settings/credits_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
+import 'package:form_mobile/repository/credits_repository.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/services/look_output_service.dart';
@@ -21,12 +27,13 @@ import 'package:go_router/go_router.dart';
 
 /// Opens the look composer, or character-reference setup when no active
 /// reference exists yet. [itemIds] preselects pieces; [tryOn] starts in
-/// try-on mode. [from] starts with an earlier look's pieces and settings
-/// instead.
+/// try-on mode and [occasion] preselects an occasion. [from] starts with an
+/// earlier look's pieces and settings instead.
 void openLookComposer(
   BuildContext context, {
   List<String> itemIds = const [],
   bool tryOn = false,
+  String? occasion,
   Look? from,
 }) {
   if (context.read<FeedCubit>().state.hasActiveCharacterReference == false) {
@@ -36,6 +43,7 @@ void openLookComposer(
   final query = [
     ...itemIds.map((id) => 'item=${Uri.encodeComponent(id)}'),
     if (tryOn) 'mode=try-on',
+    if (occasion != null) 'occasion=${Uri.encodeComponent(occasion)}',
   ].join('&');
   unawaited(
     context.push(
@@ -54,6 +62,12 @@ class FeedPage extends StatelessWidget {
     builder: (context, state) {
       final cubit = context.read<FeedCubit>();
       final looks = state.looks ?? [];
+
+      // Before the first sync settles, no looks means "not loaded yet", not
+      // an empty feed.
+      final loading =
+          state.looks == null && state.online && state.failure == null;
+      final bottomInset = MediaQuery.paddingOf(context).bottom;
       return Scaffold(
         backgroundColor: FormTokens.paper,
         extendBodyBehindAppBar: true,
@@ -62,53 +76,74 @@ class FeedPage extends StatelessWidget {
         appBar: const FormScrollEdge(adaptive: true),
         body: AnnotatedRegion(
           value: SystemUiOverlayStyle.dark,
-          child: Builder(
-            builder: (context) => RefreshIndicator(
-              edgeOffset: MediaQuery.paddingOf(context).top,
-              onRefresh: cubit.refresh,
-              child: CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
+          child: Stack(
+            children: [
+              CustomScrollView(
+                // The iOS refresh control needs overscroll on every platform.
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
                 slivers: [
                   SliverSafeArea(
                     left: false,
                     right: false,
                     bottom: false,
-                    sliver: SliverPadding(
+                    sliver: CupertinoSliverRefreshControl(
+                      onRefresh: cubit.refresh,
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      FormTokens.gutter,
+                      0,
+                      FormTokens.gutter,
+                      6,
+                    ),
+                    sliver: SliverList.list(
+                      children: [
+                        _LooksHeader(
+                          onCreate: looks.isEmpty || loading
+                              ? null
+                              : () => openLookComposer(context),
+                        ),
+                        if (state.stale && !state.online && state.looks != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: FormNotice(
+                              text: context.tr(LocaleKeys.feedStale),
+                            ),
+                          ),
+                        if (state.failure != null)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: FormNotice(
+                              text: context.tr(state.failureKey),
+                              error: true,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (loading)
+                    SliverPadding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: FormTokens.gutter,
                       ),
-                      sliver: SliverList.list(
-                        children: [
-                          FormWordmark(title: context.tr(LocaleKeys.appName)),
-                          if (state.stale &&
-                              !state.online &&
-                              state.looks != null)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: FormNotice(
-                                text: context.tr(LocaleKeys.feedStale),
-                              ),
-                            ),
-                          if (state.failure != null)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: FormNotice(
-                                text: context.tr(state.failureKey),
-                                error: true,
-                              ),
-                            ),
-                          FormHero(
-                            eyebrow: context.tr(LocaleKeys.feedHeroEyebrow),
-                            title: context.tr(LocaleKeys.feedHeroTitle),
-                            body: context.tr(LocaleKeys.feedHeroBody),
-                            addLabel: context.tr(LocaleKeys.createLook),
-                            onAdd: () => openLookComposer(context),
+                      sliver: SliverToBoxAdapter(
+                        child: Semantics(
+                          label: context.tr(LocaleKeys.feedLoading),
+                          excludeSemantics: true,
+                          child: const Column(
+                            spacing: 16,
+                            children: [
+                              _LookCardSkeleton(),
+                              _LookCardSkeleton(),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                  if (looks.isEmpty)
+                    )
+                  else if (looks.isEmpty)
                     SliverFillRemaining(
                       hasScrollBody: false,
                       child: FormEmptyState(
@@ -118,7 +153,6 @@ class FeedPage extends StatelessWidget {
                               ? LocaleKeys.feedEmptyWithoutSheet
                               : LocaleKeys.feedEmptyWithSheet,
                         ),
-                        icon: Icons.auto_awesome_outlined,
                         action: FilledButton(
                           onPressed: () => openLookComposer(context),
                           child: Text(
@@ -132,51 +166,348 @@ class FeedPage extends StatelessWidget {
                       ),
                     )
                   else
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(
-                        FormTokens.gutter,
-                        0,
-                        FormTokens.gutter,
-                        24,
-                      ),
-                      sliver: SliverList.separated(
-                        itemCount: looks.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 16),
-                        itemBuilder: (context, index) {
-                          final record = looks[index];
-                          return LookCard(
-                            key: ValueKey(record.look.id),
-                            record: record,
-                            state: state,
-                            garments: _garments(state, record.look),
-                            online: state.online && !state.stale,
-                            onRetry: () => runFeedAction(
-                              context,
-                              () => cubit.retryLook(record.look.id),
-                            ),
-                            onDelete: () =>
-                                _confirmDelete(context, record.look.id),
-                            onShare: (origin) =>
-                                _share(context, state, record.look, origin),
-                            onMenu: () => _openLookMenu(context, record.look),
-                          );
-                        },
-                      ),
-                    ),
+                    ..._overview(context, state),
                   // Clears the translucent tab bar.
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: MediaQuery.paddingOf(context).bottom,
-                    ),
-                  ),
+                  SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
                 ],
               ),
-            ),
+            ],
           ),
         ),
       );
     },
   );
+
+  static List<CachedLook> _stackLooks(FeedState state, LookStack stack) => [
+    for (final record in state.looks ?? const <CachedLook>[])
+      if (inLookStack(
+        stack,
+        record.look,
+        itemsById: state.itemsById,
+        saved: state.saved[record.look.id] ?? false,
+      ))
+        record,
+  ];
+
+  /// The stacks to choose from: every look, the occasions, saved looks and
+  /// try-ons, then one stack per piece and per colour.
+  List<Widget> _overview(BuildContext context, FeedState state) {
+    final looks = state.looks ?? const <CachedLook>[];
+    final online = state.online;
+    final width = MediaQuery.sizeOf(context).width;
+    final collections = [
+      for (final stack in const [SavedStack(), TryOnStack()])
+        if (_stackLooks(state, stack) case final looks when looks.isNotEmpty)
+          (stack, looks),
+    ];
+    final pieces = pieceStacks(looks, state.itemsById).take(16).toList();
+    final colors = colorStacks(looks, state.itemsById);
+    var index = 0;
+
+    Widget labelled(
+      String title,
+      int count,
+      Widget pile, {
+      double labelOpacity = 1,
+    }) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        pile,
+        const SizedBox(height: 10),
+        Opacity(
+          opacity: labelOpacity,
+          child: Column(
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: FormTokens.ink,
+                ),
+              ),
+              Text(_countText(context, count), style: FormTokens.small),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    Widget row({required double height, required List<Widget> children}) =>
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: height,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              padding: const EdgeInsets.symmetric(
+                horizontal: FormTokens.gutter,
+              ),
+              itemCount: children.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 14),
+              itemBuilder: (_, i) => children[i],
+            ),
+          ),
+        );
+
+    final heroPhoto = Size(width * 0.42, width * 0.42 * 5 / 4);
+    return [
+      SliverScrollProgress(
+        distance: heroPhoto.height,
+        builder: (context, progress) => Padding(
+          padding: const EdgeInsets.only(top: 12, bottom: 8),
+          child: StackPressable(
+            index: index++,
+            semanticLabel: context.tr(LocaleKeys.stackAll),
+            onTap: () => _openStack(context, const AllLooksStack()),
+            // Pulling down opens the fan wider; scrolling away gathers the
+            // prints into a pile that lifts off a little slower than the
+            // page. The label fades before the sinking pile reaches it.
+            builder: (context, spread) {
+              final pull = (-progress).clamp(0.0, 2.0);
+              final away = progress.clamp(0.0, 1.0);
+              return labelled(
+                context.tr(LocaleKeys.stackAll),
+                looks.length,
+                labelOpacity: (1 - away * 4).clamp(0.0, 1.0),
+                Transform.translate(
+                  offset: Offset(0, away * heroPhoto.height * 0.35),
+                  child: Transform.scale(
+                    scale: 1 + pull * 0.08 - away * 0.1,
+                    child: Transform.rotate(
+                      angle: away * -0.06,
+                      child: PhotoFan(
+                        looks: looks,
+                        online: online,
+                        photoSize: heroPhoto,
+                        spread: spread * (1 + pull * 0.9) * (1 - away * 0.75),
+                        angle: 0.09,
+                        offset: 0.42,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+      _SectionTitle(context.tr(LocaleKeys.stackSectionOccasions)),
+      SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: FormTokens.gutter),
+        sliver: SliverToBoxAdapter(
+          child: Row(
+            spacing: 10,
+            children: [
+              for (final preset in occasionPresets)
+                Expanded(
+                  child: _occasionTile(context, state, preset.value),
+                ),
+            ],
+          ),
+        ),
+      ),
+      if (collections.isNotEmpty) ...[
+        _SectionTitle(context.tr(LocaleKeys.stackSectionCollections)),
+        row(
+          height: 176,
+          children: [
+            for (final (stack, stackLooks) in collections)
+              StackPressable(
+                index: index++,
+                semanticLabel: _stackTitle(context, state, stack),
+                onTap: () => _openStack(context, stack),
+                builder: (context, spread) => labelled(
+                  _stackTitle(context, state, stack),
+                  stackLooks.length,
+                  PhotoFan(
+                    looks: stackLooks,
+                    online: online,
+                    photoSize: const Size(80, 100),
+                    spread: spread,
+                    angle: 0.14,
+                    offset: 0.34,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+      if (pieces.isNotEmpty) ...[
+        _SectionTitle(context.tr(LocaleKeys.stackSectionPieces)),
+        row(
+          height: 186,
+          children: [
+            for (final (item, stackLooks) in pieces)
+              SizedBox(
+                width: 132,
+                child: StackPressable(
+                  index: index++,
+                  semanticLabel: item.metadata.name,
+                  onTap: () => _openStack(context, PieceStack(item.id)),
+                  builder: (context, spread) => labelled(
+                    item.metadata.name,
+                    stackLooks.length,
+                    PiecePile(
+                      item: item,
+                      looks: stackLooks,
+                      online: online,
+                      spread: spread,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+      if (colors.isNotEmpty) ...[
+        _SectionTitle(context.tr(LocaleKeys.stackSectionColors)),
+        row(
+          height: 170,
+          children: [
+            for (final (family, stackLooks) in colors)
+              SizedBox(
+                width: 116,
+                child: StackPressable(
+                  index: index++,
+                  semanticLabel: context.tr('colorFamilies.$family'),
+                  onTap: () => _openStack(context, ColorStack(family)),
+                  builder: (context, spread) => labelled(
+                    context.tr('colorFamilies.$family'),
+                    stackLooks.length,
+                    ColorPile(
+                      family: family,
+                      looks: stackLooks,
+                      online: online,
+                      spread: spread,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+    ];
+  }
+
+  /// An occasion card. It plays its icon animation first, then opens the
+  /// occasion's stack, or the composer for that occasion while it is empty.
+  Widget _occasionTile(BuildContext context, FeedState state, String? value) {
+    final preset = occasionPresets.firstWhere((p) => p.value == value);
+    final count = _stackLooks(state, OccasionStack(value)).length;
+    return OccasionTile(
+      icon: preset.icon,
+      label: context.tr(preset.label),
+      colors: FormTokens.occasions[value ?? '']!,
+      selected: false,
+      caption: count == 0
+          ? context.tr(LocaleKeys.stackNew)
+          : _countText(context, count),
+      onTap: () => Future<void>.delayed(
+        const Duration(milliseconds: 320),
+        () {
+          if (!context.mounted) return;
+          if (count == 0) {
+            openLookComposer(context, occasion: value);
+          } else {
+            _openStack(context, OccasionStack(value));
+          }
+        },
+      ),
+    );
+  }
+
+  static String _countText(BuildContext context, int count) => context.tr(
+    count == 1 ? LocaleKeys.stackCountOne : LocaleKeys.stackCountMany,
+    namedArgs: {'count': '$count'},
+  );
+
+  static String _stackTitle(
+    BuildContext context,
+    FeedState state,
+    LookStack stack,
+  ) => switch (stack) {
+    AllLooksStack() => context.tr(LocaleKeys.stackAll),
+    OccasionStack(:final occasion) => context.tr(
+      occasionPresets.firstWhere((p) => p.value == occasion).label,
+    ),
+    TryOnStack() => context.tr(LocaleKeys.stackTryOn),
+    SavedStack() => context.tr(LocaleKeys.stackSaved),
+    PieceStack(:final itemId) => state.itemsById[itemId]?.metadata.name ?? '',
+    ColorStack(:final family) => context.tr('colorFamilies.$family'),
+  };
+
+  /// What "+ New" starts inside [stack]: the composer with the stack's
+  /// occasion, piece or try-on mode. Saved looks and colours have no
+  /// natural starting point, so they get none.
+  static VoidCallback? _createIn(BuildContext context, LookStack stack) =>
+      switch (stack) {
+        AllLooksStack() => () => openLookComposer(context),
+        OccasionStack(:final occasion) => () => openLookComposer(
+          context,
+          occasion: occasion,
+        ),
+        TryOnStack() => () => openLookComposer(context, tryOn: true),
+        PieceStack(:final itemId) => () => openLookComposer(
+          context,
+          itemIds: [itemId],
+        ),
+        SavedStack() || ColorStack() => null,
+      };
+
+  void _openStack(BuildContext context, LookStack stack) {
+    unawaited(
+      Navigator.of(context).push(
+        PageRouteBuilder<void>(
+          transitionDuration: const Duration(milliseconds: 460),
+          reverseTransitionDuration: const Duration(milliseconds: 320),
+          pageBuilder: (_, _, _) => _StackPage(
+            stack: stack,
+            looksOf: _stackLooks,
+            titleOf: _stackTitle,
+            createIn: _createIn,
+            cardBuilder: _lookCard,
+          ),
+          transitionsBuilder: (_, animation, _, child) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: FormTokens.easeOut,
+              reverseCurve: Curves.easeIn,
+            );
+            return FadeTransition(
+              opacity: curved,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.94, end: 1).animate(curved),
+                child: child,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _lookCard(BuildContext context, FeedState state, CachedLook record) {
+    final cubit = context.read<FeedCubit>();
+    return LookCard(
+      key: ValueKey(record.look.id),
+      record: record,
+      state: state,
+      garments: _garments(state, record.look),
+      online: state.online && !state.stale,
+      onRetry: () => runFeedAction(
+        context,
+        () => cubit.retryLook(record.look.id),
+      ),
+      onDelete: () => _confirmDelete(context, record.look.id),
+      onShare: (origin) => _share(context, state, record.look, origin),
+      onMenu: () => _openLookMenu(context, record.look),
+    );
+  }
 
   static List<LookGarment> _garments(FeedState state, Look look) =>
       lookGarments(
@@ -213,11 +544,23 @@ class FeedPage extends StatelessWidget {
     );
   }
 
+  /// The look's actions, grouped by what they cost: paid generations with
+  /// their price, free saves, details, and delete on its own. Anything that
+  /// needs the server is disabled offline with a reason; saves work from the
+  /// media cache.
   Future<void> _openLookMenu(BuildContext context, Look look) async {
     final cubit = context.read<FeedCubit>();
-    if (!cubit.state.online) return;
+    final online = cubit.state.online;
     final output = context.read<LookOutputService>();
     final garments = _garments(cubit.state, look);
+    final credits = context.read<CreditsCubit>().state;
+    final cost = credits?.metered == false
+        ? null
+        : context.tr(
+            LocaleKeys.lookCostBadge,
+            namedArgs: {'cost': '$lookCreditCost'},
+          );
+    final offline = online ? null : context.tr(LocaleKeys.lookNeedsConnection);
     // Actions run on the page context, which outlives the closed sheet.
     void run(
       BuildContext sheetContext,
@@ -228,122 +571,155 @@ class FeedPage extends StatelessWidget {
       unawaited(runFeedAction(context, action, success: success));
     }
 
+    // Paid actions close the menu and ask once more, with the cost in view.
+    void confirm(
+      BuildContext sheetContext, {
+      required String title,
+      required String body,
+      required LookCommand Function(String idempotencyKey) command,
+    }) {
+      Navigator.pop(sheetContext);
+      unawaited(
+        _confirmPaidLook(
+          context,
+          look,
+          title: title,
+          body: body,
+          command: command,
+        ),
+      );
+    }
+
     await showFormSheet<void>(
       context: context,
       builder: (sheetContext) => FormSheet(
         title: context.tr(LocaleKeys.lookMenuTitle),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 8,
+          spacing: 16,
           children: [
-            Text(
-              context.tr(LocaleKeys.lookMenuPrompt),
-              style: FormTokens.heading.copyWith(fontSize: 22),
-            ),
-            const SizedBox(height: 8),
-            if (look.isTryOn)
-              OutlinedButton(
-                onPressed: () => run(
-                  sheetContext,
-                  () => cubit.createLook(
-                    LookCommand.create(
-                      exactItemIds: look.wardrobeItemIds,
-                      categories: const [],
-                      occasion: null,
-                      baseAssetId: look.baseAssetId,
-                      quality: look.quality,
+            _MenuGroup(
+              children: [
+                if (look.isTryOn)
+                  _MenuRow(
+                    label: context.tr(LocaleKeys.tryOnAgain),
+                    cost: cost,
+                    disabledReason: offline,
+                    onTap: () => confirm(
+                      sheetContext,
+                      title: context.tr(LocaleKeys.tryOnAgain),
+                      body: context.tr(LocaleKeys.tryOnAgainBody),
+                      command: (key) => LookCommand.create(
+                        exactItemIds: look.wardrobeItemIds,
+                        categories: const [],
+                        occasion: null,
+                        baseAssetId: look.baseAssetId,
+                        quality: look.quality,
+                        idempotencyKey: key,
+                      ),
                     ),
-                    look.wardrobeItemIds,
                   ),
-                  success: context.tr(LocaleKeys.lookCreating),
-                ),
-                child: Text(context.tr(LocaleKeys.tryOnAgain)),
-              ),
-            if (look.quality != 'high' && !look.isTryOn)
-              OutlinedButton(
-                onPressed: () {
-                  Navigator.pop(sheetContext);
-                  unawaited(_upgradeLook(context, look));
-                },
-                child: Text(context.tr(LocaleKeys.lookUpgrade)),
-              ),
-            if (!look.isTryOn)
-              OutlinedButton(
-                onPressed: () => run(
-                  sheetContext,
-                  () => cubit.createLook(
-                    LookCommand.create(
-                      exactItemIds: const [],
-                      categories: const [],
-                      occasion: null,
-                      parentLookId: look.id,
+                if (!look.isTryOn)
+                  _MenuRow(
+                    label: context.tr(LocaleKeys.lookVary),
+                    cost: cost,
+                    disabledReason: offline,
+                    onTap: () => confirm(
+                      sheetContext,
+                      title: context.tr(LocaleKeys.lookVary),
+                      body: context.tr(LocaleKeys.lookVaryBody),
+                      command: (key) => LookCommand.create(
+                        exactItemIds: const [],
+                        categories: const [],
+                        occasion: null,
+                        parentLookId: look.id,
+                        idempotencyKey: key,
+                      ),
                     ),
-                    look.wardrobeItemIds,
                   ),
-                  success: context.tr(LocaleKeys.lookCreating),
-                ),
-                child: Text(context.tr(LocaleKeys.lookVary)),
-              ),
-            if (!look.isTryOn && look.concept != null)
-              OutlinedButton(
-                onPressed: () => run(
-                  sheetContext,
-                  () => cubit.createLook(
-                    LookCommand.create(
-                      exactItemIds: const [],
-                      categories: const [],
-                      occasion: null,
-                      parentLookId: look.id,
-                      reshoot: true,
-                      quality: look.quality,
+                if (!look.isTryOn && look.concept != null)
+                  _MenuRow(
+                    label: context.tr(LocaleKeys.lookReshoot),
+                    cost: cost,
+                    disabledReason: offline,
+                    onTap: () => confirm(
+                      sheetContext,
+                      title: context.tr(LocaleKeys.lookReshoot),
+                      body: context.tr(LocaleKeys.lookReshootBody),
+                      command: (key) => LookCommand.create(
+                        exactItemIds: const [],
+                        categories: const [],
+                        occasion: null,
+                        parentLookId: look.id,
+                        reshoot: true,
+                        quality: look.quality,
+                        idempotencyKey: key,
+                      ),
                     ),
-                    look.wardrobeItemIds,
                   ),
-                  success: context.tr(LocaleKeys.lookCreating),
+                if (look.quality != 'high' && !look.isTryOn)
+                  _MenuRow(
+                    label: context.tr(LocaleKeys.lookUpgrade),
+                    cost: cost,
+                    disabledReason: offline,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      unawaited(_upgradeLook(context, look));
+                    },
+                  ),
+                _MenuRow(
+                  label: context.tr(LocaleKeys.lookCombine),
+                  disabledReason: offline,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    openLookComposer(context, from: look);
+                  },
                 ),
-                child: Text(context.tr(LocaleKeys.lookReshoot)),
-              ),
-            OutlinedButton(
-              onPressed: () {
-                Navigator.pop(sheetContext);
-                openLookComposer(context, from: look);
-              },
-              child: Text(context.tr(LocaleKeys.lookCombine)),
+              ],
             ),
-            OutlinedButton(
-              onPressed: () {
-                Navigator.pop(sheetContext);
-                _showLookDetails(context, look);
-              },
-              child: Text(context.tr(LocaleKeys.lookDetails)),
-            ),
-            OutlinedButton(
-              onPressed: () => run(
-                sheetContext,
-                () => output.saveWorn(look),
-                success: context.tr(LocaleKeys.lookSavedToPhotos),
-              ),
-              child: Text(context.tr(LocaleKeys.lookDownloadWorn)),
-            ),
-            OutlinedButton(
-              onPressed: () => run(
-                sheetContext,
-                () => output.saveFlatLay(
-                  look,
-                  garments,
-                  flatLayLabels(context, look, garments.length),
+            _MenuGroup(
+              children: [
+                _MenuRow(
+                  label: context.tr(LocaleKeys.lookDownloadWorn),
+                  onTap: () => run(
+                    sheetContext,
+                    () => output.saveWorn(look),
+                    success: context.tr(LocaleKeys.lookSavedToPhotos),
+                  ),
                 ),
-                success: context.tr(LocaleKeys.lookSavedToPhotos),
-              ),
-              child: Text(context.tr(LocaleKeys.lookDownloadFlat)),
+                _MenuRow(
+                  label: context.tr(LocaleKeys.lookDownloadFlat),
+                  onTap: () => run(
+                    sheetContext,
+                    () => output.saveFlatLay(
+                      look,
+                      garments,
+                      flatLayLabels(context, look, garments.length),
+                    ),
+                    success: context.tr(LocaleKeys.lookSavedToPhotos),
+                  ),
+                ),
+                _MenuRow(
+                  label: context.tr(LocaleKeys.lookDetails),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _showLookDetails(context, look);
+                  },
+                ),
+              ],
             ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(sheetContext);
-                unawaited(_confirmDelete(context, look.id));
-              },
-              style: TextButton.styleFrom(foregroundColor: FormTokens.danger),
-              child: Text(context.tr(LocaleKeys.lookDelete)),
+            _MenuGroup(
+              children: [
+                _MenuRow(
+                  label: context.tr(LocaleKeys.lookDelete),
+                  danger: true,
+                  disabledReason: offline,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    unawaited(_confirmDelete(context, look.id));
+                  },
+                ),
+              ],
             ),
           ],
         ),
@@ -415,53 +791,124 @@ class FeedPage extends StatelessWidget {
     final qualities = higherQualities(look.quality);
     if (qualities.isEmpty) return;
     var selected = qualities.first;
-    // One key per upgrade sheet, so a retried confirm cannot charge twice.
+    await _confirmPaidLook(
+      context,
+      look,
+      title: context.tr(LocaleKeys.lookUpgradeTitle),
+      body: context.tr(LocaleKeys.lookUpgradeBody),
+      options: (setSheetState) => FormChoiceChips(
+        options: {
+          for (final quality in qualities)
+            quality: context.tr('quality.$quality'),
+        },
+        selected: selected,
+        onSelected: (value) => setSheetState(() => selected = value),
+      ),
+      command: (key) => LookCommand.create(
+        exactItemIds: const [],
+        categories: const [],
+        occasion: null,
+        parentLookId: look.id,
+        preserveComposition: true,
+        quality: selected,
+        idempotencyKey: key,
+      ),
+    );
+  }
+
+  /// Confirms a paid generation based on [look]: what happens, what it costs
+  /// and what is left afterwards. [options] sits between the explanation and
+  /// the cost, e.g. a quality choice. The sheet passes one idempotency key to
+  /// [command], so a retried confirm cannot charge twice.
+  Future<void> _confirmPaidLook(
+    BuildContext context,
+    Look look, {
+    required String title,
+    required String body,
+    required LookCommand Function(String idempotencyKey) command,
+    Widget Function(StateSetter setSheetState)? options,
+  }) async {
+    final credits = context.read<CreditsCubit>();
+    unawaited(credits.refresh());
     final key = newIdempotencyKey();
     await showFormSheet<void>(
       context: context,
       builder: (sheetContext) => StatefulBuilder(
         builder: (sheetContext, setSheetState) => FormSheet(
-          title: context.tr(LocaleKeys.lookUpgradeTitle),
+          title: title,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                context.tr(LocaleKeys.lookUpgradeBody),
-                style: FormTokens.body,
-              ),
+              Text(body, style: FormTokens.body),
+              if (options != null) ...[
+                const SizedBox(height: 16),
+                options(setSheetState),
+              ],
               const SizedBox(height: 16),
-              FormChoiceChips(
-                options: {
-                  for (final quality in qualities)
-                    quality: context.tr('quality.$quality'),
-                },
-                selected: selected,
-                onSelected: (value) => setSheetState(() => selected = value),
-              ),
-              const SizedBox(height: 16),
-              FilledButton(
-                onPressed: () {
-                  Navigator.pop(sheetContext);
-                  unawaited(
-                    runFeedAction(
-                      context,
-                      () => context.read<FeedCubit>().createLook(
-                        LookCommand.create(
-                          exactItemIds: const [],
-                          categories: const [],
-                          occasion: null,
-                          parentLookId: look.id,
-                          preserveComposition: true,
-                          quality: selected,
-                          idempotencyKey: key,
+              BlocBuilder<CreditsCubit, Credits?>(
+                bloc: credits,
+                builder: (_, balance) {
+                  final metered = balance?.metered ?? false;
+                  final short = metered && balance!.balance < lookCreditCost;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: 12,
+                    children: [
+                      if (short) ...[
+                        Text(
+                          context.tr(LocaleKeys.credits_empty),
+                          style: FormTokens.body.copyWith(
+                            color: FormTokens.danger,
+                          ),
                         ),
-                        look.wardrobeItemIds,
+                        OutlinedButton(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            context.go('/settings');
+                          },
+                          child: Text(context.tr(LocaleKeys.lookSeeCredits)),
+                        ),
+                      ] else if (metered)
+                        Text(
+                          context.tr(
+                            LocaleKeys.lookCostBalance,
+                            namedArgs: {
+                              'left': '${balance!.balance - lookCreditCost}',
+                            },
+                          ),
+                          style: FormTokens.small.copyWith(
+                            color: FormTokens.noteInk,
+                          ),
+                        ),
+                      FilledButton(
+                        onPressed: short
+                            ? null
+                            : () {
+                                Navigator.pop(sheetContext);
+                                unawaited(
+                                  runFeedAction(
+                                    context,
+                                    () => context.read<FeedCubit>().createLook(
+                                      command(key),
+                                      look.wardrobeItemIds,
+                                    ),
+                                    success: context.tr(
+                                      LocaleKeys.lookCreating,
+                                    ),
+                                  ),
+                                );
+                              },
+                        child: Text(
+                          lookCostLabel(
+                            context,
+                            context.tr(LocaleKeys.lookConfirmCreate),
+                            balance,
+                          ),
+                        ),
                       ),
-                      success: context.tr(LocaleKeys.lookCreating),
-                    ),
+                    ],
                   );
                 },
-                child: Text(context.tr(LocaleKeys.lookUpgradeConfirm)),
               ),
             ],
           ),
@@ -497,7 +944,7 @@ class _DetailRow extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label.toUpperCase(), style: FormTokens.small),
+        Text(label, style: FormTokens.small),
         const SizedBox(height: 4),
         Text(value, style: FormTokens.body),
       ],
@@ -583,4 +1030,359 @@ class _ShotDetailState extends State<_ShotDetail> {
       ],
     );
   }
+}
+
+/// Stands in for look cards until the first sync, so a cold start shows the
+/// feed's shape instead of flashing the empty state. Matches [LookCard]'s
+/// header strip, 4:5 stage and footer.
+class _LookCardSkeleton extends StatelessWidget {
+  const _LookCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(20),
+    child: const ColoredBox(
+      color: FormTokens.chrome,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(height: 64),
+          AspectRatio(
+            aspectRatio: 4 / 5,
+            child: ColoredBox(color: FormTokens.lookStage),
+          ),
+          SizedBox(height: 96),
+        ],
+      ),
+    ),
+  );
+}
+
+/// A white, rounded group of [_MenuRow]s separated by hairlines.
+class _MenuGroup extends StatelessWidget {
+  const _MenuGroup({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: FormTokens.surface,
+    clipBehavior: Clip.antiAlias,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(FormTokens.cardRadius),
+    ),
+    child: Column(
+      children: [
+        for (final (index, child) in children.indexed) ...[
+          if (index > 0)
+            const Divider(
+              height: 1,
+              thickness: 1,
+              indent: 16,
+              color: FormTokens.line,
+            ),
+          child,
+        ],
+      ],
+    ),
+  );
+}
+
+/// One action in a [_MenuGroup]. [cost] shows as a coin-tinted badge;
+/// [disabledReason] disables the row and says why below the label.
+class _MenuRow extends StatelessWidget {
+  const _MenuRow({
+    required this.label,
+    required this.onTap,
+    this.cost,
+    this.disabledReason,
+    this.danger = false,
+  });
+  final String label;
+  final VoidCallback onTap;
+  final String? cost;
+  final String? disabledReason;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = disabledReason == null;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 52),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Opacity(
+              opacity: enabled ? 1 : 0.5,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          label,
+                          style: FormTokens.body.copyWith(
+                            fontSize: 15,
+                            height: 1.3,
+                            color: danger ? FormTokens.danger : FormTokens.ink,
+                          ),
+                        ),
+                        if (disabledReason case final reason?)
+                          Text(reason, style: FormTokens.small),
+                      ],
+                    ),
+                  ),
+                  if (cost case final cost?)
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: FormTokens.coinTint,
+                        borderRadius: BorderRadius.circular(
+                          FormTokens.chipRadius,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        child: Text(
+                          cost,
+                          style: FormTokens.small.copyWith(
+                            color: FormTokens.coinInk,
+                            fontWeight: FontWeight.w600,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The page title with the create button beside it.
+class _LooksHeader extends StatelessWidget {
+  const _LooksHeader({required this.onCreate});
+  final VoidCallback? onCreate;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 6, bottom: 4),
+    child: SizedBox(
+      height: 60,
+      child: Row(
+        children: [
+          Expanded(
+            child: Semantics(
+              header: true,
+              child: Text(
+                context.tr(LocaleKeys.feed),
+                style: FormTokens.display.copyWith(fontSize: 38),
+              ),
+            ),
+          ),
+          if (onCreate case final onCreate?)
+            FormAddButton(
+              label: context.tr(LocaleKeys.createLook),
+              onPressed: onCreate,
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => SliverPadding(
+    padding: const EdgeInsets.fromLTRB(
+      FormTokens.gutter + 2,
+      30,
+      FormTokens.gutter,
+      14,
+    ),
+    sliver: SliverToBoxAdapter(
+      child: Semantics(
+        header: true,
+        child: Text(text, style: FormTokens.heading.copyWith(fontSize: 21)),
+      ),
+    ),
+  );
+}
+
+/// One stack's looks to leaf through, with "+ New" for that mission. It
+/// follows the feed, so new and changed looks show up live, and closes once
+/// the stack is empty.
+class _StackPage extends StatefulWidget {
+  const _StackPage({
+    required this.stack,
+    required this.looksOf,
+    required this.titleOf,
+    required this.createIn,
+    required this.cardBuilder,
+  });
+
+  final LookStack stack;
+  final List<CachedLook> Function(FeedState, LookStack) looksOf;
+  final String Function(BuildContext, FeedState, LookStack) titleOf;
+  final VoidCallback? Function(BuildContext, LookStack) createIn;
+  final Widget Function(BuildContext, FeedState, CachedLook) cardBuilder;
+
+  @override
+  State<_StackPage> createState() => _StackPageState();
+}
+
+class _StackPageState extends State<_StackPage> {
+  var _index = 0;
+  var _closing = false;
+
+  @override
+  Widget build(BuildContext context) => BlocBuilder<FeedCubit, FeedState>(
+    builder: (context, state) {
+      final looks = widget.looksOf(state, widget.stack);
+      if (looks.isEmpty && !_closing) {
+        _closing = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) Navigator.of(context).pop();
+        });
+      }
+      final index = looks.isEmpty ? 0 : math.min(_index, looks.length - 1);
+      final create = widget.createIn(context, widget.stack);
+      return Scaffold(
+        backgroundColor: FormTokens.paper,
+        body: AnnotatedRegion(
+          value: SystemUiOverlayStyle.dark,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    4,
+                    4,
+                    FormTokens.gutter,
+                    12,
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        tooltip: MaterialLocalizations.of(
+                          context,
+                        ).backButtonTooltip,
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 20,
+                          color: FormTokens.ink,
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.titleOf(context, state, widget.stack),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: FormTokens.heading.copyWith(fontSize: 23),
+                            ),
+                            AnimatedSwitcher(
+                              duration: FormTokens.quick,
+                              child: Text(
+                                looks.isEmpty
+                                    ? ''
+                                    : '${index + 1} / ${looks.length}',
+                                key: ValueKey('$index/${looks.length}'),
+                                style: FormTokens.small.copyWith(
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (create != null) _NewPill(onPressed: create),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: LookPager(
+                    itemCount: looks.length,
+                    itemBuilder: (context, i) =>
+                        widget.cardBuilder(context, state, looks[i]),
+                    onPage: (value) => setState(() => _index = value),
+                  ),
+                ),
+                SizedBox(height: MediaQuery.paddingOf(context).bottom + 8),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// "+ New" in a stack's header, in the selected tint.
+class _NewPill extends StatelessWidget {
+  const _NewPill({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: context.tr(LocaleKeys.createLook),
+    excludeSemantics: true,
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        unawaited(HapticFeedback.lightImpact());
+        onPressed();
+      },
+      child: SizedBox(
+        height: 44,
+        child: Center(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: FormTokens.selectedTint,
+              borderRadius: BorderRadius.circular(FormTokens.chipRadius),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                spacing: 4,
+                children: [
+                  const Icon(Icons.add, size: 18, color: FormTokens.green),
+                  Text(
+                    context.tr(LocaleKeys.stackNew),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: FormTokens.green,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }

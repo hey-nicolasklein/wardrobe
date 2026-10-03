@@ -174,6 +174,7 @@ abstract class LocaleKeys {
   static const visual_wardrobeTab = 'visual.wardrobeTab';
   static const visual = 'visual';
   static const feedEmptyTitle = 'feedEmptyTitle';
+  static const feedLoading = 'feedLoading';
   static const feedEmptyWithSheet = 'feedEmptyWithSheet';
   static const feedEmptyWithoutSheet = 'feedEmptyWithoutSheet';
   static const feedFirstLook = 'feedFirstLook';
@@ -200,7 +201,11 @@ abstract class LocaleKeys {
   static const lookGeneratingTitle = 'lookGeneratingTitle';
   static const lookGeneratingBody = 'lookGeneratingBody';
   static const lookFlatEmpty = 'lookFlatEmpty';
+  static const lookCostAction = 'lookCostAction';
+  static const lookCostBalance = 'lookCostBalance';
+  static const lookConfirmCreate = 'lookConfirmCreate';
   static const lookVary = 'lookVary';
+  static const lookVaryBody = 'lookVaryBody';
   static const lookCombine = 'lookCombine';
   static const lookDetails = 'lookDetails';
   static const lookDownloadWorn = 'lookDownloadWorn';
@@ -211,6 +216,7 @@ abstract class LocaleKeys {
   static const lookDetailsTitle = 'lookDetailsTitle';
   static const lookShotLabel = 'lookShotLabel';
   static const lookReshoot = 'lookReshoot';
+  static const lookReshootBody = 'lookReshootBody';
   static const lookShotHide = 'lookShotHide';
   static const lookShotShow = 'lookShotShow';
   static const lookConcept = 'lookConcept';
@@ -292,6 +298,7 @@ abstract class LocaleKeys {
   static const tryOnBadge = 'tryOnBadge';
   static const tryOnLookCaption = 'tryOnLookCaption';
   static const tryOnAgain = 'tryOnAgain';
+  static const tryOnAgainBody = 'tryOnAgainBody';
   static const lookImageCost = 'lookImageCost';
   static const costs_title = 'costs.title';
   static const costs_previousWeek = 'costs.previousWeek';
@@ -574,13 +581,22 @@ abstract class LocaleKeys {
   static const credits_shelfImageMany = 'credits.shelfImageMany';
   static const credits_empty = 'credits.empty';
   static const credits = 'credits';
+  static const lookCostBadge = 'lookCostBadge';
+  static const lookNeedsConnection = 'lookNeedsConnection';
+  static const lookSeeCredits = 'lookSeeCredits';
+  static const lookRevealPieces = 'lookRevealPieces';
   static const lookMenuTitle = 'lookMenuTitle';
   static const lookModel = 'lookModel';
   static const lookCharacterReference = 'lookCharacterReference';
   static const lookImageCostValue = 'lookImageCostValue';
-  static const lookUpgradeConfirm = 'lookUpgradeConfirm';
-  static const feedHeroBody = 'feedHeroBody';
-  static const feedHeroEyebrow = 'feedHeroEyebrow';
-  static const lookMenuPrompt = 'lookMenuPrompt';
-  static const feedHeroTitle = 'feedHeroTitle';
+  static const stackAll = 'stackAll';
+  static const stackTryOn = 'stackTryOn';
+  static const stackSaved = 'stackSaved';
+  static const stackNew = 'stackNew';
+  static const stackCountOne = 'stackCountOne';
+  static const stackCountMany = 'stackCountMany';
+  static const stackSectionOccasions = 'stackSectionOccasions';
+  static const stackSectionCollections = 'stackSectionCollections';
+  static const stackSectionPieces = 'stackSectionPieces';
+  static const stackSectionColors = 'stackSectionColors';
 }
