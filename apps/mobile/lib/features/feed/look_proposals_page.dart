@@ -111,7 +111,8 @@ class _ProposalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final planned = look.state == 'proposed' || rendered;
-    final caption = lookCaption(look);
+    // The planner's activity alone; the scene text is written for the image model.
+    final caption = look.concept?.activity ?? '';
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -150,7 +151,12 @@ class _ProposalCard extends StatelessWidget {
                 ),
                 if (caption.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Text(caption, style: FormTokens.body),
+                  Text(
+                    caption,
+                    style: FormTokens.small,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
                 const SizedBox(height: 12),
                 FilledButton(
