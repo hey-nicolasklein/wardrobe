@@ -111,6 +111,7 @@ class FeedPage extends StatelessWidget {
                     ),
                     sliver: SliverList.list(
                       children: [
+                        FormWordmark(title: context.tr(LocaleKeys.appName)),
                         // The cloud carries the create action once there are
                         // enough pieces to fill it.
                         _LooksHeader(
@@ -1294,27 +1295,26 @@ class _LooksHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 6, bottom: 4),
-    child: SizedBox(
-      height: 60,
-      child: Row(
-        children: [
-          Expanded(
-            child: Semantics(
-              header: true,
-              child: Text(
-                context.tr(LocaleKeys.feed),
-                style: FormTokens.display.copyWith(fontSize: 38),
-              ),
+    padding: const EdgeInsets.only(top: 4, bottom: 10),
+    child: Row(
+      children: [
+        Expanded(
+          child: Semantics(
+            header: true,
+            child: Text(
+              context.tr(LocaleKeys.feed),
+              style: FormTokens.display.copyWith(fontSize: 36),
             ),
           ),
-          if (onCreate case final onCreate?)
-            FormAddButton(
-              label: context.tr(LocaleKeys.createLook),
-              onPressed: onCreate,
-            ),
+        ),
+        if (onCreate case final onCreate?) ...[
+          const SizedBox(width: 15),
+          FormAddButton(
+            label: context.tr(LocaleKeys.createLook),
+            onPressed: onCreate,
+          ),
         ],
-      ),
+      ],
     ),
   );
 }
