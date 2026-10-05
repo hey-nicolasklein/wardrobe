@@ -7,7 +7,7 @@ import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/utils/idempotency_key.dart';
 
 /// Outfits one swipe session shows at most.
-const maxSessionProposals = 10;
+const maxSessionProposals = 5;
 
 /// How the user marked a piece on a proposal card.
 enum PieceMark { keep, exclude }
