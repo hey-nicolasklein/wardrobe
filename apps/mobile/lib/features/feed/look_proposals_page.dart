@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
@@ -505,7 +506,7 @@ class _SwipeDeckState extends State<_SwipeDeck>
                           top: 22,
                           right: 22,
                           child: _Stamp(
-                            label: context.tr(LocaleKeys.proposalsSkipOne),
+                            label: context.tr(LocaleKeys.proposalsSkipStamp),
                             color: FormTokens.ink,
                             angle: 0.2,
                             visible: isTop ? (-progress).clamp(0.0, 1.0) : 0,
@@ -873,79 +874,93 @@ class _PlanningCard extends StatefulWidget {
 
 class _PlanningCardState extends State<_PlanningCard>
     with SingleTickerProviderStateMixin {
-  late final _sweep = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1600),
-  )..repeat();
+  late final Ticker _ticker;
+  Duration _elapsed = Duration.zero;
 
   // Ghost pieces roughly where a flat lay puts top, jacket, bottoms, shoes.
-  static const List<({double x, double y, double w, double h})> _ghosts = [
-    (x: 0.08, y: 0.06, w: 0.42, h: 0.34),
-    (x: 0.54, y: 0.1, w: 0.38, h: 0.3),
-    (x: 0.14, y: 0.46, w: 0.34, h: 0.46),
-    (x: 0.6, y: 0.66, w: 0.26, h: 0.2),
+  // Each breathes and drifts at its own unrelated pace, so the card never
+  // settles into a loop the eye can pick up.
+  static const List<
+    ({double x, double y, double w, double h, double pace, double phase})
+  >
+  _ghosts = [
+    (x: 0.08, y: 0.06, w: 0.42, h: 0.34, pace: 0.83, phase: 0),
+    (x: 0.54, y: 0.1, w: 0.38, h: 0.3, pace: 1.17, phase: 2.1),
+    (x: 0.14, y: 0.46, w: 0.34, h: 0.46, pace: 0.61, phase: 4.3),
+    (x: 0.6, y: 0.66, w: 0.26, h: 0.2, pace: 1.39, phase: 1.2),
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker((elapsed) => setState(() => _elapsed = elapsed));
+    unawaited(_ticker.start());
+  }
+
+  @override
   void dispose() {
-    _sweep.dispose();
+    _ticker.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => _CardSurface(
-    child: Column(
-      children: [
-        Expanded(
-          child: AnimatedBuilder(
-            animation: _sweep,
-            builder: (context, _) => ShaderMask(
-              blendMode: BlendMode.srcATop,
-              shaderCallback: (bounds) => LinearGradient(
-                begin: Alignment(-1.6 + 3.2 * _sweep.value, -0.4),
-                end: Alignment(-0.8 + 3.2 * _sweep.value, 0.4),
-                colors: const [
-                  FormTokens.flatLayPaper,
-                  FormTokens.surface,
-                  FormTokens.flatLayPaper,
-                ],
-              ).createShader(bounds),
-              child: LayoutBuilder(
-                builder: (context, constraints) => Stack(
-                  children: [
-                    for (final ghost in _ghosts)
-                      Positioned(
-                        left: ghost.x * constraints.maxWidth,
-                        top: ghost.y * constraints.maxHeight,
-                        width: ghost.w * constraints.maxWidth,
-                        height: ghost.h * constraints.maxHeight,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: FormTokens.flatLayPaper,
-                            borderRadius: BorderRadius.circular(
-                              FormTokens.panelRadius,
+  Widget build(BuildContext context) {
+    final t = _elapsed.inMilliseconds / 1000;
+    return _CardSurface(
+      child: Column(
+        children: [
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) => Stack(
+                children: [
+                  for (final ghost in _ghosts)
+                    Positioned(
+                      left: ghost.x * constraints.maxWidth,
+                      top: ghost.y * constraints.maxHeight,
+                      width: ghost.w * constraints.maxWidth,
+                      height: ghost.h * constraints.maxHeight,
+                      child: Transform.translate(
+                        offset: Offset(
+                          0,
+                          3 * math.sin(t * ghost.pace * 0.9 + ghost.phase),
+                        ),
+                        child: Opacity(
+                          opacity:
+                              0.55 +
+                              0.45 *
+                                  (0.5 +
+                                      0.5 *
+                                          math.sin(
+                                            t * ghost.pace + ghost.phase,
+                                          )),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: FormTokens.flatLayPaper,
+                              borderRadius: BorderRadius.circular(
+                                FormTokens.panelRadius,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          context.tr(
-            widget.building
-                ? LocaleKeys.proposalsPlanningBuilding
-                : LocaleKeys.proposalsPlanningNext,
+          const SizedBox(height: 12),
+          Text(
+            context.tr(
+              widget.building
+                  ? LocaleKeys.proposalsPlanningBuilding
+                  : LocaleKeys.proposalsPlanningNext,
+            ),
+            style: FormTokens.small,
           ),
-          style: FormTokens.small,
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 class _DeckActions extends StatelessWidget {
@@ -962,23 +977,30 @@ class _DeckActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      IconButton.filledTonal(
+      // Skipping is the light action, generating the one that costs.
+      TextButton.icon(
         onPressed: enabled ? onSkip : null,
-        tooltip: context.tr(LocaleKeys.proposalsSkipOne),
-        iconSize: 26,
-        padding: const EdgeInsets.all(14),
-        icon: const Icon(Icons.close),
+        style: TextButton.styleFrom(foregroundColor: FormTokens.muted),
+        icon: const Icon(Icons.arrow_back, size: 18),
+        label: Text(context.tr(LocaleKeys.proposalsSkipOne)),
       ),
-      const SizedBox(width: 12),
+      const SizedBox(width: 8),
       Expanded(
-        child: FilledButton.icon(
+        child: FilledButton(
           onPressed: enabled ? onPick : null,
-          icon: const Icon(Icons.auto_awesome, size: 18),
-          label: Text(
-            lookCostLabel(
-              context,
-              context.tr(LocaleKeys.proposalsRender),
-              context.watch<CreditsCubit>().state,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 56),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+          ),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              lookCostLabel(
+                context,
+                context.tr(LocaleKeys.proposalsRender),
+                context.watch<CreditsCubit>().state,
+              ),
+              maxLines: 1,
             ),
           ),
         ),

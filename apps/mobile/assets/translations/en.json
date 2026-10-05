@@ -655,7 +655,7 @@
   "proposalsSkip": "None of these",
   "proposalsDone": "Done",
   "proposalsFailed": "Planning failed. Try a new round.",
-  "proposalsSkipOne": "Skip",
+  "proposalsSkipOne": "Next outfit",
   "proposalsPicked": {
     "one": "1 outfit on its way",
     "other": "{} outfits on their way"
@@ -685,5 +685,6 @@
   "proposalsSwap": "Swap",
   "proposalsKeep": "Keep",
   "proposalsKept": "Kept",
-  "proposalsPlanningNext": "Putting the next outfit together…"
+  "proposalsPlanningNext": "Putting the next outfit together…",
+  "proposalsSkipStamp": "Next"
 }

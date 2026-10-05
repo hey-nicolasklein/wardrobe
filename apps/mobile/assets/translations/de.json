@@ -655,7 +655,7 @@
   "proposalsSkip": "Keiner davon",
   "proposalsDone": "Fertig",
   "proposalsFailed": "Die Planung ist fehlgeschlagen. Versuch eine neue Runde.",
-  "proposalsSkipOne": "Weiter",
+  "proposalsSkipOne": "Nächstes Outfit",
   "proposalsPicked": {
     "one": "1 Outfit ist unterwegs",
     "other": "{} Outfits sind unterwegs"
@@ -685,5 +685,6 @@
   "proposalsSwap": "Tauschen",
   "proposalsKeep": "Behalten",
   "proposalsKept": "Behalten",
-  "proposalsPlanningNext": "Nächstes Outfit wird zusammengestellt…"
+  "proposalsPlanningNext": "Nächstes Outfit wird zusammengestellt…",
+  "proposalsSkipStamp": "Nächstes"
 }
