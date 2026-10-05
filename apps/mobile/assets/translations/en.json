@@ -647,20 +647,20 @@
   "photosOfYouEmpty": "So looks on you actually look like you.",
   "composerProposeAction": "Show outfits",
   "proposalsTitle": "Pick outfits",
-  "proposalsHint": "Swipe right to generate, left to skip. Planning is free.",
+  "proposalsHint": "Swipe right to generate, left for the next outfit.",
   "proposalsRender": "Generate",
   "proposalsSkip": "None of these",
   "proposalsDone": "Done",
-  "proposalsFailed": "No outfit could be planned. Go back and try again.",
+  "proposalsFailed": "Planning failed. Try a new round.",
   "proposalsSkipOne": "Skip",
   "proposalsPlanningPieces": "Picking pieces from your closet…",
   "proposalsPlanningScene": "Finding a place to wear it…",
   "proposalsPlanningFinish": "Checking it differs from your last looks…",
   "proposalsPicked": {
-    "one": "1 outfit is developing in your feed.",
-    "other": "{} outfits are developing in your feed."
+    "one": "1 outfit on its way",
+    "other": "{} outfits on their way"
   },
-  "proposalsNonePicked": "Nothing caught your eye. Want new ideas?",
+  "proposalsNonePicked": "Nothing for today?",
   "proposalsMore": "More outfits",
   "proposalsReasonNew": "New in your closet: {piece}",
   "proposalsReasonNever": "Never styled yet: {piece}",
@@ -671,5 +671,15 @@
   },
   "proposalsReasonOccasion": "Fits {occasion}",
   "proposalsReasonFresh": "Unlike your last looks",
-  "proposalsReasonPieceFallback": "a piece"
+  "proposalsReasonPieceFallback": "a piece",
+  "proposalsTapHint": "Tap a piece to keep it, tap again to rule it out",
+  "proposalsYourLook": "Your look",
+  "proposalsExcluded": {
+    "one": "1 ruled out",
+    "other": "{} ruled out"
+  },
+  "proposalsPlanningBuilding": "Building around the pieces you kept…",
+  "proposalsPickedBody": "They develop at the top of your feed in a moment.",
+  "proposalsNonePickedBody": "Start a new round, every outfit will be fresh.",
+  "proposalsFailedTitle": "No outfits this time"
 }

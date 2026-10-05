@@ -302,6 +302,12 @@ export const proposeLooksRequestSchema = z
     style: lookStyleSchema.default('candid'),
     completion: lookCompletionSchema.default('wardrobe'),
     count: z.number().int().min(1).max(4).default(3),
+    // Pieces the user ruled out while swiping. Never planned into an outfit.
+    excludedItemIds: z.array(opaqueIdSchema).max(200).default([]),
+    // Adds to the open proposals instead of replacing them.
+    append: z.boolean().default(false),
+    // With append: open proposals planned with outdated choices, dropped now.
+    discardLookIds: z.array(opaqueIdSchema).max(20).default([]),
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();

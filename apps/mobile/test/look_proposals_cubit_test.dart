@@ -19,6 +19,7 @@ void main() {
   late LookRepository looks;
   late List<String> rendered;
   late List<Map<String, dynamic>> proposals;
+  late List<Map<String, dynamic>> proposeBodies;
 
   Map<String, dynamic> proposal(String id, String state, String createdAt) =>
       lookJson(id: id, state: state, assetId: null)
@@ -31,6 +32,7 @@ void main() {
     database = AppDatabase(NativeDatabase.memory());
     directory = await Directory.systemTemp.createTemp('form-proposals-test-');
     rendered = [];
+    proposeBodies = [];
     proposals = [
       proposal('look-a', 'proposed', '2026-10-05T12:00:00.000Z'),
       proposal('look-b', 'proposed', '2026-10-05T12:00:01.000Z'),
@@ -39,6 +41,11 @@ void main() {
     final api = FormApi(
       Dio()
         ..httpClientAdapter = FakeServer((options) async {
+          if (options.method == 'POST' &&
+              options.path == 'v1/looks/proposals') {
+            proposeBodies.add(options.data as Map<String, dynamic>);
+            return jsonResponse(jsonEncode({'lookIds': <String>[]}), 202);
+          }
           if (options.path == 'v1/looks/proposals') {
             return jsonResponse(jsonEncode({'looks': proposals}));
           }
@@ -87,4 +94,36 @@ void main() {
       expect(cubit.state.finished, isTrue);
     },
   );
+  test('kept and ruled out pieces shape the next proposals', () async {
+    final cubit = LookProposalsCubit(
+      looks,
+      quality: 'low',
+      request: {
+        'exactItemIds': <String>[],
+        'categories': <String>[],
+        'occasion': null,
+        'style': 'candid',
+        'completion': 'wardrobe',
+        'idempotencyKey': 'composer-key-000001',
+      },
+    );
+    addTearDown(cubit.close);
+    await cubit.refresh();
+    cubit
+      ..togglePiece('jacket') // keep
+      ..togglePiece('pants') // keep
+      ..togglePiece('pants'); // exclude
+    expect(cubit.state.kept, {'jacket'});
+    expect(cubit.state.excluded, {'pants'});
+
+    cubit.skip('look-a');
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    final body = proposeBodies.single;
+    expect(body['append'], isTrue);
+    expect(body['exactItemIds'], ['jacket']);
+    expect(body['excludedItemIds'], ['pants']);
+    // look-b was planned before the marks, so it is replaced.
+    expect(body['discardLookIds'], ['look-b']);
+    expect(body['count'], 2);
+  });
 }

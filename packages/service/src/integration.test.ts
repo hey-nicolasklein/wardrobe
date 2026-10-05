@@ -108,7 +108,17 @@ test('proposals are planned for free and only the picked one is rendered and cha
     await assert.rejects(renderLookProposal(database, { accountId, lookId: picked, idempotencyKey: randomUUID() }), /nicht mehr verfügbar/);
     // A new batch replaces the unpicked proposals.
     await proposeLooks(database, { ...command, count: 1, idempotencyKey: randomUUID() });
-    assert.equal((await listLookProposals(database, accountId)).length, 1);
+    const [kept] = await listLookProposals(database, accountId);
+    assert.ok(kept);
+    // Appending keeps open proposals, drops outdated ones, and carries exclusions to the planner.
+    const appended = await proposeLooks(database, { ...command, count: 1, append: true, excludedItemIds: [fixtureIds.readyItem], idempotencyKey: randomUUID() });
+    assert.deepEqual((await listLookProposals(database, accountId)).map((look) => look.id).sort(), [kept.id, appended.lookIds[0]!].sort());
+    const appendedJob = (await database.query<{ payload: { excludedItemIds?: string[] } }>("SELECT payload FROM remote_image_jobs WHERE look_id=$1", [appended.lookIds[0]])).rows[0]!;
+    assert.deepEqual(appendedJob.payload.excludedItemIds, [fixtureIds.readyItem]);
+    await proposeLooks(database, { ...command, count: 1, append: true, discardLookIds: [kept.id], idempotencyKey: randomUUID() });
+    const open = (await listLookProposals(database, accountId)).map((look) => look.id);
+    assert.equal(open.length, 2);
+    assert.ok(!open.includes(kept.id));
     await database.query("UPDATE remote_image_jobs SET state='succeeded' WHERE account_id=$1 AND state='queued'", [accountId]);
   } finally {
     storage.client.destroy();

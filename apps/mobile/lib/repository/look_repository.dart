@@ -286,9 +286,16 @@ class LookRepository {
     }
   }
 
-  /// Plans outfits without rendering them, replacing earlier proposals.
-  /// [body] is a create command's body; `count` proposals are planned.
-  Future<void> propose(Map<String, dynamic> body) => _request(
+  /// Plans [count] outfits without rendering them. [body] is a create
+  /// command's body. Without [append] they replace the open proposals;
+  /// with it they join them, minus [discardLookIds].
+  Future<void> propose(
+    Map<String, dynamic> body, {
+    int count = 3,
+    bool append = false,
+    List<String> excludedItemIds = const [],
+    List<String> discardLookIds = const [],
+  }) => _request(
     'v1/looks/proposals',
     method: 'POST',
     data: {
@@ -302,7 +309,10 @@ class LookRepository {
           'idempotencyKey',
         }.contains(entry.key))
           entry.key: entry.value,
-      'count': 3,
+      'count': count,
+      if (append) 'append': true,
+      if (excludedItemIds.isNotEmpty) 'excludedItemIds': excludedItemIds,
+      if (discardLookIds.isNotEmpty) 'discardLookIds': discardLookIds,
     },
   );
 

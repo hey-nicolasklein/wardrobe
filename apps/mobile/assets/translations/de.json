@@ -647,20 +647,20 @@
   "photosOfYouEmpty": "Damit Looks an dir aussehen wie du.",
   "composerProposeAction": "Outfits vorschlagen",
   "proposalsTitle": "Outfits auswählen",
-  "proposalsHint": "Rechts wischen zum Generieren, links zum Überspringen. Vorschläge sind kostenlos.",
+  "proposalsHint": "Rechts wischen zum Generieren, links zum nächsten Outfit.",
   "proposalsRender": "Generieren",
   "proposalsSkip": "Keiner davon",
   "proposalsDone": "Fertig",
-  "proposalsFailed": "Es konnte kein Outfit geplant werden. Geh zurück und versuch es erneut.",
+  "proposalsFailed": "Die Planung ist fehlgeschlagen. Versuch eine neue Runde.",
   "proposalsSkipOne": "Weiter",
   "proposalsPlanningPieces": "Stücke aus deinem Schrank werden kombiniert…",
   "proposalsPlanningScene": "Passender Ort wird gesucht…",
   "proposalsPlanningFinish": "Abgleich mit deinen letzten Looks…",
   "proposalsPicked": {
-    "one": "1 Outfit entsteht in deinem Feed.",
-    "other": "{} Outfits entstehen in deinem Feed."
+    "one": "1 Outfit ist unterwegs",
+    "other": "{} Outfits sind unterwegs"
   },
-  "proposalsNonePicked": "Nichts dabei? Hol dir neue Ideen.",
+  "proposalsNonePicked": "Heute nichts dabei?",
   "proposalsMore": "Mehr Outfits",
   "proposalsReasonNew": "Neu im Schrank: {piece}",
   "proposalsReasonNever": "Noch nie kombiniert: {piece}",
@@ -671,5 +671,15 @@
   },
   "proposalsReasonOccasion": "Passt zu {occasion}",
   "proposalsReasonFresh": "Anders als deine letzten Looks",
-  "proposalsReasonPieceFallback": "ein Stück"
+  "proposalsReasonPieceFallback": "ein Stück",
+  "proposalsTapHint": "Tippe ein Stück zum Behalten, nochmal zum Aussortieren",
+  "proposalsYourLook": "Dein Look",
+  "proposalsExcluded": {
+    "one": "1 aussortiert",
+    "other": "{} aussortiert"
+  },
+  "proposalsPlanningBuilding": "Baue um deine behaltenen Stücke…",
+  "proposalsPickedBody": "Sie entstehen gleich oben in deinem Feed.",
+  "proposalsNonePickedBody": "Starte eine neue Runde, jedes Outfit ist frisch.",
+  "proposalsFailedTitle": "Diesmal keine Outfits"
 }

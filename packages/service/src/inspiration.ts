@@ -479,6 +479,8 @@ export async function createLook(
     reshoot?: boolean;
     // Plan only and stop at `proposed`, see renderLookProposal.
     propose?: boolean;
+    // Pieces the planner must leave out, see proposeLooks.
+    excludedItemIds?: string[];
     idempotencyKey: string;
   },
 ) {
@@ -499,6 +501,7 @@ export async function createLook(
     ...(input.baseAssetId ? { baseAssetId: input.baseAssetId } : {}),
     ...(input.reshoot ? { reshoot: true } : {}),
     ...(input.propose ? { propose: true } : {}),
+    ...(input.excludedItemIds?.length ? { excludedItemIds: input.excludedItemIds } : {}),
   };
   return withTransaction(database, async (client) => {
     const prior = await replay<{ jobId: string; lookId: string }>(
@@ -657,6 +660,7 @@ export async function createLook(
         style: input.style ?? 'candid',
         completeWithWardrobe,
         ...(focus ? { focus } : {}),
+        ...(input.excludedItemIds?.length ? { excludedItemIds: input.excludedItemIds } : {}),
         outputSize: lookOutputSize,
         ...(preserved ? { referenceAssetId: preserved.assetId } : {}),
         ...reshot?.payload,
@@ -742,14 +746,19 @@ export async function listLookProposals(database: Database, accountId: string): 
 /** Replaces the open proposals with `count` freshly planned ones. Nothing is rendered or charged. */
 export async function proposeLooks(
   database: Database,
-  input: Omit<Parameters<typeof createLook>[1], 'propose' | 'parentLookId'> & { count: number },
+  input: Omit<Parameters<typeof createLook>[1], 'propose' | 'parentLookId'> & {
+    count: number;
+    append?: boolean;
+    discardLookIds?: string[];
+  },
 ) {
-  const { count, ...look } = input;
+  const { count, append, discardLookIds, ...look } = input;
   await database.query(
     // A replayed batch keeps its own proposals.
     `UPDATE looks l SET deleted_at=now() WHERE l.account_id=$1 AND l.proposal AND l.deleted_at IS NULL
+     AND ($3 OR l.id = ANY($4::uuid[]))
      AND NOT EXISTS (SELECT 1 FROM remote_image_jobs rj WHERE rj.look_id=l.id AND rj.idempotency_key LIKE $2)`,
-    [input.accountId, `look:${input.idempotencyKey}:%`],
+    [input.accountId, `look:${input.idempotencyKey}:%`, !append, discardLookIds ?? []],
   );
   await database.query(
     `UPDATE remote_image_jobs rj SET state='cancelled' FROM looks l
@@ -1172,11 +1181,12 @@ export async function executeInspirationJob(
       );
       itemIds = links.rows.map((r) => r.wardrobe_item_id);
     } else {
+      const excluded = (job.payload as { excludedItemIds?: string[] }).excludedItemIds ?? [];
       const planningCandidates = candidatesForLookPlan(
         candidates.rows,
         row.exact_item_ids,
         completeWithWardrobe,
-      );
+      ).filter((item) => !excluded.includes(item.id) || row.exact_item_ids.includes(item.id));
       // Proposals of the same batch, planned one after another per account.
       const siblings =
         job.kind === 'plan-look'
@@ -1234,14 +1244,15 @@ export async function executeInspirationJob(
         planningCandidates,
         row.exact_item_ids,
       );
-      if (siblings.some((sibling) => similarOutfit(sibling.ids, itemIds, row.exact_item_ids)))
+      // Repeats are only accepted on the last attempt, so a small closet or a
+      // mostly kept outfit still gets its proposal.
+      const lastAttempt = job.attempts >= job.maxAttempts;
+      if (!lastAttempt && siblings.some((sibling) => similarOutfit(sibling.ids, itemIds, row.exact_item_ids)))
         throw new CatalogJobError('validation', 'The proposal repeats a sibling outfit.', true);
-      // Repeating a recent look is only accepted on the last attempt, so a small
-      // closet still gets its proposal.
       const repeatsRecent = recent.rows.some((look) =>
         similarOutfit(look.ids, itemIds, row.exact_item_ids),
       );
-      if (job.kind === 'plan-look' && repeatsRecent && job.attempts < job.maxAttempts)
+      if (job.kind === 'plan-look' && repeatsRecent && !lastAttempt)
         throw new CatalogJobError('validation', 'The proposal repeats a recent look.', true);
       const occasion = (job.payload as { occasion?: LookOccasion | null }).occasion ?? null;
       const reasons: LookReason[] = [

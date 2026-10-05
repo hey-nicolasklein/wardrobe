@@ -653,4 +653,11 @@ abstract class LocaleKeys {
   static const proposalsReasonOccasion = 'proposalsReasonOccasion';
   static const proposalsReasonFresh = 'proposalsReasonFresh';
   static const proposalsReasonPieceFallback = 'proposalsReasonPieceFallback';
+  static const proposalsTapHint = 'proposalsTapHint';
+  static const proposalsYourLook = 'proposalsYourLook';
+  static const proposalsExcluded = 'proposalsExcluded';
+  static const proposalsPlanningBuilding = 'proposalsPlanningBuilding';
+  static const proposalsPickedBody = 'proposalsPickedBody';
+  static const proposalsNonePickedBody = 'proposalsNonePickedBody';
+  static const proposalsFailedTitle = 'proposalsFailedTitle';
 }

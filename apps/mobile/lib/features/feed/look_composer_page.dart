@@ -471,48 +471,26 @@ class _OccasionPresets extends StatelessWidget {
 
   final String? selected;
 
-  // One scrolling row of chips keeps full labels in every language. The row
-  // bleeds into the sheet gutters and fades out there on both sides, so chips
-  // line up with the content at rest but never end in a hard cut.
+  // One scrolling row of chips keeps full labels in every language. Like the
+  // category pills, chips running past the right edge fade out.
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      const gutter = FormTokens.gutter;
-      final width = constraints.maxWidth + 2 * gutter;
-      final edge = gutter / width;
-      // IntrinsicHeight gives the OverflowBox a bounded height inside the
-      // sheet's unbounded column.
-      return IntrinsicHeight(
-        child: OverflowBox(
-          minWidth: width,
-          maxWidth: width,
-          child: ShaderMask(
-            blendMode: BlendMode.dstIn,
-            shaderCallback: (bounds) => LinearGradient(
-              colors: const [
-                Colors.transparent,
-                Colors.black,
-                Colors.black,
-                Colors.transparent,
-              ],
-              stops: [0, edge, 1 - edge, 1],
-            ).createShader(bounds),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: gutter),
-              child: Row(
-                children: [
-                  for (final (index, preset) in occasionPresets.indexed) ...[
-                    if (index > 0) const SizedBox(width: 8),
-                    _preset(context, preset),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    },
+  Widget build(BuildContext context) => ShaderMask(
+    blendMode: BlendMode.dstIn,
+    shaderCallback: (bounds) => const LinearGradient(
+      colors: [Colors.black, Colors.black, Colors.transparent],
+      stops: [0, 0.85, 1],
+    ).createShader(bounds),
+    child: SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final (index, preset) in occasionPresets.indexed) ...[
+            if (index > 0) const SizedBox(width: 8),
+            _preset(context, preset),
+          ],
+        ],
+      ),
+    ),
   );
 
   Widget _preset(
