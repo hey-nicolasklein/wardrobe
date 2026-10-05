@@ -95,7 +95,7 @@ async function processJob(job: RemoteImageJob): Promise<void> {
   );
   try {
     await traceJob(job, () =>
-      job.kind === 'generate-character-sheet' || job.kind === 'generate-look'
+      job.kind === 'generate-character-sheet' || job.kind === 'generate-look' || job.kind === 'plan-look'
         ? executeInspirationJob(database, storage, provider, job, executionConfig)
         : executeCatalogJob(database, storage, provider, job, executionConfig),
     );
@@ -111,7 +111,7 @@ async function processJob(job: RemoteImageJob): Promise<void> {
       retryDelaySeconds: Math.min(60, 5 * 2 ** Math.max(0, job.attempts - 1)),
     });
     if (outcome === 'failed') {
-      if (job.kind === 'generate-character-sheet' || job.kind === 'generate-look') {
+      if (job.kind === 'generate-character-sheet' || job.kind === 'generate-look' || job.kind === 'plan-look') {
         await failInspirationAttempt(database, job, catalogError);
       } else {
         await failCatalogAttempt(database, job, catalogError);

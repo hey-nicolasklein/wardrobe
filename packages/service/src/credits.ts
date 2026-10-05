@@ -12,6 +12,8 @@ export const jobCreditCost: Record<RemoteImageJobKind, number> = {
   'generate-shelf-image': 1,
   'generate-character-sheet': 2,
   'generate-look': 2,
+  // Planning a proposal is a cheap text call. Rendering it is charged as a generate-look.
+  'plan-look': 0,
 };
 
 export const signupCredits = 40;

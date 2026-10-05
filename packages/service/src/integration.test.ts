@@ -28,6 +28,9 @@ import {
   ReplayCatalogProvider,
   resetFixtures,
   listLooks,
+  listLookProposals,
+  proposeLooks,
+  renderLookProposal,
   listCharacterSheets,
   removeCharacterSheet,
   addTryOnPhoto,
@@ -48,6 +51,70 @@ import {
 import { prepareIdentityReference } from './identity-collage.js';
 
 const enabled = process.env.FORM_RUN_SERVICE_INTEGRATION === 'true';
+
+test('proposals are planned for free and only the picked one is rendered and charged', { skip: !enabled }, async () => {
+  const database = createDatabase(readDatabaseConfig());
+  const storage = createPrivateObjectStorage(readObjectStorageConfig());
+  const config = { requestTimeoutMs: 10_000, pricing: {
+    effectiveDate: '2026-08-03', textInputMicrodollarsPerMillion: 0,
+    imageInputMicrodollarsPerMillion: 0, imageOutputMicrodollarsPerMillion: 0,
+  }, detectionPricing: {
+    model: 'gpt-5.6-luna', effectiveDate: '2026-07-30', inputMicrodollarsPerMillion: 0,
+    cachedInputMicrodollarsPerMillion: 0, cacheWriteInputMicrodollarsPerMillion: 0, outputMicrodollarsPerMillion: 0,
+  } };
+  try {
+    await migrateDatabase(database);
+    await ensurePrivateBucket(storage);
+    await resetFixtures(database, storage);
+    const accountId = fixtureIds.populatedAccount;
+    await createCharacterSheet(database, { accountId, referenceAssetIds: [fixtureIds.sourceAsset], note: null, idempotencyKey: randomUUID() });
+    await database.query('UPDATE accounts SET metered=true WHERE id=$1', [accountId]);
+    await grantCredits(database, { accountId, amount: 10, reason: 'grant' });
+    const balance = await creditBalance(database, accountId);
+    const command = { accountId, exactItemIds: [fixtureIds.readyItem], categories: [], count: 3, idempotencyKey: randomUUID() };
+    const proposed = await proposeLooks(database, command);
+    assert.equal(proposed.lookIds.length, 3);
+    assert.deepEqual(await proposeLooks(database, command), proposed);
+    assert.equal(await creditBalance(database, accountId), balance);
+    const concept = { activity: 'walking', scene: 'a quiet street', mood: 'relaxed', framing: 'full-body' as const };
+    const planner = Object.assign(new ReplayCatalogProvider([]), {
+      planLook: async () => ({ requestId: 'plan', itemIds: [fixtureIds.readyItem], concept }),
+      generateComposite: async () => assert.fail('planning a proposal must not render'),
+    });
+    const jobs = (await database.query<{ id: string; payload: unknown }>(
+      "SELECT id,payload FROM remote_image_jobs WHERE kind='plan-look' AND look_id = ANY($1::uuid[])", [proposed.lookIds],
+    )).rows;
+    assert.equal(jobs.length, 3);
+    for (const job of jobs)
+      await executeInspirationJob(database, storage, planner, {
+        id: job.id, accountId, kind: 'plan-look', payload: job.payload, wardrobeItemId: null, generationAttemptId: null,
+        attempts: 1, maxAttempts: 3, leaseExpiresAt: new Date(Date.now() + 60_000),
+      }, config);
+    await database.query("UPDATE remote_image_jobs SET state='succeeded' WHERE id = ANY($1::uuid[])", [jobs.map((job) => job.id)]);
+    const proposals = await listLookProposals(database, accountId);
+    assert.deepEqual(proposals.map((look) => look.state), ['proposed', 'proposed', 'proposed']);
+    assert.deepEqual(proposals[0]!.concept, concept);
+    assert.deepEqual(proposals[0]!.wardrobeItemIds, [fixtureIds.readyItem]);
+    assert.equal((await listLooks(database, accountId)).some((look) => proposed.lookIds.includes(look.id)), false);
+    const picked = proposed.lookIds[1]!;
+    const rendered = await renderLookProposal(database, { accountId, lookId: picked, quality: 'medium', idempotencyKey: randomUUID() });
+    assert.equal(await creditBalance(database, accountId), balance - 2);
+    const job = (await database.query<{ kind: string }>('SELECT kind FROM remote_image_jobs WHERE id=$1', [rendered.jobId])).rows[0]!;
+    assert.equal(job.kind, 'generate-look');
+    const look = (await listLooks(database, accountId)).find((entry) => entry.id === picked)!;
+    assert.equal(look.state, 'queued');
+    assert.equal(look.quality, 'medium');
+    assert.deepEqual(look.concept, concept);
+    await assert.rejects(renderLookProposal(database, { accountId, lookId: picked, idempotencyKey: randomUUID() }), /nicht mehr verfügbar/);
+    // A new batch replaces the unpicked proposals.
+    await proposeLooks(database, { ...command, count: 1, idempotencyKey: randomUUID() });
+    assert.equal((await listLookProposals(database, accountId)).length, 1);
+    await database.query("UPDATE remote_image_jobs SET state='succeeded' WHERE account_id=$1 AND state='queued'", [accountId]);
+  } finally {
+    storage.client.destroy();
+    await database.end();
+  }
+});
 
 test('photo collages cost zero and become the first reference for a priced feed look', { skip: !enabled }, async () => {
   const database = createDatabase(readDatabaseConfig());

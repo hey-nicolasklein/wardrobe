@@ -7,6 +7,7 @@ import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
 import 'package:form_mobile/features/feed/look_composer_page.dart';
+import 'package:form_mobile/features/feed/look_proposals_page.dart';
 import 'package:form_mobile/features/intake/intake_page.dart';
 import 'package:form_mobile/features/onboarding/onboarding_page.dart';
 import 'package:form_mobile/features/settings/character/character_detail_page.dart';
@@ -106,6 +107,17 @@ GoRouter createRouter({bool onboarding = false}) {
                         tryOn: state.uri.queryParameters['mode'] == 'try-on',
                         occasion: state.uri.queryParameters['occasion'],
                         from: state.extra as Look?,
+                      ),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'proposals',
+                    parentNavigatorKey: _rootNavigatorKey,
+                    pageBuilder: (_, state) => FormSheetPage(
+                      key: state.pageKey,
+                      maxExtent: 0.985,
+                      child: LookProposalsPage(
+                        quality: state.uri.queryParameters['quality'] ?? 'low',
                       ),
                     ),
                   ),

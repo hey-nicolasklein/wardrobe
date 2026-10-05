@@ -644,5 +644,14 @@
   "photosOfYou": "Fotos von dir",
   "photosOfYouCollage": "{count} in der Collage",
   "photosOfYouTryOn": "{count} für die Anprobe",
-  "photosOfYouEmpty": "Damit Looks an dir aussehen wie du."
+  "photosOfYouEmpty": "Damit Looks an dir aussehen wie du.",
+  "composerProposeAction": "Outfits vorschlagen",
+  "proposalsTitle": "Outfits auswählen",
+  "proposalsHint": "Vorschläge sind kostenlos. Nur Outfits, die du generierst, kosten Credits.",
+  "proposalsPlanning": "Outfit wird zusammengestellt…",
+  "proposalsRender": "Generieren",
+  "proposalsRendering": "Entsteht in deinem Feed",
+  "proposalsSkip": "Keiner davon",
+  "proposalsDone": "Fertig",
+  "proposalsFailed": "Es konnte kein Outfit geplant werden. Geh zurück und versuch es erneut."
 }

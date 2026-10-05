@@ -17,6 +17,7 @@ const traceNames: Record<RemoteImageJobKind, string> = {
   'generate-shelf-image': 'shelf-item-generation',
   'generate-look': 'feed-image',
   'generate-character-sheet': 'character-sheet',
+  'plan-look': 'look-proposal',
 };
 
 /** Runs one worker job inside its feature-named Langfuse trace. */

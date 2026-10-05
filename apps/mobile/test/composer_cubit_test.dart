@@ -51,6 +51,20 @@ void main() {
             }
             return jsonResponse(jsonEncode({'lookId': 'look-0001'}), 202);
           }
+          if (options.method == 'POST' &&
+              options.path == 'v1/looks/proposals') {
+            createBodies.add(options.data as Map<String, dynamic>);
+            if (failNextCreate) {
+              failNextCreate = false;
+              return jsonResponse('{}', 503);
+            }
+            return jsonResponse(
+              jsonEncode({
+                'lookIds': ['look-0001'],
+              }),
+              202,
+            );
+          }
           if (options.path == 'v1/looks') {
             return jsonResponse(
               jsonEncode({
@@ -218,22 +232,23 @@ void main() {
     expect(tried.command().body['baseAssetId'], 'asset-base-photo');
   });
 
-  test('a failed submit retries with the same idempotency key', () async {
+  test('a failed proposal retries with the same idempotency key', () async {
     failNextCreate = true;
     final cubit = ComposerCubit(looks, preselectedIds: [shirt.id]);
     addTearDown(cubit.close);
     await cubit.submit();
     expect(cubit.state.failure, ApiFailure.unavailable);
-    expect(cubit.state.createdLookId, isNull);
+    expect(cubit.state.proposed, isFalse);
     await cubit.submit();
-    expect(cubit.state.createdLookId, 'look-0001');
+    expect(cubit.state.proposed, isTrue);
+    expect(cubit.state.createdLookId, isNull);
     expect(createBodies, hasLength(2));
     expect(
       createBodies.map((body) => body['idempotencyKey']).toSet(),
       {cubit.idempotencyKey},
     );
-    expect(await looks.loadLookStarts(), {
-      'look-0001': [shirt.id],
-    });
+    expect(createBodies.last['count'], 3);
+    expect(createBodies.last['exactItemIds'], [shirt.id]);
   });
+
 }

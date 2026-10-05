@@ -293,6 +293,22 @@ export const createLookRequestSchema = z
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();
+// Plans `count` outfits without rendering them; the user picks which to render.
+export const proposeLooksRequestSchema = z
+  .object({
+    exactItemIds: z.array(opaqueIdSchema).max(12).default([]),
+    categories: z.array(supportedCategorySchema).max(9).default([]),
+    occasion: lookOccasionSchema.nullable().optional(),
+    style: lookStyleSchema.default('candid'),
+    completion: lookCompletionSchema.default('wardrobe'),
+    count: z.number().int().min(1).max(4).default(3),
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+export const renderLookProposalRequestSchema = z
+  .object({ quality: generationQualitySchema.default('low'), idempotencyKey: idempotencyKeySchema })
+  .strict();
+export const proposeLooksResponseSchema = z.object({ lookIds: z.array(opaqueIdSchema) }).strict();
 export const lookShotPreferencesResponseSchema = z
   .object({ hiddenShots: z.array(z.string().min(1).max(40)) })
   .strict();

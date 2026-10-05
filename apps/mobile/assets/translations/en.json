@@ -644,5 +644,14 @@
   "photosOfYou": "Photos of you",
   "photosOfYouCollage": "{count} in the collage",
   "photosOfYouTryOn": "{count} for try-ons",
-  "photosOfYouEmpty": "So looks on you actually look like you."
+  "photosOfYouEmpty": "So looks on you actually look like you.",
+  "composerProposeAction": "Show outfits",
+  "proposalsTitle": "Pick outfits",
+  "proposalsHint": "Planning is free. Only the outfits you generate cost credits.",
+  "proposalsPlanning": "Putting an outfit together…",
+  "proposalsRender": "Generate",
+  "proposalsRendering": "Developing in your feed",
+  "proposalsSkip": "None of these",
+  "proposalsDone": "Done",
+  "proposalsFailed": "No outfit could be planned. Go back and try again."
 }

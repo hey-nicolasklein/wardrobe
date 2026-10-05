@@ -59,6 +59,7 @@ class ComposerState {
     this.limitReached = false,
     this.failure,
     this.createdLookId,
+    this.proposed = false,
   });
 
   /// The pieces and choices [look] was made with, so it can be redone as is.
@@ -133,6 +134,10 @@ class ComposerState {
   /// Set once the server accepted the look. The page closes on it.
   final String? createdLookId;
 
+  /// Set once outfits were proposed instead of a look created. The page then
+  /// switches to the proposals, where the user picks what to render.
+  final bool proposed;
+
   /// Without picked pieces there is nothing to complete freely or frame alone.
   bool get canChooseCompletion => selectedIds.isNotEmpty;
 
@@ -190,6 +195,7 @@ class ComposerState {
     bool? limitReached,
     ApiFailure? Function()? failure,
     String? createdLookId,
+    bool? proposed,
   }) => ComposerState(
     selectedIds: selectedIds ?? this.selectedIds,
     categories: categories ?? this.categories,
@@ -213,6 +219,7 @@ class ComposerState {
     limitReached: limitReached ?? false,
     failure: failure == null ? this.failure : failure(),
     createdLookId: createdLookId ?? this.createdLookId,
+    proposed: proposed ?? this.proposed,
   );
 }
 
@@ -391,11 +398,20 @@ class ComposerCubit extends Cubit<ComposerState> {
         );
 
   Future<void> submit() async {
-    if (state.submitting || state.createdLookId != null || !state.canSubmit) {
+    if (state.submitting ||
+        state.createdLookId != null ||
+        state.proposed ||
+        !state.canSubmit) {
       return;
     }
     emit(state.copyWith(submitting: true, failure: () => null));
     try {
+      // New scenes are proposed first; a try-on has nothing to choose.
+      if (!state.tryOn) {
+        await looks.propose(command().body);
+        emit(state.copyWith(submitting: false, proposed: true));
+        return;
+      }
       final lookId = await looks.create(
         command(),
         state.selectedIds.toList(),

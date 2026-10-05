@@ -7,7 +7,7 @@ import { withTransaction } from './database.js';
 import { chargeJob, refundFailedJobs } from './credits.js';
 
 export type RemoteImageJobKind =
-  'detect-source-photo' | 'generate-shelf-image' | 'generate-character-sheet' | 'generate-look';
+  'detect-source-photo' | 'generate-shelf-image' | 'generate-character-sheet' | 'generate-look' | 'plan-look';
 export type RemoteImageJob = {
   id: string;
   accountId: string;

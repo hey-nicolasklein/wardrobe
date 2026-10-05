@@ -2,7 +2,14 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'look.g.dart';
 
-const lookStates = ['queued', 'planning', 'generating', 'ready', 'failed'];
+const lookStates = [
+  'queued',
+  'planning',
+  'proposed',
+  'generating',
+  'ready',
+  'failed',
+];
 const lookOccasions = ['night-out', 'party', 'business', 'casual'];
 
 /// Output sizes the server has produced. Feed images moved to 768x960; older

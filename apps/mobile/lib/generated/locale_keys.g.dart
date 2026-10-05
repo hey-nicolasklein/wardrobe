@@ -632,4 +632,13 @@ abstract class LocaleKeys {
   static const photosOfYouCollage = 'photosOfYouCollage';
   static const photosOfYouTryOn = 'photosOfYouTryOn';
   static const photosOfYouEmpty = 'photosOfYouEmpty';
+  static const composerProposeAction = 'composerProposeAction';
+  static const proposalsTitle = 'proposalsTitle';
+  static const proposalsHint = 'proposalsHint';
+  static const proposalsPlanning = 'proposalsPlanning';
+  static const proposalsRender = 'proposalsRender';
+  static const proposalsRendering = 'proposalsRendering';
+  static const proposalsSkip = 'proposalsSkip';
+  static const proposalsDone = 'proposalsDone';
+  static const proposalsFailed = 'proposalsFailed';
 }

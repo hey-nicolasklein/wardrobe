@@ -286,6 +286,49 @@ class LookRepository {
     }
   }
 
+  /// Plans outfits without rendering them, replacing earlier proposals.
+  /// [body] is a create command's body; `count` proposals are planned.
+  Future<void> propose(Map<String, dynamic> body) => _request(
+    'v1/looks/proposals',
+    method: 'POST',
+    data: {
+      for (final entry in body.entries)
+        if (const {
+          'exactItemIds',
+          'categories',
+          'occasion',
+          'style',
+          'completion',
+          'idempotencyKey',
+        }.contains(entry.key))
+          entry.key: entry.value,
+      'count': 3,
+    },
+  );
+
+  /// The open proposals, newest first, see [propose].
+  Future<List<Look>> proposals() async {
+    final response = await _request('v1/looks/proposals');
+    try {
+      return [
+        for (final raw in response['looks'] as List<dynamic>)
+          Look.fromJson(normalizeLookJson(raw as Map<String, dynamic>)),
+      ];
+    } on Object {
+      throw const FormApiException(ApiFailure.incompatible);
+    }
+  }
+
+  /// Renders a picked proposal. It then develops in the feed like any look.
+  Future<void> render(String lookId, {required String quality}) async {
+    await _request(
+      'v1/looks/$lookId/render',
+      method: 'POST',
+      data: {'quality': quality, 'idempotencyKey': newIdempotencyKey()},
+    );
+    await refreshAndNotify();
+  }
+
   Future<Map<String, List<String>>> loadLookStarts() async {
     final raw = await database.preference(_startsKey);
     if (raw == null || raw.isEmpty) return {};

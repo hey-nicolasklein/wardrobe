@@ -421,7 +421,7 @@ export function recentForLookPlan(
 
 export async function listLooks(database: Database, accountId: string): Promise<Look[]> {
   const rows = await database.query<LookRow>(
-    `SELECT ${lookColumns} FROM looks l LEFT JOIN private_assets pa ON pa.id=l.asset_id LEFT JOIN look_items li ON li.look_id=l.id LEFT JOIN wardrobe_items wi ON wi.id=li.wardrobe_item_id AND wi.deleted_at IS NULL WHERE l.account_id=$1 AND l.deleted_at IS NULL GROUP BY l.id, pa.pixel_width, pa.pixel_height ORDER BY l.created_at DESC`,
+    `SELECT ${lookColumns} FROM looks l LEFT JOIN private_assets pa ON pa.id=l.asset_id LEFT JOIN look_items li ON li.look_id=l.id LEFT JOIN wardrobe_items wi ON wi.id=li.wardrobe_item_id AND wi.deleted_at IS NULL WHERE l.account_id=$1 AND l.deleted_at IS NULL AND NOT l.proposal GROUP BY l.id, pa.pixel_width, pa.pixel_height ORDER BY l.created_at DESC`,
     [accountId],
   );
   return rows.rows.map(mapLook);
@@ -441,6 +441,8 @@ export async function createLook(
     completion?: LookCompletion;
     baseAssetId?: string;
     reshoot?: boolean;
+    // Plan only and stop at `proposed`, see renderLookProposal.
+    propose?: boolean;
     idempotencyKey: string;
   },
 ) {
@@ -460,6 +462,7 @@ export async function createLook(
     ...(completion === 'selected' ? { completion } : {}),
     ...(input.baseAssetId ? { baseAssetId: input.baseAssetId } : {}),
     ...(input.reshoot ? { reshoot: true } : {}),
+    ...(input.propose ? { propose: true } : {}),
   };
   return withTransaction(database, async (client) => {
     const prior = await replay<{ jobId: string; lookId: string }>(
@@ -498,6 +501,8 @@ export async function createLook(
     // "Same outfit, other perspective": the parent's concept with a new shot,
     // and the parent's job settings, so only the camera changes.
     let reshot: { concept: LookConcept; payload: Record<string, unknown> } | null = null;
+    if (input.propose && (parentId || input.baseAssetId))
+      throw new InspirationValidationError('proposal-invalid', 'Vorschläge gibt es nur für neue Looks.');
     if ((input.preserveComposition || input.reshoot) && !parentId)
       throw new InspirationValidationError('parent-required', 'Wähle einen fertigen Look.');
     if (input.reshoot && input.preserveComposition)
@@ -582,7 +587,7 @@ export async function createLook(
     // The legacy column is constrained to 1024x1280. The job payload records the
     // requested size; ready looks report the actual dimensions of their asset.
     await client.query(
-      `INSERT INTO looks(id,account_id,character_sheet_id,parent_look_id,state,exact_item_ids,category_constraints,model,quality,output_size,prompt_version,planned_concept,base_asset_id) VALUES($1,$2,$3,$4,'queued',$5,$6,$7,$9,'1024x1280',$8,$10,$11)`,
+      `INSERT INTO looks(id,account_id,character_sheet_id,parent_look_id,state,exact_item_ids,category_constraints,model,quality,output_size,prompt_version,planned_concept,base_asset_id,proposal) VALUES($1,$2,$3,$4,'queued',$5,$6,$7,$9,'1024x1280',$8,$10,$11,$12)`,
       [
         lookId,
         input.accountId,
@@ -595,6 +600,7 @@ export async function createLook(
         input.quality ?? 'low',
         preserved || reshot ? JSON.stringify((preserved ?? reshot)!.concept) : null,
         input.baseAssetId ?? null,
+        input.propose ?? false,
       ],
     );
     // The photo stays pickable, and deletable, from the try-on photo list.
@@ -608,7 +614,7 @@ export async function createLook(
         await client.query('INSERT INTO look_items(look_id,wardrobe_item_id,ordinal) VALUES($1,$2,$3)', [lookId, itemId, ordinal]);
     const jobId = await enqueueJob(client, {
       accountId: input.accountId,
-      kind: 'generate-look',
+      kind: input.propose ? 'plan-look' : 'generate-look',
       payload: {
         lookId,
         occasion: input.occasion ?? null,
@@ -687,6 +693,79 @@ export async function deleteLook(database: Database, input: { accountId: string;
     [input.lookId, input.accountId],
   );
   if (!result.rowCount) throw new OwnedResourceNotFoundError();
+}
+// Proposals of the last batch, newest first. Failed ones stay so the client can drop them.
+export async function listLookProposals(database: Database, accountId: string): Promise<Look[]> {
+  const rows = await database.query<LookRow>(
+    `SELECT ${lookColumns} FROM looks l LEFT JOIN private_assets pa ON pa.id=l.asset_id LEFT JOIN look_items li ON li.look_id=l.id LEFT JOIN wardrobe_items wi ON wi.id=li.wardrobe_item_id AND wi.deleted_at IS NULL WHERE l.account_id=$1 AND l.deleted_at IS NULL AND l.proposal GROUP BY l.id, pa.pixel_width, pa.pixel_height ORDER BY l.created_at DESC`,
+    [accountId],
+  );
+  return rows.rows.map(mapLook);
+}
+
+/** Replaces the open proposals with `count` freshly planned ones. Nothing is rendered or charged. */
+export async function proposeLooks(
+  database: Database,
+  input: Omit<Parameters<typeof createLook>[1], 'propose' | 'parentLookId'> & { count: number },
+) {
+  const { count, ...look } = input;
+  await database.query(
+    // A replayed batch keeps its own proposals.
+    `UPDATE looks l SET deleted_at=now() WHERE l.account_id=$1 AND l.proposal AND l.deleted_at IS NULL
+     AND NOT EXISTS (SELECT 1 FROM remote_image_jobs rj WHERE rj.look_id=l.id AND rj.idempotency_key LIKE $2)`,
+    [input.accountId, `look:${input.idempotencyKey}:%`],
+  );
+  await database.query(
+    `UPDATE remote_image_jobs rj SET state='cancelled' FROM looks l
+     WHERE rj.look_id=l.id AND rj.kind='plan-look' AND rj.state='queued' AND l.account_id=$1 AND l.deleted_at IS NOT NULL`,
+    [input.accountId],
+  );
+  const lookIds: string[] = [];
+  // Sequential, so each planning job sees the same inputs but its own idempotency key.
+  for (let index = 0; index < count; index += 1) {
+    const created = await createLook(database, {
+      ...look,
+      parentLookId: null,
+      propose: true,
+      idempotencyKey: `${input.idempotencyKey}:${index}`,
+    });
+    lookIds.push(created.lookId);
+  }
+  return { lookIds };
+}
+
+/** Renders a picked proposal: it leaves the proposals and is charged like any new look. */
+export async function renderLookProposal(
+  database: Database,
+  input: { accountId: string; lookId: string; quality?: Look['quality']; idempotencyKey: string },
+) {
+  return withTransaction(database, async (client) => {
+    const request = { lookId: input.lookId, quality: input.quality ?? 'low' };
+    const prior = await replay<{ jobId: string; lookId: string }>(
+      client, input.accountId, input.idempotencyKey, 'render-look-proposal', request,
+    );
+    if (prior) return prior;
+    const row = await client.query(
+      `UPDATE looks SET proposal=false,state='queued',quality=$3,finished_at=NULL WHERE id=$1 AND account_id=$2 AND proposal AND state='proposed' AND deleted_at IS NULL RETURNING id`,
+      [input.lookId, input.accountId, request.quality],
+    );
+    if (!row.rows[0])
+      throw new InspirationValidationError('proposal-unavailable', 'Dieser Vorschlag ist nicht mehr verfügbar.');
+    const plan = await client.query<{ payload: Record<string, unknown> }>(
+      `SELECT payload FROM remote_image_jobs WHERE look_id=$1 AND account_id=$2 ORDER BY created_at DESC LIMIT 1`,
+      [input.lookId, input.accountId],
+    );
+    const jobId = await enqueueJob(client, {
+      accountId: input.accountId,
+      kind: 'generate-look',
+      payload: { ...plan.rows[0]?.payload, lookId: input.lookId },
+      idempotencyKey: `look-render:${input.idempotencyKey}`,
+    });
+    await client.query('UPDATE remote_image_jobs SET look_id=$1 WHERE id=$2', [input.lookId, jobId]);
+    const body = { jobId, lookId: input.lookId };
+    await remember(client, input.accountId, input.idempotencyKey, 'render-look-proposal', request, body);
+    return body;
+  });
 }
 export async function generationCosts(database: Database, accountId: string, week?: string) {
   const timeFilter = weekToRange(week);
@@ -996,7 +1075,7 @@ export async function executeInspirationJob(
       });
       return;
     }
-    if (job.kind !== 'generate-look')
+    if (job.kind !== 'generate-look' && job.kind !== 'plan-look')
       throw new CatalogJobError('internal', 'Unsupported inspiration job.', false);
     const id = (job.payload as { lookId: string }).lookId;
     const completeWithWardrobe =
@@ -1021,7 +1100,7 @@ export async function executeInspirationJob(
     const row = started.rows[0];
     if (!row) {
       const done = await database.query(
-        `SELECT 1 FROM looks WHERE id=$1 AND account_id=$2 AND state='ready'`,
+        `SELECT 1 FROM looks WHERE id=$1 AND account_id=$2 AND state IN ('ready','proposed')`,
         [id, job.accountId],
       );
       if (done.rows[0]) return;
@@ -1114,8 +1193,8 @@ export async function executeInspirationJob(
         );
       await withTransaction(database, async (client) => {
         await client.query(
-          `UPDATE looks SET state='generating',planned_concept=$3 WHERE id=$1 AND account_id=$2`,
-          [id, job.accountId, JSON.stringify(concept)],
+          `UPDATE looks SET state=$4,planned_concept=$3,finished_at=CASE WHEN $4='proposed' THEN now() END WHERE id=$1 AND account_id=$2`,
+          [id, job.accountId, JSON.stringify(concept), job.kind === 'plan-look' ? 'proposed' : 'generating'],
         );
         for (const [ordinal, itemId] of itemIds.entries())
           await client.query(
@@ -1124,6 +1203,7 @@ export async function executeInspirationJob(
           );
       });
     }
+    if (job.kind === 'plan-look') return;
     const character = await database.query<{ asset_id: string; note: string | null }>(
       'SELECT asset_id, note FROM character_sheets WHERE id=$1 AND account_id=$2',
       [row.character_sheet_id, job.accountId],
@@ -1226,7 +1306,7 @@ export async function failInspirationAttempt(
         e.message,
       ],
     );
-  if (job.kind === 'generate-look')
+  if (job.kind === 'generate-look' || job.kind === 'plan-look')
     await database.query(
       `UPDATE looks SET state='failed',failure_category=$3,failure_detail=$4,finished_at=now() WHERE id=$1 AND account_id=$2`,
       [(job.payload as { lookId: string }).lookId, job.accountId, e.category, e.message],

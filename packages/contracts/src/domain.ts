@@ -245,7 +245,7 @@ export const characterSheetSchema = z
   })
   .strict();
 
-export const lookStateSchema = z.enum(['queued', 'planning', 'generating', 'ready', 'failed']);
+export const lookStateSchema = z.enum(['queued', 'planning', 'proposed', 'generating', 'ready', 'failed']);
 export const lookConceptSchema = z
   .object({
     activity: z.string().trim().min(1).max(300),
