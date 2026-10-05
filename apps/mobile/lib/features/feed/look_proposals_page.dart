@@ -111,7 +111,8 @@ class _ProposalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final planned = look.state == 'proposed' || rendered;
-    // The planner's activity alone; the scene text is written for the image model.
+    // The planner's activity alone. The scene text is meant for the image
+    // model.
     final caption = look.concept?.activity ?? '';
     return Container(
       padding: const EdgeInsets.all(14),
