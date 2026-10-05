@@ -1,2 +1,5 @@
 // Copy to Signing.local.xcconfig for physical-device development.
 DEVELOPMENT_TEAM = YOUR_APPLE_TEAM_ID
+// Google sign-in callback: the iOS OAuth client ID reversed,
+// e.g. com.googleusercontent.apps.1234-abcd. Without it Google sign-in can't return to the app.
+GOOGLE_REVERSED_CLIENT_ID =

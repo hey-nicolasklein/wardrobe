@@ -229,14 +229,14 @@ async function api(path, body, method = 'POST') {
     });
   } catch {
     throw new Error(
-      'Keine Verbindung zu stargate. Prüfe WLAN oder Tailscale und versuche es erneut.',
+      'Keine Verbindung zu FORM. Prüfe deine Internetverbindung und versuche es erneut.',
     );
   }
   if (response.status === 204) return null;
   const data = await response.json().catch(() => null);
   if (response.status === 401 && !path.startsWith('/auth/')) {
     renderSignIn();
-    throw new Error('Bitte melde dich an.');
+    throw Object.assign(new Error('Bitte melde dich an.'), { status: 401 });
   }
   if (!response.ok)
     throw Object.assign(
@@ -303,7 +303,7 @@ function haptic() {
 let navPop = null;
 function shell(content) {
   $('#app').innerHTML =
-    `<main class="shell"><header class="masthead"><span class="wordmark">FORM</span><span class="private"><span class="dot"></span> <span id="version">${esc(version)}</span></span></header>${!navigator.onLine ? '<p class="offline">Du bist offline. Verbinde dich mit stargate, um deinen Kleiderschrank zu öffnen.</p>' : ''}${content}</main><nav class="nav" aria-label="Hauptnavigation">${[
+    `<main class="shell"><header class="masthead"><span class="wordmark">FORM</span><span class="private"><span class="dot"></span> <span id="version">${esc(version)}</span></span></header>${!navigator.onLine ? '<p class="offline">Du bist offline. Verbinde dich mit dem Internet, um deinen Kleiderschrank zu öffnen.</p>' : ''}${content}</main><nav class="nav" aria-label="Hauptnavigation">${[
       ['feed', 'feed', 'Feed'],
       ['wardrobe', 'closet', 'Schrank'],
       ['settings', 'settings', 'Settings'],
@@ -2329,7 +2329,7 @@ async function importManual(draft, form) {
 }
 function renderSettings() {
   shell(
-    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank auf stargate.</p><section class="panel"><div class="character-section-heading"><div><h3>Personenreferenzen</h3><p>Dein Abbild für persönliche Looks.</p></div></div><div id="character-settings">${characterSettingsMarkup()}</div><button class="primary" id="new-character">Neue Fotocollage</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-week-nav" class="cost-week-nav"><button id="cost-week-prev" aria-label="Vorherige Woche">${icon('arrow')}</button><span id="cost-week-label"></span><button id="cost-week-next" class="cost-week-next" aria-label="Nächste Woche">${icon('arrow')}</button></div><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p></section><section class="panel"><h3>Konto</h3><div class="setting-row">Angemeldet als<span>${esc(account?.email ?? '')}</span></div><div class="setting-row">Credits<span id="credit-balance">…</span></div><button class="secondary" id="sign-out">Abmelden</button></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Personenreferenzen werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
+    `<p class="eyebrow">So, wie du es brauchst</p><h1>Ganz dein Ding.</h1><p class="muted">Dein privater Kleiderschrank.</p><section class="panel"><div class="character-section-heading"><div><h3>Personenreferenzen</h3><p>Dein Abbild für persönliche Looks.</p></div></div><div id="character-settings">${characterSettingsMarkup()}</div><button class="primary" id="new-character">Neue Fotocollage</button></section><section class="panel"><h3>Generierungskosten</h3><div id="cost-week-nav" class="cost-week-nav"><button id="cost-week-prev" aria-label="Vorherige Woche">${icon('arrow')}</button><span id="cost-week-label"></span><button id="cost-week-next" class="cost-week-next" aria-label="Nächste Woche">${icon('arrow')}</button></div><div id="cost-settings"><div class="loading"><span class="spinner"></span></div></div></section><section class="panel"><h3>Auf deinem iPhone</h3><p>Öffne FORM in Safari. Tippe auf Teilen und dann auf „Zum Home-Bildschirm“. So öffnet sich dein Schrank wie eine App.</p></section><section class="panel"><h3>Konto</h3><div class="setting-row">Angemeldet als<span>${esc(account?.email ?? '')}</span></div><div class="setting-row">Credits<span id="credit-balance">…</span></div><button class="secondary" id="sign-out">Abmelden</button></section><button class="secondary" id="open-archive">Archiv öffnen · ${items.filter((i) => i.state === 'archived').length} Stücke</button><section class="panel"><h3>Noch einmal von vorn</h3><p>Leert den gemeinsamen privaten Kleiderschrank auf allen deinen Geräten. Kleidung, Fotos, Looks und Personenreferenzen werden dauerhaft gelöscht.</p><button class="danger" id="reset">Kleiderschrank leeren …</button></section><p class="muted" style="text-align:center;font-size:11px">FORM · Persönliche Web-Version</p>`,
   );
   $('#new-character').onclick = openCharacterSetup;
   $('#cost-settings').closest('section').insertAdjacentHTML('afterend', `<section class="panel"><h3>Bildqualität</h3><p>Standard für neue Bilder auf diesem Gerät. Höhere Qualität kostet mehr. Einzelne Bilder kannst du später in höherer Qualität neu erstellen.</p>${qualityControl('feed-quality', 'Feed', preferredQuality('feed'))}${qualityControl('wardrobe-quality', 'Schrank', preferredQuality('wardrobe'))}</section>`);
@@ -2803,15 +2803,13 @@ async function start() {
   const rawHash = location.hash.slice(1);
   const hash = ['owning', 'wanting'].includes(rawHash) ? 'wardrobe' : rawHash;
   if (['feed', 'wardrobe', 'add', 'settings', 'archived'].includes(hash)) page = hash;
+  // Signed out → sign-in. Anything else (no network, server down) → retry screen.
   try {
     account = (await api('/auth/session')).session;
-  } catch (error) {
-    if (error.status === 401) return renderSignIn();
-  }
-  try {
     await Promise.all([refreshItems(), refreshInspiration()]);
     render();
   } catch (error) {
+    if (error.status === 401) return renderSignIn();
     shell(
       `<div class="empty">${icon('closet')}<h2>Dein Schrank wartet.</h2><p>${esc(error.message)}</p><button class="primary" id="retry">Erneut verbinden</button></div>`,
     );
@@ -2826,7 +2824,7 @@ window.addEventListener('hashchange', () => {
   }
 });
 window.addEventListener('online', start);
-window.addEventListener('offline', () => toast('Verbindung unterbrochen. Prüfe Tailscale.'));
+window.addEventListener('offline', () => toast('Verbindung unterbrochen. Prüfe deine Internetverbindung.'));
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 // Baked into the web image at deploy time. Reload an open PWA when a new shell arrives.
 async function refreshVersion() {

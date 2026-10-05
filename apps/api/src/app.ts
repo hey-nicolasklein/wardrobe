@@ -307,12 +307,13 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     }
   });
 
-  // Sign-in attempts per client address and minute. Behind Tailscale Serve or a
-  // reverse proxy the address comes from X-Forwarded-For.
+  // Sign-in attempts per client address and minute. In production nginx resolves
+  // the address from trusted proxy hops and sends it as X-Real-IP. The first
+  // X-Forwarded-For entry is client-controlled, so it is never used here.
   const authLimiter = new RateLimiter(10, 60_000);
   app.use('/v1/auth/*', async (context, next) => {
     if (context.req.method !== 'POST' || context.req.path === '/v1/auth/sign-out') return next();
-    const client = context.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || 'direct';
+    const client = context.req.header('X-Real-IP')?.trim() || 'direct';
     if (!authLimiter.take(client))
       return context.json(
         errorPayload('capacity', 'rate-limited', 'Too many sign-in attempts. Try again in a minute.', true),

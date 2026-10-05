@@ -6,7 +6,8 @@ description: Ship FORM to the private stargate production host (https://stargate
 # Deploy to stargate
 
 The production instance runs on the `stargate` host at `https://stargate.stork-platy.ts.net:8443`,
-reachable on the tailnet only. There are no users besides Nico.
+made public through Tailscale Funnel for the TestFlight beta (`docs/public-access.md`).
+Beta testers use it besides Nico.
 
 **Deploying is an explicit request, never a follow-on.** Finishing a change means the code is
 written and checked locally. Do not ship because a change "looks done", and do not offer to ship
@@ -53,9 +54,9 @@ Report the deployed state: the stamp that went live and which services were rebu
 
 - A long-lived `form-production` Compose project from `compose.production.yaml`
   (`web`, `api`, `worker`, `postgres`, `object-storage`), all `restart: unless-stopped`.
-- Tailscale Serve terminates HTTPS on `:8443` and proxies to `127.0.0.1:${FORM_WEB_PORT}`
+- Tailscale Funnel terminates HTTPS on `:8443` and proxies to `127.0.0.1:${FORM_WEB_PORT}`
   (default `18081`) — the `web` container, which proxies `/v1/` to the API.
-  `tailscale serve status` shows the mapping.
+  `tailscale funnel status` shows the mapping and whether it is public.
 - Runtime config lives in the git-ignored `.env.production` (`PUBLIC_WEB_ORIGIN`, `WEB_ORIGIN`,
   `S3_PUBLIC_ENDPOINT`, `APPLE_CLIENT_IDS`). Clients sign in with a normal account.
 - Web and API assets are baked into their images (`build.target`), so shipping needs a rebuild
