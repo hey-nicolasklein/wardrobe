@@ -175,6 +175,9 @@ class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
           case IntakeAction.restore || IntakeAction.add || IntakeAction.advance:
             break;
         }
+        // Publishes the saving phase before the save loop removes the draft,
+        // so the page can tell a save from a discard.
+        _publish(emit, busy: true);
       }
       for (final draft in List<IntakeDraft>.of(_drafts)) {
         if (!canContinue) break;
