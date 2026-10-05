@@ -86,7 +86,10 @@ class _ComposerViewState extends State<_ComposerView> {
   void _onState(BuildContext context, ComposerState state) {
     if (_search.text != state.query) _search.text = state.query;
     if (state.proposed) {
-      context.go('/feed/proposals?quality=${state.quality}');
+      context.go(
+        '/feed/proposals?quality=${state.quality}',
+        extra: context.read<ComposerCubit>().command().body,
+      );
     }
     if (state.createdLookId != null) {
       // The new look develops on top of the All looks pile.

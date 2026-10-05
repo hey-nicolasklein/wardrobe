@@ -635,10 +635,22 @@ abstract class LocaleKeys {
   static const composerProposeAction = 'composerProposeAction';
   static const proposalsTitle = 'proposalsTitle';
   static const proposalsHint = 'proposalsHint';
-  static const proposalsPlanning = 'proposalsPlanning';
   static const proposalsRender = 'proposalsRender';
-  static const proposalsRendering = 'proposalsRendering';
   static const proposalsSkip = 'proposalsSkip';
   static const proposalsDone = 'proposalsDone';
   static const proposalsFailed = 'proposalsFailed';
+  static const proposalsSkipOne = 'proposalsSkipOne';
+  static const proposalsPlanningPieces = 'proposalsPlanningPieces';
+  static const proposalsPlanningScene = 'proposalsPlanningScene';
+  static const proposalsPlanningFinish = 'proposalsPlanningFinish';
+  static const proposalsPicked = 'proposalsPicked';
+  static const proposalsNonePicked = 'proposalsNonePicked';
+  static const proposalsMore = 'proposalsMore';
+  static const proposalsReasonNew = 'proposalsReasonNew';
+  static const proposalsReasonNever = 'proposalsReasonNever';
+  static const proposalsReasonRarely = 'proposalsReasonRarely';
+  static const proposalsReasonPick = 'proposalsReasonPick';
+  static const proposalsReasonOccasion = 'proposalsReasonOccasion';
+  static const proposalsReasonFresh = 'proposalsReasonFresh';
+  static const proposalsReasonPieceFallback = 'proposalsReasonPieceFallback';
 }

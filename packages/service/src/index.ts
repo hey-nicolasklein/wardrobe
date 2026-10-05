@@ -19,3 +19,4 @@ export * from './wardrobe.js';
 export * from './personal.js';
 export * from './personal-reset.js';
 export * from './try-on-photos.js';
+export * from './look-proposals.js';

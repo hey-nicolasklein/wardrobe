@@ -647,11 +647,29 @@
   "photosOfYouEmpty": "Damit Looks an dir aussehen wie du.",
   "composerProposeAction": "Outfits vorschlagen",
   "proposalsTitle": "Outfits auswählen",
-  "proposalsHint": "Vorschläge sind kostenlos. Nur Outfits, die du generierst, kosten Credits.",
-  "proposalsPlanning": "Outfit wird zusammengestellt…",
+  "proposalsHint": "Rechts wischen zum Generieren, links zum Überspringen. Vorschläge sind kostenlos.",
   "proposalsRender": "Generieren",
-  "proposalsRendering": "Entsteht in deinem Feed",
   "proposalsSkip": "Keiner davon",
   "proposalsDone": "Fertig",
-  "proposalsFailed": "Es konnte kein Outfit geplant werden. Geh zurück und versuch es erneut."
+  "proposalsFailed": "Es konnte kein Outfit geplant werden. Geh zurück und versuch es erneut.",
+  "proposalsSkipOne": "Weiter",
+  "proposalsPlanningPieces": "Stücke aus deinem Schrank werden kombiniert…",
+  "proposalsPlanningScene": "Passender Ort wird gesucht…",
+  "proposalsPlanningFinish": "Abgleich mit deinen letzten Looks…",
+  "proposalsPicked": {
+    "one": "1 Outfit entsteht in deinem Feed.",
+    "other": "{} Outfits entstehen in deinem Feed."
+  },
+  "proposalsNonePicked": "Nichts dabei? Hol dir neue Ideen.",
+  "proposalsMore": "Mehr Outfits",
+  "proposalsReasonNew": "Neu im Schrank: {piece}",
+  "proposalsReasonNever": "Noch nie kombiniert: {piece}",
+  "proposalsReasonRarely": "Länger nicht getragen: {piece}",
+  "proposalsReasonPick": {
+    "one": "Rund um dein Stück",
+    "other": "Rund um deine {} Stücke"
+  },
+  "proposalsReasonOccasion": "Passt zu {occasion}",
+  "proposalsReasonFresh": "Anders als deine letzten Looks",
+  "proposalsReasonPieceFallback": "ein Stück"
 }

@@ -16,6 +16,32 @@ const lookOccasions = ['night-out', 'party', 'business', 'casual'];
 /// looks keep 1024x1280.
 const lookSizes = ['1024x1280', '768x960'];
 
+/// Why a proposal was suggested. [kind] is one of `new-piece`,
+/// `never-styled`, `rarely-styled` (with [itemId]), `your-pick` (with
+/// [itemIds]), `occasion` (with [occasion]) or `fresh`. Unknown kinds are
+/// skipped by the UI.
+@JsonSerializable(checked: true, includeIfNull: false)
+class LookReason {
+  const LookReason({
+    required this.kind,
+    this.itemId,
+    this.itemIds = const [],
+    this.occasion,
+  });
+
+  factory LookReason.fromJson(Map<String, dynamic> json) =>
+      _$LookReasonFromJson(json);
+
+  @JsonKey(required: true)
+  final String kind;
+  final String? itemId;
+  @JsonKey(defaultValue: <String>[])
+  final List<String> itemIds;
+  final String? occasion;
+
+  Map<String, dynamic> toJson() => _$LookReasonToJson(this);
+}
+
 @JsonSerializable(checked: true, explicitToJson: true)
 class LookConcept {
   const LookConcept({
@@ -98,6 +124,7 @@ class Look {
     this.feedAssetId,
     this.settings,
     this.liked = false,
+    this.reasons,
   });
 
   factory Look.fromJson(Map<String, dynamic> json) {
@@ -162,6 +189,10 @@ class Look {
   /// types of future looks. Absent in looks cached before that.
   @JsonKey(defaultValue: false)
   final bool liked;
+
+  /// Why a proposal was suggested. Null for every other look.
+  @JsonKey(includeIfNull: false)
+  final List<LookReason>? reasons;
 
   bool get isReady => state == 'ready';
   bool get isActive => ['queued', 'planning', 'generating'].contains(state);

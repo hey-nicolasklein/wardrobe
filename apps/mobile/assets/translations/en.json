@@ -647,11 +647,29 @@
   "photosOfYouEmpty": "So looks on you actually look like you.",
   "composerProposeAction": "Show outfits",
   "proposalsTitle": "Pick outfits",
-  "proposalsHint": "Planning is free. Only the outfits you generate cost credits.",
-  "proposalsPlanning": "Putting an outfit together…",
+  "proposalsHint": "Swipe right to generate, left to skip. Planning is free.",
   "proposalsRender": "Generate",
-  "proposalsRendering": "Developing in your feed",
   "proposalsSkip": "None of these",
   "proposalsDone": "Done",
-  "proposalsFailed": "No outfit could be planned. Go back and try again."
+  "proposalsFailed": "No outfit could be planned. Go back and try again.",
+  "proposalsSkipOne": "Skip",
+  "proposalsPlanningPieces": "Picking pieces from your closet…",
+  "proposalsPlanningScene": "Finding a place to wear it…",
+  "proposalsPlanningFinish": "Checking it differs from your last looks…",
+  "proposalsPicked": {
+    "one": "1 outfit is developing in your feed.",
+    "other": "{} outfits are developing in your feed."
+  },
+  "proposalsNonePicked": "Nothing caught your eye. Want new ideas?",
+  "proposalsMore": "More outfits",
+  "proposalsReasonNew": "New in your closet: {piece}",
+  "proposalsReasonNever": "Never styled yet: {piece}",
+  "proposalsReasonRarely": "Not worn in a while: {piece}",
+  "proposalsReasonPick": {
+    "one": "Built around your piece",
+    "other": "Built around your {} pieces"
+  },
+  "proposalsReasonOccasion": "Fits {occasion}",
+  "proposalsReasonFresh": "Unlike your last looks",
+  "proposalsReasonPieceFallback": "a piece"
 }

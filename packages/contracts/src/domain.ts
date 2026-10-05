@@ -273,6 +273,13 @@ export const lookSettingsSchema = z
     categories: z.array(supportedCategorySchema),
   })
   .strict();
+// Why a proposal was suggested, as facts the client words itself.
+export const lookReasonSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.enum(['new-piece', 'never-styled', 'rarely-styled']), itemId: opaqueIdSchema }).strict(),
+  z.object({ kind: z.literal('your-pick'), itemIds: z.array(opaqueIdSchema).min(1) }).strict(),
+  z.object({ kind: z.literal('occasion'), occasion: lookOccasionSchema }).strict(),
+  z.object({ kind: z.literal('fresh') }).strict(),
+]);
 export const lookSchema = z
   .object({
     id: opaqueIdSchema,
@@ -297,6 +304,8 @@ export const lookSchema = z
     failureCategory: z.string().min(1).max(80).nullable(),
     createdAt: timestampSchema,
     finishedAt: timestampSchema.nullable(),
+    // Only on proposals, see LookReason.
+    reasons: z.array(lookReasonSchema).optional(),
   })
   .strict();
 
@@ -331,5 +340,7 @@ export type WardrobeItem = z.infer<typeof wardrobeItemSchema>;
 export type CharacterSheet = z.infer<typeof characterSheetSchema>;
 export type Look = z.infer<typeof lookSchema>;
 export type LookConcept = z.infer<typeof lookConceptSchema>;
+export type LookReason = z.infer<typeof lookReasonSchema>;
+export type LookOccasion = z.infer<typeof lookOccasionSchema>;
 export type LookStyle = z.infer<typeof lookStyleSchema>;
 export type LookCompletion = z.infer<typeof lookCompletionSchema>;

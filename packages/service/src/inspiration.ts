@@ -7,6 +7,8 @@ import {
   type Look,
   type LookCompletion,
   type LookConcept,
+  type LookOccasion,
+  type LookReason,
   type LookStyle,
   type SupportedCategory,
 } from '@form/contracts';
@@ -24,6 +26,7 @@ import {
   writeGarmentReferenceDebugGallery,
 } from './garment-reference-collage.js';
 import { withTransaction } from './database.js';
+import { pickAnchor, type PieceUsage } from './look-proposals.js';
 import { pickShot, shotPrompt, shotStyle, shotWeights } from './look-shots.js';
 import { enqueueJob, type RemoteImageJob } from './jobs.js';
 import { collageModel, prepareIdentityReference, createIdentityCollage } from './identity-collage.js';
@@ -73,12 +76,14 @@ type LookRow = {
   created_at: Date;
   finished_at: Date | null;
   wardrobe_item_ids: string[];
+  proposal: boolean;
+  proposal_reasons: LookReason[] | null;
 };
 
 const characterColumns = `id, state, reference_asset_ids, note, asset_id, active, model, quality,
   output_size, provider_request_id, cost_microunits, failure_category, created_at, finished_at`;
 const lookColumns = `l.id, l.state, l.asset_id, l.feed_asset_id, l.character_sheet_id, l.parent_look_id,
-  l.base_asset_id, l.liked_at IS NOT NULL AS liked, l.planned_concept, l.category_constraints,
+  l.base_asset_id, l.liked_at IS NOT NULL AS liked, l.planned_concept, l.category_constraints, l.proposal, l.proposal_reasons,
   (SELECT payload FROM remote_image_jobs rj WHERE rj.look_id=l.id ORDER BY rj.created_at DESC LIMIT 1) AS job_payload,
   l.model, l.quality,
   COALESCE(pa.pixel_width::text || 'x' || pa.pixel_height::text,
@@ -124,6 +129,7 @@ const mapLook = (row: LookRow): Look => ({
   failureCategory: row.failure_category,
   createdAt: row.created_at.toISOString(),
   finishedAt: row.finished_at?.toISOString() ?? null,
+  ...(row.proposal ? { reasons: row.proposal_reasons ?? [] } : {}),
 });
 // Reads the composer choices back from the look's job payload, see createLook.
 const lookSettings = (row: LookRow): Look['settings'] => {
@@ -317,8 +323,9 @@ async function candidateItems(
     notes: string | null;
     asset_id: string;
     original_asset_id: string;
+    created_at: Date;
   }>(
-    `SELECT i.id,i.name,i.category,i.colors,i.notes,
+    `SELECT i.id,i.name,i.category,i.colors,i.notes,i.created_at,
        v.transparent_asset_id AS asset_id,
        COALESCE(a.reference_asset_id,sp.asset_id) AS original_asset_id
      FROM wardrobe_items i
@@ -374,6 +381,35 @@ export function normalizeAutomaticLookItems(
     result.push(id);
   }
   return result;
+}
+
+/**
+ * Two proposals read as the same outfit when the pieces added around the
+ * user's exact pieces change in at most one slot, e.g. only the necklace.
+ */
+export function similarOutfit(a: string[], b: string[], exact: string[]) {
+  const added = (ids: string[]) => ids.filter((id) => !exact.includes(id));
+  const [left, right] = [added(a), added(b)];
+  const size = Math.max(left.length, right.length);
+  const shared = left.filter((id) => right.includes(id)).length;
+  return size >= 2 && size - shared <= 1;
+}
+
+/** How often each piece appeared in finished looks, and whether among [recent]. */
+async function pieceUsage(
+  database: Database,
+  accountId: string,
+  recent: Array<{ ids: string[] }>,
+): Promise<Map<string, PieceUsage>> {
+  const latest = new Set(recent.flatMap((look) => look.ids));
+  const counts = await database.query<{ id: string; uses: string }>(
+    `SELECT li.wardrobe_item_id id,count(*) uses FROM look_items li JOIN looks l ON l.id=li.look_id
+     WHERE l.account_id=$1 AND l.state='ready' AND l.deleted_at IS NULL GROUP BY li.wardrobe_item_id`,
+    [accountId],
+  );
+  const usage = new Map<string, PieceUsage>();
+  for (const row of counts.rows) usage.set(row.id, { uses: Number(row.uses), recent: latest.has(row.id) });
+  return usage;
 }
 
 export type LookFocus = 'upper' | 'lower' | 'feet';
@@ -1141,6 +1177,31 @@ export async function executeInspirationJob(
         row.exact_item_ids,
         completeWithWardrobe,
       );
+      // Proposals of the same batch, planned one after another per account.
+      const siblings =
+        job.kind === 'plan-look'
+          ? (
+              await database.query<{ ids: string[]; planned_concept: LookConcept | null }>(
+                `SELECT COALESCE(array_agg(li.wardrobe_item_id),'{}') ids,l.planned_concept FROM looks l LEFT JOIN look_items li ON li.look_id=l.id WHERE l.account_id=$1 AND l.id<>$2 AND l.proposal AND l.state='proposed' AND l.deleted_at IS NULL GROUP BY l.id`,
+                [job.accountId, id],
+              )
+            ).rows
+          : [];
+      const usage =
+        job.kind === 'plan-look' ? await pieceUsage(database, job.accountId, recent.rows) : null;
+      const anchor =
+        usage && completeWithWardrobe && !row.category_constraints.length
+          ? pickAnchor({
+              candidates: planningCandidates.map((item) => ({
+                id: item.id,
+                category: item.category,
+                createdAt: item.created_at,
+              })),
+              usage,
+              exactItemIds: row.exact_item_ids,
+              siblingItemIds: siblings.flatMap((sibling) => sibling.ids),
+            })
+          : null;
       const planned = await provider.planLook({
         candidates: planningCandidates.map((i) => ({
           id: i.id,
@@ -1152,6 +1213,8 @@ export async function executeInspirationJob(
           },
         })),
         recent: recentForLookPlan(recent.rows, row.exact_item_ids),
+        ...(siblings.length ? { siblings: recentForLookPlan(siblings, row.exact_item_ids) } : {}),
+        ...(anchor ? { anchorItemId: anchor.itemId } : {}),
         exactItemIds: row.exact_item_ids,
         categories: row.category_constraints,
         occasion: (job.payload as { occasion?: string | null }).occasion ?? null,
@@ -1171,6 +1234,22 @@ export async function executeInspirationJob(
         planningCandidates,
         row.exact_item_ids,
       );
+      if (siblings.some((sibling) => similarOutfit(sibling.ids, itemIds, row.exact_item_ids)))
+        throw new CatalogJobError('validation', 'The proposal repeats a sibling outfit.', true);
+      // Repeating a recent look is only accepted on the last attempt, so a small
+      // closet still gets its proposal.
+      const repeatsRecent = recent.rows.some((look) =>
+        similarOutfit(look.ids, itemIds, row.exact_item_ids),
+      );
+      if (job.kind === 'plan-look' && repeatsRecent && job.attempts < job.maxAttempts)
+        throw new CatalogJobError('validation', 'The proposal repeats a recent look.', true);
+      const occasion = (job.payload as { occasion?: LookOccasion | null }).occasion ?? null;
+      const reasons: LookReason[] = [
+        ...(row.exact_item_ids.length ? [{ kind: 'your-pick' as const, itemIds: row.exact_item_ids }] : []),
+        ...(anchor?.reason && itemIds.includes(anchor.itemId) ? [anchor.reason] : []),
+        ...(occasion ? [{ kind: 'occasion' as const, occasion }] : []),
+      ];
+      if (!repeatsRecent && reasons.length < 2) reasons.push({ kind: 'fresh' });
       const plannedItems = candidates.rows.filter((item) => itemIds.includes(item.id));
       const missingCategory = row.category_constraints.find(
         (category) => !plannedItems.some((item) => item.category === category),
@@ -1193,8 +1272,14 @@ export async function executeInspirationJob(
         );
       await withTransaction(database, async (client) => {
         await client.query(
-          `UPDATE looks SET state=$4,planned_concept=$3,finished_at=CASE WHEN $4='proposed' THEN now() END WHERE id=$1 AND account_id=$2`,
-          [id, job.accountId, JSON.stringify(concept), job.kind === 'plan-look' ? 'proposed' : 'generating'],
+          `UPDATE looks SET state=$4,planned_concept=$3,proposal_reasons=$5,finished_at=CASE WHEN $4='proposed' THEN now() END WHERE id=$1 AND account_id=$2`,
+          [
+            id,
+            job.accountId,
+            JSON.stringify(concept),
+            job.kind === 'plan-look' ? 'proposed' : 'generating',
+            job.kind === 'plan-look' ? JSON.stringify(reasons) : null,
+          ],
         );
         for (const [ordinal, itemId] of itemIds.entries())
           await client.query(

@@ -6,6 +6,29 @@ part of 'look.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
+LookReason _$LookReasonFromJson(Map<String, dynamic> json) =>
+    $checkedCreate('LookReason', json, ($checkedConvert) {
+      $checkKeys(json, requiredKeys: const ['kind']);
+      final val = LookReason(
+        kind: $checkedConvert('kind', (v) => v as String),
+        itemId: $checkedConvert('itemId', (v) => v as String?),
+        itemIds: $checkedConvert(
+          'itemIds',
+          (v) => (v as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+        ),
+        occasion: $checkedConvert('occasion', (v) => v as String?),
+      );
+      return val;
+    });
+
+Map<String, dynamic> _$LookReasonToJson(LookReason instance) =>
+    <String, dynamic>{
+      'kind': instance.kind,
+      'itemId': ?instance.itemId,
+      'itemIds': instance.itemIds,
+      'occasion': ?instance.occasion,
+    };
+
 LookConcept _$LookConceptFromJson(Map<String, dynamic> json) =>
     $checkedCreate('LookConcept', json, ($checkedConvert) {
       $checkKeys(
@@ -119,6 +142,12 @@ Look _$LookFromJson(Map<String, dynamic> json) => $checkedCreate('Look', json, (
           v == null ? null : LookSettings.fromJson(v as Map<String, dynamic>),
     ),
     liked: $checkedConvert('liked', (v) => v as bool? ?? false),
+    reasons: $checkedConvert(
+      'reasons',
+      (v) => (v as List<dynamic>?)
+          ?.map((e) => LookReason.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    ),
   );
   return val;
 });
@@ -143,6 +172,7 @@ Map<String, dynamic> _$LookToJson(Look instance) => <String, dynamic>{
   'baseAssetId': ?instance.baseAssetId,
   'settings': ?instance.settings?.toJson(),
   'liked': instance.liked,
+  'reasons': ?instance.reasons?.map((e) => e.toJson()).toList(),
 };
 
 CharacterSheet _$CharacterSheetFromJson(

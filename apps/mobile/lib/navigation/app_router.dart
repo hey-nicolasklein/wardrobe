@@ -118,6 +118,7 @@ GoRouter createRouter({bool onboarding = false}) {
                       maxExtent: 0.985,
                       child: LookProposalsPage(
                         quality: state.uri.queryParameters['quality'] ?? 'low',
+                        request: state.extra as Map<String, dynamic>?,
                       ),
                     ),
                   ),

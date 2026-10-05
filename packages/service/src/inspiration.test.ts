@@ -7,6 +7,7 @@ import {
   lookPrompt,
   tryOnPrompt,
   normalizeAutomaticLookItems,
+  similarOutfit,
   recentForLookPlan,
 } from './inspiration.js';
 
@@ -141,4 +142,12 @@ test('try-on edits the own photo and keeps everything but the clothes', () => {
   assert.doesNotMatch(prompt, /skin|body shape|what the person wears/);
   assert.match(prompt, /Fur coat \(jacket; brown\)/);
   assert.doesNotMatch(prompt, /identity reference/);
+});
+
+test('proposals that change only one added piece count as the same outfit', () => {
+  assert.equal(similarOutfit(['shirt', 'jeans', 'boots'], ['shirt', 'jeans', 'sneakers'], []), true);
+  assert.equal(similarOutfit(['shirt', 'jeans', 'boots'], ['tee', 'skirt', 'boots'], []), false);
+  // The user's exact pieces are shared by design and do not count.
+  assert.equal(similarOutfit(['coat', 'shirt', 'jeans'], ['coat', 'tee', 'skirt'], ['coat']), false);
+  assert.equal(similarOutfit(['coat', 'boots'], ['coat', 'sneakers'], ['coat']), false);
 });
