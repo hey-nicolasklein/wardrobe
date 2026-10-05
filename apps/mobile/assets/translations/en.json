@@ -564,7 +564,10 @@
     "street-wide-scene": "From a distance",
     "mirror-straight": "Straight on",
     "mirror-angled": "Angled",
-    "mirror-step": "Stepping forward"
+    "mirror-step": "Stepping forward",
+    "candid-walking-past": "Walking past",
+    "candid-waiting": "Waiting",
+    "street-crossing": "Crossing the street"
   },
   "lookStyleHint": {
     "auto": "Picks one for the occasion",
@@ -653,9 +656,6 @@
   "proposalsDone": "Done",
   "proposalsFailed": "Planning failed. Try a new round.",
   "proposalsSkipOne": "Skip",
-  "proposalsPlanningPieces": "Picking pieces from your closet…",
-  "proposalsPlanningScene": "Finding a place to wear it…",
-  "proposalsPlanningFinish": "Checking it differs from your last looks…",
   "proposalsPicked": {
     "one": "1 outfit on its way",
     "other": "{} outfits on their way"
@@ -672,7 +672,7 @@
   "proposalsReasonOccasion": "Fits {occasion}",
   "proposalsReasonFresh": "Unlike your last looks",
   "proposalsReasonPieceFallback": "a piece",
-  "proposalsTapHint": "Tap a piece to keep it, tap again to rule it out",
+  "proposalsTapHint": "Tap a piece to keep or swap it",
   "proposalsYourLook": "Your look",
   "proposalsExcluded": {
     "one": "1 ruled out",
@@ -681,5 +681,9 @@
   "proposalsPlanningBuilding": "Building around the pieces you kept…",
   "proposalsPickedBody": "They develop at the top of your feed in a moment.",
   "proposalsNonePickedBody": "Start a new round, every outfit will be fresh.",
-  "proposalsFailedTitle": "No outfits this time"
+  "proposalsFailedTitle": "No outfits this time",
+  "proposalsSwap": "Swap",
+  "proposalsKeep": "Keep",
+  "proposalsKept": "Kept",
+  "proposalsPlanningNext": "Putting the next outfit together…"
 }

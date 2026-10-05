@@ -154,6 +154,17 @@ export function traceProvider(
         },
         { asType: 'generation' },
       ),
+    classifyWarmth: (input) =>
+      startActiveObservation(
+        'classify-warmth',
+        async (generation) => {
+          generation.update({ model: input.model, input: { items: input.items.length } });
+          const result = await provider.classifyWarmth(input);
+          generation.update({ output: Object.fromEntries(result) });
+          return result;
+        },
+        { asType: 'generation' },
+      ),
     generateComposite: (input) =>
       startActiveObservation(
         'generate-feed-image',

@@ -564,7 +564,10 @@
     "street-wide-scene": "Aus der Distanz",
     "mirror-straight": "Frontal",
     "mirror-angled": "Schräg zur Seite",
-    "mirror-step": "Schritt nach vorn"
+    "mirror-step": "Schritt nach vorn",
+    "candid-walking-past": "Im Vorbeigehen",
+    "candid-waiting": "Beim Warten",
+    "street-crossing": "Über die Straße"
   },
   "lookStyleHint": {
     "auto": "Wählt passend zum Anlass",
@@ -653,9 +656,6 @@
   "proposalsDone": "Fertig",
   "proposalsFailed": "Die Planung ist fehlgeschlagen. Versuch eine neue Runde.",
   "proposalsSkipOne": "Weiter",
-  "proposalsPlanningPieces": "Stücke aus deinem Schrank werden kombiniert…",
-  "proposalsPlanningScene": "Passender Ort wird gesucht…",
-  "proposalsPlanningFinish": "Abgleich mit deinen letzten Looks…",
   "proposalsPicked": {
     "one": "1 Outfit ist unterwegs",
     "other": "{} Outfits sind unterwegs"
@@ -672,7 +672,7 @@
   "proposalsReasonOccasion": "Passt zu {occasion}",
   "proposalsReasonFresh": "Anders als deine letzten Looks",
   "proposalsReasonPieceFallback": "ein Stück",
-  "proposalsTapHint": "Tippe ein Stück zum Behalten, nochmal zum Aussortieren",
+  "proposalsTapHint": "Tippe ein Stück zum Behalten oder Tauschen",
   "proposalsYourLook": "Dein Look",
   "proposalsExcluded": {
     "one": "1 aussortiert",
@@ -681,5 +681,9 @@
   "proposalsPlanningBuilding": "Baue um deine behaltenen Stücke…",
   "proposalsPickedBody": "Sie entstehen gleich oben in deinem Feed.",
   "proposalsNonePickedBody": "Starte eine neue Runde, jedes Outfit ist frisch.",
-  "proposalsFailedTitle": "Diesmal keine Outfits"
+  "proposalsFailedTitle": "Diesmal keine Outfits",
+  "proposalsSwap": "Tauschen",
+  "proposalsKeep": "Behalten",
+  "proposalsKept": "Behalten",
+  "proposalsPlanningNext": "Nächstes Outfit wird zusammengestellt…"
 }

@@ -640,9 +640,6 @@ abstract class LocaleKeys {
   static const proposalsDone = 'proposalsDone';
   static const proposalsFailed = 'proposalsFailed';
   static const proposalsSkipOne = 'proposalsSkipOne';
-  static const proposalsPlanningPieces = 'proposalsPlanningPieces';
-  static const proposalsPlanningScene = 'proposalsPlanningScene';
-  static const proposalsPlanningFinish = 'proposalsPlanningFinish';
   static const proposalsPicked = 'proposalsPicked';
   static const proposalsNonePicked = 'proposalsNonePicked';
   static const proposalsMore = 'proposalsMore';
@@ -660,4 +657,8 @@ abstract class LocaleKeys {
   static const proposalsPickedBody = 'proposalsPickedBody';
   static const proposalsNonePickedBody = 'proposalsNonePickedBody';
   static const proposalsFailedTitle = 'proposalsFailedTitle';
+  static const proposalsSwap = 'proposalsSwap';
+  static const proposalsKeep = 'proposalsKeep';
+  static const proposalsKept = 'proposalsKept';
+  static const proposalsPlanningNext = 'proposalsPlanningNext';
 }

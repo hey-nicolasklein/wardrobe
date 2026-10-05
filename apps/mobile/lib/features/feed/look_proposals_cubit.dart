@@ -89,7 +89,7 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
     this.looks, {
     required this.quality,
     this.request,
-    this.pollInterval = const Duration(seconds: 2),
+    this.pollInterval = const Duration(seconds: 1),
   }) : super(const LookProposalsState()) {
     unawaited(refresh());
   }
@@ -103,14 +103,20 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
   final Duration pollInterval;
   Timer? _poll;
 
-  /// Marks changed since the open proposals were requested.
-  bool _stale = false;
+  /// Bumped by every adjustment, so a poll that started before it cannot
+  /// bring back the outfits as they were.
+  int _revision = 0;
 
   Future<void> refresh() async {
     _poll?.cancel();
+    final revision = _revision;
     try {
       final fresh = await looks.proposals();
       if (isClosed) return;
+      if (revision != _revision) {
+        _poll = Timer(pollInterval, () => unawaited(refresh()));
+        return;
+      }
       // Decided proposals keep their place here, even after the server
       // dropped them, so the end screen can show what was picked.
       final kept = [
@@ -135,19 +141,40 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
     if (state.planning) _poll = Timer(pollInterval, () => unawaited(refresh()));
   }
 
-  /// Cycles a piece: neutral → keep → exclude → neutral.
-  void togglePiece(String itemId) {
-    final marks = {...state.marks};
-    switch (marks[itemId]) {
-      case null:
-        marks[itemId] = PieceMark.keep;
-      case PieceMark.keep:
-        marks[itemId] = PieceMark.exclude;
-      case PieceMark.exclude:
-        marks.remove(itemId);
+  /// Keeps a piece: it moves into every waiting outfit and all later ones.
+  Future<void> keep(String itemId) => _mark(itemId, PieceMark.keep);
+
+  /// Swaps a piece out of the outfits for good. It is replaced in place.
+  Future<void> swap(String itemId) => _mark(itemId, PieceMark.exclude);
+
+  /// Drops a mark. Outfits already adjusted stay as they are.
+  void unmark(String itemId) =>
+      emit(state.copyWith(marks: {...state.marks}..remove(itemId)));
+
+  Future<void> _mark(String itemId, PieceMark mark) async {
+    emit(state.copyWith(marks: {...state.marks, itemId: mark}));
+    _revision++;
+    try {
+      final adjusted = await looks.adjustProposals(
+        keep: mark == PieceMark.keep ? [itemId] : const [],
+        exclude: mark == PieceMark.exclude ? [itemId] : const [],
+      );
+      if (isClosed) return;
+      _revision++;
+      final byId = {for (final look in adjusted) look.id: look};
+      emit(
+        state.copyWith(
+          proposals: [
+            for (final look in state.proposals ?? const <Look>[])
+              byId[look.id] ?? look,
+          ],
+          failure: () => null,
+        ),
+      );
+    } on FormApiException catch (error) {
+      if (isClosed) return;
+      emit(state.copyWith(failure: () => error.failure));
     }
-    _stale = true;
-    emit(state.copyWith(marks: marks));
   }
 
   void skip(String lookId) {
@@ -173,29 +200,17 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
     }
   }
 
-  /// Keeps two proposals ahead of the user until the session limit. After
-  /// new marks, the waiting proposals are outdated and get replaced.
+  /// Keeps three proposals ahead of the user until the session limit. New
+  /// ones are planned with the marks so far.
   Future<void> _topUp() async {
     final body = request;
     if (body == null || state.proposing) return;
-    final outdated = _stale
-        ? state.deck.map((look) => look.id).toList()
-        : <String>[];
-    final ahead = state.deck.length - outdated.length;
+    final ahead = state.deck.length;
     final room = maxSessionProposals - state.decided - ahead;
-    final count = (2 - ahead).clamp(0, room);
+    final count = (3 - ahead).clamp(0, room);
     if (count <= 0) return;
-    _stale = false;
     final exact = {...?(body['exactItemIds'] as List?)?.cast<String>()};
-    emit(
-      state.copyWith(
-        proposing: true,
-        failure: () => null,
-        proposals: [
-          ...?state.proposals?.where((look) => !outdated.contains(look.id)),
-        ],
-      ),
-    );
+    emit(state.copyWith(proposing: true, failure: () => null));
     try {
       await looks.propose(
         {
@@ -206,7 +221,6 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
         count: count,
         append: true,
         excludedItemIds: state.excluded.toList(),
-        discardLookIds: outdated,
       );
       if (isClosed) return;
       emit(state.copyWith(proposing: false));
@@ -225,7 +239,6 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
     try {
       await looks.propose({...body, 'idempotencyKey': newIdempotencyKey()});
       if (isClosed) return;
-      _stale = false;
       emit(const LookProposalsState(proposing: true));
       await refresh();
       if (!isClosed) emit(state.copyWith(proposing: false));

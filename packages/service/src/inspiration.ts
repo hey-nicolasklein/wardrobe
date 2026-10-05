@@ -18,7 +18,7 @@ import {
   type CatalogExecutionConfig,
   CatalogJobError,
 } from './catalog.js';
-import { CatalogProviderError, type CatalogProvider } from './catalog-provider.js';
+import { CatalogProviderError, type CatalogProvider, type Warmth } from './catalog-provider.js';
 import type { Database, DatabaseClient } from './database.js';
 import {
   createGarmentReferenceCollage,
@@ -26,7 +26,7 @@ import {
   writeGarmentReferenceDebugGallery,
 } from './garment-reference-collage.js';
 import { withTransaction } from './database.js';
-import { pickAnchor, type PieceUsage } from './look-proposals.js';
+import { adjustOutfit, pickAnchor, warmthClash, type PieceUsage } from './look-proposals.js';
 import { pickShot, shotPrompt, shotStyle, shotWeights } from './look-shots.js';
 import { enqueueJob, type RemoteImageJob } from './jobs.js';
 import { collageModel, prepareIdentityReference, createIdentityCollage } from './identity-collage.js';
@@ -324,8 +324,9 @@ async function candidateItems(
     asset_id: string;
     original_asset_id: string;
     created_at: Date;
+    state: string;
   }>(
-    `SELECT i.id,i.name,i.category,i.colors,i.notes,i.created_at,
+    `SELECT i.id,i.name,i.category,i.colors,i.notes,i.created_at,i.state,
        v.transparent_asset_id AS asset_id,
        COALESCE(a.reference_asset_id,sp.asset_id) AS original_asset_id
      FROM wardrobe_items i
@@ -393,6 +394,47 @@ export function similarOutfit(a: string[], b: string[], exact: string[]) {
   const size = Math.max(left.length, right.length);
   const shared = left.filter((id) => right.includes(id)).length;
   return size >= 2 && size - shared <= 1;
+}
+
+/**
+ * Warmth of [items], tagging the ones never tagged before in one call. A
+ * failed call only costs the warmth hints, never the plan.
+ */
+async function warmthOf(
+  database: Database,
+  provider: CatalogProvider,
+  accountId: string,
+  items: Array<{ id: string; name: string; category: SupportedCategory; colors: string[]; notes: string | null }>,
+  signal?: AbortSignal,
+): Promise<Map<string, Warmth>> {
+  const known = await database.query<{ wardrobe_item_id: string; warmth: Warmth }>(
+    'SELECT wardrobe_item_id, warmth FROM item_warmth WHERE account_id=$1 AND wardrobe_item_id = ANY($2::uuid[])',
+    [accountId, items.map((item) => item.id)],
+  );
+  const warmth = new Map(known.rows.map((row) => [row.wardrobe_item_id, row.warmth]));
+  const untagged = items.filter((item) => !warmth.has(item.id));
+  if (!untagged.length) return warmth;
+  try {
+    const tagged = await provider.classifyWarmth({
+      items: untagged.map((item) => ({
+        id: item.id,
+        metadata: { name: item.name, category: item.category, colors: item.colors, notes: item.notes },
+      })),
+      model: lookPlannerModel,
+      signal,
+    });
+    for (const [id, level] of tagged) {
+      if (!untagged.some((item) => item.id === id)) continue;
+      warmth.set(id, level);
+      await database.query(
+        'INSERT INTO item_warmth (wardrobe_item_id, account_id, warmth) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+        [id, accountId, level],
+      );
+    }
+  } catch (error) {
+    console.warn('Warmth tagging failed; planning without it.', error);
+  }
+  return warmth;
 }
 
 /** How often each piece appeared in finished looks, and whether among [recent]. */
@@ -779,6 +821,56 @@ export async function proposeLooks(
   return { lookIds };
 }
 
+/**
+ * Applies swipe marks to every open proposal right away, see adjustOutfit.
+ * No planner call: a swap or a kept piece shows up in milliseconds.
+ */
+export async function adjustLookProposals(
+  database: Database,
+  input: { accountId: string; keepItemIds: string[]; excludeItemIds: string[] },
+) {
+  await withTransaction(database, async (client) => {
+    // Quick taps arrive back to back; one adjustment at a time per account.
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${input.accountId}:proposals`]);
+    const pool = await candidateItems(client, input.accountId, true);
+    const warmth = await client.query<{ wardrobe_item_id: string; warmth: Warmth }>(
+      'SELECT wardrobe_item_id, warmth FROM item_warmth WHERE account_id=$1',
+      [input.accountId],
+    );
+    const uses = await client.query<{ id: string; uses: string }>(
+      `SELECT li.wardrobe_item_id id,count(*) uses FROM look_items li JOIN looks l ON l.id=li.look_id
+       WHERE l.account_id=$1 AND l.state='ready' AND l.deleted_at IS NULL GROUP BY li.wardrobe_item_id`,
+      [input.accountId],
+    );
+    const warmthById = new Map(warmth.rows.map((row) => [row.wardrobe_item_id, row.warmth]));
+    const usesById = new Map(uses.rows.map((row) => [row.id, Number(row.uses)]));
+    const pieces = new Map(
+      pool.rows
+        .filter((item) => item.state === 'owning' || input.keepItemIds.includes(item.id))
+        .map((item) => [
+          item.id,
+          { id: item.id, category: item.category, warmth: warmthById.get(item.id) ?? null, uses: usesById.get(item.id) ?? 0 },
+        ]),
+    );
+    const keep = input.keepItemIds.flatMap((id) => pieces.get(id) ?? []);
+    const open = await client.query<{ id: string; ids: string[] }>(
+      `SELECT l.id, COALESCE(array_agg(li.wardrobe_item_id ORDER BY li.ordinal) FILTER (WHERE li.wardrobe_item_id IS NOT NULL),'{}') ids
+       FROM looks l LEFT JOIN look_items li ON li.look_id=l.id
+       WHERE l.account_id=$1 AND l.proposal AND l.state='proposed' AND l.deleted_at IS NULL GROUP BY l.id`,
+      [input.accountId],
+    );
+    for (const look of open.rows) {
+      const outfit = look.ids.flatMap((id) => pieces.get(id) ?? []);
+      const next = adjustOutfit({ outfit, keep, exclude: input.excludeItemIds, pool: [...pieces.values()] });
+      if (next.length === look.ids.length && next.every((id) => look.ids.includes(id))) continue;
+      await client.query('DELETE FROM look_items WHERE look_id=$1', [look.id]);
+      for (const [ordinal, itemId] of next.entries())
+        await client.query('INSERT INTO look_items(look_id,wardrobe_item_id,ordinal) VALUES($1,$2,$3)', [look.id, itemId, ordinal]);
+    }
+  });
+  return listLookProposals(database, input.accountId);
+}
+
 /** Renders a picked proposal: it leaves the proposals and is charged like any new look. */
 export async function renderLookProposal(
   database: Database,
@@ -1000,7 +1092,22 @@ function lookLighting(occasion: string | null) {
 }
 
 const unpolished =
-  'It must look like a real, unretouched photo: natural skin texture, slight sensor noise, imperfect casual framing. Avoid studio lighting, retouched skin, perfect symmetry, and a commercial DSLR or editorial look.';
+  'It must look like a real, unretouched snapshot, not an AI image: natural skin texture, sensor noise or grain, framing that is a little off with the horizon slightly crooked, a stranger or an object cut off at the edge, some motion blur, blown highlights or crushed shadows where the camera would clip. The person stands or moves; they are not seated. Avoid cinematic color grading, creamy bokeh, perfect composition, studio lighting, retouched skin, perfect symmetry, and any commercial, editorial or stock-photo look.';
+
+// The two cameras feed photos are taken with. Drawn per look, so the feed
+// mixes both; nights and parties always get the flash.
+export const lookCameras = {
+  iphone:
+    'Shot on an iPhone main camera by a friend: deep depth of field, typical phone HDR and sharpening, slightly flat colors, nothing staged.',
+  flash:
+    'Shot on a Fujifilm X100 with the built-in flash fired directly, also in daylight: hard frontal flash, a crisp flash shadow behind the person, slightly blown skin highlights, punchy colors, visible grain.',
+} as const;
+export type LookCamera = keyof typeof lookCameras;
+
+export function pickCamera(occasion: string | null, random: () => number = Math.random): LookCamera {
+  if (occasion === 'party' || occasion === 'night-out') return 'flash';
+  return random() < 0.5 ? 'flash' : 'iphone';
+}
 
 const lookFocusFraming: Record<LookFocus, string> = {
   upper: 'Frame from about the waist up so the referenced garments fill the frame; nothing below the waist is visible.',
@@ -1048,7 +1155,7 @@ export function lookPrompt(
   const garmentReferences = items.length > 1
     ? `The final garment reference is one ordered board. Its cells are row-major, from left to right and then top to bottom, matching this garment order: ${items.map((item, index) => `${index + 1}. ${item.name}`).join('; ')}. ${pairing} Use each cell only for its matching garment.`
     : `The final reference shows the garment. ${pairing}`;
-  return `The first reference shows the person whose identity must be preserved. It may be a single photo or a card containing several photos of the same person. Ignore background people and partial faces at the edges. For a single photo, use that photo as the primary identity reference. For a card, choose the photo with the clearest unobstructed face as the primary identity reference, regardless of its position in the card. Preserve its actual expression, whether smiling, laughing, or neutral; do not impose a preferred expression. Use the other photos only to confirm identity details, not to blend their expressions or head angles. Preserving the exact facial likeness of the person in this reference card is the highest priority. Use the original photos as the ground truth for identity. Preserve their facial proportions, face shape, jaw, cheeks, eyes, nose, mouth, hairline, facial hair, glasses when present, natural asymmetry, skin texture, and body proportions. Do not beautify, slim, symmetrize, or redesign their face. Copy the primary identity photo's head angle, gaze, and facial expression. Vary the outfit, body stance, and surroundings while keeping those facial details stable. Never borrow a face or identity from the clothing references. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} ${garmentReferences} ${lookStylePrompts[style](concept, focus ? lookFocusFraming[focus] : null)}${shotPrompt(concept.shot) ? ` Camera: ${shotPrompt(concept.shot)}` : ''} ${lookLighting(occasion)} ${unpolished} Mood of the scene: ${concept.mood}. The activity, camera shot, and mood describe the body and surroundings only. If they suggest laughing, looking down or away, or turning the head differently from the primary identity photo, adapt them to preserve that photo's head angle, gaze, and expression. ${garmentInstruction} Every referenced garment must be fully visible and faithful to its reference. ${completion} Avoid ${style === 'mirror' ? '' : 'selfies, '}illustrations, text, watermarks, and collages in the output. Keep the background free of readable lettering: no café menus, chalkboards, shop signs, posters, or storefront text. Where such surfaces appear naturally, keep them blank, out of focus, or turned away. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
+  return `The first reference shows the person whose identity must be preserved. It may be a single photo or a card containing several photos of the same person. Ignore background people and partial faces at the edges. For a single photo, use that photo as the primary identity reference. For a card, choose the photo with the clearest unobstructed face as the primary identity reference, regardless of its position in the card. Preserve its actual expression, whether smiling, laughing, or neutral; do not impose a preferred expression. Use the other photos only to confirm identity details, not to blend their expressions or head angles. Preserving the exact facial likeness of the person in this reference card is the highest priority. Use the original photos as the ground truth for identity. Preserve their facial proportions, face shape, jaw, cheeks, eyes, nose, mouth, hairline, facial hair, glasses when present, natural asymmetry, skin texture, and body proportions. Do not beautify, slim, symmetrize, or redesign their face. Copy the primary identity photo's head angle, gaze, and facial expression. Vary the outfit, body stance, and surroundings while keeping those facial details stable. Never borrow a face or identity from the clothing references. Use it only for identity, not for its clothes, layout, or background.${identityNote ? ` Additional identity details: ${identityNote}.` : ''} ${garmentReferences} ${lookStylePrompts[style](concept, focus ? lookFocusFraming[focus] : null)}${shotPrompt(concept.shot) ? ` Camera: ${shotPrompt(concept.shot)}` : ''} ${concept.camera ? lookCameras[concept.camera] : lookLighting(occasion)} ${unpolished} Mood of the scene: ${concept.mood}. The activity, camera shot, and mood describe the body and surroundings only. If they suggest laughing, looking down or away, or turning the head differently from the primary identity photo, adapt them to preserve that photo's head angle, gaze, and expression. ${garmentInstruction} Every referenced garment must be fully visible and faithful to its reference. ${completion} Avoid ${style === 'mirror' ? '' : 'selfies, '}illustrations, text, watermarks, and collages in the output. Keep the background free of readable lettering: no café menus, chalkboards, shop signs, posters, or storefront text. Where such surfaces appear naturally, keep them blank, out of focus, or turned away. Shoes, trousers, skirts, and dresses must never be cropped when selected.`;
 }
 
 async function imageDimensions(bytes: Uint8Array, expected: '1024x1280' | '768x960') {
@@ -1212,6 +1319,7 @@ export async function executeInspirationJob(
               siblingItemIds: siblings.flatMap((sibling) => sibling.ids),
             })
           : null;
+      const warmth = await warmthOf(database, provider, job.accountId, planningCandidates, controller.signal);
       const planned = await provider.planLook({
         candidates: planningCandidates.map((i) => ({
           id: i.id,
@@ -1221,6 +1329,7 @@ export async function executeInspirationJob(
             colors: i.colors,
             notes: i.notes,
           },
+          ...(warmth.has(i.id) ? { warmth: warmth.get(i.id) } : {}),
         })),
         recent: recentForLookPlan(recent.rows, row.exact_item_ids),
         ...(siblings.length ? { siblings: recentForLookPlan(siblings, row.exact_item_ids) } : {}),
@@ -1238,7 +1347,11 @@ export async function executeInspirationJob(
         model: lookPlannerModel,
         signal: controller.signal,
       });
-      concept = planned.concept;
+      // The camera is drawn here, not by the planner, so both stay in the mix.
+      concept = {
+        ...planned.concept,
+        ...(style === 'mirror' ? {} : { camera: pickCamera((job.payload as { occasion?: string | null }).occasion ?? null) }),
+      };
       itemIds = normalizeAutomaticLookItems(
         planned.itemIds,
         planningCandidates,
@@ -1252,6 +1365,8 @@ export async function executeInspirationJob(
       const repeatsRecent = recent.rows.some((look) =>
         similarOutfit(look.ids, itemIds, row.exact_item_ids),
       );
+      if (!lastAttempt && warmthClash(itemIds.map((itemId) => ({ warmth: warmth.get(itemId) }))))
+        throw new CatalogJobError('validation', 'The plan mixes warm and light pieces.', true);
       if (job.kind === 'plan-look' && repeatsRecent && !lastAttempt)
         throw new CatalogJobError('validation', 'The proposal repeats a recent look.', true);
       const occasion = (job.payload as { occasion?: LookOccasion | null }).occasion ?? null;

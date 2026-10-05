@@ -5,6 +5,7 @@ import {
   candidatesForLookPlan,
   lookFocus,
   lookPrompt,
+  pickCamera,
   tryOnPrompt,
   normalizeAutomaticLookItems,
   similarOutfit,
@@ -119,13 +120,16 @@ test('selected completion frames the body zone the picked pieces share', () => {
   assert.doesNotMatch(prompt, /Complete the outfit/);
 });
 
-test('parties get the flash look and every look avoids the DSLR polish', () => {
+test('parties get the flash look and every look avoids the stock-photo polish', () => {
   const concept = { activity: 'laughing', scene: 'a rooftop party', mood: 'loose', framing: 'full-body' as const };
   const item = [{ name: 'Fur coat', category: 'jacket', colors: ['brown'] }];
   const party = lookPrompt(concept, item, null, true, { occasion: 'party' });
   assert.match(party, /Light it with a direct on-camera flash/);
   assert.doesNotMatch(party, /If the scene is at night/);
-  assert.match(party, /commercial DSLR/);
+  assert.match(party, /stock-photo/);
+  assert.match(party, /not seated/);
+  // A drawn camera replaces the occasion lighting.
+  assert.match(lookPrompt({ ...concept, camera: 'flash' }, item, null, true, { occasion: 'casual' }), /Fujifilm X100 with the built-in flash/);
   const casual = lookPrompt(concept, item, null, true, { occasion: 'casual' });
   assert.doesNotMatch(casual, /flash/);
   assert.match(lookPrompt(concept, item, null, true), /If the scene is at night/);
@@ -150,4 +154,10 @@ test('proposals that change only one added piece count as the same outfit', () =
   // The user's exact pieces are shared by design and do not count.
   assert.equal(similarOutfit(['coat', 'shirt', 'jeans'], ['coat', 'tee', 'skirt'], ['coat']), false);
   assert.equal(similarOutfit(['coat', 'boots'], ['coat', 'sneakers'], ['coat']), false);
+});
+
+test('nights and parties always get the flash camera, other looks either', () => {
+  assert.equal(pickCamera('party', () => 0.9), 'flash');
+  assert.equal(pickCamera(null, () => 0.9), 'iphone');
+  assert.equal(pickCamera('casual', () => 0.1), 'flash');
 });

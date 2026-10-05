@@ -11,14 +11,15 @@ export const lookShots = {
   candid: {
     'candid-mid-laugh': 'A relaxed moment in conversation with someone just outside the frame. Use the primary identity photo\'s expression; only show a laugh if that photo already shows one.',
     'candid-over-shoulder': 'The torso is angled away from the camera. Adapt the turn and camera position to keep the face at the primary identity photo\'s head angle.',
-    'candid-seated': 'The person sits at a table, on a bench, or at a bar, shot at eye level from across the table.',
+    'candid-walking-past': 'Caught mid-step walking past, shot slightly from the side from a few steps away, with a little motion blur in the hands and fabric.',
+    'candid-waiting': 'Standing and waiting somewhere, at a crossing, a doorway or a platform edge, weight on one leg, shot from a few steps away.',
     'candid-busy-hands': 'The person is busy with something in their hands, like a coffee, phone, keys, or bag; keep the head angle and gaze from the primary identity photo.',
   },
   street: {
     'street-low-wide': "Shot from low, about knee height, on the iPhone's 0.5x wide lens, so the legs look long and the buildings lean in; keep the head angle and gaze from the primary identity photo, in hard sunlight with crisp shadows.",
     'street-walking': 'Shot at eye level while the person walks toward the camera mid-stride, with a little motion in the hands and fabric.',
     'street-side-lean': 'Shot from the side at chest height while the person leans against a wall, railing, or shop window, with the expression and head angle from the primary identity photo.',
-    'street-steps': 'Shot from slightly above while the person sits on steps, a curb, or a low wall, legs stretched or crossed, the whole outfit visible.',
+    'street-crossing': 'Shot from the opposite curb while the person crosses the street, full body, with traffic and passers-by around.',
     'street-wide-scene': 'Shot from a few metres away so the person stands in the middle of the street scene, smaller in the frame, with the surroundings telling the story.',
   },
   mirror: {

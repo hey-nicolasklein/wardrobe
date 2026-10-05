@@ -311,6 +311,13 @@ export const proposeLooksRequestSchema = z
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();
+// Swipe marks applied to the open proposals in place, without re-planning.
+export const adjustLookProposalsRequestSchema = z
+  .object({
+    keepItemIds: z.array(opaqueIdSchema).max(20).default([]),
+    excludeItemIds: z.array(opaqueIdSchema).max(200).default([]),
+  })
+  .strict();
 export const renderLookProposalRequestSchema = z
   .object({ quality: generationQualitySchema.default('low'), idempotencyKey: idempotencyKeySchema })
   .strict();

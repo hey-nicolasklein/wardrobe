@@ -9,19 +9,19 @@ const weight = (shot: string, value: number): ShotWeight => ({
 });
 
 test('shots are drawn by weight and hidden ones never', () => {
-  const weights = [weight('street-low-wide', 0), weight('street-walking', 1), weight('street-steps', 3)];
+  const weights = [weight('street-low-wide', 0), weight('street-walking', 1), weight('street-crossing', 3)];
   // The roll walks the weights in order: [0, 1) walking, [1, 4) steps.
   assert.equal(pickShot(weights, 'street', undefined, () => 0.2), 'street-walking');
-  assert.equal(pickShot(weights, 'street', undefined, () => 0.3), 'street-steps');
+  assert.equal(pickShot(weights, 'street', undefined, () => 0.3), 'street-crossing');
   for (let i = 0; i < 20; i++) assert.notEqual(pickShot(weights, 'street'), 'street-low-wide');
-  assert.equal(shotStyle('street-steps'), 'street');
+  assert.equal(shotStyle('street-crossing'), 'street');
   assert.equal(isLookShot('studio-backdrop'), false);
 });
 
 test('another perspective never repeats the current shot', () => {
-  const weights = [weight('street-walking', 5), weight('street-steps', 0)];
+  const weights = [weight('street-walking', 5), weight('street-crossing', 0)];
   // Only a hidden shot is left, so it is taken rather than repeating.
-  assert.equal(pickShot(weights, 'street', 'street-walking'), 'street-steps');
+  assert.equal(pickShot(weights, 'street', 'street-walking'), 'street-crossing');
 });
 
 test('the picked shot becomes the camera sentence of the prompt', () => {

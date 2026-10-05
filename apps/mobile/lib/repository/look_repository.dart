@@ -329,6 +329,26 @@ class LookRepository {
     }
   }
 
+  /// Applies swipe marks to the open proposals in place and returns them.
+  Future<List<Look>> adjustProposals({
+    List<String> keep = const [],
+    List<String> exclude = const [],
+  }) async {
+    final response = await _request(
+      'v1/looks/proposals/adjust',
+      method: 'POST',
+      data: {'keepItemIds': keep, 'excludeItemIds': exclude},
+    );
+    try {
+      return [
+        for (final raw in response['looks'] as List<dynamic>)
+          Look.fromJson(normalizeLookJson(raw as Map<String, dynamic>)),
+      ];
+    } on Object {
+      throw const FormApiException(ApiFailure.incompatible);
+    }
+  }
+
   /// Renders a picked proposal. It then develops in the feed like any look.
   Future<void> render(String lookId, {required String quality}) async {
     await _request(

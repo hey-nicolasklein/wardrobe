@@ -30,6 +30,7 @@ import {
   listLooks,
   listLookProposals,
   proposeLooks,
+  adjustLookProposals,
   renderLookProposal,
   listCharacterSheets,
   removeCharacterSheet,
@@ -51,6 +52,11 @@ import {
 import { prepareIdentityReference } from './identity-collage.js';
 
 const enabled = process.env.FORM_RUN_SERVICE_INTEGRATION === 'true';
+// The worker draws a camera for every planned look, see pickCamera.
+const withoutCamera = (concept: { camera?: string } | null) => {
+  const { camera: _camera, ...rest } = concept ?? {};
+  return rest;
+};
 
 test('proposals are planned for free and only the picked one is rendered and charged', { skip: !enabled }, async () => {
   const database = createDatabase(readDatabaseConfig());
@@ -93,7 +99,8 @@ test('proposals are planned for free and only the picked one is rendered and cha
     await database.query("UPDATE remote_image_jobs SET state='succeeded' WHERE id = ANY($1::uuid[])", [jobs.map((job) => job.id)]);
     const proposals = await listLookProposals(database, accountId);
     assert.deepEqual(proposals.map((look) => look.state), ['proposed', 'proposed', 'proposed']);
-    assert.deepEqual(proposals[0]!.concept, concept);
+    assert.deepEqual(withoutCamera(proposals[0]!.concept), concept);
+    assert.match(proposals[0]!.concept?.camera ?? '', /^(iphone|flash)$/);
     assert.deepEqual(proposals[0]!.wardrobeItemIds, [fixtureIds.readyItem]);
     assert.equal((await listLooks(database, accountId)).some((look) => proposed.lookIds.includes(look.id)), false);
     const picked = proposed.lookIds[1]!;
@@ -104,8 +111,13 @@ test('proposals are planned for free and only the picked one is rendered and cha
     const look = (await listLooks(database, accountId)).find((entry) => entry.id === picked)!;
     assert.equal(look.state, 'queued');
     assert.equal(look.quality, 'medium');
-    assert.deepEqual(look.concept, concept);
+    assert.deepEqual(withoutCamera(look.concept), concept);
     await assert.rejects(renderLookProposal(database, { accountId, lookId: picked, idempotencyKey: randomUUID() }), /nicht mehr verfügbar/);
+    // Swipe marks edit the open proposals in place. Without another piece of
+    // its category in the closet, an excluded piece simply leaves the outfit.
+    const adjusted = await adjustLookProposals(database, { accountId, keepItemIds: [], excludeItemIds: [fixtureIds.readyItem] });
+    assert.equal(adjusted.length, 2);
+    assert.ok(adjusted.every((look) => !look.wardrobeItemIds.includes(fixtureIds.readyItem)));
     // A new batch replaces the unpicked proposals.
     await proposeLooks(database, { ...command, count: 1, idempotencyKey: randomUUID() });
     const [kept] = await listLookProposals(database, accountId);
@@ -226,16 +238,16 @@ test('photo collages cost zero and become the first reference for a priced feed 
     assert.deepEqual(tried.wardrobeItemIds, [fixtureIds.readyItem]);
     // "Other perspective" keeps outfit and scene, changes only the shot, and
     // skips shots the user hid.
-    assert.deepEqual(await setShotHidden(database, { accountId: input.accountId, shot: 'candid-seated', hidden: true }), ['candid-seated']);
+    assert.deepEqual(await setShotHidden(database, { accountId: input.accountId, shot: 'candid-waiting', hidden: true }), ['candid-waiting']);
     const reshoot = await createLook(database, { accountId: input.accountId, exactItemIds: [], categories: [], parentLookId: look.lookId, reshoot: true, idempotencyKey: randomUUID() });
     const reshotLook = (await listLooks(database, input.accountId)).find((entry) => entry.id === reshoot.lookId)!;
     assert.equal(reshotLook.concept?.scene, concept.scene);
     assert.match(reshotLook.concept?.shot ?? '', /^candid-/);
-    assert.notEqual(reshotLook.concept?.shot, 'candid-seated');
+    assert.notEqual(reshotLook.concept?.shot, 'candid-waiting');
     assert.deepEqual(reshotLook.wardrobeItemIds, [fixtureIds.readyItem]);
     await assert.rejects(createLook(database, { accountId: input.accountId, exactItemIds: [], categories: [], parentLookId: tryOn.lookId, reshoot: true, idempotencyKey: randomUUID() }), /Perspektive/);
     await database.query("UPDATE looks SET state='failed' WHERE id=$1", [reshoot.lookId]);
-    assert.deepEqual(await setShotHidden(database, { accountId: input.accountId, shot: 'candid-seated', hidden: false }), []);
+    assert.deepEqual(await setShotHidden(database, { accountId: input.accountId, shot: 'candid-waiting', hidden: false }), []);
     // A heart on the reshot look raises its shot's weight above its siblings.
     await setLookLiked(database, { accountId: input.accountId, lookId: reshoot.lookId, liked: true });
     const liked = (await listLooks(database, input.accountId)).find((entry) => entry.id === reshoot.lookId)!;
@@ -254,7 +266,7 @@ test('photo collages cost zero and become the first reference for a priced feed 
     const upgrade = (await listLooks(database, input.accountId)).find((entry) => entry.id === upgraded.lookId)!;
     assert.equal(upgrade.quality, 'high');
     assert.equal(upgrade.characterSheetId, sheet.id);
-    assert.deepEqual(upgrade.concept, concept);
+    assert.deepEqual(withoutCamera(upgrade.concept), concept);
     assert.deepEqual(upgrade.wardrobeItemIds, feed[0]!.wardrobeItemIds);
     await database.query("UPDATE looks SET state='failed' WHERE id=$1", [upgraded.lookId]);
     const retry = await retryLook(database, { accountId: input.accountId, lookId: upgraded.lookId, idempotencyKey: randomUUID() });

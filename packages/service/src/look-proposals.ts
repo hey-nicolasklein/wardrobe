@@ -1,5 +1,7 @@
 import type { LookReason } from '@form/contracts';
 
+import type { Warmth } from './catalog-provider.js';
+
 // Pieces that can carry an outfit. Accessories make weak anchors.
 const anchorCategories = new Set(['top', 'dress', 'pants', 'skirt', 'jacket', 'shoes']);
 // Slots a dress fills, so a dress and these never anchor next to each other.
@@ -55,4 +57,69 @@ export function pickAnchor(input: {
           ? { kind: 'rarely-styled', itemId: anchor.id }
           : null;
   return { itemId: anchor.id, reason };
+}
+
+export type OutfitPiece = { id: string; category: string; warmth?: Warmth | null; uses?: number };
+
+const lowerSlots = new Set(['pants', 'skirt']);
+
+/** Whether two pieces would fill the same place in an outfit. */
+function sameSlot(a: string, b: string) {
+  if (a === b) return true;
+  if (lowerSlots.has(a) && lowerSlots.has(b)) return true;
+  if (a === 'dress') return dressSlots.has(b);
+  if (b === 'dress') return dressSlots.has(a);
+  return false;
+}
+
+/** A winter coat next to shorts: warm and light pieces never share an outfit. */
+export function warmthClash(pieces: Array<{ warmth?: Warmth | null }>) {
+  const levels = new Set(pieces.map((piece) => piece.warmth));
+  return levels.has('warm') && levels.has('light');
+}
+
+/**
+ * Applies the user's swipe marks to a planned outfit without asking the
+ * planner again: kept pieces move in and push out whatever filled their slot,
+ * excluded pieces and pieces that clash in warmth with the kept ones are
+ * replaced by the least worn fitting piece of the same category from [pool].
+ */
+export function adjustOutfit(input: {
+  outfit: OutfitPiece[];
+  keep: OutfitPiece[];
+  exclude: string[];
+  pool: OutfitPiece[];
+}): string[] {
+  const keptIds = new Set(input.keep.map((piece) => piece.id));
+  let outfit = [...input.outfit];
+  const gaps: string[] = [];
+  for (const piece of outfit)
+    if (input.exclude.includes(piece.id) && !keptIds.has(piece.id)) gaps.push(piece.category);
+  outfit = outfit.filter((piece) => !input.exclude.includes(piece.id) || keptIds.has(piece.id));
+  for (const kept of input.keep) {
+    if (outfit.some((piece) => piece.id === kept.id)) continue;
+    outfit = outfit.filter((piece) => !sameSlot(piece.category, kept.category));
+    outfit.push(kept);
+  }
+  // Pieces that clash with what the user kept make way, like excluded ones.
+  const anchors = outfit.filter((piece) => keptIds.has(piece.id));
+  const clashing = outfit.filter(
+    (piece) => !keptIds.has(piece.id) && anchors.some((kept) => warmthClash([kept, piece])),
+  );
+  for (const piece of clashing) gaps.push(piece.category);
+  outfit = outfit.filter((piece) => !clashing.includes(piece));
+  for (const category of gaps) {
+    if (outfit.some((piece) => sameSlot(piece.category, category))) continue;
+    const replacement = input.pool
+      .filter(
+        (piece) =>
+          piece.category === category &&
+          !input.exclude.includes(piece.id) &&
+          !input.outfit.some((old) => old.id === piece.id) &&
+          !warmthClash([...outfit, piece]),
+      )
+      .sort((a, b) => (a.uses ?? 0) - (b.uses ?? 0))[0];
+    if (replacement) outfit.push(replacement);
+  }
+  return outfit.map((piece) => piece.id);
 }

@@ -16,6 +16,7 @@ import {
   activateCharacterSheetRequestSchema,
   createLookRequestSchema,
   proposeLooksRequestSchema,
+  adjustLookProposalsRequestSchema,
   renderLookProposalRequestSchema,
   retryLookRequestSchema,
   createWardrobeItemRequestSchema,
@@ -82,6 +83,7 @@ import {
   listLooks,
   listLookProposals,
   proposeLooks,
+  adjustLookProposals,
   renderLookProposal,
   retryLook,
   removeCharacterSheet,
@@ -1133,6 +1135,26 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       if (mapped) return context.json(mapped.payload, mapped.status);
       throw error;
     }
+  });
+
+  app.post('/v1/looks/proposals/adjust', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    const parsed = adjustLookProposalsRequestSchema.safeParse(
+      await context.req.json().catch(() => null),
+    );
+    if (!parsed.success)
+      return context.json(errorPayload('validation', 'invalid-adjust', 'Auswahl ungültig.'), 400);
+    return context.json({
+      looks: await adjustLookProposals(database, {
+        accountId: authenticated.session.id,
+        ...parsed.data,
+      }),
+    });
   });
 
   app.post('/v1/looks/:lookId/render', async (context) => {

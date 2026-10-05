@@ -64,6 +64,10 @@ export type GenerationProviderResult = {
   usage: GenerationUsage;
 };
 
+// How warm a piece wears. An outfit never mixes warm with light pieces.
+export type Warmth = 'light' | 'mid' | 'warm';
+export const warmthLevels: readonly Warmth[] = ['light', 'mid', 'warm'];
+
 export type LookPlanResult = {
   requestId: string;
   itemIds: string[];
@@ -90,7 +94,8 @@ export interface CatalogProvider {
     signal?: AbortSignal;
   }): Promise<GenerationProviderResult>;
   planLook(input: {
-    candidates: Array<{ id: string; metadata: ItemMetadata }>;
+    // warmth: see classifyWarmth. Missing when it could not be classified.
+    candidates: Array<{ id: string; metadata: ItemMetadata; warmth?: Warmth }>;
     recent: Array<{ itemIds: string[]; concept: LookConcept | null }>;
     // Proposals shown alongside this one. The plan must clearly differ from each.
     siblings?: Array<{ itemIds: string[]; concept: LookConcept | null }>;
@@ -104,6 +109,12 @@ export interface CatalogProvider {
     model: string;
     signal?: AbortSignal;
   }): Promise<LookPlanResult>;
+  /** Tags pieces as light, mid or warm from their name, category and notes. */
+  classifyWarmth(input: {
+    items: Array<{ id: string; metadata: ItemMetadata }>;
+    model: string;
+    signal?: AbortSignal;
+  }): Promise<Map<string, Warmth>>;
   generateComposite(input: {
     references: Uint8Array[];
     prompt: string;
@@ -569,7 +580,8 @@ export class OpenAICatalogProvider implements CatalogProvider {
   }
 
   async planLook(input: {
-    candidates: Array<{ id: string; metadata: ItemMetadata }>;
+    // warmth: see classifyWarmth. Missing when it could not be classified.
+    candidates: Array<{ id: string; metadata: ItemMetadata; warmth?: Warmth }>;
     recent: Array<{ itemIds: string[]; concept: LookConcept | null }>;
     // Proposals shown alongside this one. The plan must clearly differ from each.
     siblings?: Array<{ itemIds: string[]; concept: LookConcept | null }>;
@@ -621,7 +633,9 @@ export class OpenAICatalogProvider implements CatalogProvider {
         body: JSON.stringify({
           model: input.model,
           store: false,
-          input: `Plan one coherent candid outfit photograph. Exact item IDs are mandatory. Satisfy every requested category. Build a complete outfit around the exact items, adding complementary pieces from the candidates. For pieces you add automatically, choose at most one top, at most one jacket, and at most one lower-body piece (pants or skirt). A dress replaces the top and lower-body piece; a jacket may be layered over either. Do not select alternative garments in the same slot. Match the requested occasion in both clothing and scene when provided. Avoid recent combinations and situations, but never at the cost of an exact item: the exact items always stay in the outfit, and you vary the added pieces, scene, activity and mood instead. Do not use weather, season or the user's location. The scene must be a specific, lived-in real place (a street corner, café terrace, subway platform, park, kitchen, bar, gallery opening) with incidental background detail and other people where natural; never a plain studio, blank wall or empty backdrop. Do not mention signs, menus, posters, chalkboards, or other written text in the scene.${input.style === 'street' ? ' The photo is a street-style fit pic, so the scene is outdoors in a city.' : ''} Candidates: ${JSON.stringify(input.candidates)}. Exact: ${JSON.stringify(input.exactItemIds)}. Categories: ${JSON.stringify(input.categories)}. Occasion: ${JSON.stringify(input.occasion ?? null)}.${input.style === 'mirror' ? ' The photo will be a mirror selfie, so choose an indoor scene with a mirror (bedroom, hallway, fitting room, elevator, restroom) and an activity that fits it.' : ''}${shotIds.length === 1 ? ` The camera shot is fixed; plan an activity and pose that fit it. Shot: ${JSON.stringify(Object.fromEntries((input.shots ?? []).map(({ id, description }) => [id, description])))}.` : shotIds.length ? ` Pick the camera shot from Shots whose pose fits the activity, and avoid shots used in Recent. Shots: ${JSON.stringify(Object.fromEntries((input.shots ?? []).map(({ id, description }) => [id, description])))}.` : ''} Describe activity and pose through the body stance, hands, and surroundings. The image model will copy the head angle, gaze, and expression from an identity photo you cannot see. Do not prescribe those facial details or force laughing, looking down, or turning the head, even when the shot name suggests it. Describe mood through the scene and body language. Recent: ${JSON.stringify(input.recent)}.${input.siblings?.length ? ` This outfit is one of several proposals the user picks from, so it must clearly differ from every one in Siblings: change at least two added pieces where the candidates allow it, and use a different kind of scene and activity. Siblings: ${JSON.stringify(input.siblings)}.` : ''}${input.anchorItemId ? ` Build the outfit around the anchor piece and include it, it has not been worn much lately: ${JSON.stringify(input.anchorItemId)}.` : ''}`,
+          // Planning is mostly slot filling. Low effort keeps the swipe deck fast.
+          reasoning: { effort: 'low' },
+          input: `Plan one coherent candid outfit photograph. Exact item IDs are mandatory. Satisfy every requested category. Build a complete outfit around the exact items, adding complementary pieces from the candidates. For pieces you add automatically, choose at most one top, at most one jacket, and at most one lower-body piece (pants or skirt). A dress replaces the top and lower-body piece; a jacket may be layered over either. Do not select alternative garments in the same slot. Every candidate has a warmth (light, mid or warm): keep the outfit to one season and never combine warm pieces such as winter coats, knits or boots with light pieces such as shorts, sandals or summer dresses. Match the requested occasion in both clothing and scene when provided. Avoid recent combinations and situations, but never at the cost of an exact item: the exact items always stay in the outfit, and you vary the added pieces, scene, activity and mood instead. Do not use weather, season or the user's location. Invent the place and moment freely and vary them widely: anywhere a person really spends a day, from a laundromat, a train platform or a flower market to a rooftop, a record store, a ferry deck or a friend's hallway. Prefer the unexpected over cafés and restaurants. The scene is specific and lived-in, with incidental background detail and other people where natural; never a plain studio, blank wall or empty backdrop. The person stands, walks or moves through the scene and never sits. Do not mention signs, menus, posters, chalkboards, or other written text in the scene.${input.style === 'street' ? ' The photo is a street-style fit pic, so the scene is outdoors in a city.' : ''} Candidates: ${JSON.stringify(input.candidates)}. Exact: ${JSON.stringify(input.exactItemIds)}. Categories: ${JSON.stringify(input.categories)}. Occasion: ${JSON.stringify(input.occasion ?? null)}.${input.style === 'mirror' ? ' The photo will be a mirror selfie, so choose an indoor scene with a mirror (bedroom, hallway, fitting room, elevator, restroom) and an activity that fits it.' : ''}${shotIds.length === 1 ? ` The camera shot is fixed; plan an activity and pose that fit it. Shot: ${JSON.stringify(Object.fromEntries((input.shots ?? []).map(({ id, description }) => [id, description])))}.` : shotIds.length ? ` Pick the camera shot from Shots whose pose fits the activity, and avoid shots used in Recent. Shots: ${JSON.stringify(Object.fromEntries((input.shots ?? []).map(({ id, description }) => [id, description])))}.` : ''} Describe activity and pose through the body stance, hands, and surroundings. The image model will copy the head angle, gaze, and expression from an identity photo you cannot see. Do not prescribe those facial details or force laughing, looking down, or turning the head, even when the shot name suggests it. Describe mood through the scene and body language. Recent: ${JSON.stringify(input.recent)}.${input.siblings?.length ? ` This outfit is one of several proposals the user picks from, so it must clearly differ from every one in Siblings: change at least two added pieces where the candidates allow it, and use a different kind of scene and activity. Siblings: ${JSON.stringify(input.siblings)}.` : ''}${input.anchorItemId ? ` Build the outfit around the anchor piece and include it, it has not been worn much lately: ${JSON.stringify(input.anchorItemId)}.` : ''}`,
           text: {
             format: {
               type: 'json_schema',
@@ -689,6 +703,74 @@ export class OpenAICatalogProvider implements CatalogProvider {
         true,
       );
     }
+  }
+
+  async classifyWarmth(input: {
+    items: Array<{ id: string; metadata: ItemMetadata }>;
+    model: string;
+    signal?: AbortSignal;
+  }): Promise<Map<string, Warmth>> {
+    if (!input.items.length) return new Map();
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/responses`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+        signal: input.signal,
+        body: JSON.stringify({
+          model: input.model,
+          store: false,
+          reasoning: { effort: 'low' },
+          input: `Tag each clothing piece with how warm it wears. light: summer pieces such as shorts, tank tops, linen, sandals, summer dresses. warm: winter pieces such as coats, puffers, fur, heavy knits, boots, scarves, beanies. mid: everything that works across seasons, such as jeans, shirts, sneakers, light jackets, and most accessories. Pieces: ${JSON.stringify(input.items)}.`,
+          text: {
+            format: {
+              type: 'json_schema',
+              name: 'warmth',
+              strict: true,
+              schema: {
+                type: 'object',
+                properties: {
+                  items: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string', enum: input.items.map(({ id }) => id) },
+                        warmth: { type: 'string', enum: warmthLevels },
+                      },
+                      required: ['id', 'warmth'],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ['items'],
+                additionalProperties: false,
+              },
+            },
+          },
+        }),
+      });
+    } catch (error) {
+      if ((error as { name?: string }).name === 'AbortError')
+        throw new CatalogProviderError('timeout', 'OpenAI warmth tagging timed out.', true);
+      throw new CatalogProviderError('connection', 'OpenAI warmth tagging could not connect.', true);
+    }
+    const body = await readProviderResponse(response);
+    if (!response.ok) throw providerErrorFromResponse(response.status, body);
+    const raw = body as {
+      output_text?: string;
+      output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+    };
+    const text =
+      raw.output_text ??
+      raw.output?.flatMap((o) => o.content ?? []).find((c) => c.type === 'output_text')?.text ??
+      '';
+    const parsed = z
+      .object({ items: z.array(z.object({ id: z.string(), warmth: z.enum(['light', 'mid', 'warm']) })) })
+      .safeParse(JSON.parse(text || '{}'));
+    if (!parsed.success)
+      throw new CatalogProviderError('validation', 'OpenAI returned invalid warmth tags.', true);
+    return new Map(parsed.data.items.map(({ id, warmth }) => [id, warmth]));
   }
 
   async generateComposite(input: {
@@ -835,6 +917,10 @@ export class ReplayCatalogProvider implements CatalogProvider {
         },
       },
     );
+  }
+
+  async classifyWarmth(input: { items: Array<{ id: string }> }): Promise<Map<string, Warmth>> {
+    return new Map(input.items.map(({ id }) => [id, 'mid' as const]));
   }
 
   async generateComposite(input: {

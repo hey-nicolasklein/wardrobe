@@ -254,6 +254,8 @@ export const lookConceptSchema = z
     mood: z.string().trim().min(1).max(200),
     // The camera setup the planner picked, an id from the service's shot catalog.
     shot: z.string().min(1).max(40).optional(),
+    // The device the photo is taken with, see lookCameras in the service.
+    camera: z.enum(['iphone', 'flash']).optional(),
   })
   .strict();
 // How a feed image is photographed. `candid` is the original friend-snapshot look.

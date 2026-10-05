@@ -21,7 +21,6 @@ import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
 import 'package:form_mobile/widgets/form_components.dart';
-import 'package:form_mobile/widgets/form_icon.dart';
 import 'package:go_router/go_router.dart';
 
 /// Planned outfits from the composer as a swipe deck. Right renders the
@@ -56,7 +55,11 @@ class _ProposalsView extends StatefulWidget {
 class _ProposalsViewState extends State<_ProposalsView> {
   final _deck = GlobalKey<_SwipeDeckState>();
 
+  /// The piece on the top card whose actions are open.
+  String? _selected;
+
   void _decide(Look look, {required bool pick}) {
+    setState(() => _selected = null);
     final cubit = context.read<LookProposalsCubit>();
     if (pick) {
       unawaited(HapticFeedback.mediumImpact());
@@ -120,7 +123,7 @@ class _ProposalsViewState extends State<_ProposalsView> {
                       marks: state.marks,
                       itemsById: itemsById,
                       online: online,
-                      onTap: cubit.togglePiece,
+                      onTap: cubit.unmark,
                     ),
                     if (state.failure != null) ...[
                       const SizedBox(height: 10),
@@ -143,7 +146,29 @@ class _ProposalsViewState extends State<_ProposalsView> {
                                       itemsById: itemsById,
                                       online: online,
                                       marks: state.marks,
-                                      onPieceTap: cubit.togglePiece,
+                                      // Only the top card takes taps.
+                                      selectedId: look == deck.first
+                                          ? _selected
+                                          : null,
+                                      onPieceTap: (id) => setState(
+                                        () => _selected = _selected == id
+                                            ? null
+                                            : id,
+                                      ),
+                                      onKeep: (id) {
+                                        unawaited(
+                                          HapticFeedback.mediumImpact(),
+                                        );
+                                        setState(() => _selected = null);
+                                        unawaited(cubit.keep(id));
+                                      },
+                                      onSwap: (id) {
+                                        unawaited(
+                                          HapticFeedback.lightImpact(),
+                                        );
+                                        setState(() => _selected = null);
+                                        unawaited(cubit.swap(id));
+                                      },
                                     )
                                   : _PlanningCard(
                                       building: state.kept.isNotEmpty,
@@ -185,8 +210,8 @@ class _Progress extends StatelessWidget {
   );
 }
 
-/// The pieces kept so far, and how many are ruled out. Grows in when the
-/// first piece is marked.
+/// Every marked piece in the order it was marked: kept ones with a green pin,
+/// swapped-out ones faded behind a red cross. Tapping one drops its mark.
 class _YourLook extends StatelessWidget {
   const _YourLook({
     required this.marks,
@@ -202,17 +227,16 @@ class _YourLook extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final kept = [
+    final marked = [
       for (final entry in marks.entries)
-        if (entry.value == PieceMark.keep && itemsById[entry.key] != null)
-          itemsById[entry.key]!,
+        if (itemsById[entry.key] case final item?)
+          (item: item, mark: entry.value),
     ];
-    final excluded = marks.values.where((m) => m == PieceMark.exclude).length;
     return AnimatedSize(
       duration: const Duration(milliseconds: 320),
       curve: FormTokens.easeOut,
       alignment: Alignment.topCenter,
-      child: marks.isEmpty
+      child: marked.isEmpty
           ? const SizedBox(width: double.infinity)
           : Padding(
               padding: const EdgeInsets.only(top: 12),
@@ -228,26 +252,23 @@ class _YourLook extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: SizedBox(
-                      height: 44,
+                      height: 48,
                       child: ListView(
                         scrollDirection: Axis.horizontal,
+                        clipBehavior: Clip.none,
                         children: [
-                          for (final item in kept)
-                            _KeptThumb(
-                              key: ValueKey(item.id),
-                              item: item,
+                          for (final entry in marked)
+                            _MarkThumb(
+                              key: ValueKey(entry.item.id),
+                              item: entry.item,
+                              kept: entry.mark == PieceMark.keep,
                               online: online,
-                              onTap: () => onTap(item.id),
+                              onTap: () => onTap(entry.item.id),
                             ),
                         ],
                       ),
                     ),
                   ),
-                  if (excluded > 0)
-                    Text(
-                      context.plural(LocaleKeys.proposalsExcluded, excluded),
-                      style: FormTokens.small,
-                    ),
                 ],
               ),
             ),
@@ -255,15 +276,17 @@ class _YourLook extends StatelessWidget {
   }
 }
 
-class _KeptThumb extends StatelessWidget {
-  const _KeptThumb({
+class _MarkThumb extends StatelessWidget {
+  const _MarkThumb({
     required this.item,
+    required this.kept,
     required this.online,
     required this.onTap,
     super.key,
   });
 
   final WardrobeItem item;
+  final bool kept;
   final bool online;
   final VoidCallback onTap;
 
@@ -274,21 +297,53 @@ class _KeptThumb extends StatelessWidget {
     curve: FormTokens.pop,
     builder: (context, value, child) =>
         Transform.scale(scale: value, child: child),
-    child: GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        margin: const EdgeInsets.only(right: 6),
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: FormTokens.selectedTint,
-          borderRadius: BorderRadius.circular(FormTokens.inputRadius),
-          border: Border.all(color: FormTokens.green, width: 1.5),
-        ),
-        child: CachedMedia(
-          identity: item.previewIdentity,
-          previewPath: item.previewPath,
-          online: online,
+    child: Semantics(
+      button: true,
+      label: item.metadata.name,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.only(right: 8, top: 4),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: kept ? FormTokens.selectedTint : FormTokens.dangerTint,
+                  borderRadius: BorderRadius.circular(FormTokens.inputRadius),
+                ),
+                child: Opacity(
+                  opacity: kept ? 1 : 0.45,
+                  child: CachedMedia(
+                    identity: item.previewIdentity,
+                    previewPath: item.previewPath,
+                    online: online,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: -4,
+                right: -4,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: kept ? FormTokens.green : FormTokens.danger,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: FormTokens.surface, width: 1.5),
+                  ),
+                  child: Icon(
+                    kept ? Icons.push_pin : Icons.close,
+                    size: 10,
+                    color: FormTokens.surface,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     ),
@@ -385,41 +440,35 @@ class _SwipeDeckState extends State<_SwipeDeck>
         _width = constraints.maxWidth;
         final dx = _dx.value;
         final progress = (dx / _threshold).clamp(-1.0, 1.0);
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            if (next != null)
-              Positioned.fill(
-                child: Transform.translate(
-                  offset: Offset(0, 14 * (1 - progress.abs())),
+        // Both cards share one widget shape and are keyed by look, so the
+        // next card keeps its state when it moves to the top instead of
+        // being rebuilt and dropping its pieces in a second time.
+        Widget card(Look look, {required bool isTop}) => Positioned.fill(
+          key: ValueKey(look.id),
+          child: IgnorePointer(
+            ignoring: !isTop,
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onHorizontalDragStart: isTop && _draggable
+                  ? (_) => _dx.stop()
+                  : null,
+              onHorizontalDragUpdate: isTop && _draggable
+                  ? (details) => _dx.value += details.delta.dx
+                  : null,
+              onHorizontalDragEnd: isTop && _draggable ? _release : null,
+              child: Transform.translate(
+                offset: isTop
+                    ? Offset(dx, dx.abs() * 0.05)
+                    : Offset(0, 14 * (1 - progress.abs())),
+                child: Transform.rotate(
+                  angle: isTop ? dx / _width * 0.2 : 0,
+                  alignment: const Alignment(0, 2),
                   child: Transform.scale(
-                    // Grows into place as the top card leaves.
-                    scale: 0.94 + 0.06 * progress.abs(),
-                    child: widget.cardBuilder(next),
-                  ),
-                ),
-              ),
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onHorizontalDragStart: _draggable ? (_) => _dx.stop() : null,
-                onHorizontalDragUpdate: _draggable
-                    ? (details) => _dx.value += details.delta.dx
-                    : null,
-                onHorizontalDragEnd: _draggable ? _release : null,
-                child: Transform.translate(
-                  offset: Offset(dx, dx.abs() * 0.05),
-                  child: Transform.rotate(
-                    angle: dx / _width * 0.2,
-                    alignment: const Alignment(0, 2),
+                    // The next card grows into place as the top one leaves.
+                    scale: isTop ? 1 : 0.94 + 0.06 * progress.abs(),
                     child: Stack(
                       children: [
-                        Positioned.fill(
-                          child: KeyedSubtree(
-                            key: ValueKey(top.id),
-                            child: widget.cardBuilder(top),
-                          ),
-                        ),
+                        Positioned.fill(child: widget.cardBuilder(look)),
                         // Tints the card toward the decision it is about to
                         // make.
                         Positioned.fill(
@@ -434,7 +483,9 @@ class _SwipeDeckState extends State<_SwipeDeck>
                                             ? FormTokens.green
                                             : FormTokens.ink)
                                         .withValues(
-                                          alpha: 0.07 * progress.abs(),
+                                          alpha: isTop
+                                              ? 0.07 * progress.abs()
+                                              : 0,
                                         ),
                               ),
                             ),
@@ -447,7 +498,7 @@ class _SwipeDeckState extends State<_SwipeDeck>
                             label: context.tr(LocaleKeys.proposalsRender),
                             color: FormTokens.green,
                             angle: -0.2,
-                            visible: progress.clamp(0.0, 1.0),
+                            visible: isTop ? progress.clamp(0.0, 1.0) : 0,
                           ),
                         ),
                         Positioned(
@@ -457,7 +508,7 @@ class _SwipeDeckState extends State<_SwipeDeck>
                             label: context.tr(LocaleKeys.proposalsSkipOne),
                             color: FormTokens.ink,
                             angle: 0.2,
-                            visible: (-progress).clamp(0.0, 1.0),
+                            visible: isTop ? (-progress).clamp(0.0, 1.0) : 0,
                           ),
                         ),
                       ],
@@ -466,6 +517,13 @@ class _SwipeDeckState extends State<_SwipeDeck>
                 ),
               ),
             ),
+          ),
+        );
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            if (next != null) card(next, isTop: false),
+            card(top, isTop: true),
           ],
         );
       },
@@ -544,14 +602,20 @@ class _ProposalCard extends StatelessWidget {
     required this.itemsById,
     required this.online,
     required this.marks,
+    required this.selectedId,
     required this.onPieceTap,
+    required this.onKeep,
+    required this.onSwap,
   });
 
   final Look look;
   final Map<String, WardrobeItem> itemsById;
   final bool online;
   final Map<String, PieceMark> marks;
+  final String? selectedId;
   final ValueChanged<String> onPieceTap;
+  final ValueChanged<String> onKeep;
+  final ValueChanged<String> onSwap;
 
   @override
   Widget build(BuildContext context) {
@@ -559,6 +623,9 @@ class _ProposalCard extends StatelessWidget {
       for (final reason in look.reasons ?? const <LookReason>[])
         ?_reasonChip(context, reason, itemsById),
     ];
+    final selected = look.wardrobeItemIds.contains(selectedId)
+        ? selectedId
+        : null;
     return _CardSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -568,14 +635,15 @@ class _ProposalCard extends StatelessWidget {
               child: FlatLayBoard(
                 garments: lookGarments(look, itemsById),
                 online: online,
-                // The pieces drop onto the card one after another.
+                selectedId: selected,
+                // New and swapped-in pieces drop onto the card.
                 arrive: true,
                 onGarmentTap: (id) {
-                  unawaited(HapticFeedback.lightImpact());
+                  unawaited(HapticFeedback.selectionClick());
                   onPieceTap(id);
                 },
                 imageBuilder: (item) => _MarkedPiece(
-                  mark: marks[item.id],
+                  kept: marks[item.id] == PieceMark.keep,
                   child: CachedMedia(
                     identity: item.previewIdentity,
                     previewPath: item.previewPath,
@@ -585,76 +653,138 @@ class _ProposalCard extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            context.tr(LocaleKeys.proposalsTapHint),
-            textAlign: TextAlign.center,
-            style: FormTokens.small,
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SizeTransition(sizeFactor: animation, child: child),
+            ),
+            child: selected == null
+                ? Column(
+                    key: const ValueKey('reasons'),
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        context.tr(LocaleKeys.proposalsTapHint),
+                        textAlign: TextAlign.center,
+                        style: FormTokens.small,
+                      ),
+                      if (reasons.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Wrap(spacing: 6, runSpacing: 6, children: reasons),
+                      ],
+                    ],
+                  )
+                : _PieceActions(
+                    key: ValueKey(selected),
+                    name: itemsById[selected]?.metadata.name ?? '',
+                    kept: marks[selected] == PieceMark.keep,
+                    onKeep: () => onKeep(selected),
+                    onSwap: () => onSwap(selected),
+                  ),
           ),
-          if (reasons.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(spacing: 6, runSpacing: 6, children: reasons),
-          ],
         ],
       ),
     );
   }
 }
 
-/// A piece with its mark: kept pieces get a green badge, excluded ones fade
-/// out behind a cross.
-class _MarkedPiece extends StatelessWidget {
-  const _MarkedPiece({required this.mark, required this.child});
+/// What can happen to the selected piece: keep it for the next outfits, or
+/// swap it for another piece of its kind right on this card.
+class _PieceActions extends StatelessWidget {
+  const _PieceActions({
+    required this.name,
+    required this.kept,
+    required this.onKeep,
+    required this.onSwap,
+    super.key,
+  });
 
-  final PieceMark? mark;
-  final Widget child;
+  final String name;
+  final bool kept;
+  final VoidCallback onKeep;
+  final VoidCallback onSwap;
 
   @override
-  Widget build(BuildContext context) {
-    final excluded = mark == PieceMark.exclude;
-    return Stack(
-      clipBehavior: Clip.none,
-      fit: StackFit.expand,
-      children: [
-        AnimatedOpacity(
-          duration: const Duration(milliseconds: 220),
-          opacity: excluded ? 0.25 : 1,
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 260),
-            curve: FormTokens.pop,
-            scale: mark == PieceMark.keep
-                ? 1.06
-                : excluded
-                ? 0.9
-                : 1,
-            child: child,
-          ),
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(
+        name,
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: FormTokens.small.copyWith(
+          color: FormTokens.ink,
+          fontWeight: FontWeight.w600,
         ),
-        Positioned(
-          top: 0,
-          right: 0,
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 320),
-            curve: FormTokens.pop,
-            scale: mark == null ? 0 : 1,
-            child: Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                color: excluded ? FormTokens.danger : FormTokens.green,
-                shape: BoxShape.circle,
-                border: Border.all(color: FormTokens.surface, width: 2),
-              ),
-              child: Icon(
-                excluded ? Icons.close : Icons.check,
-                size: 15,
-                color: FormTokens.surface,
+      ),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: onSwap,
+              icon: const Icon(Icons.swap_horiz, size: 18),
+              label: Text(context.tr(LocaleKeys.proposalsSwap)),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: kept ? null : onKeep,
+              icon: const Icon(Icons.push_pin_outlined, size: 18),
+              label: Text(
+                context.tr(
+                  kept ? LocaleKeys.proposalsKept : LocaleKeys.proposalsKeep,
+                ),
               ),
             ),
           ),
+        ],
+      ),
+    ],
+  );
+}
+
+/// A piece the user kept: a pin badge pops in.
+class _MarkedPiece extends StatelessWidget {
+  const _MarkedPiece({required this.kept, required this.child});
+
+  final bool kept;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    clipBehavior: Clip.none,
+    fit: StackFit.expand,
+    children: [
+      child,
+      Positioned(
+        top: 0,
+        right: 0,
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 320),
+          curve: FormTokens.pop,
+          scale: kept ? 1 : 0,
+          child: Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: FormTokens.green,
+              shape: BoxShape.circle,
+              border: Border.all(color: FormTokens.surface, width: 2),
+            ),
+            child: const Icon(
+              Icons.push_pin,
+              size: 13,
+              color: FormTokens.surface,
+            ),
+          ),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
 }
 
 /// A short, factual reason chip. Null for kinds this app does not know.
@@ -729,8 +859,8 @@ Widget? _reasonChip(
   );
 }
 
-/// Stands in for an outfit that is still being planned: pieces bob on the
-/// card while the line below says what FORM is doing.
+/// Stands in for an outfit that is still being planned: ghost pieces where
+/// the flat lay will be, with a slow light passing over them.
 class _PlanningCard extends StatefulWidget {
   const _PlanningCard({this.building = false});
 
@@ -743,88 +873,75 @@ class _PlanningCard extends StatefulWidget {
 
 class _PlanningCardState extends State<_PlanningCard>
     with SingleTickerProviderStateMixin {
-  late final _bob = AnimationController(
+  late final _sweep = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1400),
+    duration: const Duration(milliseconds: 1600),
   )..repeat();
-  late final Timer _ticker;
-  int _step = 0;
 
-  List<String> get _steps => [
-    if (widget.building)
-      LocaleKeys.proposalsPlanningBuilding
-    else
-      LocaleKeys.proposalsPlanningPieces,
-    LocaleKeys.proposalsPlanningScene,
-    LocaleKeys.proposalsPlanningFinish,
+  // Ghost pieces roughly where a flat lay puts top, jacket, bottoms, shoes.
+  static const List<({double x, double y, double w, double h})> _ghosts = [
+    (x: 0.08, y: 0.06, w: 0.42, h: 0.34),
+    (x: 0.54, y: 0.1, w: 0.38, h: 0.3),
+    (x: 0.14, y: 0.46, w: 0.34, h: 0.46),
+    (x: 0.6, y: 0.66, w: 0.26, h: 0.2),
   ];
 
   @override
-  void initState() {
-    super.initState();
-    _ticker = Timer.periodic(
-      const Duration(milliseconds: 1800),
-      (_) => setState(() => _step = (_step + 1) % _steps.length),
-    );
-  }
-
-  @override
   void dispose() {
-    _ticker.cancel();
-    _bob.dispose();
+    _sweep.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => _CardSurface(
     child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        AnimatedBuilder(
-          animation: _bob,
-          builder: (context, _) => Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (var index = 0; index < 3; index++)
-                Transform.translate(
-                  offset: Offset(
-                    0,
-                    -12 *
-                        math.max(
-                          0,
-                          math.sin((_bob.value - index * 0.18) * 2 * math.pi),
+        Expanded(
+          child: AnimatedBuilder(
+            animation: _sweep,
+            builder: (context, _) => ShaderMask(
+              blendMode: BlendMode.srcATop,
+              shaderCallback: (bounds) => LinearGradient(
+                begin: Alignment(-1.6 + 3.2 * _sweep.value, -0.4),
+                end: Alignment(-0.8 + 3.2 * _sweep.value, 0.4),
+                colors: const [
+                  FormTokens.flatLayPaper,
+                  FormTokens.surface,
+                  FormTokens.flatLayPaper,
+                ],
+              ).createShader(bounds),
+              child: LayoutBuilder(
+                builder: (context, constraints) => Stack(
+                  children: [
+                    for (final ghost in _ghosts)
+                      Positioned(
+                        left: ghost.x * constraints.maxWidth,
+                        top: ghost.y * constraints.maxHeight,
+                        width: ghost.w * constraints.maxWidth,
+                        height: ghost.h * constraints.maxHeight,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: FormTokens.flatLayPaper,
+                            borderRadius: BorderRadius.circular(
+                              FormTokens.panelRadius,
+                            ),
+                          ),
                         ),
-                  ),
-                  child: Container(
-                    width: 58,
-                    height: 72,
-                    margin: const EdgeInsets.symmetric(horizontal: 7),
-                    decoration: BoxDecoration(
-                      color: FormTokens.flatLayPaper,
-                      borderRadius: BorderRadius.circular(
-                        FormTokens.cardRadius,
                       ),
-                    ),
-                    child: const Center(
-                      child: FormIcon(
-                        FormIconName.top,
-                        size: 26,
-                        color: FormTokens.green,
-                      ),
-                    ),
-                  ),
+                  ],
                 ),
-            ],
+              ),
+            ),
           ),
         ),
-        const SizedBox(height: 22),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: Text(
-            context.tr(_steps[_step % _steps.length]),
-            key: ValueKey(_step),
-            style: FormTokens.small.copyWith(color: FormTokens.ink),
+        const SizedBox(height: 12),
+        Text(
+          context.tr(
+            widget.building
+                ? LocaleKeys.proposalsPlanningBuilding
+                : LocaleKeys.proposalsPlanningNext,
           ),
+          style: FormTokens.small,
         ),
       ],
     ),
