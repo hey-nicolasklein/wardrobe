@@ -56,6 +56,7 @@ type LookRow = {
   id: string;
   state: Look['state'];
   asset_id: string | null;
+  feed_asset_id: string | null;
   character_sheet_id: string;
   parent_look_id: string | null;
   base_asset_id: string | null;
@@ -76,7 +77,7 @@ type LookRow = {
 
 const characterColumns = `id, state, reference_asset_ids, note, asset_id, active, model, quality,
   output_size, provider_request_id, cost_microunits, failure_category, created_at, finished_at`;
-const lookColumns = `l.id, l.state, l.asset_id, l.character_sheet_id, l.parent_look_id,
+const lookColumns = `l.id, l.state, l.asset_id, l.feed_asset_id, l.character_sheet_id, l.parent_look_id,
   l.base_asset_id, l.liked_at IS NOT NULL AS liked, l.planned_concept, l.category_constraints,
   (SELECT payload FROM remote_image_jobs rj WHERE rj.look_id=l.id ORDER BY rj.created_at DESC LIMIT 1) AS job_payload,
   l.model, l.quality,
@@ -107,6 +108,7 @@ const mapLook = (row: LookRow): Look => ({
   id: row.id,
   state: row.state,
   assetId: row.asset_id,
+  feedAssetId: row.feed_asset_id,
   wardrobeItemIds: row.wardrobe_item_ids,
   characterSheetId: row.character_sheet_id,
   parentLookId: row.parent_look_id,
@@ -787,6 +789,7 @@ async function writeAsset(
   bytes: Buffer,
   width: number,
   height: number,
+  contentType = 'image/png',
 ) {
   const id = randomUUID(),
     objectKey = `accounts/${accountId}/inspiration/${purpose}/${id}`;
@@ -795,7 +798,7 @@ async function writeAsset(
       Bucket: storage.bucket,
       Key: objectKey,
       Body: bytes,
-      ContentType: 'image/png',
+      ContentType: contentType,
       ContentLength: bytes.byteLength,
     }),
   );
@@ -806,10 +809,48 @@ async function writeAsset(
       false,
     );
   await database.query(
-    `INSERT INTO private_assets(id,account_id,purpose,object_key,object_version_id,content_type,byte_size,pixel_width,pixel_height,state,ready_at) VALUES($1,$2,$3,$4,$5,'image/png',$6,$7,$8,'ready',now())`,
-    [id, accountId, purpose, objectKey, result.VersionId, bytes.byteLength, width, height],
+    `INSERT INTO private_assets(id,account_id,purpose,object_key,object_version_id,content_type,byte_size,pixel_width,pixel_height,state,ready_at) VALUES($1,$2,$3,$4,$5,$9,$6,$7,$8,'ready',now())`,
+    [id, accountId, purpose, objectKey, result.VersionId, bytes.byteLength, width, height, contentType],
   );
   return id;
+}
+// Feed cards show looks at phone width, so the multi-megabyte PNG original is
+// shrunk to a WebP of this width for them.
+const feedWidth = 800;
+async function writeFeedAsset(
+  database: Database,
+  storage: PrivateObjectStorage,
+  accountId: string,
+  original: Buffer,
+) {
+  const { data, info } = await sharp(original)
+    .resize({ width: feedWidth, withoutEnlargement: true })
+    .webp({ quality: 82 })
+    .toBuffer({ resolveWithObject: true });
+  return writeAsset(database, storage, accountId, 'look', data, info.width, info.height, 'image/webp');
+}
+// Gives every ready look made before feed assets existed its feed copy.
+export async function backfillLookFeedAssets(
+  database: Database,
+  storage: PrivateObjectStorage,
+): Promise<{ created: number; failed: number }> {
+  const { rows } = await database.query<{ id: string; account_id: string; asset_id: string }>(
+    `SELECT id,account_id,asset_id FROM looks WHERE state='ready' AND asset_id IS NOT NULL AND feed_asset_id IS NULL`,
+  );
+  let created = 0;
+  let failed = 0;
+  for (const row of rows) {
+    try {
+      const original = await readAsset(database, storage, row.account_id, row.asset_id);
+      const feedAssetId = await writeFeedAsset(database, storage, row.account_id, original);
+      await database.query(`UPDATE looks SET feed_asset_id=$2 WHERE id=$1`, [row.id, feedAssetId]);
+      created += 1;
+    } catch (error) {
+      failed += 1;
+      console.error(`Look ${row.id}: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  return { created, failed };
 }
 // The camera sentence of the Look prompt per style. All three read as photos a
 // friend took on a phone, not a photographer's shoot. `framing` is null for a
@@ -1156,10 +1197,11 @@ export async function executeInspirationJob(
       dimensions.width,
       dimensions.height,
     );
+    const feedAssetId = await writeFeedAsset(database, storage, job.accountId, result.pngBytes);
     const cost = calculateCostMicrounits(result.usage, config.pricing);
     await database.query(
-      `UPDATE looks SET state='ready',asset_id=$3,provider_request_id=$4,provider_usage=$5,cost_microunits=$6,finished_at=now() WHERE id=$1 AND account_id=$2`,
-      [id, job.accountId, assetId, result.requestId, JSON.stringify(result.usage.raw), cost],
+      `UPDATE looks SET state='ready',asset_id=$3,feed_asset_id=$7,provider_request_id=$4,provider_usage=$5,cost_microunits=$6,finished_at=now() WHERE id=$1 AND account_id=$2`,
+      [id, job.accountId, assetId, result.requestId, JSON.stringify(result.usage.raw), cost, feedAssetId],
     );
   } finally {
     clearTimeout(timer);

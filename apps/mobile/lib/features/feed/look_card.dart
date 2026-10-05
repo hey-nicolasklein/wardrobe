@@ -67,7 +67,7 @@ class _LookCardState extends State<LookCard> {
   }
 
   Future<void> _prepareImage() async {
-    final assetId = look.assetId;
+    final assetId = look.cardAssetId;
     try {
       if (assetId != null) {
         final file = await context.read<MediaRepository>().load(
@@ -593,14 +593,16 @@ class _LookStageState extends State<_LookStage>
                         // Only the worn photo can be dark; the flat lay and
                         // the card chrome keep the page's dark icons.
                         child: MediaStatusBarRegion(
-                          identity: look.assetId!,
-                          previewPath: widget.record.previewPath(look.assetId!),
+                          identity: look.cardAssetId!,
+                          previewPath: widget.record.previewPath(
+                            look.cardAssetId!,
+                          ),
                           online: widget.online,
                           enabled: worn,
                           child: CachedMedia(
-                            identity: look.assetId!,
+                            identity: look.cardAssetId!,
                             previewPath: widget.record.previewPath(
-                              look.assetId!,
+                              look.cardAssetId!,
                             ),
                             online: widget.online,
                             fit: BoxFit.cover,

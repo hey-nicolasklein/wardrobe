@@ -88,6 +88,7 @@ class Look {
     required this.createdAt,
     required this.finishedAt,
     this.baseAssetId,
+    this.feedAssetId,
     this.settings,
     this.liked = false,
   });
@@ -109,6 +110,11 @@ class Look {
   final String state;
   @JsonKey(required: true)
   final String? assetId;
+
+  /// A smaller WebP of [assetId] for cards. Missing on looks cached before
+  /// the API sent it.
+  @JsonKey(includeIfNull: false)
+  final String? feedAssetId;
   @JsonKey(required: true)
   final List<String> wardrobeItemIds;
   @JsonKey(required: true)
@@ -152,6 +158,8 @@ class Look {
 
   bool get isReady => state == 'ready';
   bool get isActive => ['queued', 'planning', 'generating'].contains(state);
+
+  String? get cardAssetId => feedAssetId ?? assetId;
 
   Map<String, dynamic> toJson() => _$LookToJson(this);
 }

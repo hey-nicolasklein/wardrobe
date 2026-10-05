@@ -873,7 +873,7 @@ class _LookPhoto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final assetId = record.look.assetId!;
+    final assetId = record.look.cardAssetId!;
     return ClipRRect(
       borderRadius: BorderRadius.circular(FormTokens.panelRadius),
       child: AspectRatio(

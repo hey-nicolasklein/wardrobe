@@ -244,7 +244,7 @@ class LookRepository {
 
   Future<void> _prefetch(List<CachedLook> records) async {
     for (final record in records) {
-      final assetId = record.look.assetId;
+      final assetId = record.look.cardAssetId;
       if (assetId == null) continue;
       await media.load(assetId, previewPath: record.previewPath(assetId));
     }

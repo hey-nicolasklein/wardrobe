@@ -112,6 +112,7 @@ Look _$LookFromJson(Map<String, dynamic> json) => $checkedCreate('Look', json, (
       (v) => v == null ? null : DateTime.parse(v as String),
     ),
     baseAssetId: $checkedConvert('baseAssetId', (v) => v as String?),
+    feedAssetId: $checkedConvert('feedAssetId', (v) => v as String?),
     settings: $checkedConvert(
       'settings',
       (v) =>
@@ -126,6 +127,7 @@ Map<String, dynamic> _$LookToJson(Look instance) => <String, dynamic>{
   'id': instance.id,
   'state': instance.state,
   'assetId': instance.assetId,
+  'feedAssetId': ?instance.feedAssetId,
   'wardrobeItemIds': instance.wardrobeItemIds,
   'characterSheetId': instance.characterSheetId,
   'parentLookId': instance.parentLookId,

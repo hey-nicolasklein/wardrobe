@@ -278,6 +278,8 @@ export const lookSchema = z
     id: opaqueIdSchema,
     state: lookStateSchema,
     assetId: opaqueIdSchema.nullable(),
+    // A smaller WebP of the asset for the feed. Null until the look is ready.
+    feedAssetId: opaqueIdSchema.nullable(),
     wardrobeItemIds: z.array(opaqueIdSchema),
     characterSheetId: opaqueIdSchema,
     parentLookId: opaqueIdSchema.nullable(),
