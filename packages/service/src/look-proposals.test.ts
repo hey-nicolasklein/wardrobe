@@ -91,3 +91,9 @@ test('a kept winter coat pushes out light pieces', () => {
   );
   assert.equal(warmthClash([piece('coat', 'jacket', 'warm'), piece('shorts', 'pants', 'light')]), true);
 });
+
+test('replacements avoid pieces the other proposals already show', () => {
+  const outfit = [piece('shirt', 'top'), piece('jeans', 'pants')];
+  const pool = [piece('cords', 'pants', 'mid', 0), piece('chinos', 'pants', 'mid', 3)];
+  assert.deepEqual(adjustOutfit({ outfit, keep: [], exclude: ['jeans'], pool, elsewhere: ['cords'] }), ['shirt', 'chinos']);
+});

@@ -859,9 +859,17 @@ export async function adjustLookProposals(
        WHERE l.account_id=$1 AND l.proposal AND l.state='proposed' AND l.deleted_at IS NULL GROUP BY l.id`,
       [input.accountId],
     );
+    const current = new Map(open.rows.map((look) => [look.id, look.ids]));
     for (const look of open.rows) {
       const outfit = look.ids.flatMap((id) => pieces.get(id) ?? []);
-      const next = adjustOutfit({ outfit, keep, exclude: input.excludeItemIds, pool: [...pieces.values()] });
+      const next = adjustOutfit({
+        outfit,
+        keep,
+        exclude: input.excludeItemIds,
+        pool: [...pieces.values()],
+        elsewhere: [...current].flatMap(([id, ids]) => (id === look.id ? [] : ids)),
+      });
+      current.set(look.id, next);
       if (next.length === look.ids.length && next.every((id) => look.ids.includes(id))) continue;
       await client.query('DELETE FROM look_items WHERE look_id=$1', [look.id]);
       for (const [ordinal, itemId] of next.entries())

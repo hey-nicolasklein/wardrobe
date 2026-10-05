@@ -89,7 +89,10 @@ export function adjustOutfit(input: {
   keep: OutfitPiece[];
   exclude: string[];
   pool: OutfitPiece[];
+  // Pieces of the other open proposals; replacements avoid them when they can.
+  elsewhere?: string[];
 }): string[] {
+  const elsewhere = new Set(input.elsewhere ?? []);
   const keptIds = new Set(input.keep.map((piece) => piece.id));
   let outfit = [...input.outfit];
   const gaps: string[] = [];
@@ -118,7 +121,11 @@ export function adjustOutfit(input: {
           !input.outfit.some((old) => old.id === piece.id) &&
           !warmthClash([...outfit, piece]),
       )
-      .sort((a, b) => (a.uses ?? 0) - (b.uses ?? 0))[0];
+      .sort(
+        (a, b) =>
+          Number(elsewhere.has(a.id)) - Number(elsewhere.has(b.id)) ||
+          (a.uses ?? 0) - (b.uses ?? 0),
+      )[0];
     if (replacement) outfit.push(replacement);
   }
   return outfit.map((piece) => piece.id);
