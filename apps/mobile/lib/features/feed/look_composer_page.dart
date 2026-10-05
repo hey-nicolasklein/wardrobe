@@ -85,6 +85,9 @@ class _ComposerViewState extends State<_ComposerView> {
 
   void _onState(BuildContext context, ComposerState state) {
     if (_search.text != state.query) _search.text = state.query;
+    if (state.proposed) {
+      context.replace('/feed/proposals?quality=${state.quality}');
+    }
     if (state.createdLookId != null) {
       // The new look develops on top of the All looks pile.
       context.go('/feed');
@@ -101,7 +104,8 @@ class _ComposerViewState extends State<_ComposerView> {
     return BlocConsumer<ComposerCubit, ComposerState>(
       listenWhen: (previous, next) =>
           previous.query != next.query ||
-          previous.createdLookId != next.createdLookId,
+          previous.createdLookId != next.createdLookId ||
+          previous.proposed != next.proposed,
       listener: _onState,
       builder: (context, state) {
         final cubit = context.read<ComposerCubit>();
@@ -1261,16 +1265,15 @@ class _ComposerFooter extends StatelessWidget {
                     // Stays on one line beside the tray. Long labels shrink.
                     : FittedBox(
                         fit: BoxFit.scaleDown,
+                        // Proposing is free; the cost shows on each proposal.
                         child: Text(
-                          lookCostLabel(
-                            context,
-                            context.tr(
-                              state.tryOn
-                                  ? LocaleKeys.composerTryOnAction
-                                  : LocaleKeys.createLook,
-                            ),
-                            context.watch<CreditsCubit>().state,
-                          ),
+                          state.tryOn
+                              ? lookCostLabel(
+                                  context,
+                                  context.tr(LocaleKeys.composerTryOnAction),
+                                  context.watch<CreditsCubit>().state,
+                                )
+                              : context.tr(LocaleKeys.composerProposeAction),
                           maxLines: 1,
                         ),
                       ),
