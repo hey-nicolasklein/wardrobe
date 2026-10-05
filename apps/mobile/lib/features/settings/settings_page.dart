@@ -73,6 +73,10 @@ class SettingsPage extends StatelessWidget {
                 label: context.tr(LocaleKeys.settings_qualityTitle),
                 onTap: () => context.push('/settings/quality'),
               ),
+              SettingRow(
+                label: context.tr(LocaleKeys.settings_replayOnboarding),
+                onTap: () => context.push('/onboarding'),
+              ),
             ]),
             _SectionTitle(context.tr(LocaleKeys.settings_groupData)),
             SettingGroup([

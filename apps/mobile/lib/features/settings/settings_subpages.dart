@@ -1,6 +1,5 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:form_mobile/features/settings/account_section.dart';
 import 'package:form_mobile/features/settings/cache_section.dart';
 import 'package:form_mobile/features/settings/character/character_section.dart';
@@ -66,15 +65,11 @@ final settingsSubpageRoutes = <RouteBase>[
   if (kDebugMode)
     GoRoute(
       path: 'debug',
-      builder: (context, _) => SettingsSubpage(
+      builder: (context, _) => const SettingsSubpage(
         title: LocaleKeys.settings_debugTitle,
         children: [
-          const FeedWeightsSection(),
-          OutlinedButton(
-            onPressed: () => context.push('/onboarding'),
-            child: Text(context.tr(LocaleKeys.settings_replayOnboarding)),
-          ),
-          const ResetSection(),
+          FeedWeightsSection(),
+          ResetSection(),
         ],
       ),
     ),

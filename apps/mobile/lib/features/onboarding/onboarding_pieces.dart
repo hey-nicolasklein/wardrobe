@@ -66,30 +66,16 @@ const onboardingPieces = [
 OnboardingPiece onboardingPiece(String id) =>
     onboardingPieces.firstWhere((piece) => piece.id == id);
 
-/// Adds [piece] to [look], replacing the piece of the same category, or
-/// removes it when it is already part of the look.
-List<OnboardingPiece> toggleOnboardingPiece(
-  List<OnboardingPiece> look,
-  OnboardingPiece piece,
-) {
-  if (look.any((entry) => entry.id == piece.id)) {
-    return [
-      for (final entry in look)
-        if (entry.id != piece.id) entry,
-    ];
-  }
-  return [
-    for (final entry in look)
-      if (entry.category != piece.category) entry,
-    piece,
-  ];
-}
-
 /// A random complete outfit from the owned demo pieces: always a top, pants
-/// and shoes, sometimes a jacket and an accessory.
-List<OnboardingPiece> surpriseOnboardingLook(int seed) {
+/// and shoes, sometimes a jacket and an accessory. [around] is always part of
+/// it, in place of the random pick for its category.
+List<OnboardingPiece> surpriseOnboardingLook(
+  int seed, {
+  OnboardingPiece? around,
+}) {
   final random = Random(seed);
   OnboardingPiece pick(String category) {
+    if (around?.category == category) return around!;
     final options = onboardingPieces
         .where((piece) => piece.category == category && piece.state == 'owning')
         .toList();
@@ -98,16 +84,15 @@ List<OnboardingPiece> surpriseOnboardingLook(int seed) {
 
   return [
     pick('top'),
-    if (random.nextBool()) pick('jacket'),
+    if (around?.category == 'jacket' || random.nextBool()) pick('jacket'),
     pick('pants'),
     pick('shoes'),
-    if (random.nextInt(3) == 0) pick('accessory'),
+    if (around?.category == 'accessory' || random.nextInt(3) == 0)
+      pick('accessory'),
   ];
 }
 
-/// A playful estimate of distinct outfits in a wardrobe of [pieces]: every
-/// top, pants and shoes combination, with or without each jacket.
-int estimatedLooks(int pieces) {
-  int share(double part) => (pieces * part).floor();
-  return share(0.35) * share(0.25) * share(0.2) * (share(0.2) + 1);
-}
+/// A rough estimate of looks that actually work in a wardrobe of [pieces].
+/// Not every combination goes together, so it grows with the square of the
+/// pieces rather than with every possible combination.
+int estimatedLooks(int pieces) => pieces * pieces ~/ 6;

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/feed/flat_lay_widget.dart';
+import 'package:form_mobile/features/feed/occasion_tile.dart';
 import 'package:form_mobile/features/onboarding/onboarding_pieces.dart';
 import 'package:form_mobile/features/onboarding/scan_stage.dart';
 import 'package:form_mobile/features/settings/character/character_cubit.dart';
@@ -311,17 +312,17 @@ class _PieceBurstState extends State<PieceBurst>
 
 /// Plays a photo being analysed: a scan sweeps over it, each piece is
 /// framed, and the pieces land on the shelf below.
-class OnboardingWardrobeStep extends StatefulWidget {
-  const OnboardingWardrobeStep({required this.active, super.key});
+class OnboardingScanStep extends StatefulWidget {
+  const OnboardingScanStep({required this.active, super.key});
 
   /// Whether the step is the visible page. The scan starts on first view.
   final bool active;
 
   @override
-  State<OnboardingWardrobeStep> createState() => _OnboardingWardrobeStepState();
+  State<OnboardingScanStep> createState() => _OnboardingScanStepState();
 }
 
-class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
+class _OnboardingScanStepState extends State<OnboardingScanStep>
     with SingleTickerProviderStateMixin {
   late final _scan =
       AnimationController(
@@ -333,7 +334,6 @@ class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
         }
       });
   int _photo = 0;
-  String _collection = 'owning';
   bool _started = false;
 
   @override
@@ -345,7 +345,7 @@ class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
   }
 
   @override
-  void didUpdateWidget(OnboardingWardrobeStep oldWidget) {
+  void didUpdateWidget(OnboardingScanStep oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.active && !_started) _play();
   }
@@ -368,10 +368,7 @@ class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
 
   void _again() {
     unawaited(HapticFeedback.selectionClick());
-    setState(() {
-      _photo = (_photo + 1) % ScanStage.photos.length;
-      _collection = 'owning';
-    });
+    setState(() => _photo = (_photo + 1) % ScanStage.photos.length);
     _play();
   }
 
@@ -386,13 +383,10 @@ class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
     final pieces = [
       for (final id in ScanStage.photos[_photo]) onboardingPiece(id),
     ];
-    final shelf = _collection == 'owning'
-        ? pieces
-        : onboardingPieces.where((piece) => piece.state == 'wanting').toList();
     return OnboardingStepLayout(
-      eyebrow: context.tr(LocaleKeys.onboarding_wardrobeEyebrow),
-      title: context.tr(LocaleKeys.onboarding_wardrobeTitle),
-      body: context.tr(LocaleKeys.onboarding_wardrobeBody),
+      eyebrow: context.tr(LocaleKeys.onboarding_scanEyebrow),
+      title: context.tr(LocaleKeys.onboarding_scanTitle),
+      body: context.tr(LocaleKeys.onboarding_scanBody),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -427,11 +421,11 @@ class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
                             Text(
                               found
                                   ? context.tr(
-                                      LocaleKeys.onboarding_wardrobeFound,
+                                      LocaleKeys.onboarding_scanFound,
                                       namedArgs: {'count': '${pieces.length}'},
                                     )
                                   : context.tr(
-                                      LocaleKeys.onboarding_wardrobeScanning,
+                                      LocaleKeys.onboarding_scanScanning,
                                     ),
                               style: FormTokens.small.copyWith(
                                 color: found ? FormTokens.green : null,
@@ -446,7 +440,7 @@ class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
                 ),
                 TextButton(
                   onPressed: _again,
-                  child: Text(context.tr(LocaleKeys.onboarding_wardrobeAgain)),
+                  child: Text(context.tr(LocaleKeys.onboarding_scanAgain)),
                 ),
               ],
             ),
@@ -464,48 +458,35 @@ class _OnboardingWardrobeStepState extends State<OnboardingWardrobeStep>
                 ),
               ),
               child: Row(
-                key: ValueKey('$_collection$_photo'),
+                key: ValueKey(_photo),
                 spacing: FormTokens.gap,
                 children: [
-                  for (final (index, piece) in shelf.indexed)
+                  for (final (index, piece) in pieces.indexed)
                     Expanded(
-                      child: _collection == 'owning'
-                          ? ScaleTransition(
-                              scale: _interval(
-                                0.66 + index * 0.08,
-                                0.9 + index * 0.08,
-                              ),
-                              child: _ShelfTile(piece: piece),
-                            )
-                          : _ShelfTile(piece: piece),
+                      child: ScaleTransition(
+                        scale: _interval(
+                          0.66 + index * 0.08,
+                          0.9 + index * 0.08,
+                        ),
+                        child: OnboardingShelfTile(piece: piece),
+                      ),
                     ),
-                  for (var i = shelf.length; i < 3; i++)
+                  for (var i = pieces.length; i < 3; i++)
                     const Expanded(child: SizedBox()),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          Text(
-            context.tr(LocaleKeys.onboarding_wardrobeToggle),
-            style: FormTokens.small,
-          ),
-          FormCollectionToggle(
-            selected: _collection,
-            labels: {
-              'owning': context.tr(LocaleKeys.collection_owning),
-              'wanting': context.tr(LocaleKeys.collection_wanting),
-            },
-            onSelected: (value) => setState(() => _collection = value),
-          ),
+          const SizedBox(height: 12),
         ],
       ),
     );
   }
 }
 
-class _ShelfTile extends StatelessWidget {
-  const _ShelfTile({required this.piece});
+/// A demo piece on a white card, like a wardrobe tile.
+class OnboardingShelfTile extends StatelessWidget {
+  const OnboardingShelfTile({required this.piece, super.key});
   final OnboardingPiece piece;
 
   @override
@@ -522,292 +503,8 @@ class _ShelfTile extends StatelessWidget {
   );
 }
 
-/// A short yes/no quiz about what FORM can and cannot do.
-class OnboardingQuizStep extends StatefulWidget {
-  const OnboardingQuizStep({super.key});
-
-  @override
-  State<OnboardingQuizStep> createState() => _OnboardingQuizStepState();
-}
-
-class _OnboardingQuizStepState extends State<OnboardingQuizStep> {
-  // Question key, whether FORM can do it, and the piece floating on its card.
-  static const _questions = [
-    ('outfit', true, 'jersey'),
-    ('hidden', false, 'teddy-coat'),
-    ('worn', true, 'leather-jacket'),
-    ('size', false, 'brown-trousers'),
-    ('perfect', false, 'sunglasses'),
-    ('free', false, 'ring'),
-  ];
-  final List<bool> _results = [];
-  bool? _answer;
-
-  int get _index => _results.length - (_answer == null ? 0 : 1);
-  bool get _done => _results.length == _questions.length && _answer == null;
-
-  void _choose(bool yes) {
-    final correct = yes == _questions[_index].$2;
-    unawaited(
-      correct ? HapticFeedback.mediumImpact() : HapticFeedback.lightImpact(),
-    );
-    setState(() {
-      _answer = yes;
-      _results.add(correct);
-    });
-  }
-
-  void _next() => setState(() => _answer = null);
-
-  void _restart() => setState(() {
-    _results.clear();
-    _answer = null;
-  });
-
-  @override
-  Widget build(BuildContext context) => OnboardingStepLayout(
-    eyebrow: context.tr(LocaleKeys.onboarding_quizEyebrow),
-    title: context.tr(LocaleKeys.onboarding_quizTitle),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 480),
-            switchInCurve: FormTokens.easeOut,
-            switchOutCurve: Curves.easeIn,
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: RotationTransition(
-                turns: Tween<double>(begin: 0.02, end: 0).animate(animation),
-                child: SlideTransition(
-                  position: Tween(
-                    begin: const Offset(0.3, 0.04),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
-                ),
-              ),
-            ),
-            child: _done ? _score(context) : _card(context, _questions[_index]),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          spacing: 8,
-          children: [
-            for (var i = 0; i < _questions.length; i++)
-              AnimatedContainer(
-                duration: FormTokens.sheetDuration,
-                curve: FormTokens.pop,
-                width: i == _index && !_done ? 22 : 9,
-                height: 9,
-                decoration: BoxDecoration(
-                  color: i < _results.length
-                      ? (_results[i] ? FormTokens.green : FormTokens.danger)
-                      : FormTokens.line,
-                  borderRadius: BorderRadius.circular(5),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-      ],
-    ),
-  );
-
-  Widget _card(BuildContext context, (String, bool, String) question) {
-    final (key, _, pieceId) = question;
-    final answered = _answer != null;
-    final correct = answered && _results.last;
-    return AnimatedContainer(
-      key: ValueKey(key),
-      duration: FormTokens.sheetDuration,
-      curve: FormTokens.easeOut,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: !answered
-            ? FormTokens.surface
-            : correct
-            ? FormTokens.selectedTint
-            : FormTokens.dangerTint,
-        border: Border.all(color: FormTokens.line),
-        borderRadius: BorderRadius.circular(FormTokens.panelRadius),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '${_index + 1} / ${_questions.length}',
-            style: FormTokens.eyebrow.merge(FormTokens.numerals),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            context.tr('onboarding.questions.$key'),
-            style: FormTokens.heading.copyWith(fontSize: 24, height: 1.25),
-          ),
-          Expanded(
-            child: Center(
-              child: FractionallySizedBox(
-                heightFactor: 0.8,
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: FloatingPiece(
-                    piece: onboardingPiece(pieceId),
-                    angle: -6,
-                    delay: const Duration(milliseconds: 200),
-                    phase: _index.toDouble(),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          AnimatedSwitcher(
-            duration: FormTokens.sheetDuration,
-            switchInCurve: FormTokens.easeOut,
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: SizeTransition(
-                sizeFactor: animation,
-                alignment: Alignment.bottomCenter,
-                child: child,
-              ),
-            ),
-            child: !answered
-                ? Row(
-                    key: const ValueKey('ask'),
-                    spacing: FormTokens.gap,
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => _choose(true),
-                          child: Text(context.tr(LocaleKeys.onboarding_yes)),
-                        ),
-                      ),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => _choose(false),
-                          child: Text(context.tr(LocaleKeys.onboarding_no)),
-                        ),
-                      ),
-                    ],
-                  )
-                : Column(
-                    key: const ValueKey('verdict'),
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    spacing: 10,
-                    children: [
-                      Row(
-                        spacing: 10,
-                        children: [
-                          TweenAnimationBuilder<double>(
-                            tween: Tween(begin: 0, end: 1),
-                            duration: const Duration(milliseconds: 520),
-                            curve: FormTokens.pop,
-                            builder: (context, scale, child) =>
-                                Transform.scale(scale: scale, child: child),
-                            child: CircleAvatar(
-                              radius: 16,
-                              backgroundColor: correct
-                                  ? FormTokens.green
-                                  : FormTokens.danger,
-                              child: FormIcon(
-                                correct
-                                    ? FormIconName.check
-                                    : FormIconName.close,
-                                size: 16,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            context.tr(
-                              correct
-                                  ? LocaleKeys.onboarding_right
-                                  : LocaleKeys.onboarding_wrong,
-                            ),
-                            style: FormTokens.heading.copyWith(fontSize: 21),
-                          ),
-                          const Spacer(),
-                          Text(
-                            context.tr(
-                              _questions[_index].$2
-                                  ? LocaleKeys.onboarding_yes
-                                  : LocaleKeys.onboarding_no,
-                            ),
-                            style: FormTokens.eyebrow,
-                          ),
-                        ],
-                      ),
-                      Text(
-                        context.tr('onboarding.answers.$key'),
-                        style: FormTokens.body,
-                      ),
-                      FilledButton(
-                        onPressed: _next,
-                        child: Text(
-                          context.tr(
-                            _results.length == _questions.length
-                                ? LocaleKeys.onboarding_next
-                                : LocaleKeys.onboarding_nextQuestion,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _score(BuildContext context) {
-    final score = _results.where((correct) => correct).length;
-    return Stack(
-      key: const ValueKey('score'),
-      alignment: Alignment.center,
-      children: [
-        const PieceBurst(),
-        Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          spacing: 10,
-          children: [
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0.4, end: 1),
-              duration: const Duration(milliseconds: 620),
-              curve: FormTokens.pop,
-              builder: (context, scale, child) =>
-                  Transform.scale(scale: scale, child: child),
-              child: Text(
-                context.tr(
-                  LocaleKeys.onboarding_score,
-                  namedArgs: {
-                    'score': '$score',
-                    'count': '${_questions.length}',
-                  },
-                ),
-                textAlign: TextAlign.center,
-                style: FormTokens.display.copyWith(fontSize: 36),
-              ),
-            ),
-            Text(
-              context.tr(LocaleKeys.onboarding_scoreBody),
-              textAlign: TextAlign.center,
-              style: FormTokens.body.copyWith(color: FormTokens.muted),
-            ),
-            TextButton(
-              onPressed: _restart,
-              child: Text(context.tr(LocaleKeys.onboarding_playAgain)),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// A playable flat lay: tap pieces to swap them in, or let FORM surprise you.
+/// A small Looks feed: pick an occasion, then say whether you would wear the
+/// look to deal the next one.
 class OnboardingFeedStep extends StatefulWidget {
   const OnboardingFeedStep({super.key});
 
@@ -817,23 +514,20 @@ class OnboardingFeedStep extends StatefulWidget {
 
 class _OnboardingFeedStepState extends State<OnboardingFeedStep> {
   int _seed = 3;
-  late List<OnboardingPiece> _look = surpriseOnboardingLook(_seed);
+  ({FormIconName icon, String label, String? value}) _occasion =
+      occasionPresets.last;
 
-  void _toggle(OnboardingPiece piece) {
-    unawaited(HapticFeedback.selectionClick());
-    setState(() => _look = toggleOnboardingPiece(_look, piece));
-  }
-
-  void _surprise() {
-    unawaited(HapticFeedback.mediumImpact());
-    setState(() => _look = surpriseOnboardingLook(++_seed));
+  void _deal({bool liked = false}) {
+    unawaited(
+      liked ? HapticFeedback.mediumImpact() : HapticFeedback.lightImpact(),
+    );
+    setState(() => _seed++);
   }
 
   @override
   Widget build(BuildContext context) {
-    final tray = onboardingPieces
-        .where((piece) => piece.state == 'owning')
-        .toList();
+    final look = surpriseOnboardingLook(_seed);
+    final colors = FormTokens.occasions[_occasion.value ?? '']!;
     return OnboardingStepLayout(
       eyebrow: context.tr(LocaleKeys.onboarding_feedEyebrow),
       title: context.tr(LocaleKeys.onboarding_feedTitle),
@@ -841,98 +535,114 @@ class _OnboardingFeedStepState extends State<OnboardingFeedStep> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            child: Row(
+              spacing: 8,
+              children: [
+                for (final preset in occasionPresets)
+                  OccasionTile(
+                    icon: preset.icon,
+                    label: context.tr(preset.label),
+                    colors: FormTokens.occasions[preset.value ?? '']!,
+                    selected: preset == _occasion,
+                    compact: true,
+                    onTap: () {
+                      unawaited(HapticFeedback.selectionClick());
+                      setState(() {
+                        _occasion = preset;
+                        _seed++;
+                      });
+                    },
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(FormTokens.panelRadius),
-              child: ColoredBox(
-                color: FormTokens.flatLayPaper,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    if (_look.isEmpty)
-                      Text(
-                        context.tr(LocaleKeys.onboarding_feedEmptyBoard),
-                        style: FormTokens.heading.copyWith(
-                          fontSize: 20,
-                          color: FormTokens.muted,
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Center(
-                        child: FlatLayBoard(
-                          garments: [for (final piece in _look) piece.garment],
-                          online: false,
-                          arrive: true,
-                          onGarmentTap: (id) => _toggle(onboardingPiece(id)),
-                          imageBuilder: (item) => OnboardingPieceImage(
-                            piece: onboardingPiece(item.id),
+            child: AnimatedSwitcher(
+              duration: FormTokens.sheetDuration,
+              switchInCurve: FormTokens.easeOut,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.94, end: 1).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: ClipRRect(
+                key: ValueKey(_seed),
+                borderRadius: BorderRadius.circular(FormTokens.panelRadius),
+                child: ColoredBox(
+                  color: FormTokens.flatLayPaper,
+                  child: Stack(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 40, 12, 12),
+                        child: Center(
+                          child: FlatLayBoard(
+                            garments: [for (final piece in look) piece.garment],
+                            online: false,
+                            arrive: true,
+                            imageBuilder: (item) => OnboardingPieceImage(
+                              piece: onboardingPiece(item.id),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  context.tr(LocaleKeys.onboarding_feedHint),
-                  style: FormTokens.small,
-                ),
-              ),
-              TextButton.icon(
-                onPressed: _surprise,
-                icon: const FormIcon(
-                  FormIconName.shuffle,
-                  size: 18,
-                  color: FormTokens.green,
-                ),
-                label: Text(context.tr(LocaleKeys.onboarding_feedSurprise)),
-              ),
-            ],
-          ),
-          SizedBox(
-            height: 70,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: tray.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final piece = tray[index];
-                final selected = _look.any((entry) => entry.id == piece.id);
-                return Semantics(
-                  button: true,
-                  selected: selected,
-                  label: context.tr('categories.${piece.category}'),
-                  child: PressableGarment(
-                    onTap: () => _toggle(piece),
-                    child: AnimatedContainer(
-                      duration: FormTokens.quick,
-                      width: 64,
-                      padding: const EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? FormTokens.selectedTint
-                            : FormTokens.surface,
-                        border: Border.all(
-                          color: selected ? FormTokens.green : FormTokens.line,
-                          width: selected ? 2 : 1,
-                        ),
-                        borderRadius: BorderRadius.circular(
-                          FormTokens.cardRadius,
+                      Positioned(
+                        left: 14,
+                        top: 14,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: colors.tint,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            child: Text(
+                              context.tr(_occasion.label).toUpperCase(),
+                              style: FormTokens.eyebrow.copyWith(
+                                color: colors.ink,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                      child: OnboardingPieceImage(piece: piece),
-                    ),
+                    ],
                   ),
-                );
-              },
+                ),
+              ),
             ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            spacing: FormTokens.gap,
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _deal,
+                  icon: const FormIcon(FormIconName.close, size: 18),
+                  label: Text(context.tr(LocaleKeys.lookNotForMe)),
+                ),
+              ),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _deal(liked: true),
+                  icon: const FormIcon(
+                    FormIconName.heart,
+                    size: 18,
+                    color: FormTokens.green,
+                  ),
+                  label: Text(context.tr(LocaleKeys.lookWouldWear)),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
         ],

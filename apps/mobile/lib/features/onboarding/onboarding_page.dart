@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/onboarding/onboarding_closet_steps.dart';
 import 'package:form_mobile/features/onboarding/onboarding_pieces.dart';
 import 'package:form_mobile/features/onboarding/onboarding_steps.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -13,9 +14,9 @@ import 'package:form_mobile/repository/preferences_repository.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
-/// First-run walkthrough: shows a lively wardrobe and feed made of bundled
-/// demo pieces, explains what FORM can and cannot do, and leads into the
-/// character collage and the first intake. Replayable from Settings.
+/// First-run walkthrough with bundled demo pieces: the Looks feed, scanning
+/// a photo, the Schrank, and turning a piece into a look or a try-on. Leads
+/// into the character collage and the first intake. Replayable from Settings.
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
 
@@ -24,7 +25,7 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
-  static const _count = 6;
+  static const _count = 7;
   final _pages = PageController();
   int _index = 0;
   bool _precached = false;
@@ -100,10 +101,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
               },
               children: [
                 const _WelcomeStep(),
-                OnboardingWardrobeStep(active: _index == 1),
-                const OnboardingQuizStep(),
                 const OnboardingFeedStep(),
-                OnboardingCollageStep(active: _index == 4),
+                OnboardingScanStep(active: _index == 2),
+                const OnboardingClosetStep(),
+                const OnboardingPieceLookStep(),
+                OnboardingCollageStep(active: _index == 5),
                 _FinaleStep(onExplore: () => unawaited(_finish('/feed'))),
               ],
             ),
