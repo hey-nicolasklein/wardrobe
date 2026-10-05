@@ -16,6 +16,7 @@ import 'package:form_mobile/features/feed/flat_lay_widget.dart';
 import 'package:form_mobile/features/feed/look_card.dart';
 import 'package:form_mobile/features/feed/look_commands.dart';
 import 'package:form_mobile/features/feed/look_stacks.dart';
+import 'package:form_mobile/features/feed/look_stages.dart';
 import 'package:form_mobile/features/feed/occasion_tile.dart';
 import 'package:form_mobile/features/settings/credits_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -207,6 +208,17 @@ class FeedPage extends StatelessWidget {
     return items.take(18).toList();
   }
 
+  /// The newest finished try-on, shown as the user's figure on the worn
+  /// stage.
+  static ({String identity, String previewPath})? _figure(FeedState state) {
+    for (final record in _stackLooks(state, const TryOnStack())) {
+      if (record.look.assetId case final assetId?) {
+        return (identity: assetId, previewPath: record.previewPath(assetId));
+      }
+    }
+    return null;
+  }
+
   static List<CachedLook> _stackLooks(FeedState state, LookStack stack) => [
     for (final record in state.looks ?? const <CachedLook>[])
       if (inLookStack(
@@ -285,23 +297,6 @@ class FeedPage extends StatelessWidget {
     final heroPhoto = Size(width * 0.42, width * 0.42 * 5 / 4);
     final cloudItems = _cloudItems(state);
     return [
-      if (cloudItems.length >= _cloudMinimum)
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(
-            FormTokens.gutter,
-            4,
-            FormTokens.gutter,
-            0,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: WardrobeCloud(
-              items: cloudItems,
-              online: online,
-              label: context.tr(LocaleKeys.createLook),
-              onCreate: () => openLookComposer(context),
-            ),
-          ),
-        ),
       SliverScrollProgress(
         distance: heroPhoto.height,
         builder: (context, progress) => Padding(
@@ -352,6 +347,26 @@ class FeedPage extends StatelessWidget {
           ),
         ),
       ),
+      if (cloudItems.length >= _cloudMinimum)
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(
+            FormTokens.gutter,
+            20,
+            FormTokens.gutter,
+            0,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: LookStages(
+              items: cloudItems,
+              figure: _figure(state),
+              online: online,
+              flatLabel: context.tr(LocaleKeys.createLook),
+              wornLabel: context.tr(LocaleKeys.composerTryOnAction),
+              onFlat: () => openLookComposer(context),
+              onWorn: () => openLookComposer(context, tryOn: true),
+            ),
+          ),
+        ),
       _SectionTitle(context.tr(LocaleKeys.stackSectionOccasions)),
       SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: FormTokens.gutter),
