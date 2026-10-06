@@ -40,14 +40,17 @@ class _SignInPageState extends State<SignInPage> {
   }
 
   Future<void> _run(Future<void> Function(AuthRepository auth) signIn) async {
+    // Read before awaiting: the resume check fired when the Apple or Google
+    // sheet closes can swap this page out, and the session check must still
+    // run.
+    final connection = context.read<ConnectionCubit>();
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
       await signIn(context.read<AuthRepository>());
-      if (!mounted) return;
-      await context.read<ConnectionCubit>().check();
+      await connection.check();
     } on SignInCancelled {
       // Closing the sheet is a choice, not a failure.
     } on FormApiException catch (error) {

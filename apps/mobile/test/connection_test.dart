@@ -161,28 +161,64 @@ void main() {
   });
 
   test(
-    'overlapping retries share a check and disposal ignores completion',
+    'a check requested mid-flight runs again with the fresh session',
     () async {
-      final completion = Completer<ResponseBody>();
-      final started = Completer<void>();
-      final adapter = FakeServer((_) {
-        started.complete();
-        return completion.future;
+      // Mirrors Apple sign-in: the resume check starts without a token, the
+      // token arrives, and the sign-in check must not be swallowed.
+      var signedIn = false;
+      final firstSession = Completer<void>();
+      final sessionStarted = Completer<void>();
+      final adapter = FakeServer((request) async {
+        if (request.path == 'v1/meta') {
+          return jsonResponse('{"service":"form-api","contractVersion":5}');
+        }
+        if (!sessionStarted.isCompleted) {
+          sessionStarted.complete();
+          await firstSession.future;
+        }
+        return signedIn
+            ? jsonResponse('{"session":{"accountId":"fixture-account"}}')
+            : jsonResponse('{"error":{"code":"fixture-error"}}', 401);
       });
       final api = FormApi(Dio()..httpClientAdapter = adapter);
       final cubit = ConnectionCubit(ServerRepository(api));
       addTearDown(api.close);
-      final pending = cubit.check();
-      await cubit.check();
-      await started.future;
-      expect(adapter.paths, ['v1/meta']);
-      await cubit.close();
-      completion.complete(
-        jsonResponse('{"service":"form-api","contractVersion":6}'),
-      );
-      await pending;
+      addTearDown(cubit.close);
+      final resume = cubit.check();
+      await sessionStarted.future;
+      signedIn = true;
+      final afterSignIn = cubit.check();
+      firstSession.complete();
+      await Future.wait([resume, afterSignIn]);
+      expect(cubit.state, ConnectionStatus.ready);
+      expect(adapter.paths, [
+        'v1/meta',
+        'v1/auth/session',
+        'v1/meta',
+        'v1/auth/session',
+      ]);
     },
   );
+
+  test('disposal mid-check ignores completion', () async {
+    final completion = Completer<ResponseBody>();
+    final started = Completer<void>();
+    final adapter = FakeServer((_) {
+      started.complete();
+      return completion.future;
+    });
+    final api = FormApi(Dio()..httpClientAdapter = adapter);
+    final cubit = ConnectionCubit(ServerRepository(api));
+    addTearDown(api.close);
+    final pending = cubit.check();
+    await started.future;
+    await cubit.close();
+    completion.complete(
+      jsonResponse('{"service":"form-api","contractVersion":6}'),
+    );
+    await pending;
+    expect(adapter.paths, ['v1/meta']);
+  });
 
   test(
     'missing URL requires configuration without attempting a request',

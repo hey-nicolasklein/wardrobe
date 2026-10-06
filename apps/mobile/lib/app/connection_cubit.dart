@@ -21,12 +21,31 @@ class ConnectionCubit extends Cubit<ConnectionStatus> {
       );
 
   final ServerRepository? _repository;
-  bool _checking = false;
+  Future<void>? _running;
+  bool _again = false;
 
-  Future<void> check() async {
-    final repository = _repository;
-    if (_checking || repository == null || isClosed) return;
-    _checking = true;
+  /// A check requested while one is running queues one more run instead of
+  /// being dropped. Sign-in relies on this: the resume check fired by the
+  /// Apple sheet can start before the session token exists, and its stale
+  /// answer must not be the last one.
+  Future<void> check() {
+    if (_repository == null || isClosed) return Future.value();
+    if (_running case final running?) {
+      _again = true;
+      return running;
+    }
+    return _running = _runUntilSettled().whenComplete(() => _running = null);
+  }
+
+  Future<void> _runUntilSettled() async {
+    do {
+      _again = false;
+      await _checkOnce(_repository!);
+    } while (_again && !isClosed);
+  }
+
+  Future<void> _checkOnce(ServerRepository repository) async {
+    if (isClosed) return;
     emit(ConnectionStatus.checking);
     try {
       await repository.checkAccess();
@@ -40,8 +59,6 @@ class ConnectionCubit extends Cubit<ConnectionStatus> {
           ApiFailure.rejected => ConnectionStatus.rejected,
         });
       }
-    } finally {
-      _checking = false;
     }
   }
 }
