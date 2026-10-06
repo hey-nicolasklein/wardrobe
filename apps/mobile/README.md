@@ -38,6 +38,16 @@ local HTTP API. Tracked configuration never contains a password. For a one-tap
 sign-in, set `DEV_MODE`, `DEV_EMAIL`, and `DEV_PASSWORD` in an ignored local
 JSON file. The credentials are compiled into that build.
 
+For TestFlight, use `bash tool/build-testflight.sh`. It checks the ignored
+production configuration for HTTPS, Apple sign-in, and development credentials
+before building the signed IPA. See [the TestFlight guide](../../docs/testflight.md)
+for signing, upload, and internal testing.
+
+For a requested release, run `npm run release:testflight -- --build-number N`
+from the repository root. Choose the next unused number in App Store Connect.
+The pipeline verifies, builds, and uploads; the `release-testflight` repo skill
+then covers processing, test notes, and availability in FORM Internal.
+
 ## Validate wardrobe on iOS
 
 1. Launch online and open Wardrobe. Check the recency order, Owning/Wanting,

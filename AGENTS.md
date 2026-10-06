@@ -34,6 +34,12 @@ offer to on every turn.
 Migrating, resetting, or deleting data — local or production — is always its own
 explicit request.
 
+For an explicitly requested iOS TestFlight release, use the `release-testflight`
+skill in `.agents/skills/release-testflight/SKILL.md`. The local pipeline is
+`npm run release:testflight -- --build-number N`. Choose N from App Store Connect,
+then confirm processing and availability in FORM Internal. Mobile release and
+backend deployment are separate requests.
+
 ## Local data
 
 Two separate databases on the same local Postgres (`:55432`):
