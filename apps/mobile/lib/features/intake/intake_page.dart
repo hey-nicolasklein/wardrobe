@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:app_settings/app_settings.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -16,16 +17,40 @@ import 'package:form_mobile/features/wardrobe/item_edit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/intake.dart';
 import 'package:form_mobile/models/wardrobe.dart';
+import 'package:form_mobile/repository/credits_repository.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
-typedef IntakeChoiceBoolCallback =
-    void Function(
-      IntakeChoice choice, {
-      required bool value,
-    });
+bool _analyzing(IntakeDraft draft) => switch (draft.phase) {
+  DraftPhase.local ||
+  DraftPhase.uploading ||
+  DraftPhase.uploaded ||
+  DraftPhase.detecting => true,
+  _ => false,
+};
 
+bool _leaving(IntakeDraft draft) =>
+    draft.phase == DraftPhase.saving || draft.phase == DraftPhase.finished;
+
+bool _ready(IntakeDraft draft) =>
+    draft.phase == DraftPhase.ready && draft.failure == null;
+
+/// Detected pieces in a stable order: clothes first, accessories last, so
+/// the preselected pieces lead the strip.
+List<IntakeChoice> _pieces(IntakeDraft draft) {
+  const order = ['top', 'bottom', 'shoes', 'accessory'];
+  final pieces = draft.choices.where((c) => c.proposal != null).toList();
+  return [
+    for (final theme in order)
+      ...pieces.where((c) => _detectionTheme(c.proposal!.category) == theme),
+  ];
+}
+
+/// Adding pieces works one photo at a time: a tray of all photos on top, the
+/// current photo in the middle and its pieces as a strip below. Every region
+/// keeps its height while photos are analysed in the background, so nothing
+/// jumps. Saving a photo moves on to the next one that needs a decision.
 class IntakePage extends StatefulWidget {
   const IntakePage({super.key});
   @override
@@ -36,6 +61,10 @@ class _IntakePageState extends State<IntakePage> {
   bool _picking = false;
   String? _pickerError;
   late IntakeBloc _bloc;
+  final _pages = PageController();
+  final _trayKeys = <String, GlobalKey>{};
+  String? _currentId;
+  IntakeState _previous = const IntakeState();
 
   @override
   void initState() {
@@ -47,6 +76,7 @@ class _IntakePageState extends State<IntakePage> {
   @override
   void dispose() {
     _bloc.availability(visible: false);
+    _pages.dispose();
     super.dispose();
   }
 
@@ -85,6 +115,30 @@ class _IntakePageState extends State<IntakePage> {
     }
   }
 
+  Future<void> _pickSource() async {
+    final camera = await showCupertinoModalPopup<bool>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: Text(context.tr(LocaleKeys.intake_more)),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(context.tr(LocaleKeys.intake_camera)),
+          ),
+          CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(context.tr(LocaleKeys.intake_library)),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(context),
+          child: Text(context.tr(LocaleKeys.cancel)),
+        ),
+      ),
+    );
+    if (camera != null) await _pick(camera: camera);
+  }
+
   Future<void> _discard(IntakeDraft draft) async {
     final confirmed = await confirmFormAction(
       context: context,
@@ -97,71 +151,115 @@ class _IntakePageState extends State<IntakePage> {
     }
   }
 
+  void _goTo(String id, {bool animate = true}) {
+    final index = _bloc.state.drafts.indexWhere((d) => d.id == id);
+    if (index < 0 || !_pages.hasClients) return;
+    if (animate && !MediaQuery.disableAnimationsOf(context)) {
+      unawaited(
+        _pages.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 460),
+          curve: FormTokens.sheetCurve,
+        ),
+      );
+    } else {
+      _pages.jumpToPage(index);
+    }
+  }
+
+  void _showing(String id) {
+    setState(() => _currentId = id);
+    final tray = _trayKeys[id]?.currentContext;
+    if (tray != null) {
+      unawaited(
+        Scrollable.ensureVisible(
+          tray,
+          alignment: 0.5,
+          duration: FormTokens.sheetDuration,
+          curve: FormTokens.easeOut,
+        ),
+      );
+    }
+  }
+
+  /// The next photo that still needs a decision, ready ones first.
+  IntakeDraft? _nextOpen(String afterId) {
+    final drafts = _bloc.state.drafts;
+    final start = drafts.indexWhere((d) => d.id == afterId);
+    final order = [...drafts.skip(start + 1), ...drafts.take(start)];
+    return order.where(_ready).firstOrNull ??
+        order.where((d) => !_leaving(d)).firstOrNull;
+  }
+
+  void _save(IntakeDraft draft) {
+    unawaited(HapticFeedback.mediumImpact());
+    _bloc.add(IntakeEvent(IntakeAction.save, id: draft.id));
+    final next = _nextOpen(draft.id);
+    if (next == null) return;
+    // Long enough to see the pieces being stamped, then on to the next photo
+    // while saving continues in the background.
+    Timer(const Duration(milliseconds: 750), () {
+      if (mounted && _currentId == draft.id) _goTo(next.id);
+    });
+  }
+
   // The last draft leaving while it was saving means everything picked has
   // landed in the wardrobe, so return to the list. A discard does not count.
   static bool _savedLastDraft(IntakeState previous, IntakeState current) =>
       current.drafts.isEmpty &&
       previous.drafts.isNotEmpty &&
-      previous.drafts.every(
-        (d) => d.phase == DraftPhase.saving || d.phase == DraftPhase.finished,
-      );
+      previous.drafts.every(_leaving);
+
+  /// Keeps the shown photo when drafts arrive or leave. A removed photo hands
+  /// over to the one that followed it.
+  void _sync(IntakeState previous, IntakeState current) {
+    if (_savedLastDraft(previous, current)) {
+      context.go('/wardrobe');
+      return;
+    }
+    final ids = current.drafts.map((d) => d.id).toList();
+    _trayKeys.removeWhere((id, _) => !ids.contains(id));
+    if (ids.isEmpty) {
+      _currentId = null;
+      return;
+    }
+    var id = _currentId;
+    if (id == null) {
+      id = ids.first;
+    } else if (!ids.contains(id)) {
+      final oldIds = previous.drafts.map((d) => d.id).toList();
+      id =
+          oldIds.skip(oldIds.indexOf(id) + 1).where(ids.contains).firstOrNull ??
+          ids.last;
+    }
+    _currentId = id;
+    final index = ids.indexOf(id);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_pages.hasClients) return;
+      if ((_pages.page ?? 0).round() != index) _pages.jumpToPage(index);
+    });
+  }
 
   @override
   Widget build(BuildContext context) => BlocConsumer<IntakeBloc, IntakeState>(
-    listenWhen: _savedLastDraft,
-    listener: (context, _) => context.go('/wardrobe'),
+    listenWhen: (previous, current) {
+      _previous = previous;
+      return previous.drafts != current.drafts;
+    },
+    listener: (context, state) => _sync(_previous, state),
     builder: (context, state) {
       final online =
           context.watch<ConnectionCubit>().state == ConnectionStatus.ready;
-      final enabled = online && !state.busy && !_picking;
-      final hasDrafts = state.drafts.isNotEmpty;
-      // On top while the page is empty, below the drafts once analysis is
-      // running so the photo being scanned stays front and centre.
-      final addPhotos = <Widget>[
-        if (!hasDrafts) ...[
-          const SizedBox(height: 8),
-          Text(
-            context.tr(LocaleKeys.intake_intro),
-            style: FormTokens.body.copyWith(color: FormTokens.muted),
-          ),
-          const SizedBox(height: 16),
-        ],
-        _UploadArea(
-          compact: hasDrafts,
-          // Not tied to the bloc's busy flag: detection polling toggles it
-          // every few seconds, and a new photo simply queues behind it.
-          enabled: online,
-          picking: _picking,
-          onCamera: () => _pick(camera: true),
-          onLibrary: () => _pick(camera: false),
-        ),
-        if (hasDrafts)
-          Text(
-            context.tr(LocaleKeys.intake_cost),
-            textAlign: TextAlign.center,
-            style: FormTokens.small.copyWith(fontSize: 11),
-          )
-        else
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: FormTokens.field,
-              borderRadius: BorderRadius.circular(FormTokens.inputRadius),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-              child: Text(
-                context.tr(LocaleKeys.intake_cost),
-                style: FormTokens.small.copyWith(
-                  color: FormTokens.noteInk,
-                ),
-              ),
-            ),
-          ),
+      final drafts = state.drafts;
+      final current =
+          drafts.where((d) => d.id == _currentId).firstOrNull ??
+          drafts.firstOrNull;
+      final notices = <Widget>[
+        if (!online)
+          FormNotice(text: context.tr(LocaleKeys.intake_offline), error: true),
+        if (state.error != null)
+          FormNotice(text: context.tr(state.error!), error: true),
         if (_pickerError != null) ...[
-          const SizedBox(height: 12),
           FormNotice(text: context.tr(_pickerError!), error: true),
           if (_pickerError == LocaleKeys.intake_permission)
             TextButton(
@@ -173,102 +271,454 @@ class _IntakePageState extends State<IntakePage> {
       return Scaffold(
         backgroundColor: FormTokens.paper,
         extendBodyBehindAppBar: true,
-        appBar: FormPageHeader(title: context.tr(LocaleKeys.intake_title)),
+        appBar: FormPageHeader(
+          title: context.tr(LocaleKeys.intake_title),
+          subtitle: drafts.length > 1 && current != null
+              ? context.tr(
+                  LocaleKeys.intake_photoOf,
+                  namedArgs: {
+                    'index': '${drafts.indexOf(current) + 1}',
+                    'total': '${drafts.length}',
+                  },
+                )
+              : null,
+        ),
         body: Builder(
-          builder: (context) => ListView(
-            padding: EdgeInsets.fromLTRB(
-              FormTokens.gutter,
-              MediaQuery.paddingOf(context).top,
-              FormTokens.gutter,
-              MediaQuery.paddingOf(context).bottom,
-            ),
-            children: [
-              if (!hasDrafts) ...addPhotos,
-              if (!online)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: FormNotice(
-                    text: context.tr(LocaleKeys.intake_offline),
-                    error: true,
+          builder: (context) {
+            final padding = MediaQuery.paddingOf(context);
+            if (current == null) {
+              return _EmptyIntake(
+                padding: padding,
+                online: online,
+                picking: _picking,
+                notices: notices,
+                onCamera: () => _pick(camera: true),
+                onLibrary: () => _pick(camera: false),
+              );
+            }
+            final enabled = online && !_picking;
+            return Padding(
+              padding: EdgeInsets.only(top: padding.top),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (notices.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        FormTokens.gutter,
+                        4,
+                        FormTokens.gutter,
+                        8,
+                      ),
+                      child: Column(spacing: 8, children: notices),
+                    ),
+                  _PhotoTray(
+                    drafts: drafts,
+                    currentId: current.id,
+                    keys: _trayKeys,
+                    canAdd: online && !_picking,
+                    onSelect: _goTo,
+                    onAdd: _pickSource,
                   ),
-                ),
-              if (state.error != null) ...[
-                const SizedBox(height: 12),
-                FormNotice(text: context.tr(state.error!), error: true),
-              ],
-              for (final draft in state.drafts)
-                FormReveal(
-                  key: ValueKey(draft.id),
-                  child: _DraftCard(
-                    draft: draft,
-                    state: state,
-                    enabled: enabled,
-                    onDiscard: () => _discard(draft),
-                    onSelect: enabled && draft.phase == DraftPhase.ready
-                        ? (choice) => _bloc.add(
+                  Expanded(
+                    child: PageView.builder(
+                      controller: _pages,
+                      itemCount: drafts.length,
+                      onPageChanged: (index) => _showing(drafts[index].id),
+                      findChildIndexCallback: (key) {
+                        final index = drafts.indexWhere(
+                          (d) => ValueKey(d.id) == key,
+                        );
+                        return index < 0 ? null : index;
+                      },
+                      itemBuilder: (context, index) {
+                        final draft = drafts[index];
+                        return _DraftPage(
+                          key: ValueKey(draft.id),
+                          draft: draft,
+                          enabled: enabled,
+                          onDiscard: () => _discard(draft),
+                          onToggle: (choice) => _bloc.add(
                             IntakeEvent(
                               IntakeAction.select,
                               id: draft.id,
                               choiceKey: choice.itemKey,
                               value: !choice.selected,
                             ),
-                          )
-                        : null,
-                    onBatchOwning: enabled && draft.phase == DraftPhase.ready
-                        ? (value) => _bloc.add(
+                          ),
+                          onOwnership: (owning) => _bloc.add(
                             IntakeEvent(
                               IntakeAction.ownership,
                               id: draft.id,
-                              value: value,
+                              value: owning,
                             ),
-                          )
-                        : null,
-                    onChoiceOwning: enabled
-                        ? (choice, {required value}) {
-                            if (choice.locked) return;
-                            _bloc.add(
-                              IntakeEvent(
-                                IntakeAction.ownership,
-                                id: draft.id,
-                                choiceKey: choice.itemKey,
-                                value: value,
-                              ),
-                            );
-                          }
-                        : null,
-                    onChoiceSelect: enabled
-                        ? (choice, {required value}) {
-                            if (choice.locked) return;
-                            _bloc.add(
-                              IntakeEvent(
-                                IntakeAction.select,
-                                id: draft.id,
-                                choiceKey: choice.itemKey,
-                                value: value,
-                              ),
-                            );
-                          }
-                        : null,
-                    onRetry: enabled
-                        ? () => _bloc.add(
-                            IntakeEvent(IntakeAction.retry, id: draft.id),
-                          )
-                        : null,
-                    onSave:
-                        enabled &&
-                            draft.phase == DraftPhase.ready &&
-                            draft.choices.any((c) => c.selected && !c.enqueued)
-                        ? () => _bloc.add(
-                            IntakeEvent(IntakeAction.save, id: draft.id),
-                          )
-                        : null,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  if (current.phase != DraftPhase.manual)
+                    _ActionBar(
+                      draft: current,
+                      enabled: enabled,
+                      bottom: padding.bottom,
+                      nextReady: _ready(current)
+                          ? null
+                          : drafts
+                                .where((d) => d.id != current.id)
+                                .where(_ready)
+                                .firstOrNull,
+                      onSave: () => _save(current),
+                      onRetry: () => _bloc.add(
+                        IntakeEvent(IntakeAction.retry, id: current.id),
+                      ),
+                      onNext: _goTo,
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    },
+  );
+}
+
+/// The first view before any photo is picked. It fits the screen without
+/// scrolling and previews the flow: pick photos, FORM finds the pieces, tap
+/// to choose and add.
+class _EmptyIntake extends StatelessWidget {
+  const _EmptyIntake({
+    required this.padding,
+    required this.online,
+    required this.picking,
+    required this.notices,
+    required this.onCamera,
+    required this.onLibrary,
+  });
+
+  final EdgeInsets padding;
+  final bool online;
+  final bool picking;
+  final List<Widget> notices;
+  final VoidCallback onCamera;
+  final VoidCallback onLibrary;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = picking || !online;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        FormTokens.gutter,
+        padding.top + 4,
+        FormTokens.gutter,
+        padding.bottom + 6,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Expanded(
+            child: FormReveal(child: LoopingScanStage()),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            context.tr(LocaleKeys.intake_uploadTitle),
+            style: FormTokens.heading.copyWith(fontSize: 26),
+          ),
+          const SizedBox(height: 20),
+          const _IntakeSteps(),
+          const SizedBox(height: 28),
+          for (final notice in notices) ...[notice, const SizedBox(height: 10)],
+          FilledButton.icon(
+            onPressed: disabled ? null : onLibrary,
+            icon: const Icon(Icons.photo_library_outlined, size: 22),
+            label: Text(context.tr(LocaleKeys.intake_library)),
+          ),
+          const SizedBox(height: FormTokens.gap),
+          OutlinedButton.icon(
+            onPressed: disabled ? null : onCamera,
+            icon: const Icon(Icons.camera_alt_outlined, size: 22),
+            label: Text(context.tr(LocaleKeys.intake_camera)),
+          ),
+          SizedBox(
+            height: 30,
+            child: Center(
+              child: Text(
+                context.tr(
+                  LocaleKeys.intake_costShort,
+                  namedArgs: {'credits': '$shelfImageCreditCost'},
+                ),
+                style: FormTokens.small.copyWith(fontSize: 11),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The three steps of adding, in the order the next screen walks through.
+class _IntakeSteps extends StatelessWidget {
+  const _IntakeSteps();
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = [
+      (Icons.photo_library_outlined, LocaleKeys.intake_steps_pick),
+      (Icons.auto_awesome_outlined, LocaleKeys.intake_steps_detect),
+      (Icons.check_circle_outline, LocaleKeys.intake_steps_add),
+    ];
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (index, (icon, label)) in steps.indexed) ...[
+          Expanded(
+            child: FormReveal(
+              delay: Duration(milliseconds: 120 + 110 * index),
+              child: Column(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: const BoxDecoration(
+                      color: FormTokens.selectedTint,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, size: 18, color: FormTokens.green),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    context.tr(label),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: FormTokens.small.copyWith(
+                      fontSize: 11.5,
+                      height: 1.3,
+                      color: FormTokens.ink,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// All photos of this session as thumbnails, each showing where it stands.
+class _PhotoTray extends StatelessWidget {
+  const _PhotoTray({
+    required this.drafts,
+    required this.currentId,
+    required this.keys,
+    required this.canAdd,
+    required this.onSelect,
+    required this.onAdd,
+  });
+
+  final List<IntakeDraft> drafts;
+  final String currentId;
+  final Map<String, GlobalKey> keys;
+  final bool canAdd;
+  final ValueChanged<String> onSelect;
+  final VoidCallback onAdd;
+
+  static const size = 54.0;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: size + 18,
+    child: _EdgeFade(
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(FormTokens.gutter, 6, 14, 12),
+        children: [
+          for (final draft in drafts)
+            Padding(
+              key: keys.putIfAbsent(draft.id, GlobalKey.new),
+              padding: const EdgeInsets.only(right: 8),
+              child: FormReveal(
+                child: _TrayThumb(
+                  draft: draft,
+                  active: draft.id == currentId,
+                  onTap: () => onSelect(draft.id),
+                ),
+              ),
+            ),
+          _AddThumb(onTap: canAdd ? onAdd : null),
+        ],
+      ),
+    ),
+  );
+}
+
+class _TrayThumb extends StatelessWidget {
+  const _TrayThumb({
+    required this.draft,
+    required this.active,
+    required this.onTap,
+  });
+
+  final IntakeDraft draft;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final analyzing = _analyzing(draft) && draft.failure == null;
+    final leaving = _leaving(draft);
+    final selected = draft.choices.where((c) => c.selected).length;
+    final badge = draft.failure != null
+        ? const _TrayBadge(
+            key: ValueKey('failed'),
+            color: FormTokens.danger,
+            child: Text('!'),
+          )
+        : leaving
+        ? const _TrayBadge(
+            key: ValueKey('saved'),
+            color: FormTokens.green,
+            child: Icon(Icons.check, size: 12, color: Colors.white),
+          )
+        : draft.phase == DraftPhase.manual
+        ? const _TrayBadge(
+            key: ValueKey('manual'),
+            color: FormTokens.coinRim,
+            child: Icon(Icons.edit, size: 11, color: Colors.white),
+          )
+        : draft.phase == DraftPhase.ready
+        ? _TrayBadge(
+            key: ValueKey('ready-$selected'),
+            color: FormTokens.green,
+            child: Text('$selected'),
+          )
+        : null;
+    return Semantics(
+      button: true,
+      selected: active,
+      label: context.tr('intake.phases.${draft.phase.name}'),
+      child: GestureDetector(
+        onTap: () {
+          unawaited(HapticFeedback.selectionClick());
+          onTap();
+        },
+        child: AnimatedScale(
+          scale: active ? 1 : 0.9,
+          duration: FormTokens.quick,
+          curve: FormTokens.easeOut,
+          child: SizedBox.square(
+            dimension: _PhotoTray.size,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: AnimatedContainer(
+                    duration: FormTokens.quick,
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: active ? FormTokens.green : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.file(
+                            File(draft.filePath),
+                            fit: BoxFit.cover,
+                            cacheWidth: 160,
+                            errorBuilder: (_, _, _) =>
+                                const ColoredBox(color: FormTokens.field),
+                          ),
+                          AnimatedOpacity(
+                            opacity: analyzing || leaving ? 1 : 0,
+                            duration: FormTokens.sheetDuration,
+                            child: ColoredBox(
+                              color: leaving
+                                  ? FormTokens.green.withValues(alpha: 0.45)
+                                  : const Color(0x66263329),
+                              child: analyzing ? const _ThumbScan() : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              if (hasDrafts) ...[
-                const SizedBox(height: 24),
-                ...addPhotos,
+                Positioned(
+                  right: -4,
+                  top: -4,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 320),
+                    switchInCurve: FormTokens.pop,
+                    transitionBuilder: (child, animation) =>
+                        ScaleTransition(scale: animation, child: child),
+                    child: badge ?? const SizedBox.shrink(),
+                  ),
+                ),
               ],
-              const SizedBox(height: 24),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A soft band of light drifting slowly over a thumbnail while its photo
+/// is analysed, the small sibling of the photo's scan.
+class _ThumbScan extends StatefulWidget {
+  const _ThumbScan();
+
+  @override
+  State<_ThumbScan> createState() => _ThumbScanState();
+}
+
+class _ThumbScanState extends State<_ThumbScan>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _sweep = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2800),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _sweep.stop();
+    } else if (!_sweep.isAnimating) {
+      unawaited(_sweep.repeat());
+    }
+  }
+
+  @override
+  void dispose() {
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _sweep,
+    builder: (context, _) {
+      final t = Curves.easeInOut.transform(_sweep.value);
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment(-1 + 3 * t - 1, -1),
+            end: Alignment(1 + 3 * t - 1, 1),
+            colors: const [
+              Color(0x00FFFFFF),
+              Color(0x59FFFFFF),
+              Color(0x00FFFFFF),
             ],
           ),
         ),
@@ -277,269 +727,315 @@ class _IntakePageState extends State<IntakePage> {
   );
 }
 
-class _UploadArea extends StatelessWidget {
-  const _UploadArea({
-    required this.compact,
+class _TrayBadge extends StatelessWidget {
+  const _TrayBadge({required this.color, required this.child, super.key});
+
+  final Color color;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minWidth: 20),
+    height: 20,
+    padding: const EdgeInsets.symmetric(horizontal: 5),
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: FormTokens.paper, width: 2),
+    ),
+    child: DefaultTextStyle(
+      style: FormTokens.small
+          .copyWith(
+            fontSize: 11,
+            height: 1,
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          )
+          .merge(FormTokens.numerals),
+      child: child,
+    ),
+  );
+}
+
+class _AddThumb extends StatelessWidget {
+  const _AddThumb({required this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    enabled: onTap != null,
+    label: context.tr(LocaleKeys.intake_more),
+    child: GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: onTap == null ? 0.4 : 1,
+        child: SizedBox.square(
+          dimension: _PhotoTray.size,
+          child: CustomPaint(
+            foregroundPainter: const FormDashedBorder(
+              color: FormTokens.uploadLine,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: FormTokens.uploadTint,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(Icons.add, color: FormTokens.green),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// One photo: the picture fills the free space, the strip of pieces below
+/// keeps a fixed height whether the photo is still analysed or ready.
+class _DraftPage extends StatefulWidget {
+  const _DraftPage({
+    required this.draft,
     required this.enabled,
-    required this.picking,
-    required this.onCamera,
-    required this.onLibrary,
+    required this.onDiscard,
+    required this.onToggle,
+    required this.onOwnership,
+    super.key,
   });
 
-  final bool compact;
+  final IntakeDraft draft;
   final bool enabled;
-  final bool picking;
-  final VoidCallback onCamera;
-  final VoidCallback onLibrary;
+  final VoidCallback onDiscard;
+  final ValueChanged<IntakeChoice> onToggle;
+  final ValueChanged<bool> onOwnership;
+
+  @override
+  State<_DraftPage> createState() => _DraftPageState();
+}
+
+class _DraftPageState extends State<_DraftPage> {
+  String? _focus;
+  Timer? _unfocus;
+
+  @override
+  void dispose() {
+    _unfocus?.cancel();
+    super.dispose();
+  }
+
+  // Highlights the tapped piece on the photo for a moment, so the photo
+  // stays calm otherwise.
+  void _toggle(IntakeChoice choice) {
+    widget.onToggle(choice);
+    _unfocus?.cancel();
+    setState(() => _focus = choice.itemKey);
+    _unfocus = Timer(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => _focus = null);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final buttonsDisabled = picking || !enabled;
-    final camera = FilledButton.icon(
-      onPressed: buttonsDisabled ? null : onCamera,
-      icon: Icon(Icons.camera_alt_outlined, size: compact ? 20 : 23),
-      label: Text(
-        context.tr(
-          compact ? LocaleKeys.intake_cameraShort : LocaleKeys.intake_camera,
+    if (widget.draft.phase == DraftPhase.manual) {
+      return SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          FormTokens.gutter,
+          4,
+          FormTokens.gutter,
+          MediaQuery.paddingOf(context).bottom + 24,
         ),
-      ),
-    );
-    final library = OutlinedButton.icon(
-      onPressed: buttonsDisabled ? null : onLibrary,
-      icon: Icon(Icons.photo_library_outlined, size: compact ? 20 : 23),
-      label: Text(
-        context.tr(
-          compact ? LocaleKeys.intake_libraryShort : LocaleKeys.intake_library,
-        ),
-      ),
-    );
-    // Below the drafts it is a secondary action: a quiet heading and one row
-    // of buttons instead of the dashed upload card.
-    if (compact) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 10,
           children: [
-            Text(
-              context.tr(LocaleKeys.intake_more).toUpperCase(),
-              style: FormTokens.eyebrow,
+            SizedBox(
+              height: 220,
+              child: _PhotoStage(
+                draft: widget.draft,
+                focus: _focus,
+                onDiscard: widget.onDiscard,
+              ),
             ),
-            Row(
-              spacing: FormTokens.gap,
-              children: [
-                Expanded(child: camera),
-                Expanded(child: library),
-              ],
+            ManualIntakeForm(
+              key: ValueKey(widget.draft.id),
+              draft: widget.draft,
+              enabled: widget.enabled,
             ),
           ],
         ),
       );
     }
+    final pieces = _pieces(widget.draft);
+    final selected = pieces.where((c) => c.selected).length;
+    final ready = widget.draft.phase == DraftPhase.ready;
+    final interactive = widget.enabled && ready && widget.draft.failure == null;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: CustomPaint(
-        foregroundPainter: const FormDashedBorder(
-          color: FormTokens.uploadLine,
-          radius: 20,
-        ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: FormTokens.uploadTint,
-            borderRadius: BorderRadius.circular(20),
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: FormTokens.gutter,
+              ),
+              child: _PhotoStage(
+                draft: widget.draft,
+                focus: _focus,
+                onDiscard: widget.onDiscard,
+              ),
+            ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 170, child: LoopingScanStage()),
-                const SizedBox(height: 18),
-                Text(
-                  context.tr(LocaleKeys.intake_uploadTitle),
-                  textAlign: TextAlign.center,
-                  style: FormTokens.heading.copyWith(fontSize: 24),
-                ),
-                const SizedBox(height: 6),
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 270),
-                    child: Text(
-                      context.tr(LocaleKeys.intake_uploadBody),
-                      textAlign: TextAlign.center,
-                      style: FormTokens.body.copyWith(
-                        color: FormTokens.muted,
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: FormTokens.gutter),
+            child: SizedBox(
+              height: 32,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: FormTokens.quick,
+                      layoutBuilder: (current, _) => Align(
+                        alignment: Alignment.centerLeft,
+                        child: current,
+                      ),
+                      child: Text(
+                        pieces.isEmpty
+                            ? context.tr(
+                                'intake.phases.${widget.draft.phase.name}',
+                              )
+                            : context.tr(
+                                LocaleKeys.intake_selectedCount,
+                                namedArgs: {
+                                  'selected': '$selected',
+                                  'total': '${pieces.length}',
+                                },
+                              ),
+                        key: ValueKey(
+                          pieces.isEmpty ? widget.draft.phase : selected,
+                        ),
+                        style: FormTokens.small.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: FormTokens.ink,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 18),
-                camera,
-                const SizedBox(height: FormTokens.gap),
-                library,
-              ],
+                  if (pieces.isNotEmpty)
+                    _OwnershipSwitch(
+                      owning: widget.draft.ownership == 'owning',
+                      onChanged: interactive ? widget.onOwnership : null,
+                    ),
+                ],
+              ),
             ),
           ),
-        ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: _PieceTile.height,
+            child: widget.draft.failure != null
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: FormTokens.gutter,
+                    ),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: FormNotice(
+                        text: context.tr(widget.draft.failure!),
+                        error: true,
+                      ),
+                    ),
+                  )
+                : pieces.isEmpty
+                ? const _SkeletonStrip()
+                : _EdgeFade(
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: FormTokens.gutter,
+                      ),
+                      itemCount: pieces.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 10),
+                      itemBuilder: (context, index) => FormReveal(
+                        key: ValueKey(pieces[index].itemKey),
+                        delay: Duration(milliseconds: 160 + 70 * index),
+                        child: _PieceTile(
+                          draft: widget.draft,
+                          choice: pieces[index],
+                          onTap: interactive && !pieces[index].locked
+                              ? () => _toggle(pieces[index])
+                              : null,
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _DraftCard extends StatelessWidget {
-  const _DraftCard({
+/// The photo fitted into the free space. It stays clean; tapping a piece in
+/// the strip spotlights it here for a moment.
+class _PhotoStage extends StatelessWidget {
+  const _PhotoStage({
     required this.draft,
-    required this.state,
-    required this.enabled,
     required this.onDiscard,
-    required this.onSelect,
-    required this.onBatchOwning,
-    required this.onChoiceOwning,
-    required this.onChoiceSelect,
-    required this.onRetry,
-    required this.onSave,
+    this.focus,
   });
 
   final IntakeDraft draft;
-  final IntakeState state;
-  final bool enabled;
-  final VoidCallback onDiscard;
-  final void Function(IntakeChoice)? onSelect;
-  final ValueChanged<bool>? onBatchOwning;
-  final IntakeChoiceBoolCallback? onChoiceOwning;
-  final IntakeChoiceBoolCallback? onChoiceSelect;
-  final VoidCallback? onRetry;
-  final VoidCallback? onSave;
-
-  bool get _busy =>
-      draft.phase == DraftPhase.uploading ||
-      draft.phase == DraftPhase.uploaded ||
-      draft.phase == DraftPhase.detecting;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 17),
-      child: FormPanel(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _DraftHead(
-              title: _draftTitle(context),
-              onDiscard: onDiscard,
-            ),
-            if (draft.phase == DraftPhase.manual) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: ColoredBox(
-                  color: FormTokens.field,
-                  child: DraftPhoto(draft: draft),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ] else
-              _DetectionStage(
-                draft: draft,
-                busy: _busy,
-                analyzing: draft.phase != DraftPhase.uploading,
-                onSelect: onSelect,
-              ),
-            if (draft.failure != null) ...[
-              const SizedBox(height: 12),
-              FormNotice(text: context.tr(draft.failure!), error: true),
-              TextButton(
-                onPressed: onRetry,
-                child: Text(context.tr(LocaleKeys.retry)),
-              ),
-            ],
-            if (draft.phase == DraftPhase.ready ||
-                draft.phase == DraftPhase.saving) ...[
-              if (!_busy) ...[
-                _BatchOwnership(
-                  value: draft.ownership == 'owning',
-                  onChanged: onBatchOwning,
-                ),
-                const SizedBox(height: 13),
-                _DetectionChoices(
-                  draft: draft,
-                  enabled: enabled,
-                  onChoiceSelect: onChoiceSelect,
-                  onChoiceOwning: onChoiceOwning,
-                ),
-              ],
-              if (draft.phase == DraftPhase.ready)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: FilledButton(
-                    onPressed: onSave,
-                    child: Text(context.tr(LocaleKeys.intake_save)),
-                  ),
-                ),
-            ],
-            if (draft.phase == DraftPhase.manual)
-              ManualIntakeForm(
-                key: ValueKey(draft.id),
-                draft: draft,
-                enabled: enabled,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _draftTitle(BuildContext context) =>
-      context.tr('intake.phases.${draft.phase.name}');
-}
-
-class _DraftHead extends StatelessWidget {
-  const _DraftHead({
-    required this.title,
-    required this.onDiscard,
-  });
-
-  final String title;
+  final String? focus;
   final VoidCallback onDiscard;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    final analyzing = _analyzing(draft) && draft.failure == null;
+    final leaving = _leaving(draft);
+    return Center(
+      child: AspectRatio(
+        aspectRatio: draft.width / draft.height,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(FormTokens.panelRadius),
+          child: ColoredBox(
+            color: FormTokens.field,
+            child: Stack(
+              fit: StackFit.expand,
               children: [
+                DraftPhoto(draft: draft, focus: focus),
                 AnimatedSwitcher(
                   duration: FormTokens.sheetDuration,
-                  switchInCurve: FormTokens.easeOut,
-                  // Only the new title takes part, so the old one doesn't
-                  // overlap it while fading.
-                  layoutBuilder: (current, _) => current ?? const SizedBox(),
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween(
-                        begin: const Offset(0, 0.35),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
-                    ),
-                  ),
-                  child: Text(
-                    title,
-                    key: ValueKey(title),
-                    style: FormTokens.heading.copyWith(fontSize: 22),
-                  ),
+                  child: analyzing
+                      ? _ScanOverlay(
+                          key: const ValueKey('scan'),
+                          message: context.tr(
+                            draft.phase == DraftPhase.detecting
+                                ? LocaleKeys.intake_phases_detecting
+                                : LocaleKeys.intake_phases_uploading,
+                          ),
+                        )
+                      : leaving
+                      ? _ScanOverlay(
+                          key: const ValueKey('saving'),
+                          sweep: false,
+                          message: context.tr(
+                            'intake.phases.${draft.phase.name}',
+                          ),
+                        )
+                      : const SizedBox.expand(),
                 ),
+                if (!leaving)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: _DiscardButton(onPressed: onDiscard),
+                  ),
               ],
             ),
           ),
-          _DiscardButton(onPressed: onDiscard),
-        ],
+        ),
       ),
     );
   }
@@ -557,17 +1053,16 @@ class _DiscardButton extends StatelessWidget {
       label: label,
       button: true,
       child: Material(
-        color: FormTokens.field,
+        color: const Color(0xCCFFFFFF),
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onPressed,
-          child: SizedBox(
-            width: 44,
-            height: 44,
+          child: SizedBox.square(
+            dimension: 36,
             child: Icon(
               Icons.close,
-              size: 20,
+              size: 18,
               color: FormTokens.ink,
               semanticLabel: label,
             ),
@@ -578,56 +1073,13 @@ class _DiscardButton extends StatelessWidget {
   }
 }
 
-class _DetectionStage extends StatelessWidget {
-  const _DetectionStage({
-    required this.draft,
-    required this.busy,
-    required this.analyzing,
-    required this.onSelect,
-  });
-
-  final IntakeDraft draft;
-  final bool busy;
-  final bool analyzing;
-  final void Function(IntakeChoice)? onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: ColoredBox(
-        color: FormTokens.field,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            DraftPhoto(draft: draft, onSelect: busy ? null : onSelect),
-            Positioned.fill(
-              child: AnimatedSwitcher(
-                duration: FormTokens.sheetDuration,
-                child: busy
-                    ? _ScanOverlay(
-                        message: context.tr(
-                          analyzing
-                              ? LocaleKeys.intake_phases_detecting
-                              : LocaleKeys.intake_phases_uploading,
-                        ),
-                      )
-                    : const SizedBox.expand(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /// A band sweeping over the photo while it uploads and is analysed, with
-/// the current step in a pill below.
+/// the current step in a pill below. Without [sweep] only the pill shows.
 class _ScanOverlay extends StatefulWidget {
-  const _ScanOverlay({required this.message});
+  const _ScanOverlay({required this.message, this.sweep = true, super.key});
 
   final String message;
+  final bool sweep;
 
   @override
   State<_ScanOverlay> createState() => _ScanOverlayState();
@@ -664,42 +1116,43 @@ class _ScanOverlayState extends State<_ScanOverlay>
 
   @override
   Widget build(BuildContext context) => ColoredBox(
-    color: const Color(0x40263329),
+    color: widget.sweep ? const Color(0x40263329) : Colors.transparent,
     child: LayoutBuilder(
       builder: (context, constraints) {
         final height = constraints.maxHeight;
         final band = height * 0.35;
         return Stack(
           children: [
-            AnimatedBuilder(
-              animation: _sweep,
-              builder: (context, _) {
-                final t = FormTokens.easeOut.transform(_sweep.value);
-                return Positioned(
-                  left: 0,
-                  right: 0,
-                  top: -band + (height + band) * t,
-                  height: band,
-                  child: Opacity(
-                    // Fades in at the top and out at the bottom so the loop
-                    // restarts without a visible jump.
-                    opacity: math.sin(math.pi * _sweep.value),
-                    child: const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0x00FFFFFF), Color(0x70FFFFFF)],
-                        ),
-                        border: Border(
-                          bottom: BorderSide(color: Colors.white, width: 2),
+            if (widget.sweep)
+              AnimatedBuilder(
+                animation: _sweep,
+                builder: (context, _) {
+                  final t = FormTokens.easeOut.transform(_sweep.value);
+                  return Positioned(
+                    left: 0,
+                    right: 0,
+                    top: -band + (height + band) * t,
+                    height: band,
+                    child: Opacity(
+                      // Fades in at the top and out at the bottom so the loop
+                      // restarts without a visible jump.
+                      opacity: math.sin(math.pi * _sweep.value),
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0x00FFFFFF), Color(0x70FFFFFF)],
+                          ),
+                          border: Border(
+                            bottom: BorderSide(color: Colors.white, width: 2),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
             Positioned(
               left: 0,
               right: 0,
@@ -763,39 +1216,413 @@ class _ScanOverlayState extends State<_ScanOverlay>
   );
 }
 
-class _BatchOwnership extends StatelessWidget {
-  const _BatchOwnership({required this.value, required this.onChanged});
+/// Owning or Wanting for every piece of one photo, small enough to share a
+/// row with the selection count.
+class _OwnershipSwitch extends StatelessWidget {
+  const _OwnershipSwitch({required this.owning, required this.onChanged});
 
-  final bool value;
+  final bool owning;
   final ValueChanged<bool>? onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: FormTokens.line)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.tr(LocaleKeys.intake_batchOwning),
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : FormTokens.quick;
+    Widget segment(String label, {required bool value}) {
+      final active = owning == value;
+      return Semantics(
+        button: true,
+        selected: active,
+        enabled: onChanged != null,
+        child: GestureDetector(
+          onTap: onChanged == null || active
+              ? null
+              : () {
+                  unawaited(HapticFeedback.selectionClick());
+                  onChanged!(value);
+                },
+          child: AnimatedContainer(
+            duration: duration,
+            curve: FormTokens.easeOut,
+            padding: const EdgeInsets.symmetric(horizontal: 11),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active ? FormTokens.green : Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              label,
               style: FormTokens.small.copyWith(
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.04 * 12,
-                color: FormTokens.muted,
+                fontSize: 12,
+                height: 1,
+                fontWeight: FontWeight.w500,
+                color: active ? Colors.white : FormTokens.ink,
               ),
             ),
-            const SizedBox(height: 6),
-            _FormStateToggle(
-              label: context.tr(LocaleKeys.intake_batchOwning),
-              value: value,
-              onChanged: onChanged,
-            ),
+          ),
+        ),
+      );
+    }
+
+    return AnimatedOpacity(
+      opacity: onChanged == null ? 0.55 : 1,
+      duration: duration,
+      child: Container(
+        height: 32,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: FormTokens.field,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            segment(context.tr('collection.owning'), value: true),
+            segment(context.tr('collection.wanting'), value: false),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A detected piece as a large crop. Tapping keeps or leaves it out.
+class _PieceTile extends StatelessWidget {
+  const _PieceTile({
+    required this.draft,
+    required this.choice,
+    required this.onTap,
+  });
+
+  final IntakeDraft draft;
+  final IntakeChoice choice;
+  final VoidCallback? onTap;
+
+  static const size = 92.0;
+  static const double height = size + 26;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = choice.selected;
+    final leaving = _leaving(draft);
+    final proposal = choice.proposal!;
+    final colors = FormTokens.category(_detectionTheme(proposal.category));
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : FormTokens.quick;
+    return Semantics(
+      label:
+          '${context.tr('categories.${proposal.category}')} · '
+          '${proposal.name}',
+      button: true,
+      selected: selected,
+      enabled: onTap != null,
+      child: GestureDetector(
+        onTap: onTap == null
+            ? null
+            : () {
+                unawaited(HapticFeedback.selectionClick());
+                onTap!();
+              },
+        child: AnimatedOpacity(
+          // Pieces left out fade away once the photo is being saved.
+          opacity: leaving && !selected ? 0.25 : 1,
+          duration: FormTokens.sheetDuration,
+          child: SizedBox(
+            width: size,
+            child: Column(
+              children: [
+                AnimatedScale(
+                  scale: selected ? 1 : 0.92,
+                  duration: const Duration(milliseconds: 260),
+                  curve: FormTokens.pop,
+                  child: AnimatedContainer(
+                    duration: duration,
+                    curve: FormTokens.easeOut,
+                    width: size,
+                    height: size,
+                    decoration: BoxDecoration(
+                      color: selected ? colors.tint : FormTokens.field,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: selected ? FormTokens.green : FormTokens.line,
+                        width: selected ? 2.5 : 1,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      // Concentric with the tile, inside its border.
+                      borderRadius: BorderRadius.circular(
+                        selected ? 16 - 2.5 : 16 - 1,
+                      ),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          AnimatedOpacity(
+                            opacity: selected ? 1 : 0.45,
+                            duration: duration,
+                            child: DraftPhoto(
+                              draft: draft,
+                              crop: proposal.boundingBox,
+                              contain: true,
+                            ),
+                          ),
+                          Positioned(
+                            top: 6,
+                            right: 6,
+                            child: _CheckBadge(
+                              selected: selected,
+                              saved: choice.enqueued,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  proposal.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: FormTokens.small.copyWith(
+                    fontSize: 11.5,
+                    height: 1.4,
+                    color: selected ? FormTokens.ink : FormTokens.muted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CheckBadge extends StatelessWidget {
+  const _CheckBadge({required this.selected, required this.saved});
+
+  final bool selected;
+  final bool saved;
+
+  @override
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: FormTokens.quick,
+    width: 22,
+    height: 22,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: selected ? FormTokens.green : const Color(0xE6FFFFFF),
+      border: Border.all(
+        color: selected ? FormTokens.green : FormTokens.toggleOff,
+      ),
+    ),
+    child: AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: FormTokens.pop,
+      transitionBuilder: (child, animation) =>
+          ScaleTransition(scale: animation, child: child),
+      child: Icon(
+        saved
+            ? Icons.done_all
+            : selected
+            ? Icons.check
+            : Icons.add,
+        key: ValueKey((selected, saved)),
+        size: 13,
+        color: selected ? Colors.white : FormTokens.muted,
+      ),
+    ),
+  );
+}
+
+/// Placeholder tiles while the photo is analysed, at the strip's final
+/// height so the page does not move when the pieces arrive.
+class _SkeletonStrip extends StatefulWidget {
+  const _SkeletonStrip();
+
+  @override
+  State<_SkeletonStrip> createState() => _SkeletonStripState();
+}
+
+class _SkeletonStripState extends State<_SkeletonStrip>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pulse.value = 0.5;
+    } else if (!_pulse.isAnimating) {
+      unawaited(_pulse.repeat(reverse: true));
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListView.separated(
+    scrollDirection: Axis.horizontal,
+    physics: const NeverScrollableScrollPhysics(),
+    padding: const EdgeInsets.symmetric(horizontal: FormTokens.gutter),
+    itemCount: 4,
+    separatorBuilder: (_, _) => const SizedBox(width: 10),
+    itemBuilder: (context, index) => AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, _) {
+        // Each tile runs a little behind the previous one, like a wave.
+        final t = (math.sin((_pulse.value - index * 0.18) * math.pi) + 1) / 2;
+        return Opacity(
+          opacity: 0.45 + 0.55 * t,
+          child: Column(
+            children: [
+              Container(
+                width: _PieceTile.size,
+                height: _PieceTile.size,
+                decoration: BoxDecoration(
+                  color: FormTokens.field,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: _PieceTile.size * 0.6,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: FormTokens.field,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+}
+
+/// The one decision per photo, pinned to the bottom.
+class _ActionBar extends StatelessWidget {
+  const _ActionBar({
+    required this.draft,
+    required this.enabled,
+    required this.bottom,
+    required this.nextReady,
+    required this.onSave,
+    required this.onRetry,
+    required this.onNext,
+  });
+
+  final IntakeDraft draft;
+  final bool enabled;
+  final double bottom;
+  final IntakeDraft? nextReady;
+  final VoidCallback onSave;
+  final VoidCallback onRetry;
+  final ValueChanged<String> onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = draft.choices.where((c) => c.selected && !c.enqueued).length;
+    final Widget button;
+    final String note;
+    if (draft.failure != null) {
+      button = FilledButton(
+        onPressed: enabled ? onRetry : null,
+        child: Text(context.tr(LocaleKeys.retry)),
+      );
+      note = '';
+    } else if (draft.phase == DraftPhase.ready) {
+      final credits = count * shelfImageCreditCost;
+      button = FilledButton(
+        onPressed: enabled && count > 0 ? onSave : null,
+        child: Text(
+          count == 0
+              ? context.tr(LocaleKeys.intake_addNone)
+              : context.tr(
+                  count == 1
+                      ? LocaleKeys.intake_addOne
+                      : LocaleKeys.intake_addMany,
+                  namedArgs: {'count': '$count'},
+                ),
+        ),
+      );
+      note = count == 0
+          ? ''
+          : context.tr(
+              count == 1
+                  ? LocaleKeys.intake_costOne
+                  : LocaleKeys.intake_costMany,
+              namedArgs: {'count': '$count', 'credits': '$credits'},
+            );
+    } else if (_leaving(draft)) {
+      button = FilledButton.icon(
+        onPressed: null,
+        icon: const Icon(Icons.check, size: 20),
+        label: Text(context.tr('intake.phases.${draft.phase.name}')),
+      );
+      note = context.tr(LocaleKeys.intake_background);
+    } else if (nextReady != null) {
+      button = OutlinedButton.icon(
+        onPressed: () => onNext(nextReady!.id),
+        iconAlignment: IconAlignment.end,
+        icon: const Icon(Icons.arrow_forward, size: 20),
+        label: Text(context.tr(LocaleKeys.intake_nextReady)),
+      );
+      note = context.tr(LocaleKeys.intake_detectionFree);
+    } else {
+      button = FilledButton(
+        onPressed: null,
+        child: Text(context.tr('intake.phases.${draft.phase.name}')),
+      );
+      note = context.tr(LocaleKeys.intake_detectionFree);
+    }
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        FormTokens.gutter,
+        14,
+        FormTokens.gutter,
+        bottom + 10,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          AnimatedSwitcher(
+            duration: FormTokens.quick,
+            // Passes the bar's full width on to the button.
+            layoutBuilder: (current, previous) => Stack(
+              fit: StackFit.passthrough,
+              children: [...previous, ?current],
+            ),
+            child: KeyedSubtree(
+              key: ValueKey(
+                '${draft.id}-${draft.phase}-${draft.failure}-'
+                '${nextReady != null}',
+              ),
+              child: button,
+            ),
+          ),
+          SizedBox(
+            height: 24,
+            child: Center(
+              child: Text(
+                note,
+                style: FormTokens.small.copyWith(fontSize: 11),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -887,372 +1714,6 @@ class _ToggleControl extends StatelessWidget {
   }
 }
 
-class _DetectionChoices extends StatelessWidget {
-  const _DetectionChoices({
-    required this.draft,
-    required this.enabled,
-    required this.onChoiceSelect,
-    required this.onChoiceOwning,
-  });
-
-  final IntakeDraft draft;
-  final bool enabled;
-  final IntakeChoiceBoolCallback? onChoiceSelect;
-  final IntakeChoiceBoolCallback? onChoiceOwning;
-
-  static const List<({String theme, List<String> categories})> _groups = [
-    (theme: 'top', categories: ['top', 'jacket', 'coat', 'dress']),
-    (theme: 'bottom', categories: ['pants', 'skirt']),
-    (theme: 'shoes', categories: ['shoes']),
-    (theme: 'accessory', categories: <String>[]),
-  ];
-
-  static const _mainCategories = {
-    'top',
-    'jacket',
-    'coat',
-    'dress',
-    'pants',
-    'skirt',
-    'shoes',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final choices = draft.choices.where((c) => c.proposal != null).toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final group in _groups) ...[
-          ..._groupSections(context, group.theme, group.categories, choices),
-        ],
-      ],
-    );
-  }
-
-  List<Widget> _groupSections(
-    BuildContext context,
-    String theme,
-    List<String> categories,
-    List<IntakeChoice> choices,
-  ) {
-    final indexed = <({IntakeChoice choice, int index})>[];
-    var index = 0;
-    for (final choice in choices) {
-      final category = choice.proposal!.category;
-      final inGroup = categories.isEmpty
-          ? !_mainCategories.contains(category)
-          : categories.contains(category);
-      if (inGroup) {
-        indexed.add((choice: choice, index: index));
-      }
-      index++;
-    }
-    if (indexed.isEmpty) return [];
-    final colors = FormTokens.category(theme);
-    return [
-      Padding(
-        padding: const EdgeInsets.only(bottom: 7),
-        child: Row(
-          children: [
-            Icon(_groupIcon(theme), size: 15, color: colors.ink),
-            const SizedBox(width: 6),
-            Text(
-              _groupLabel(context, theme),
-              style: FormTokens.small.copyWith(
-                fontWeight: FontWeight.w600,
-                color: colors.ink,
-              ),
-            ),
-          ],
-        ),
-      ),
-      for (final entry in indexed)
-        Padding(
-          key: ValueKey(entry.choice.itemKey),
-          padding: const EdgeInsets.only(bottom: 7),
-          child: FormReveal(
-            delay: Duration(milliseconds: 250 + 70 * entry.index),
-            child: _DetectionChoiceRow(
-              draft: draft,
-              choice: entry.choice,
-              index: entry.index,
-              enabled: enabled,
-              onSelect: onChoiceSelect,
-              onOwning: onChoiceOwning,
-            ),
-          ),
-        ),
-      const SizedBox(height: 9),
-    ];
-  }
-
-  String _groupLabel(BuildContext context, String theme) => switch (theme) {
-    'top' => context.tr('categories.top'),
-    'bottom' => context.tr('categories.pants'),
-    'shoes' => context.tr('categories.shoes'),
-    _ => context.tr('categories.accessory'),
-  };
-
-  IconData _groupIcon(String theme) => switch (theme) {
-    'top' => Icons.checkroom_outlined,
-    'bottom' => Icons.straighten,
-    'shoes' => Icons.directions_walk_outlined,
-    _ => Icons.watch_outlined,
-  };
-}
-
-class _DetectionChoiceRow extends StatelessWidget {
-  const _DetectionChoiceRow({
-    required this.draft,
-    required this.choice,
-    required this.index,
-    required this.enabled,
-    required this.onSelect,
-    required this.onOwning,
-  });
-
-  final IntakeDraft draft;
-  final IntakeChoice choice;
-  final int index;
-  final bool enabled;
-  final IntakeChoiceBoolCallback? onSelect;
-  final IntakeChoiceBoolCallback? onOwning;
-
-  static const double _rowRadius = FormTokens.panelRadius;
-  static const _rowPadding = 10.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = choice.selected;
-    final rowEnabled = enabled && !choice.locked && onSelect != null;
-    final categoryLabel = context.tr('categories.${choice.proposal!.category}');
-    final semanticsLabel = '$categoryLabel · ${choice.proposal!.name}';
-    return AnimatedContainer(
-      duration: FormTokens.quick,
-      curve: FormTokens.easeOut,
-      decoration: BoxDecoration(
-        color: selected ? const Color(0xFFE7EDDF) : FormTokens.surface,
-        borderRadius: BorderRadius.circular(_rowRadius),
-        border: Border.all(
-          color: selected ? const Color(0xFF9EAF92) : FormTokens.line,
-        ),
-      ),
-      child: Semantics(
-        label: semanticsLabel,
-        button: true,
-        selected: selected,
-        enabled: rowEnabled,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(_rowRadius),
-            onTap: rowEnabled
-                ? () => onSelect!(choice, value: !choice.selected)
-                : null,
-            child: Padding(
-              padding: const EdgeInsets.all(_rowPadding),
-              // The text column sets the row height. The photo is stretched to
-              // it (DraftPhoto uses a LayoutBuilder, so no IntrinsicHeight),
-              // the chip sits at the bottom and the checkbox stays centred.
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: 58,
-                    child: ClipRRect(
-                      // Concentric with the row's corners.
-                      borderRadius: BorderRadius.circular(
-                        _rowRadius - _rowPadding,
-                      ),
-                      child: ColoredBox(
-                        color: const Color(0xFFE2E6DE),
-                        child: DraftPhoto(
-                          draft: draft,
-                          crop: choice.proposal!.boundingBox,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      const SizedBox(width: 70),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              choice.proposal!.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: FormTokens.body.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '$categoryLabel · '
-                              '${choice.proposal!.colors.join(', ')}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: FormTokens.small.copyWith(fontSize: 11),
-                            ),
-                            if (choice.itemId != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  context.tr(
-                                    choice.enqueued
-                                        ? LocaleKeys.intake_enqueued
-                                        : LocaleKeys.intake_created,
-                                  ),
-                                  style: FormTokens.small,
-                                ),
-                              ),
-                            const SizedBox(height: 12),
-                            _OwnershipChip(
-                              owning: choice.ownership == 'owning',
-                              enabled: enabled && !choice.locked,
-                              onChanged: onOwning == null
-                                  ? null
-                                  : (value) => onOwning!(choice, value: value),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      _ChoiceNumber(selected: selected, index: index),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ChoiceNumber extends StatelessWidget {
-  const _ChoiceNumber({required this.selected, required this.index});
-
-  final bool selected;
-  final int index;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: FormTokens.quick,
-      width: 27,
-      height: 27,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: selected ? FormTokens.green : Colors.transparent,
-        border: Border.all(
-          color: selected ? FormTokens.green : const Color(0xFFB9BEB5),
-        ),
-      ),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 260),
-        switchInCurve: FormTokens.pop,
-        transitionBuilder: (child, animation) =>
-            ScaleTransition(scale: animation, child: child),
-        child: selected
-            ? const Icon(
-                Icons.check,
-                key: ValueKey(true),
-                size: 15,
-                color: Colors.white,
-              )
-            : Text(
-                '${index + 1}',
-                key: const ValueKey(false),
-                style: FormTokens.small
-                    .copyWith(
-                      fontSize: 11,
-                      color: FormTokens.muted,
-                    )
-                    .merge(FormTokens.numerals),
-              ),
-      ),
-    );
-  }
-}
-
-class _OwnershipChip extends StatelessWidget {
-  const _OwnershipChip({
-    required this.owning,
-    required this.enabled,
-    required this.onChanged,
-  });
-
-  final bool owning;
-  final bool enabled;
-  final ValueChanged<bool>? onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final chipEnabled = enabled && onChanged != null;
-    final label = context.tr('collection.${owning ? 'owning' : 'wanting'}');
-    return Semantics(
-      label: label,
-      button: true,
-      toggled: owning,
-      enabled: chipEnabled,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(FormTokens.chipRadius),
-          onTap: chipEnabled ? () => onChanged!(!owning) : null,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: owning ? const Color(0xFFF9FBF5) : const Color(0xFFF4F5F1),
-              borderRadius: BorderRadius.circular(FormTokens.chipRadius),
-              border: Border.all(
-                color: owning
-                    ? const Color(0xFFB7C3AB)
-                    : const Color(0xFFD7DCD1),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    owning ? Icons.check : null,
-                    size: 12,
-                    color: owning ? const Color(0xFF536547) : FormTokens.muted,
-                  ),
-                  if (!owning)
-                    Text(
-                      '＋',
-                      style: FormTokens.small.copyWith(fontSize: 11),
-                    ),
-                  const SizedBox(width: 5),
-                  Text(
-                    label,
-                    style: FormTokens.small.copyWith(
-                      fontSize: 11,
-                      color: owning
-                          ? const Color(0xFF536547)
-                          : FormTokens.muted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 String _detectionTheme(String category) {
   if (['top', 'jacket', 'coat', 'dress'].contains(category)) return 'top';
   if (['pants', 'skirt'].contains(category)) return 'bottom';
@@ -1260,22 +1721,24 @@ String _detectionTheme(String category) {
   return 'accessory';
 }
 
-IconData _categoryIcon(String theme) => switch (theme) {
-  'top' => Icons.checkroom_outlined,
-  'bottom' => Icons.straighten,
-  'shoes' => Icons.directions_walk_outlined,
-  _ => Icons.watch_outlined,
-};
-
-/// Both preview crops and overlays use the prepared photo's pixel geometry.
-/// The whole draft photo with tappable detection boxes, or with [crop] a
-/// single detection that covers its box so the parent's rounded clip shapes
-/// every corner.
+/// Both preview crops and the spotlight use the prepared photo's pixel
+/// geometry. The whole draft photo with an optional spotlight, or with [crop]
+/// a single detection. A crop covers its box so the parent's rounded clip
+/// shapes every corner, or with [contain] shows the whole piece.
 class DraftPhoto extends StatelessWidget {
-  const DraftPhoto({required this.draft, this.crop, this.onSelect, super.key});
+  const DraftPhoto({
+    required this.draft,
+    this.crop,
+    this.contain = false,
+    this.focus,
+    super.key,
+  });
   final IntakeDraft draft;
   final DetectionBox? crop;
-  final void Function(IntakeChoice)? onSelect;
+  final bool contain;
+
+  /// Item key of the piece to highlight on the whole photo.
+  final String? focus;
   @override
   Widget build(BuildContext context) {
     final source = Size(draft.width.toDouble(), draft.height.toDouble());
@@ -1289,7 +1752,8 @@ class DraftPhoto extends StatelessWidget {
       return LayoutBuilder(
         builder: (context, constraints) {
           final box = constraints.biggest;
-          final scale = math.max(
+          final fit = contain ? math.min : math.max;
+          final scale = fit(
             box.width / region.width,
             box.height / region.height,
           );
@@ -1313,239 +1777,163 @@ class DraftPhoto extends StatelessWidget {
         },
       );
     }
+    final focused = draft.choices
+        .where((c) => c.itemKey == focus && c.proposal != null)
+        .firstOrNull;
     return Center(
       child: AspectRatio(
         aspectRatio: source.width / source.height,
         child: LayoutBuilder(
-          builder: (context, constraints) {
-            final scale = constraints.maxWidth / source.width;
-            return ClipRect(
-              child: Stack(
-                children: [
-                  Positioned.fill(child: image),
-                  for (final (index, choice)
-                      in draft.choices.where((c) => c.proposal != null).indexed)
-                    _DetectionBoxOverlay(
-                      key: ValueKey(choice.proposal!.id),
-                      index: index,
-                      choice: choice,
-                      scale: scale,
-                      source: source,
-                      onSelect: onSelect,
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-/// A detected piece framed on the photo. Boxes pop in one after another
-/// with a haptic tick. Once saved, a box flashes green with a check and
-/// shrinks away, as if the piece were lifted into the wardrobe.
-class _DetectionBoxOverlay extends StatefulWidget {
-  const _DetectionBoxOverlay({
-    required this.index,
-    required this.choice,
-    required this.scale,
-    required this.source,
-    required this.onSelect,
-    super.key,
-  });
-
-  final int index;
-  final IntakeChoice choice;
-  final double scale;
-  final Size source;
-  final void Function(IntakeChoice)? onSelect;
-
-  @override
-  State<_DetectionBoxOverlay> createState() => _DetectionBoxOverlayState();
-}
-
-class _DetectionBoxOverlayState extends State<_DetectionBoxOverlay>
-    with TickerProviderStateMixin {
-  late final AnimationController _enter;
-  late final AnimationController _lift;
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _enter = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 560),
-    );
-    _lift = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-      // A piece saved before this box was built is already gone.
-      value: widget.choice.enqueued ? 1 : 0,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (MediaQuery.disableAnimationsOf(context)) {
-        _enter.value = 1;
-        return;
-      }
-      _timer = Timer(
-        Duration(milliseconds: 220 + 120 * widget.index),
-        () {
-          unawaited(HapticFeedback.lightImpact());
-          unawaited(_enter.forward());
-        },
-      );
-    });
-  }
-
-  @override
-  void didUpdateWidget(_DetectionBoxOverlay oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.choice.enqueued && !oldWidget.choice.enqueued) {
-      unawaited(HapticFeedback.mediumImpact());
-      if (MediaQuery.disableAnimationsOf(context)) {
-        _lift.value = 1;
-      } else {
-        unawaited(_lift.forward());
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _enter.dispose();
-    _lift.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final choice = widget.choice;
-    final onSelect = widget.onSelect;
-    final theme = _detectionTheme(choice.proposal!.category);
-    final colors = FormTokens.category(theme);
-    final selected = choice.selected;
-    final rect = choice.proposal!.boundingBox.pixels(
-      Size(
-        widget.source.width * widget.scale,
-        widget.source.height * widget.scale,
-      ),
-    );
-    final enabled = onSelect != null && !choice.locked && !choice.enqueued;
-    final label =
-        '${context.tr('categories.${choice.proposal!.category}')} · '
-        '${choice.proposal!.name}';
-    final saved = choice.enqueued;
-    return Positioned.fromRect(
-      rect: rect,
-      child: IgnorePointer(
-        ignoring: saved,
-        child: AnimatedBuilder(
-          animation: Listenable.merge([_enter, _lift]),
-          builder: (context, child) {
-            final enter = FormTokens.pop.transform(_enter.value);
-            // The flash holds for the first half, then the box lifts away.
-            final lift = Curves.easeIn.transform(
-              ((_lift.value - 0.45) / 0.55).clamp(0, 1),
-            );
-            return Opacity(
-              opacity: (_enter.value * (1 - lift)).clamp(0, 1),
-              child: Transform.translate(
-                offset: Offset(0, -18 * lift),
-                child: Transform.scale(
-                  scale: (1.3 - 0.3 * enter) * (1 - 0.25 * lift),
-                  child: child,
-                ),
-              ),
-            );
-          },
-          child: Semantics(
-            label: label,
-            button: true,
-            selected: selected,
-            enabled: enabled,
-            onTap: enabled ? () => onSelect(choice) : null,
-            child: Actions(
-              actions: <Type, Action<Intent>>{
-                ActivateIntent: CallbackAction<ActivateIntent>(
-                  onInvoke: (_) {
-                    if (enabled) onSelect(choice);
-                    return null;
-                  },
-                ),
-              },
-              child: Focus(
-                child: GestureDetector(
-                  onTap: enabled
-                      ? () {
-                          unawaited(HapticFeedback.selectionClick());
-                          onSelect(choice);
-                        }
-                      : null,
-                  child: AnimatedContainer(
-                    duration: FormTokens.quick,
-                    curve: FormTokens.easeOut,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: saved
-                            ? FormTokens.green
-                            : selected
-                            ? colors.ink
-                            : const Color(0xCCFFFFFF),
-                        width: selected || saved ? 3 : 2,
-                      ),
-                      color: saved
-                          ? FormTokens.green.withValues(alpha: 0.4)
-                          : selected
-                          ? colors.ink.withValues(alpha: 0.26)
-                          : const Color(0x00000000),
-                      boxShadow: const [
-                        BoxShadow(color: Color(0x66263329)),
-                      ],
-                    ),
-                    child: Center(
-                      child: AnimatedScale(
-                        scale: selected || saved ? 1.12 : 1,
-                        duration: const Duration(milliseconds: 260),
-                        curve: FormTokens.pop,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: saved
-                                ? FormTokens.green
-                                : FormTokens.surface,
-                            shape: BoxShape.circle,
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x30000000),
-                                blurRadius: 10,
-                              ),
-                            ],
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(6),
-                            child: Icon(
-                              saved ? Icons.check : _categoryIcon(theme),
-                              size: 14,
-                              color: saved ? Colors.white : colors.ink,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+          builder: (context, constraints) => ClipRect(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                image,
+                _Spotlight(
+                  rect: focused?.proposal!.boundingBox.pixels(
+                    constraints.biggest,
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
       ),
     );
   }
+}
+
+/// Dims the photo around one piece. Moves between pieces and fades out
+/// once [rect] is null.
+class _Spotlight extends StatefulWidget {
+  const _Spotlight({required this.rect});
+
+  final Rect? rect;
+
+  @override
+  State<_Spotlight> createState() => _SpotlightState();
+}
+
+class _SpotlightState extends State<_Spotlight> {
+  late Rect? _last = widget.rect;
+
+  @override
+  void didUpdateWidget(_Spotlight oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _last = widget.rect ?? _last;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final last = _last;
+    final still = MediaQuery.disableAnimationsOf(context);
+    return IgnorePointer(
+      child: AnimatedOpacity(
+        opacity: widget.rect == null ? 0 : 1,
+        duration: still ? Duration.zero : FormTokens.sheetDuration,
+        curve: FormTokens.easeOut,
+        child: last == null
+            ? const SizedBox.expand()
+            : TweenAnimationBuilder<Rect?>(
+                tween: RectTween(end: last),
+                duration: still
+                    ? Duration.zero
+                    : const Duration(milliseconds: 320),
+                curve: FormTokens.easeOut,
+                builder: (context, rect, _) => CustomPaint(
+                  size: Size.infinite,
+                  painter: _SpotlightPainter(rect!),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _SpotlightPainter extends CustomPainter {
+  const _SpotlightPainter(this.rect);
+
+  final Rect rect;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final hole = RRect.fromRectAndRadius(
+      rect.inflate(6),
+      const Radius.circular(14),
+    );
+    canvas
+      ..drawPath(
+        Path.combine(
+          PathOperation.difference,
+          Path()..addRect(Offset.zero & size),
+          Path()..addRRect(hole),
+        ),
+        Paint()..color = const Color(0x8C263329),
+      )
+      ..drawRRect(
+        hole,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..color = Colors.white,
+      );
+  }
+
+  @override
+  bool shouldRepaint(_SpotlightPainter oldDelegate) => oldDelegate.rect != rect;
+}
+
+/// Fades the ends of a horizontal list where more content is scrolled away.
+class _EdgeFade extends StatefulWidget {
+  const _EdgeFade({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_EdgeFade> createState() => _EdgeFadeState();
+}
+
+class _EdgeFadeState extends State<_EdgeFade> {
+  static const _width = 28.0;
+  bool _start = false;
+  bool _end = false;
+
+  bool _update(ScrollMetrics metrics) {
+    final start = metrics.pixels > metrics.minScrollExtent + 1;
+    final end = metrics.pixels < metrics.maxScrollExtent - 1;
+    if (start != _start || end != _end) {
+      setState(() {
+        _start = start;
+        _end = end;
+      });
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      NotificationListener<ScrollMetricsNotification>(
+        onNotification: (n) => _update(n.metrics),
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (n) => _update(n.metrics),
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (bounds) {
+              final stop = _width / bounds.width;
+              return LinearGradient(
+                colors: [
+                  if (_start) Colors.transparent else Colors.white,
+                  Colors.white,
+                  Colors.white,
+                  if (_end) Colors.transparent else Colors.white,
+                ],
+                stops: [0, stop, 1 - stop, 1],
+              ).createShader(bounds);
+            },
+            child: widget.child,
+          ),
+        ),
+      );
 }
 
 class ManualIntakeForm extends StatefulWidget {
