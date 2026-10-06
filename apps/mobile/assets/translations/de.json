@@ -650,12 +650,12 @@
   "photosOfYouEmpty": "Damit Looks an dir aussehen wie du.",
   "composerProposeAction": "Outfits vorschlagen",
   "proposalsTitle": "Outfits auswählen",
-  "proposalsHint": "Tippe ein Teil, um es zu behalten oder wegzulassen. Links wischen für eine Variante, rechts für dein Outfit.",
+  "proposalsHint": "Wische links für eine Variante, rechts für dein Outfit.",
   "proposalsRender": "Generieren",
   "proposalsSkip": "Keiner davon",
   "proposalsDone": "Fertig",
   "proposalsFailed": "Die Planung ist fehlgeschlagen. Versuch eine neue Runde.",
-  "proposalsSkipOne": "Nächstes Outfit",
+  "proposalsSkipOne": "Andere Variante",
   "proposalsPicked": {
     "one": "Dein Outfit ist unterwegs",
     "other": "Dein Outfit ist unterwegs"
@@ -672,7 +672,7 @@
   "proposalsReasonOccasion": "Passt zu {occasion}",
   "proposalsReasonFresh": "Anders als deine letzten Looks",
   "proposalsReasonPieceFallback": "ein Stück",
-  "proposalsTapHint": "Tippe ein Stück zum Behalten oder Tauschen",
+  "proposalsTapHint": "Einmal tippen behält ein Stück, zweimal lässt es weg",
   "proposalsYourLook": "Dein Look",
   "proposalsExcluded": {
     "one": "1 aussortiert",
@@ -682,9 +682,6 @@
   "proposalsPickedBody": "Es entsteht gleich oben in deinem Feed. Mit deinen Teilen kannst du weiter stylen.",
   "proposalsNonePickedBody": "Style weiter mit deinen Teilen oder schau später wieder rein.",
   "proposalsFailedTitle": "Diesmal keine Outfits",
-  "proposalsSwap": "Weglassen",
-  "proposalsKeep": "Behalten",
-  "proposalsKept": "Behalten",
   "proposalsPlanningNext": "Nächstes Outfit wird zusammengestellt…",
   "proposalsSkipStamp": "Nächstes",
   "season": "Saison",
@@ -697,6 +694,5 @@
   "kind": "Art",
   "brandHint": "Marke hinzufügen",
   "addBrand": "Marke",
-  "removeBrand": "Marke entfernen",
-  "proposalsLeftOut": "Weggelassen"
+  "removeBrand": "Marke entfernen"
 }

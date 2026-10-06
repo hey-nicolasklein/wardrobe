@@ -650,12 +650,12 @@
   "photosOfYouEmpty": "So looks on you actually look like you.",
   "composerProposeAction": "Show outfits",
   "proposalsTitle": "Pick outfits",
-  "proposalsHint": "Tap a piece to keep it or leave it out. Swipe left for a variation, right for your outfit.",
+  "proposalsHint": "Swipe left for another take, right for your outfit.",
   "proposalsRender": "Generate",
   "proposalsSkip": "None of these",
   "proposalsDone": "Done",
   "proposalsFailed": "Planning failed. Try a new round.",
-  "proposalsSkipOne": "Next outfit",
+  "proposalsSkipOne": "Another take",
   "proposalsPicked": {
     "one": "Your outfit is on its way",
     "other": "Your outfit is on its way"
@@ -672,7 +672,7 @@
   "proposalsReasonOccasion": "Fits {occasion}",
   "proposalsReasonFresh": "Unlike your last looks",
   "proposalsReasonPieceFallback": "a piece",
-  "proposalsTapHint": "Tap a piece to keep or swap it",
+  "proposalsTapHint": "Tap a piece once to keep it, twice to leave it out",
   "proposalsYourLook": "Your look",
   "proposalsExcluded": {
     "one": "1 ruled out",
@@ -682,9 +682,6 @@
   "proposalsPickedBody": "It develops at the top of your feed in a moment. Keep styling with your pieces if you like.",
   "proposalsNonePickedBody": "Keep styling with your pieces, or check back later.",
   "proposalsFailedTitle": "No outfits this time",
-  "proposalsSwap": "Leave out",
-  "proposalsKeep": "Keep",
-  "proposalsKept": "Kept",
   "proposalsPlanningNext": "Putting the next outfit together…",
   "proposalsSkipStamp": "Next",
   "season": "Season",
@@ -697,6 +694,5 @@
   "kind": "Type",
   "brandHint": "Add brand",
   "addBrand": "Brand",
-  "removeBrand": "Remove brand",
-  "proposalsLeftOut": "Left out"
+  "removeBrand": "Remove brand"
 }

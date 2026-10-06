@@ -182,4 +182,22 @@ void main() {
     expect(cubit.state.marks.keys, {'jacket', 'pants'});
     expect(cubit.state.picked, isEmpty);
   });
+  test(
+    'tapping a piece keeps it, then leaves it out, then clears it',
+    () async {
+      final cubit = LookProposalsCubit(looks, quality: 'low');
+      addTearDown(cubit.close);
+      await cubit.refresh();
+      await cubit.cycle('shoes', onLookId: 'look-a');
+      expect(cubit.state.marks['shoes'], PieceMark.keep);
+      await cubit.cycle('shoes', onLookId: 'look-a');
+      expect(cubit.state.marks['shoes'], PieceMark.exclude);
+      await cubit.cycle('shoes', onLookId: 'look-a');
+      expect(cubit.state.marks.containsKey('shoes'), isFalse);
+      expect(adjustBodies.map((body) => body['excludeItemIds']), [
+        <String>[],
+        ['shoes'],
+      ]);
+    },
+  );
 }

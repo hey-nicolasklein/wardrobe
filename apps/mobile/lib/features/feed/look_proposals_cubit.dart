@@ -154,6 +154,15 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
   Future<void> swap(String itemId, {String? onLookId}) =>
       _mark(itemId, PieceMark.exclude, onLookId);
 
+  /// A tap on a piece: the first keeps it, the second leaves it out, the
+  /// third drops the mark again.
+  Future<void> cycle(String itemId, {String? onLookId}) =>
+      switch (state.marks[itemId]) {
+        null => keep(itemId, onLookId: onLookId),
+        PieceMark.keep => swap(itemId, onLookId: onLookId),
+        PieceMark.exclude => Future.sync(() => unmark(itemId)),
+      };
+
   /// Drops a mark. Outfits already adjusted stay as they are.
   void unmark(String itemId) =>
       emit(state.copyWith(marks: {...state.marks}..remove(itemId)));

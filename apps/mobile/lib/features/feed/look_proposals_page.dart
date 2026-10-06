@@ -57,11 +57,7 @@ class _ProposalsView extends StatefulWidget {
 class _ProposalsViewState extends State<_ProposalsView> {
   final _deck = GlobalKey<_SwipeDeckState>();
 
-  /// The piece on the top card whose actions are open.
-  String? _selected;
-
   void _decide(Look look, {required bool pick}) {
-    setState(() => _selected = null);
     final cubit = context.read<LookProposalsCubit>();
     if (pick) {
       unawaited(HapticFeedback.mediumImpact());
@@ -84,8 +80,13 @@ class _ProposalsViewState extends State<_ProposalsView> {
     final online = !wardrobe.stale;
     final deck = state.deck;
     final topReady = deck.firstOrNull?.state == 'proposed';
+    // The occasion the outfits are planned for heads the sheet.
+    final occasion = occasionPresets
+        .where((preset) => preset.value != null)
+        .where((preset) => preset.value == cubit.request?['occasion'])
+        .firstOrNull;
     return FormSheet(
-      title: context.tr(LocaleKeys.proposalsTitle),
+      title: context.tr(occasion?.label ?? LocaleKeys.proposalsTitle),
       scrollable: false,
       footer: state.finished
           ? _FinishedActions(
@@ -138,32 +139,19 @@ class _ProposalsViewState extends State<_ProposalsView> {
                                       online: online,
                                       marks: state.marks,
                                       // Only the top card takes taps.
-                                      selectedId: look == deck.first
-                                          ? _selected
+                                      onPieceTap: look == deck.first
+                                          ? (id) {
+                                              unawaited(
+                                                HapticFeedback.selectionClick(),
+                                              );
+                                              unawaited(
+                                                cubit.cycle(
+                                                  id,
+                                                  onLookId: look.id,
+                                                ),
+                                              );
+                                            }
                                           : null,
-                                      onPieceTap: (id) => setState(
-                                        () => _selected = _selected == id
-                                            ? null
-                                            : id,
-                                      ),
-                                      onKeep: (id) {
-                                        unawaited(
-                                          HapticFeedback.mediumImpact(),
-                                        );
-                                        setState(() => _selected = null);
-                                        unawaited(
-                                          cubit.keep(id, onLookId: look.id),
-                                        );
-                                      },
-                                      onSwap: (id) {
-                                        unawaited(
-                                          HapticFeedback.lightImpact(),
-                                        );
-                                        setState(() => _selected = null);
-                                        unawaited(
-                                          cubit.swap(id, onLookId: look.id),
-                                        );
-                                      },
                                     )
                                   : _PlanningCard(
                                       building: state.kept.isNotEmpty,
@@ -570,20 +558,16 @@ class _ProposalCard extends StatelessWidget {
     required this.itemsById,
     required this.online,
     required this.marks,
-    required this.selectedId,
     required this.onPieceTap,
-    required this.onKeep,
-    required this.onSwap,
   });
 
   final Look look;
   final Map<String, WardrobeItem> itemsById;
   final bool online;
   final Map<String, PieceMark> marks;
-  final String? selectedId;
-  final ValueChanged<String> onPieceTap;
-  final ValueChanged<String> onKeep;
-  final ValueChanged<String> onSwap;
+
+  /// Null on cards below the top one.
+  final ValueChanged<String>? onPieceTap;
 
   @override
   Widget build(BuildContext context) {
@@ -591,9 +575,6 @@ class _ProposalCard extends StatelessWidget {
       for (final reason in look.reasons ?? const <LookReason>[])
         ?_reasonChip(context, reason, itemsById),
     ];
-    final selected = look.wardrobeItemIds.contains(selectedId)
-        ? selectedId
-        : null;
     return _CardSurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -603,13 +584,9 @@ class _ProposalCard extends StatelessWidget {
               child: FlatLayBoard(
                 garments: lookGarments(look, itemsById),
                 online: online,
-                selectedId: selected,
                 // New and swapped-in pieces drop onto the card.
                 arrive: true,
-                onGarmentTap: (id) {
-                  unawaited(HapticFeedback.selectionClick());
-                  onPieceTap(id);
-                },
+                onGarmentTap: onPieceTap,
                 imageBuilder: (item) => _MarkedPiece(
                   kept: marks[item.id] == PieceMark.keep,
                   leftOut: marks[item.id] == PieceMark.exclude,
@@ -622,107 +599,19 @@ class _ProposalCard extends StatelessWidget {
               ),
             ),
           ),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: SizeTransition(sizeFactor: animation, child: child),
-            ),
-            child: selected == null
-                ? Column(
-                    key: const ValueKey('reasons'),
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        context.tr(LocaleKeys.proposalsTapHint),
-                        textAlign: TextAlign.center,
-                        style: FormTokens.small,
-                      ),
-                      if (reasons.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        Wrap(spacing: 6, runSpacing: 6, children: reasons),
-                      ],
-                    ],
-                  )
-                : _PieceActions(
-                    key: ValueKey(selected),
-                    name: itemsById[selected]?.metadata.name ?? '',
-                    kept: marks[selected] == PieceMark.keep,
-                    leftOut: marks[selected] == PieceMark.exclude,
-                    onKeep: () => onKeep(selected),
-                    onSwap: () => onSwap(selected),
-                  ),
+          Text(
+            context.tr(LocaleKeys.proposalsTapHint),
+            textAlign: TextAlign.center,
+            style: FormTokens.small,
           ),
+          if (reasons.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(spacing: 6, runSpacing: 6, children: reasons),
+          ],
         ],
       ),
     );
   }
-}
-
-/// What can happen to the selected piece: keep it for the next outfits, or
-/// leave it out of them. This card stays as it is either way.
-class _PieceActions extends StatelessWidget {
-  const _PieceActions({
-    required this.name,
-    required this.kept,
-    required this.leftOut,
-    required this.onKeep,
-    required this.onSwap,
-    super.key,
-  });
-
-  final String name;
-  final bool kept;
-  final bool leftOut;
-  final VoidCallback onKeep;
-  final VoidCallback onSwap;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Text(
-        name,
-        textAlign: TextAlign.center,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: FormTokens.small.copyWith(
-          color: FormTokens.ink,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      const SizedBox(height: 10),
-      Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: leftOut ? null : onSwap,
-              icon: const Icon(Icons.remove_circle_outline, size: 18),
-              label: Text(
-                context.tr(
-                  leftOut
-                      ? LocaleKeys.proposalsLeftOut
-                      : LocaleKeys.proposalsSwap,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: kept ? null : onKeep,
-              icon: const Icon(Icons.push_pin_outlined, size: 18),
-              label: Text(
-                context.tr(
-                  kept ? LocaleKeys.proposalsKept : LocaleKeys.proposalsKeep,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ],
-  );
 }
 
 /// A piece the user kept gets a pin badge. One left out fades back: it stays
@@ -968,7 +857,7 @@ class _DeckActions extends StatelessWidget {
       TextButton.icon(
         onPressed: enabled ? onSkip : null,
         style: TextButton.styleFrom(foregroundColor: FormTokens.muted),
-        icon: const Icon(Icons.arrow_back, size: 18),
+        icon: const Icon(Icons.refresh, size: 18),
         label: Text(context.tr(LocaleKeys.proposalsSkipOne)),
       ),
       const SizedBox(width: 8),
