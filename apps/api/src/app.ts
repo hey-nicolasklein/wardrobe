@@ -46,6 +46,7 @@ import {
   signInWithIdentity,
   type AuthenticatedAccount,
   type IdentityTokenVerifier,
+  type OutfitRanker,
   completeSourceUpload,
   createSession,
   createSourceUploadIntent,
@@ -101,6 +102,7 @@ import { cors } from 'hono/cors';
 import { Hono, type Context } from 'hono';
 
 import { RateLimiter } from './rate-limit.js';
+import { traceProposals } from './tracing.js';
 
 export type ReadinessCheck = () => Promise<DependencyHealth>;
 
@@ -114,6 +116,7 @@ export type AppDependencies = {
   webOrigin?: string;
   publicOrigin?: string;
   detectionModel?: string;
+  outfitRanker?: OutfitRanker;
   identityVerifier?: IdentityTokenVerifier;
   // Enables POST /v1/auth/dev, which signs in any email without a password.
   // Local development only.
@@ -1126,7 +1129,13 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       );
     try {
       return context.json(
-        await proposeLooks(database, { accountId: authenticated.session.id, ...parsed.data }),
+        await traceProposals(authenticated.session.id, parsed.data, () =>
+          proposeLooks(
+            database,
+            { accountId: authenticated.session.id, ...parsed.data },
+            resolved.outfitRanker,
+          ),
+        ),
         202,
       );
     } catch (error) {

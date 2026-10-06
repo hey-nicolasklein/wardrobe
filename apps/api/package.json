@@ -15,6 +15,9 @@
     "@form/contracts": "*",
     "@form/service": "*",
     "@hono/node-server": "^2.0.11",
+    "@langfuse/otel": "^5.11.1",
+    "@langfuse/tracing": "^5.11.1",
+    "@opentelemetry/sdk-node": "^0.222.0",
     "hono": "^4.7.0",
     "zod": "^4.4.3"
   },
