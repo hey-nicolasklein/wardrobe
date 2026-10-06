@@ -41,6 +41,7 @@
   "archive": "Archive",
   "refresh": "Refresh",
   "wardrobeStale": "Cached content · read-only while offline",
+  "wardrobeOffline": "Server unavailable · read-only while offline",
   "wardrobeRefreshFailed": "Refresh failed. Cached items remain available.",
   "itemCount": "{shown} of {total} items",
   "search": "Search",

@@ -45,6 +45,7 @@ abstract class LocaleKeys {
   static const archive = 'archive';
   static const refresh = 'refresh';
   static const wardrobeStale = 'wardrobeStale';
+  static const wardrobeOffline = 'wardrobeOffline';
   static const wardrobeRefreshFailed = 'wardrobeRefreshFailed';
   static const itemCount = 'itemCount';
   static const search = 'search';

@@ -204,19 +204,12 @@ class _WardrobePageState extends State<WardrobePage> {
                           FormWordmark(
                             title: context.tr(LocaleKeys.appName),
                           ),
-                          if (state.stale && state.items != null)
+                          if (state.noticeKey case final notice?)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: FormNotice(
-                                text: context.tr(LocaleKeys.wardrobeStale),
-                              ),
-                            ),
-                          if (state.failure != null)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: FormNotice(
-                                text: context.tr(state.failureKey),
-                                error: true,
+                                text: context.tr(notice),
+                                error: state.failure != null,
                               ),
                             ),
                           _WardrobeHero(

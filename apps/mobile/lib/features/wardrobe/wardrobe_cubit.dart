@@ -25,6 +25,15 @@ class WardrobeState {
     ApiFailure.rejected => LocaleKeys.rejected,
     ApiFailure.unavailable || null => LocaleKeys.unavailable,
   };
+
+  // The single notice above the grid. Cached pieces the server can't
+  // refresh read as one message instead of a stale and an error notice.
+  String? get noticeKey => switch ((stale && items != null, failure)) {
+    (true, ApiFailure.unavailable) => LocaleKeys.wardrobeOffline,
+    (true, null) => LocaleKeys.wardrobeStale,
+    (_, null) => null,
+    _ => failureKey,
+  };
 }
 
 class WardrobeCubit extends Cubit<WardrobeState> {

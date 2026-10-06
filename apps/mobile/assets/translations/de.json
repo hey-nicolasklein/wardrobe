@@ -41,6 +41,7 @@
   "archive": "Archiv",
   "refresh": "Aktualisieren",
   "wardrobeStale": "Gespeicherter Stand · offline nur lesbar",
+  "wardrobeOffline": "Server nicht erreichbar · offline nur lesbar",
   "wardrobeRefreshFailed": "Aktualisierung fehlgeschlagen. Gespeicherte Stücke bleiben verfügbar.",
   "itemCount": "{shown} von {total} Stücken",
   "search": "Suchen",
