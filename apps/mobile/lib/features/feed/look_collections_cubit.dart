@@ -39,6 +39,28 @@ class LookCollectionsCubit extends Cubit<List<LookCollection>> {
     return collection;
   }
 
+  Future<void> rename(
+    String collectionId, {
+    required String name,
+    required String emoji,
+  }) async {
+    await repository.update(collectionId, name: name, emoji: emoji);
+    if (!isClosed) {
+      emit([
+        for (final c in state)
+          c.id == collectionId
+              ? LookCollection(
+                  id: c.id,
+                  name: name,
+                  emoji: emoji,
+                  lookIds: c.lookIds,
+                )
+              : c,
+      ]);
+    }
+    await repository.remember(state);
+  }
+
   Future<void> remove(String collectionId) async {
     final before = state;
     emit([

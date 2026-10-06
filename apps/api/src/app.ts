@@ -43,6 +43,7 @@ import {
 import {
   ActiveJobLimitError,
   createLookCollection,
+  updateLookCollection,
   deleteLookCollection,
   listLookCollections,
   setLookInCollection,
@@ -1286,6 +1287,31 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       await createLookCollection(database, { accountId: authenticated.session.id, ...parsed.data }),
       201,
     );
+  });
+
+  app.patch('/v1/look-collections/:collectionId', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    const parsed = createLookCollectionRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success)
+      return context.json(errorPayload('validation', 'invalid-collection', 'Send a name and an emoji.'), 400);
+    try {
+      return context.json(
+        await updateLookCollection(database, {
+          accountId: authenticated.session.id,
+          collectionId: context.req.param('collectionId'),
+          ...parsed.data,
+        }),
+      );
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
   });
 
   app.delete('/v1/look-collections/:collectionId', async (context) => {

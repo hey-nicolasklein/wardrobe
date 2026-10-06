@@ -717,5 +717,8 @@
   "collectionIdeaDate": "Date",
   "collectionIdeaWedding": "Wedding",
   "collectionIdeaWeekend": "Weekend",
-  "collectionEmpty": "Still empty. Add looks with “Add to collection”."
+  "collectionEmpty": "Still empty. Add looks with “Add to collection”.",
+  "collectionEdit": "Edit collection",
+  "collectionSave": "Save",
+  "collectionHoldHint": "Hold a collection to rename it."
 }

@@ -518,7 +518,7 @@ class FeedPage extends StatelessWidget {
       .firstOrNull;
 
   /// A Sammlung on the overview. Empty ones show their emoji and wait for
-  /// looks. Holding one offers to delete it.
+  /// looks. Holding one opens it to rename or delete.
   Widget _collectionStack(
     BuildContext context,
     FeedState state,
@@ -529,7 +529,10 @@ class FeedPage extends StatelessWidget {
   }) {
     final title = '${collection.emoji} ${collection.name}';
     return GestureDetector(
-      onLongPress: () => confirmRemoveCollection(context, collection),
+      onLongPress: () {
+        unawaited(HapticFeedback.mediumImpact());
+        unawaited(showCollectionSheet(context, edit: collection));
+      },
       child: StackPressable(
         index: index,
         semanticLabel: title,
@@ -541,26 +544,13 @@ class FeedPage extends StatelessWidget {
           looks.length,
           looks.isEmpty
               ? _EmptyCollection(emoji: collection.emoji, spread: spread)
-              : Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    PhotoFan(
-                      looks: looks,
-                      online: state.online,
-                      photoSize: const Size(80, 100),
-                      spread: spread,
-                      angle: 0.14,
-                      offset: 0.34,
-                    ),
-                    Positioned(
-                      right: -6,
-                      bottom: -6,
-                      child: Text(
-                        collection.emoji,
-                        style: const TextStyle(fontSize: 26),
-                      ),
-                    ),
-                  ],
+              : PhotoFan(
+                  looks: looks,
+                  online: state.online,
+                  photoSize: const Size(80, 100),
+                  spread: spread,
+                  angle: 0.14,
+                  offset: 0.34,
                 ),
         ),
       ),
@@ -1555,23 +1545,19 @@ class _StackPageState extends State<_StackPage> {
                           :final collectionId,
                         ))
                           IconButton(
-                            tooltip: context.tr(LocaleKeys.collectionRemove),
-                            onPressed: () async {
+                            tooltip: context.tr(LocaleKeys.collectionEdit),
+                            onPressed: () {
                               final collection = FeedPage._collection(
                                 context,
                                 collectionId,
                               );
                               if (collection == null) return;
-                              final removed = await confirmRemoveCollection(
-                                context,
-                                collection,
+                              unawaited(
+                                showCollectionSheet(context, edit: collection),
                               );
-                              if (removed && context.mounted) {
-                                Navigator.of(context).pop();
-                              }
                             },
                             icon: const Icon(
-                              Icons.delete_outline,
+                              Icons.edit_outlined,
                               color: FormTokens.ink,
                             ),
                           ),

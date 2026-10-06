@@ -96,6 +96,16 @@ class LookCollectionRepository {
     ),
   );
 
+  Future<void> update(
+    String collectionId, {
+    required String name,
+    required String emoji,
+  }) => _request(
+    'v1/look-collections/$collectionId',
+    method: 'PATCH',
+    data: {'name': name, 'emoji': emoji},
+  );
+
   Future<void> delete(String collectionId) =>
       _request('v1/look-collections/$collectionId', method: 'DELETE');
 

@@ -688,4 +688,7 @@ abstract class LocaleKeys {
   static const collectionIdeaWedding = 'collectionIdeaWedding';
   static const collectionIdeaWeekend = 'collectionIdeaWeekend';
   static const collectionEmpty = 'collectionEmpty';
+  static const collectionEdit = 'collectionEdit';
+  static const collectionSave = 'collectionSave';
+  static const collectionHoldHint = 'collectionHoldHint';
 }

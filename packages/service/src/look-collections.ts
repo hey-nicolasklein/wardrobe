@@ -47,6 +47,19 @@ export async function createLookCollection(
   return { id, name: input.name, emoji: input.emoji, createdAt: result.rows[0]!.created_at.toISOString(), lookIds: [] };
 }
 
+/** Renames a Sammlung or gives it another emoji. */
+export async function updateLookCollection(
+  database: Database,
+  input: { accountId: string; collectionId: string; name: string; emoji: string },
+) {
+  const result = await database.query(
+    `UPDATE look_collections SET name = $3, emoji = $4 WHERE id = $1 AND account_id = $2`,
+    [input.collectionId, input.accountId, input.name, input.emoji],
+  );
+  if (!result.rowCount) throw new OwnedResourceNotFoundError();
+  return { name: input.name, emoji: input.emoji };
+}
+
 /** Removes a Sammlung. Its looks stay in the feed. */
 export async function deleteLookCollection(database: Database, input: { accountId: string; collectionId: string }) {
   const result = await database.query(`DELETE FROM look_collections WHERE id = $1 AND account_id = $2`, [

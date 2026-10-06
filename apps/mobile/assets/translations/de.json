@@ -717,5 +717,8 @@
   "collectionIdeaDate": "Date",
   "collectionIdeaWedding": "Hochzeit",
   "collectionIdeaWeekend": "Wochenende",
-  "collectionEmpty": "Noch leer. Leg Looks mit „Zur Sammlung“ hinein."
+  "collectionEmpty": "Noch leer. Leg Looks mit „Zur Sammlung“ hinein.",
+  "collectionEdit": "Sammlung bearbeiten",
+  "collectionSave": "Speichern",
+  "collectionHoldHint": "Halte eine Sammlung gedrückt, um sie umzubenennen."
 }

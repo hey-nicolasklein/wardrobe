@@ -48,6 +48,7 @@ import {
   setShotHidden,
   setLookLiked,
   createLookCollection,
+  updateLookCollection,
   deleteLookCollection,
   listLookCollections,
   setLookInCollection,
@@ -569,6 +570,12 @@ test('looks can be filed into Sammlungen, which can be removed again', { skip: !
         lookId,
         included: true,
       }),
+    );
+
+    await updateLookCollection(database, { accountId, collectionId: trip.id, name: 'Sommer', emoji: '☀️' });
+    assert.equal((await listLookCollections(database, accountId))[0]!.name, 'Sommer');
+    await assert.rejects(
+      updateLookCollection(database, { accountId: fixtureIds.emptyAccount, collectionId: trip.id, name: 'x', emoji: 'x' }),
     );
 
     await setLookInCollection(database, { accountId, collectionId: trip.id, lookId, included: false });
