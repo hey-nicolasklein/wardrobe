@@ -43,7 +43,14 @@ class LookProposalsPage extends StatelessWidget {
       quality: quality,
       request: request,
     ),
-    child: const _ProposalsView(),
+    // The sheet sits above the shell's Scaffold, so its undo toasts need a
+    // messenger of their own to show on top.
+    child: const ScaffoldMessenger(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: _ProposalsView(),
+      ),
+    ),
   );
 }
 
@@ -62,10 +69,31 @@ class _ProposalsViewState extends State<_ProposalsView> {
     if (pick) {
       unawaited(HapticFeedback.mediumImpact());
       unawaited(cubit.pick(look.id));
+      showFormToast(
+        context,
+        context.tr(LocaleKeys.proposalsPickedToast),
+        action: context.tr(LocaleKeys.proposalsUndo),
+        onAction: cubit.undoPick,
+        duration: cubit.undoWindow,
+      );
     } else {
       unawaited(HapticFeedback.selectionClick());
       cubit.skip(look.id);
     }
+  }
+
+  /// Drops a mark from "Dein Look" and offers it back.
+  void _unmark(String itemId, String name) {
+    final cubit = context.read<LookProposalsCubit>();
+    final mark = cubit.state.marks[itemId];
+    if (mark == null) return;
+    cubit.unmark(itemId);
+    showFormToast(
+      context,
+      context.tr(LocaleKeys.proposalsMarkRemoved, namedArgs: {'name': name}),
+      action: context.tr(LocaleKeys.proposalsUndo),
+      onAction: () => cubit.restoreMark(itemId, mark),
+    );
   }
 
   @override
@@ -115,7 +143,7 @@ class _ProposalsViewState extends State<_ProposalsView> {
                       marks: state.marks,
                       itemsById: itemsById,
                       online: online,
-                      onTap: cubit.unmark,
+                      onTap: _unmark,
                     ),
                     if (state.failure != null) ...[
                       const SizedBox(height: 10),
@@ -179,7 +207,7 @@ class _YourLook extends StatelessWidget {
   final Map<String, PieceMark> marks;
   final Map<String, WardrobeItem> itemsById;
   final bool online;
-  final ValueChanged<String> onTap;
+  final void Function(String itemId, String name) onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -219,7 +247,10 @@ class _YourLook extends StatelessWidget {
                               item: entry.item,
                               kept: entry.mark == PieceMark.keep,
                               online: online,
-                              onTap: () => onTap(entry.item.id),
+                              onTap: () => onTap(
+                                entry.item.id,
+                                entry.item.metadata.name,
+                              ),
                             ),
                         ],
                       ),
@@ -255,7 +286,13 @@ class _MarkThumb extends StatelessWidget {
         Transform.scale(scale: value, child: child),
     child: Semantics(
       button: true,
-      label: item.metadata.name,
+      label: context.tr(
+        kept
+            ? LocaleKeys.proposalsMarkKeptLabel
+            : LocaleKeys.proposalsMarkExcludedLabel,
+        namedArgs: {'name': item.metadata.name},
+      ),
+      excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,
         child: Padding(

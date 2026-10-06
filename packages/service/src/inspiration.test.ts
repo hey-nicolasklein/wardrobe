@@ -14,7 +14,7 @@ import { similarOutfit } from './look-proposals.js';
 
 const candidates = [
   ['top-one', 'top'], ['top-two', 'top'], ['jacket-one', 'jacket'], ['jacket-two', 'jacket'],
-  ['pants', 'pants'], ['skirt', 'skirt'], ['dress', 'dress'], ['bag', 'bag'],
+  ['pants', 'pants'], ['skirt', 'skirt'], ['dress', 'dress'], ['bag', 'bag'], ['coat', 'coat'],
 ] as const;
 
 test('automatic look plans keep one garment per outfit slot', () => {
@@ -30,6 +30,11 @@ test('automatic look plans keep one garment per outfit slot', () => {
   assert.deepEqual(
     normalizeAutomaticLookItems(['top-one', 'jacket-one', 'dress', 'pants'], items, []),
     ['jacket-one', 'dress'],
+  );
+  // A coat and a jacket are both the outer layer.
+  assert.deepEqual(
+    normalizeAutomaticLookItems(['top-one', 'coat', 'jacket-one', 'pants'], items, []),
+    ['top-one', 'coat', 'pants'],
   );
 });
 

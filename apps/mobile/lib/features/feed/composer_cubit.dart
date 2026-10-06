@@ -32,7 +32,7 @@ const lookCompletions = ['wardrobe', 'model', 'selected'];
 /// full-body photo. Bags and accessories fit any zone.
 bool canFrameOnly(Iterable<String> categories) {
   bool has(Set<String> wanted) => categories.any(wanted.contains);
-  final upper = has(const {'top', 'jacket', 'hat', 'scarf'});
+  final upper = has(const {'top', 'jacket', 'coat', 'hat', 'scarf'});
   final lowerOrShoes = has(const {'pants', 'skirt', 'shoes'});
   return !has(const {'dress'}) && !(upper && lowerOrShoes);
 }

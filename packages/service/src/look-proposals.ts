@@ -3,7 +3,7 @@ import type { LookReason } from '@form/contracts';
 import type { Warmth } from './catalog-provider.js';
 
 // Pieces that can carry an outfit. Accessories make weak anchors.
-const anchorCategories = new Set(['top', 'dress', 'pants', 'skirt', 'jacket', 'shoes']);
+const anchorCategories = new Set(['top', 'dress', 'pants', 'skirt', 'jacket', 'coat', 'shoes']);
 // Slots a dress fills, so a dress and these never anchor next to each other.
 const dressSlots = new Set(['dress', 'top', 'pants', 'skirt']);
 const newPieceDays = 14;
@@ -76,9 +76,13 @@ export type OutfitPiece = { id: string; category: string; warmth?: Warmth | null
 const lowerSlots = new Set(['pants', 'skirt']);
 
 /** Whether two pieces would fill the same place in an outfit. */
+// Jackets and coats are both the outer layer; an outfit wears one of them.
+const outerSlots = new Set(['jacket', 'coat']);
+
 function sameSlot(a: string, b: string) {
   if (a === b) return true;
   if (lowerSlots.has(a) && lowerSlots.has(b)) return true;
+  if (outerSlots.has(a) && outerSlots.has(b)) return true;
   if (a === 'dress') return dressSlots.has(b);
   if (b === 'dress') return dressSlots.has(a);
   return false;
@@ -151,7 +155,7 @@ const optionalExtras = ['bag', 'hat', 'scarf', 'accessory'];
 /**
  * Samples distinct outfit candidates from the closet without a model: each
  * starts from the user's exact pieces and an anchor (see pickAnchor), fills
- * the core slots, shoes and maybe a jacket and one extra, and never mixes
+ * the core slots, shoes and maybe a jacket or coat and one extra, and never mixes
  * warm with light pieces. Less worn pieces are likelier at every step.
  * A ranker then picks the best of them, see pickProposals.
  */
@@ -208,8 +212,8 @@ export function buildOutfits(input: {
     }
     if (!has('shoes')) add('shoes');
     const season = new Set(outfit.map((piece) => piece.warmth));
-    const jacketOdds = season.has('warm') ? 0.9 : season.has('light') ? 0.15 : 0.5;
-    if (!has('jacket') && random() < jacketOdds) add('jacket');
+    const outerOdds = season.has('warm') ? 0.9 : season.has('light') ? 0.15 : 0.5;
+    if (!has('jacket', 'coat') && random() < outerOdds) add('jacket', 'coat');
     if (!has(...optionalExtras) && random() < 0.35) add(...optionalExtras);
     const itemIds = outfit.map((piece) => piece.id);
     const key = [...itemIds].sort().join(',');

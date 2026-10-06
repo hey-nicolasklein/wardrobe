@@ -6,6 +6,7 @@ part 'wardrobe.g.dart';
 const supportedCategories = [
   'top',
   'jacket',
+  'coat',
   'pants',
   'skirt',
   'dress',

@@ -280,6 +280,7 @@ class _FittingRoomCardState extends State<FittingRoomCard> {
 }
 
 const _headlineOrder = [
+  'coat',
   'jacket',
   'dress',
   'top',

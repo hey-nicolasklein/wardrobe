@@ -83,6 +83,7 @@ abstract class LocaleKeys {
   static const generationExplanation = 'generationExplanation';
   static const categories_top = 'categories.top';
   static const categories_jacket = 'categories.jacket';
+  static const categories_coat = 'categories.coat';
   static const categories_pants = 'categories.pants';
   static const categories_skirt = 'categories.skirt';
   static const categories_dress = 'categories.dress';

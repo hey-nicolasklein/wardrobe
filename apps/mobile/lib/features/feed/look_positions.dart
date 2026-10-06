@@ -26,6 +26,7 @@ const _lookBodyRegions = <String, List<double>>{
   'accessory': [38, 12, 24, 10],
   'top': [32, 24, 36, 32],
   'jacket': [27, 22, 46, 38],
+  'coat': [27, 22, 46, 52],
   'dress': [30, 24, 40, 61],
   'bag': [57, 43, 22, 24],
   'pants': [35, 53, 30, 37],

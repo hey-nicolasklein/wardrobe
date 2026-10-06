@@ -37,9 +37,11 @@ test('combines shelf and original images into one stable side-by-side reference'
     const offset = (y * info.width + x) * info.channels;
     return Array.from(data.subarray(offset, offset + 3));
   };
-  assert.deepEqual(pixel(127, 128), [225, 20, 40]);
+  // The shelf view takes a third, the original photo two thirds.
+  assert.deepEqual(pixel(85, 128), [225, 20, 40]);
+  assert.deepEqual(pixel(170, 128), [209, 209, 204]);
+  assert.deepEqual(pixel(200, 128), [24, 59, 223]);
   assert.deepEqual(pixel(384, 128), [24, 59, 223]);
-  assert.deepEqual(pixel(255, 128), [209, 209, 204]);
 });
 
 test('writes an inspectable debug gallery without database storage', async () => {

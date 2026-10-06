@@ -19,6 +19,7 @@ export const itemStatusSchema = z.enum([
 export const supportedCategorySchema = z.enum([
   'top',
   'jacket',
+  'coat',
   'pants',
   'skirt',
   'dress',

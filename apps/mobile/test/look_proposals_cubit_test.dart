@@ -91,7 +91,11 @@ void main() {
   test(
     'swiping works through the deck and renders only picked outfits',
     () async {
-      final cubit = LookProposalsCubit(looks, quality: 'medium');
+      final cubit = LookProposalsCubit(
+        looks,
+        quality: 'medium',
+        undoWindow: Duration.zero,
+      );
       addTearDown(cubit.close);
       await cubit.refresh();
       // The failed plan never reaches the deck.
@@ -154,6 +158,7 @@ void main() {
     final cubit = LookProposalsCubit(
       looks,
       quality: 'low',
+      undoWindow: Duration.zero,
       request: {
         'exactItemIds': <String>[],
         'categories': <String>[],
@@ -181,6 +186,22 @@ void main() {
     expect(body['excludedItemIds'], ['pants']);
     expect(cubit.state.marks.keys, {'jacket', 'pants'});
     expect(cubit.state.picked, isEmpty);
+  });
+  test('an undone pick returns to the deck and never renders', () async {
+    final cubit = LookProposalsCubit(
+      looks,
+      quality: 'low',
+      undoWindow: const Duration(milliseconds: 50),
+    );
+    addTearDown(cubit.close);
+    await cubit.refresh();
+    final pick = cubit.pick('look-a');
+    expect(cubit.state.finished, isTrue);
+    cubit.undoPick();
+    await pick;
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(rendered, isEmpty);
+    expect(cubit.state.deck.first.id, 'look-a');
   });
   test(
     'tapping a piece keeps it, then leaves it out, then clears it',

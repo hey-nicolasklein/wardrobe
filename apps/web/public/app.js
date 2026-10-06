@@ -30,6 +30,7 @@ const esc = (value) =>
 const categories = {
   top: 'Oberteile',
   jacket: 'Jacken',
+  coat: 'Mäntel',
   pants: 'Hosen',
   skirt: 'Röcke',
   dress: 'Kleider',
@@ -73,7 +74,7 @@ const icon = (name) =>
 const imageGenerationProgress = (name) =>
   `<div class="wardrobe-image-progress" role="status" aria-label="Katalogbild für ${esc(name)} wird erstellt"><span class="image-generation-loader" aria-hidden="true">${Array.from({ length: 9 }, (_, index) => `<i style="--tile:${index}"></i>`).join('')}</span><span>Bild wird erstellt</span></div>`;
 const detectionCategoryTheme = (category) =>
-  ['top', 'jacket', 'dress'].includes(category)
+  ['top', 'jacket', 'coat', 'dress'].includes(category)
     ? 'top'
     : ['pants', 'skirt'].includes(category)
       ? 'bottom'
@@ -846,6 +847,7 @@ const lookBodyRegions = {
   accessory: [38, 12, 24, 10],
   top: [32, 24, 36, 32],
   jacket: [27, 22, 46, 38],
+  coat: [27, 22, 46, 52],
   dress: [30, 24, 40, 61],
   bag: [57, 43, 22, 24],
   pants: [35, 53, 30, 37],
@@ -2113,7 +2115,7 @@ function renderDetectionDraft(draft) {
     )
     .join('');
   const categoryGroups = [
-    { label: 'Oberteile', icon: 'top', categories: ['top', 'jacket', 'dress'] },
+    { label: 'Oberteile', icon: 'top', categories: ['top', 'jacket', 'coat', 'dress'] },
     { label: 'Unterteile', icon: 'bottom', categories: ['pants', 'skirt'] },
     { label: 'Schuhe', icon: 'shoes', categories: ['shoes'] },
     { label: 'Accessoires', icon: 'accessory', categories: [] },
@@ -2124,7 +2126,7 @@ function renderDetectionDraft(draft) {
       const group = detections
         .map((item, index) => ({ item, index }))
         .filter(({ item }) =>
-          groupCategories.length ? groupCategories.includes(item.category) : !['top', 'jacket', 'dress', 'pants', 'skirt', 'shoes'].includes(item.category),
+          groupCategories.length ? groupCategories.includes(item.category) : !['top', 'jacket', 'coat', 'dress', 'pants', 'skirt', 'shoes'].includes(item.category),
         );
       if (!group.length) return '';
       return `<section class="detection-group category-${groupIcon}"><h4>${icon(groupIcon)}<span>${label}</span></h4>${group

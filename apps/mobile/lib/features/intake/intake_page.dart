@@ -901,7 +901,7 @@ class _DetectionChoices extends StatelessWidget {
   final IntakeChoiceBoolCallback? onChoiceOwning;
 
   static const List<({String theme, List<String> categories})> _groups = [
-    (theme: 'top', categories: ['top', 'jacket', 'dress']),
+    (theme: 'top', categories: ['top', 'jacket', 'coat', 'dress']),
     (theme: 'bottom', categories: ['pants', 'skirt']),
     (theme: 'shoes', categories: ['shoes']),
     (theme: 'accessory', categories: <String>[]),
@@ -910,6 +910,7 @@ class _DetectionChoices extends StatelessWidget {
   static const _mainCategories = {
     'top',
     'jacket',
+    'coat',
     'dress',
     'pants',
     'skirt',
@@ -1253,7 +1254,7 @@ class _OwnershipChip extends StatelessWidget {
 }
 
 String _detectionTheme(String category) {
-  if (['top', 'jacket', 'dress'].contains(category)) return 'top';
+  if (['top', 'jacket', 'coat', 'dress'].contains(category)) return 'top';
   if (['pants', 'skirt'].contains(category)) return 'bottom';
   if (category == 'shoes') return 'shoes';
   return 'accessory';

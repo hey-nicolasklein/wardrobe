@@ -1,17 +1,19 @@
 // Coordinates use a 100 × 125 artboard. The same composition is used on screen
 // and in the downloaded image; category and ID make it independent of API order.
 const order = ['hat', 'top', 'dress', 'jacket', 'pants', 'skirt', 'scarf', 'accessory', 'bag', 'shoes'];
+// A coat lies where a jacket would: both are the outer layer.
+const kindOf = (item) => (item.metadata?.category === 'coat' ? 'jacket' : item.metadata?.category);
 export function flatLayLayout(garments) {
   const sorted = [...garments].sort((a, b) => {
     const rank = (item) => {
-      const index = order.indexOf(item.metadata?.category);
+      const index = order.indexOf(kindOf(item));
       return index < 0 ? order.length : index;
     };
     return rank(a) - rank(b) || a.id.localeCompare(b.id);
   });
   if (!sorted.length) return [];
   if (sorted.length === 1) return [{ item: sorted[0], x: 50, y: 61, size: 80, angle: -3 }];
-  const kinds = sorted.map((item) => item.metadata?.category);
+  const kinds = sorted.map(kindOf);
   // Multiple pieces of a category need their own space, not a stack that hides
   // one of the choices. Larger collections use evenly spaced editorial rows.
   if (sorted.length > 6 || new Set(kinds).size !== kinds.length ||
@@ -51,7 +53,7 @@ export function flatLayLayout(garments) {
     accessory: [15, 108, 18, -5],
   };
   return sorted.map((item, index) => {
-    const [x, y, size, angle] = templates[item.metadata?.category] || [76, 54 + index * 6, 26, 4];
+    const [x, y, size, angle] = templates[kindOf(item)] || [76, 54 + index * 6, 26, 4];
     return { item, x, y, size, angle };
   });
 }

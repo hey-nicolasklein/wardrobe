@@ -28,11 +28,15 @@ const _order = [
   'shoes',
 ];
 
+/// A coat lies where a jacket would: both are the outer layer.
+String _kindOf(WardrobeItem item) =>
+    item.metadata.category == 'coat' ? 'jacket' : item.metadata.category;
+
 List<FlatLayPlacement> flatLayLayout(List<WardrobeItem> garments) {
   final sorted = [...garments]
     ..sort((a, b) {
       int rank(WardrobeItem item) {
-        final index = _order.indexOf(item.metadata.category);
+        final index = _order.indexOf(_kindOf(item));
         return index < 0 ? _order.length : index;
       }
 
@@ -46,7 +50,7 @@ List<FlatLayPlacement> flatLayLayout(List<WardrobeItem> garments) {
       FlatLayPlacement(item: sorted.single, x: 50, y: 61, size: 80, angle: -3),
     ];
   }
-  final kinds = sorted.map((item) => item.metadata.category).toList();
+  final kinds = sorted.map(_kindOf).toList();
   final uniqueKinds = kinds.toSet();
   if (sorted.length > 6 ||
       uniqueKinds.length != kinds.length ||
@@ -120,7 +124,7 @@ List<FlatLayPlacement> flatLayLayout(List<WardrobeItem> garments) {
   return [
     for (var index = 0; index < sorted.length; index++)
       () {
-        final category = sorted[index].metadata.category;
+        final category = _kindOf(sorted[index]);
         final template = templates[category] ?? [76, 54 + index * 6.0, 26, 4];
         return FlatLayPlacement(
           item: sorted[index],

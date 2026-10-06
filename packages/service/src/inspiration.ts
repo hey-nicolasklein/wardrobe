@@ -45,8 +45,8 @@ import sharp from 'sharp';
 
 export const lookModel = 'gpt-image-2.5-flare';
 export const lookPlannerModel = 'gpt-5.4-mini';
-export const lookPromptVersion = 'real-camera-identity-v6';
-export const tryOnPromptVersion = 'try-on-v1';
+export const lookPromptVersion = 'real-camera-identity-v7';
+export const tryOnPromptVersion = 'try-on-v2';
 
 type CharacterRow = {
   id: string;
@@ -330,18 +330,20 @@ async function candidateItems(
     category: SupportedCategory;
     colors: string[];
     notes: string | null;
+    kind: string | null;
     asset_id: string;
     original_asset_id: string;
     created_at: Date;
     state: string;
   }>(
-    `SELECT i.id,i.name,i.category,i.colors,i.notes,i.created_at,i.state,
+    `SELECT i.id,i.name,i.category,i.colors,i.notes,i.created_at,i.state,t.kind,
        v.transparent_asset_id AS asset_id,
        COALESCE(a.reference_asset_id,sp.asset_id) AS original_asset_id
      FROM wardrobe_items i
      JOIN shelf_image_versions v ON v.id=i.current_shelf_image_version_id
      JOIN generation_attempts a ON a.id=v.generation_attempt_id
      JOIN source_photos sp ON sp.id=i.source_photo_id
+     LEFT JOIN item_traits t ON t.wardrobe_item_id=i.id
      WHERE i.account_id=$1 AND i.deleted_at IS NULL AND i.state ${deliberate ? "IN ('owning','wanting')" : "='owning'"}
      ORDER BY i.created_at`,
     [accountId],
@@ -350,6 +352,13 @@ async function candidateItems(
 function hasCore(items: Array<{ category: string }>) {
   const cats = new Set(items.map((i) => i.category));
   return cats.has('dress') || (cats.has('top') && (cats.has('pants') || cats.has('skirt')));
+}
+
+// Pants and skirts share the lower slot, jackets and coats the outer one.
+function slotOf(category: SupportedCategory) {
+  if (category === 'pants' || category === 'skirt') return 'lower';
+  if (category === 'jacket' || category === 'coat') return 'outer';
+  return category;
 }
 
 // The planner can suggest layers, but an automatic outfit must not turn into a
@@ -378,13 +387,13 @@ export function normalizeAutomaticLookItems(
     const { category } = item;
     if (exact.has(id)) {
       used.add(id);
-      used.add(category === 'pants' || category === 'skirt' ? 'lower' : category);
+      used.add(slotOf(category));
       result.push(id);
       continue;
     }
     if (useDress && (category === 'top' || category === 'pants' || category === 'skirt')) continue;
     if (!useDress && category === 'dress') continue;
-    const slot = category === 'pants' || category === 'skirt' ? 'lower' : category;
+    const slot = slotOf(category);
     if (used.has(slot)) continue;
     used.add(id);
     used.add(slot);
@@ -492,7 +501,7 @@ export type LookFocus = 'upper' | 'lower' | 'feet';
  */
 export function lookFocus(categories: string[]): LookFocus | null {
   const has = (...wanted: string[]) => categories.some((c) => wanted.includes(c));
-  const upper = has('top', 'jacket', 'hat', 'scarf');
+  const upper = has('top', 'jacket', 'coat', 'hat', 'scarf');
   const lower = has('pants', 'skirt');
   const shoes = has('shoes');
   if (has('dress') || (upper && (lower || shoes))) return null;
@@ -1262,7 +1271,15 @@ const lookFocusFraming: Record<LookFocus, string> = {
   feet: 'Frame close on the lower legs and feet so the referenced shoes fill the frame; the upper body stays out of frame.',
 };
 
-const garmentPairing = 'Each view pairs the clean generated shelf view on the left with the cropped original photo on the right. Treat the original photo as the ground truth for colors, material, texture, construction, and distinctive details; use the shelf view to clarify its complete silhouette.';
+type GarmentPromptItem = { name: string; category: string; colors: string[]; kind?: string | null };
+
+// Names each garment by its tagged kind ("faux fur coat") where there is one,
+// which says more about cut and length than the broad category.
+function describeGarments(items: GarmentPromptItem[]) {
+  return items.map((i) => `${i.name} (${i.kind ?? i.category}; ${i.colors.join(', ')})`).join('; ');
+}
+
+const garmentPairing = `Each view pairs a narrow, clean generated shelf view on the left with the larger cropped original photo on the right. Treat the original photo as the ground truth for colors, material, texture, construction, and distinctive details; use the shelf view to clarify its complete silhouette. Every view is scaled to fill its cell, so cell size says nothing about garment size: take each garment's real length, volume, and fit when worn from the original photo, and keep long or bulky pieces such as coats as long and voluminous as they are there.`;
 
 /**
  * The prompt of a try-on: the first reference is the user's own photo.
@@ -1270,8 +1287,8 @@ const garmentPairing = 'Each view pairs the clean generated shelf view on the le
  * upgrade. Asking to change the clothes on a real photo was rejected as sexual
  * by the image model's safety filter every time, whatever the photo showed.
  */
-export function tryOnPrompt(items: Array<{ name: string; category: string; colors: string[] }>) {
-  const garments = items.map((i) => `${i.name} (${i.category}; ${i.colors.join(', ')})`).join('; ');
+export function tryOnPrompt(items: GarmentPromptItem[]) {
+  const garments = describeGarments(items);
   const references = items.length > 1
     ? `The second reference is one ordered board of clothing items. Its cells are row-major, from left to right and then top to bottom, matching this order: ${items.map((item, index) => `${index + 1}. ${item.name}`).join('; ')}. ${garmentPairing} Use each cell only for its matching item.`
     : `The second reference shows the clothing item. ${garmentPairing}`;
@@ -1280,7 +1297,7 @@ export function tryOnPrompt(items: Array<{ name: string; category: string; color
 
 export function lookPrompt(
   concept: LookConcept,
-  items: Array<{ name: string; category: string; colors: string[] }>,
+  items: GarmentPromptItem[],
   identityNote: string | null,
   completeWithWardrobe: boolean,
   { style = 'candid', focus = null, occasion = null }: {
@@ -1289,7 +1306,7 @@ export function lookPrompt(
     occasion?: string | null;
   } = {},
 ) {
-  const garments = items.map((i) => `${i.name} (${i.category}; ${i.colors.join(', ')})`).join('; ');
+  const garments = describeGarments(items);
   const garmentInstruction = completeWithWardrobe || focus
     ? `Dress the person in exactly these referenced major garments: ${garments}.`
     : `Dress the person in these referenced garments: ${garments}.`;

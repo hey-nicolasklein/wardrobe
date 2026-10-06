@@ -10,7 +10,10 @@ export const garmentReferenceCollageHeight = 256;
 const garmentReferenceBoardEdge = 512;
 
 const gutterWidth = 4;
-const tileWidth = (garmentReferenceCollageWidth - gutterWidth) / 2;
+// The original photo carries everything the shelf view shows and more: fit,
+// length, and volume on a body. It gets two thirds of the width.
+const shelfTileWidth = Math.round((garmentReferenceCollageWidth - gutterWidth) / 3);
+const originalTileWidth = garmentReferenceCollageWidth - gutterWidth - shelfTileWidth;
 const background = '#f3f3f1';
 const gutter = '#d1d1cc';
 
@@ -34,8 +37,8 @@ export async function createGarmentReferenceCollage(
   originalImage: Uint8Array,
 ) {
   const [shelfTile, originalTile] = await Promise.all([
-    tile(shelfImage, tileWidth, garmentReferenceCollageHeight),
-    tile(originalImage, tileWidth, garmentReferenceCollageHeight),
+    tile(shelfImage, shelfTileWidth, garmentReferenceCollageHeight),
+    tile(originalImage, originalTileWidth, garmentReferenceCollageHeight),
   ]);
   return sharp({
     create: {
@@ -47,7 +50,7 @@ export async function createGarmentReferenceCollage(
   })
     .composite([
       { input: shelfTile, left: 0, top: 0 },
-      { input: originalTile, left: tileWidth + gutterWidth, top: 0 },
+      { input: originalTile, left: shelfTileWidth + gutterWidth, top: 0 },
     ])
     .png()
     .toBuffer();

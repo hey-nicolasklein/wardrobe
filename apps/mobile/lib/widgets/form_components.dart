@@ -1296,12 +1296,14 @@ void showFormToast(
   String message, {
   String? action,
   VoidCallback? onAction,
+  Duration duration = const Duration(seconds: 4),
 }) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(
       SnackBar(
         content: Text(message, style: const TextStyle(fontSize: 14)),
+        duration: duration,
         action: action != null && onAction != null
             ? SnackBarAction(
                 label: action,
