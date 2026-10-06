@@ -19,6 +19,7 @@ import {
   OpenAICatalogProvider,
   recoverExpiredLeases,
   renewJobLease,
+  tagUntaggedItems,
   type CatalogJobError,
   type RemoteImageJob,
 } from '@form/service';
@@ -81,6 +82,18 @@ const recoveryTimer = setInterval(
   },
   Math.max(config.REMOTE_IMAGE_LEASE_SECONDS * 500, 5_000),
 );
+
+// Tags new pieces shortly after intake and backfills older ones, a small batch
+// per tick. A failed batch is retried on the next tick.
+let tagging = false;
+const tagTimer = setInterval(() => {
+  if (tagging) return;
+  tagging = true;
+  void tagUntaggedItems(database, storage, provider, { limit: 8 })
+    .then((tagged) => tagged && console.log(`Tagged traits for ${tagged} piece(s).`))
+    .catch((error: unknown) => console.error('Failed to tag item traits.', error))
+    .finally(() => (tagging = false));
+}, 30_000);
 
 let stopping = false;
 
@@ -147,6 +160,7 @@ async function stop(): Promise<void> {
   stopping = true;
   clearInterval(recoveryTimer);
   clearInterval(pollTimer);
+  clearInterval(tagTimer);
   await poller.stop();
   storage.client.destroy();
   await database.end();

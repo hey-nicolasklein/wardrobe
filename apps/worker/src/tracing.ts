@@ -154,12 +154,12 @@ export function traceProvider(
         },
         { asType: 'generation' },
       ),
-    classifyWarmth: (input) =>
+    classifyTraits: (input) =>
       startActiveObservation(
-        'classify-warmth',
+        'classify-traits',
         async (generation) => {
           generation.update({ model: input.model, input: { items: input.items.length } });
-          const result = await provider.classifyWarmth(input);
+          const result = await provider.classifyTraits(input);
           generation.update({ output: Object.fromEntries(result) });
           return result;
         },

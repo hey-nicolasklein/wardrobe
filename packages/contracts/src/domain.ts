@@ -43,6 +43,16 @@ export const itemMetadataSchema = z
   })
   .strict();
 
+// Derived filter tags, set by the worker shortly after intake. Null until then.
+export const itemTraitsSchema = z
+  .object({
+    warmth: z.enum(['light', 'mid', 'warm']),
+    kind: z.string().min(1).max(40),
+    brand: z.string().min(1).max(40).nullable(),
+    formality: z.enum(['casual', 'smart-casual', 'business', 'formal']),
+  })
+  .strict();
+
 export const normalizedBoundingBoxSchema = z
   .object({
     x: z.number().int().min(0).max(999),
@@ -218,6 +228,7 @@ export const wardrobeItemSchema = z
     state: itemStateSchema,
     status: itemStatusSchema,
     metadata: itemMetadataSchema,
+    traits: itemTraitsSchema.nullable(),
     currentShelfImageVersionId: opaqueIdSchema.nullable(),
     recordVersion: recordVersionSchema,
     createdAt: timestampSchema,

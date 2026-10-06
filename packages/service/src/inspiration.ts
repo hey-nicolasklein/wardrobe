@@ -18,7 +18,7 @@ import {
   type CatalogExecutionConfig,
   CatalogJobError,
 } from './catalog.js';
-import { CatalogProviderError, type CatalogProvider, type Warmth } from './catalog-provider.js';
+import { CatalogProviderError, type CatalogProvider, type ItemTraits, type Warmth } from './catalog-provider.js';
 import type { Database, DatabaseClient } from './database.js';
 import {
   createGarmentReferenceCollage,
@@ -396,45 +396,76 @@ export function similarOutfit(a: string[], b: string[], exact: string[]) {
   return size >= 2 && size - shared <= 1;
 }
 
-/**
- * Warmth of [items], tagging the ones never tagged before in one call. A
- * failed call only costs the warmth hints, never the plan.
- */
-async function warmthOf(
-  database: Database,
-  provider: CatalogProvider,
-  accountId: string,
-  items: Array<{ id: string; name: string; category: SupportedCategory; colors: string[]; notes: string | null }>,
-  signal?: AbortSignal,
-): Promise<Map<string, Warmth>> {
-  const known = await database.query<{ wardrobe_item_id: string; warmth: Warmth }>(
-    'SELECT wardrobe_item_id, warmth FROM item_warmth WHERE account_id=$1 AND wardrobe_item_id = ANY($2::uuid[])',
-    [accountId, items.map((item) => item.id)],
+/** Stored traits of an account's pieces, keyed by item id. */
+async function traitsOf(database: Database | DatabaseClient, accountId: string): Promise<Map<string, ItemTraits>> {
+  const result = await database.query<ItemTraits & { wardrobe_item_id: string }>(
+    'SELECT wardrobe_item_id, warmth, kind, brand, formality FROM item_traits WHERE account_id=$1',
+    [accountId],
   );
-  const warmth = new Map(known.rows.map((row) => [row.wardrobe_item_id, row.warmth]));
-  const untagged = items.filter((item) => !warmth.has(item.id));
-  if (!untagged.length) return warmth;
-  try {
-    const tagged = await provider.classifyWarmth({
-      items: untagged.map((item) => ({
-        id: item.id,
-        metadata: { name: item.name, category: item.category, colors: item.colors, notes: item.notes },
-      })),
-      model: lookPlannerModel,
-      signal,
-    });
-    for (const [id, level] of tagged) {
-      if (!untagged.some((item) => item.id === id)) continue;
-      warmth.set(id, level);
-      await database.query(
-        'INSERT INTO item_warmth (wardrobe_item_id, account_id, warmth) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
-        [id, accountId, level],
-      );
-    }
-  } catch (error) {
-    console.warn('Warmth tagging failed; planning without it.', error);
+  return new Map(result.rows.map(({ wardrobe_item_id, ...traits }) => [wardrobe_item_id, traits]));
+}
+
+/**
+ * Tags pieces that have a shelf image but no traits yet, oldest first, in
+ * small batches. The worker calls it on an interval, so new pieces get their
+ * traits shortly after intake and older ones are backfilled on the way.
+ * Returns how many pieces were tagged.
+ */
+export async function tagUntaggedItems(
+  database: Database,
+  storage: PrivateObjectStorage,
+  provider: CatalogProvider,
+  options: { limit: number; signal?: AbortSignal },
+): Promise<number> {
+  const untagged = await database.query<{
+    id: string;
+    account_id: string;
+    name: string;
+    category: SupportedCategory;
+    colors: string[];
+    notes: string | null;
+    asset_id: string;
+  }>(
+    `SELECT i.id,i.account_id,i.name,i.category,i.colors,i.notes,v.transparent_asset_id AS asset_id
+     FROM wardrobe_items i
+     JOIN shelf_image_versions v ON v.id=i.current_shelf_image_version_id
+     LEFT JOIN item_traits t ON t.wardrobe_item_id=i.id
+     WHERE i.deleted_at IS NULL AND t.wardrobe_item_id IS NULL
+     ORDER BY i.created_at LIMIT $1`,
+    [options.limit],
+  );
+  if (!untagged.rows.length) return 0;
+  const items = await Promise.all(
+    untagged.rows.map(async (item) => ({
+      item,
+      // Low detail is plenty for warmth and logos, and keeps the call cheap.
+      png: await sharp(await readAsset(database, storage, item.account_id, item.asset_id))
+        .resize(512, 512, { fit: 'inside' })
+        .png()
+        .toBuffer(),
+    })),
+  );
+  const traits = await provider.classifyTraits({
+    items: items.map(({ item, png }) => ({
+      id: item.id,
+      metadata: { name: item.name, category: item.category, colors: item.colors, notes: item.notes },
+      png,
+    })),
+    model: lookPlannerModel,
+    signal: options.signal,
+  });
+  let tagged = 0;
+  for (const { item } of items) {
+    const traitsOfItem = traits.get(item.id);
+    if (!traitsOfItem) continue;
+    await database.query(
+      `INSERT INTO item_traits (wardrobe_item_id, account_id, warmth, kind, brand, formality)
+       VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
+      [item.id, item.account_id, traitsOfItem.warmth, traitsOfItem.kind, traitsOfItem.brand, traitsOfItem.formality],
+    );
+    tagged += 1;
   }
-  return warmth;
+  return tagged;
 }
 
 /** How often each piece appeared in finished looks, and whether among [recent]. */
@@ -833,23 +864,19 @@ export async function adjustLookProposals(
     // Quick taps arrive back to back; one adjustment at a time per account.
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`${input.accountId}:proposals`]);
     const pool = await candidateItems(client, input.accountId, true);
-    const warmth = await client.query<{ wardrobe_item_id: string; warmth: Warmth }>(
-      'SELECT wardrobe_item_id, warmth FROM item_warmth WHERE account_id=$1',
-      [input.accountId],
-    );
+    const traits = await traitsOf(client, input.accountId);
     const uses = await client.query<{ id: string; uses: string }>(
       `SELECT li.wardrobe_item_id id,count(*) uses FROM look_items li JOIN looks l ON l.id=li.look_id
        WHERE l.account_id=$1 AND l.state='ready' AND l.deleted_at IS NULL GROUP BY li.wardrobe_item_id`,
       [input.accountId],
     );
-    const warmthById = new Map(warmth.rows.map((row) => [row.wardrobe_item_id, row.warmth]));
     const usesById = new Map(uses.rows.map((row) => [row.id, Number(row.uses)]));
     const pieces = new Map(
       pool.rows
         .filter((item) => item.state === 'owning' || input.keepItemIds.includes(item.id))
         .map((item) => [
           item.id,
-          { id: item.id, category: item.category, warmth: warmthById.get(item.id) ?? null, uses: usesById.get(item.id) ?? 0 },
+          { id: item.id, category: item.category, warmth: traits.get(item.id)?.warmth ?? null, uses: usesById.get(item.id) ?? 0 },
         ]),
     );
     const keep = input.keepItemIds.flatMap((id) => pieces.get(id) ?? []);
@@ -1327,18 +1354,28 @@ export async function executeInspirationJob(
               siblingItemIds: siblings.flatMap((sibling) => sibling.ids),
             })
           : null;
-      const warmth = await warmthOf(database, provider, job.accountId, planningCandidates, controller.signal);
+      const traits = await traitsOf(database, job.accountId);
+      const warmthOf = (itemId: string): { warmth?: Warmth } => ({ warmth: traits.get(itemId)?.warmth });
+      // The exact items and the anchor set the season: the planner never sees
+      // pieces that clash with them, so a winter coat cannot meet shorts.
+      const fixed = [...row.exact_item_ids, ...(anchor ? [anchor.itemId] : [])].map(warmthOf);
+      const seasonal = planningCandidates.filter(
+        (item) => row.exact_item_ids.includes(item.id) || !warmthClash([...fixed, warmthOf(item.id)]),
+      );
       const planned = await provider.planLook({
-        candidates: planningCandidates.map((i) => ({
-          id: i.id,
-          metadata: {
-            name: i.name,
-            category: i.category,
-            colors: i.colors,
-            notes: i.notes,
-          },
-          ...(warmth.has(i.id) ? { warmth: warmth.get(i.id) } : {}),
-        })),
+        candidates: seasonal.map((i) => {
+          const { brand: _brand, ...hints } = traits.get(i.id) ?? {};
+          return {
+            id: i.id,
+            metadata: {
+              name: i.name,
+              category: i.category,
+              colors: i.colors,
+              notes: i.notes,
+            },
+            ...hints,
+          };
+        }),
         recent: recentForLookPlan(recent.rows, row.exact_item_ids),
         ...(siblings.length ? { siblings: recentForLookPlan(siblings, row.exact_item_ids) } : {}),
         ...(anchor ? { anchorItemId: anchor.itemId } : {}),
@@ -1373,7 +1410,12 @@ export async function executeInspirationJob(
       const repeatsRecent = recent.rows.some((look) =>
         similarOutfit(look.ids, itemIds, row.exact_item_ids),
       );
-      if (!lastAttempt && warmthClash(itemIds.map((itemId) => ({ warmth: warmth.get(itemId) }))))
+      // Never accepted, not even on the last attempt, unless the user picked the
+      // clashing pieces themselves.
+      if (
+        !warmthClash(row.exact_item_ids.map(warmthOf)) &&
+        warmthClash(itemIds.map(warmthOf))
+      )
         throw new CatalogJobError('validation', 'The plan mixes warm and light pieces.', true);
       if (job.kind === 'plan-look' && repeatsRecent && !lastAttempt)
         throw new CatalogJobError('validation', 'The proposal repeats a recent look.', true);

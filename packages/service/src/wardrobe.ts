@@ -46,6 +46,7 @@ type WardrobeItemRow = {
   category: WardrobeItem['metadata']['category'];
   colors: string[];
   notes: string | null;
+  traits: WardrobeItem['traits'];
   current_shelf_image_version_id: string | null;
   record_version: number;
   created_at: Date;
@@ -116,6 +117,7 @@ function mapWardrobeItem(row: WardrobeItemRow): WardrobeItem {
       colors: row.colors,
       notes: row.notes,
     },
+    traits: row.traits,
     currentShelfImageVersionId: row.current_shelf_image_version_id,
     recordVersion: row.record_version,
     createdAt: row.created_at.toISOString(),
@@ -200,7 +202,9 @@ function mapShelfImageVersion(row: ShelfImageVersionRow): ShelfImageVersion {
 }
 
 const itemColumns = `id, source_photo_id, state, status, name, category, colors, notes,
-  current_shelf_image_version_id, record_version, created_at, updated_at`;
+  current_shelf_image_version_id, record_version, created_at, updated_at,
+  (SELECT json_build_object('warmth', t.warmth, 'kind', t.kind, 'brand', t.brand, 'formality', t.formality)
+     FROM item_traits t WHERE t.wardrobe_item_id = wardrobe_items.id) AS traits`;
 const attemptColumns = `id, wardrobe_item_id, source_photo_id, detection_proposal_id, state,
   reviewed_metadata, model, quality, output_size, prompt_version, parent_shelf_image_version_id,
   refinement_instruction, keyed_asset_id,
