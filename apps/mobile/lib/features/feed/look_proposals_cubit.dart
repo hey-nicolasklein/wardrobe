@@ -6,8 +6,9 @@ import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/utils/idempotency_key.dart';
 
-/// Outfits one swipe session shows at most.
-const maxSessionProposals = 5;
+/// Outfits one swipe session shows at most. High enough to feel endless while
+/// the user narrows the outfit down with marks, low enough to bound a session.
+const maxSessionProposals = 20;
 
 /// How the user marked a piece on a proposal card.
 enum PieceMark { keep, exclude }
@@ -61,8 +62,10 @@ class LookProposalsState {
 
   bool get planning => proposals?.any((look) => look.isActive) ?? true;
 
-  /// The session used up its outfits, or nothing more can be planned.
-  bool get finished => proposals != null && !proposing && deck.isEmpty;
+  /// A round ends with the one outfit the user picked, or when the deck runs
+  /// out of outfits.
+  bool get finished =>
+      proposals != null && !proposing && (picked.isNotEmpty || deck.isEmpty);
 
   LookProposalsState copyWith({
     List<Look>? proposals,
@@ -187,10 +190,10 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
     unawaited(_topUp());
   }
 
+  /// Renders the outfit and ends the round: one pick per round.
   Future<void> pick(String lookId) async {
-    if (state.picked.contains(lookId)) return;
+    if (state.picked.isNotEmpty) return;
     emit(state.copyWith(picked: {...state.picked, lookId}));
-    unawaited(_topUp());
     try {
       await looks.render(lookId, quality: quality);
     } on FormApiException catch (error) {
@@ -209,7 +212,7 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
   /// ones are planned with the marks so far.
   Future<void> _topUp() async {
     final body = request;
-    if (body == null || state.proposing) return;
+    if (body == null || state.proposing || state.picked.isNotEmpty) return;
     final ahead = state.deck.length;
     final room = maxSessionProposals - state.decided - ahead;
     final count = (3 - ahead).clamp(0, room);
@@ -236,15 +239,24 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
     }
   }
 
-  /// Starts a fresh session for the composer's original request.
-  Future<void> more() async {
+  /// Starts the next round for the composer's request, keeping the marks so
+  /// far, so the user styles on from where the last round ended.
+  Future<void> restyle() async {
     final body = request;
     if (body == null || state.proposing) return;
-    emit(state.copyWith(proposing: true, failure: () => null));
+    final marks = state.marks;
+    emit(LookProposalsState(marks: marks, proposing: true));
+    final exact = {...?(body['exactItemIds'] as List?)?.cast<String>()};
     try {
-      await looks.propose({...body, 'idempotencyKey': newIdempotencyKey()});
+      await looks.propose(
+        {
+          ...body,
+          'exactItemIds': [...exact, ...state.kept.difference(exact)],
+          'idempotencyKey': newIdempotencyKey(),
+        },
+        excludedItemIds: state.excluded.toList(),
+      );
       if (isClosed) return;
-      emit(const LookProposalsState(proposing: true));
       await refresh();
       if (!isClosed) emit(state.copyWith(proposing: false));
     } on FormApiException catch (error) {

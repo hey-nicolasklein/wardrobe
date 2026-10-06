@@ -650,18 +650,18 @@
   "photosOfYouEmpty": "Damit Looks an dir aussehen wie du.",
   "composerProposeAction": "Outfits vorschlagen",
   "proposalsTitle": "Outfits auswählen",
-  "proposalsHint": "Rechts wischen zum Generieren, links zum nächsten Outfit.",
+  "proposalsHint": "Tippe ein Teil, um es zu behalten oder wegzulassen. Links wischen für eine Variante, rechts für dein Outfit.",
   "proposalsRender": "Generieren",
   "proposalsSkip": "Keiner davon",
   "proposalsDone": "Fertig",
   "proposalsFailed": "Die Planung ist fehlgeschlagen. Versuch eine neue Runde.",
   "proposalsSkipOne": "Nächstes Outfit",
   "proposalsPicked": {
-    "one": "1 Outfit ist unterwegs",
-    "other": "{} Outfits sind unterwegs"
+    "one": "Dein Outfit ist unterwegs",
+    "other": "Dein Outfit ist unterwegs"
   },
   "proposalsNonePicked": "Heute nichts dabei?",
-  "proposalsMore": "Mehr Outfits",
+  "proposalsMore": "Weiter stylen",
   "proposalsReasonNew": "Neu im Schrank: {piece}",
   "proposalsReasonNever": "Noch nie kombiniert: {piece}",
   "proposalsReasonRarely": "Länger nicht getragen: {piece}",
@@ -679,8 +679,8 @@
     "other": "{} aussortiert"
   },
   "proposalsPlanningBuilding": "Baue um deine behaltenen Stücke…",
-  "proposalsPickedBody": "Sie entstehen gleich oben in deinem Feed.",
-  "proposalsNonePickedBody": "Starte eine neue Runde, jedes Outfit ist frisch.",
+  "proposalsPickedBody": "Es entsteht gleich oben in deinem Feed. Mit deinen Teilen kannst du weiter stylen.",
+  "proposalsNonePickedBody": "Style weiter mit deinen Teilen oder schau später wieder rein.",
   "proposalsFailedTitle": "Diesmal keine Outfits",
   "proposalsSwap": "Weglassen",
   "proposalsKeep": "Behalten",

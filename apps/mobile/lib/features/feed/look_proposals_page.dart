@@ -24,9 +24,10 @@ import 'package:form_mobile/widgets/cached_media.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
-/// Planned outfits from the composer as a swipe deck. Right renders the
-/// outfit, left shows the next one. Tapping a piece keeps it for the next
-/// outfits, tapping again rules it out, so a look can be built across swipes.
+/// Planned outfits from the composer as a swipe deck, to style towards one
+/// outfit. Tapping a piece keeps it for, or leaves it out of, the next
+/// outfits; left shows the next variation. Right renders the outfit and ends
+/// the round, from where the user can style on with the same marks.
 class LookProposalsPage extends StatelessWidget {
   const LookProposalsPage({required this.quality, this.request, super.key});
 
@@ -105,20 +106,9 @@ class _ProposalsViewState extends State<_ProposalsView> {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            context.tr(LocaleKeys.proposalsHint),
-                            style: FormTokens.small,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        _Progress(
-                          seen: state.decided,
-                          total: maxSessionProposals,
-                        ),
-                      ],
+                    Text(
+                      context.tr(LocaleKeys.proposalsHint),
+                      style: FormTokens.small,
                     ),
                     _YourLook(
                       marks: state.marks,
@@ -186,33 +176,6 @@ class _ProposalsViewState extends State<_ProposalsView> {
       ),
     );
   }
-}
-
-/// One dot per outfit of the session, filling as outfits are decided.
-class _Progress extends StatelessWidget {
-  const _Progress({required this.seen, required this.total});
-
-  final int seen;
-  final int total;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      for (var index = 0; index < total; index++)
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 280),
-          curve: FormTokens.easeOut,
-          margin: const EdgeInsets.only(left: 3),
-          width: index == seen ? 14 : 6,
-          height: 6,
-          decoration: BoxDecoration(
-            color: index <= seen ? FormTokens.green : FormTokens.line,
-            borderRadius: BorderRadius.circular(3),
-          ),
-        ),
-    ],
-  );
 }
 
 /// Every marked piece in the order it was marked: kept ones with a green pin,
@@ -1197,7 +1160,7 @@ class _FinishedActions extends StatelessWidget {
           child: OutlinedButton(
             onPressed: proposing
                 ? null
-                : () => unawaited(context.read<LookProposalsCubit>().more()),
+                : () => unawaited(context.read<LookProposalsCubit>().restyle()),
             child: Text(context.tr(LocaleKeys.proposalsMore)),
           ),
         ),

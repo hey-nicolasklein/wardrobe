@@ -150,4 +150,36 @@ void main() {
       expect(body.containsKey('discardLookIds'), isFalse);
     },
   );
+  test('a pick ends the round and the next round keeps the marks', () async {
+    final cubit = LookProposalsCubit(
+      looks,
+      quality: 'low',
+      request: {
+        'exactItemIds': <String>[],
+        'categories': <String>[],
+        'occasion': null,
+        'style': 'candid',
+        'completion': 'wardrobe',
+        'idempotencyKey': 'composer-key-000002',
+      },
+    );
+    addTearDown(cubit.close);
+    await cubit.refresh();
+    await cubit.keep('jacket', onLookId: 'look-a');
+    await cubit.swap('pants', onLookId: 'look-a');
+    await cubit.pick('look-a');
+    await cubit.pick('look-b');
+    expect(rendered, ['look-a']);
+    expect(cubit.state.finished, isTrue);
+    // No more outfits are planned once the round has its outfit.
+    expect(proposeBodies, isEmpty);
+
+    await cubit.restyle();
+    final body = proposeBodies.single;
+    expect(body['append'], isNot(isTrue));
+    expect(body['exactItemIds'], ['jacket']);
+    expect(body['excludedItemIds'], ['pants']);
+    expect(cubit.state.marks.keys, {'jacket', 'pants'});
+    expect(cubit.state.picked, isEmpty);
+  });
 }
