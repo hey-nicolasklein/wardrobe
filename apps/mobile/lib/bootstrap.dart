@@ -10,6 +10,7 @@ import 'package:form_mobile/app/collection_counts_cubit.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/safe_bloc_observer.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
+import 'package:form_mobile/features/feed/look_collections_cubit.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/settings/character/character_cubit.dart';
 import 'package:form_mobile/features/settings/credits_cubit.dart';
@@ -23,6 +24,7 @@ import 'package:form_mobile/repository/character_sheet_repository.dart';
 import 'package:form_mobile/repository/collection_counts_repository.dart';
 import 'package:form_mobile/repository/credits_repository.dart';
 import 'package:form_mobile/repository/intake_repository.dart';
+import 'package:form_mobile/repository/look_collection_repository.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/media_repository.dart';
 import 'package:form_mobile/repository/personal_repository.dart';
@@ -123,6 +125,10 @@ Future<void> bootstrap(
     characterSheetRepository,
   );
   await feed.loadCache();
+  final lookCollections = LookCollectionsCubit(
+    LookCollectionRepository(database, api, uri?.toString() ?? ''),
+  );
+  await lookCollections.loadCache();
   final support = await getApplicationSupportDirectory();
   final characterDraftRepository = CharacterDraftRepository(
     characterSheetRepository,
@@ -208,6 +214,7 @@ Future<void> bootstrap(
           BlocProvider(create: (_) => CreditsCubit(CreditsRepository(api))),
           BlocProvider(create: (_) => wardrobe),
           BlocProvider(create: (_) => feed),
+          BlocProvider(create: (_) => lookCollections),
           BlocProvider(create: (_) => characters),
           BlocProvider(create: (_) => intake),
           BlocProvider(create: (_) => LanguageCubit(preferences, language)),

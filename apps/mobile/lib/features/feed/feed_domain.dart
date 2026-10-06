@@ -100,17 +100,27 @@ class ColorStack extends LookStack {
   final String family;
 }
 
+/// Looks the user filed into the Sammlung [collectionId].
+class CollectionStack extends LookStack {
+  const CollectionStack(this.collectionId);
+  final String collectionId;
+}
+
+/// [collections] maps each Sammlung's id to its look ids.
 bool inLookStack(
   LookStack stack,
   Look look, {
   required Map<String, WardrobeItem> itemsById,
   required bool saved,
+  Map<String, List<String>> collections = const {},
 }) => switch (stack) {
   AllLooksStack() => true,
   OccasionStack(:final occasion) =>
     !look.isTryOn && look.settings?.occasion == occasion,
   TryOnStack() => look.isTryOn,
   SavedStack() => saved,
+  CollectionStack(:final collectionId) =>
+    collections[collectionId]?.contains(look.id) ?? false,
   PieceStack(:final itemId) => look.wardrobeItemIds.contains(itemId),
   ColorStack(:final family) => look.wardrobeItemIds.any(
     (id) =>

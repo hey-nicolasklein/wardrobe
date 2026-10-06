@@ -47,6 +47,10 @@ import {
   signupCredits,
   setShotHidden,
   setLookLiked,
+  createLookCollection,
+  deleteLookCollection,
+  listLookCollections,
+  setLookInCollection,
   shotWeights,
 } from './index.js';
 import { prepareIdentityReference } from './identity-collage.js';
@@ -523,6 +527,58 @@ test('try-on photos can be listed and deleted with their file', { skip: !enabled
       storage.client.send(new GetObjectCommand({ Bucket: storage.bucket, Key: objectKey })),
     );
     await assert.rejects(removeTryOnPhoto(database, storage, { accountId, assetId: photoId }));
+  } finally {
+    storage.client.destroy();
+    await database.end();
+  }
+});
+
+test('looks can be filed into Sammlungen, which can be removed again', { skip: !enabled }, async () => {
+  const database = createDatabase(readDatabaseConfig());
+  const storage = createPrivateObjectStorage(readObjectStorageConfig());
+  try {
+    await migrateDatabase(database);
+    await ensurePrivateBucket(storage);
+    await resetFixtures(database, storage);
+    const accountId = fixtureIds.populatedAccount;
+    const sheetId = randomUUID();
+    const lookId = randomUUID();
+    await database.query(
+      `INSERT INTO character_sheets (
+        id, account_id, reference_asset_ids, state, asset_id, active,
+        model, quality, output_size, prompt_version, cost_microunits, finished_at
+      ) VALUES ($1, $2, $3, 'ready', $4, true, 'fixture', 'high', '864x1536', 'fixture', 10, now())`,
+      [sheetId, accountId, [fixtureIds.transparentAssetOne], fixtureIds.transparentAssetOne],
+    );
+    await database.query(
+      `INSERT INTO looks (id, account_id, character_sheet_id, state, model, quality, output_size, prompt_version)
+       VALUES ($1, $2, $3, 'ready', 'fixture', 'medium', '1024x1280', 'fixture')`,
+      [lookId, accountId, sheetId],
+    );
+
+    const trip = await createLookCollection(database, { accountId, name: 'Urlaub', emoji: '🌴' });
+    await setLookInCollection(database, { accountId, collectionId: trip.id, lookId, included: true });
+    await setLookInCollection(database, { accountId, collectionId: trip.id, lookId, included: true });
+    assert.deepEqual((await listLookCollections(database, accountId)).map((c) => c.lookIds), [[lookId]]);
+    const liked = await database.query('SELECT liked_at IS NOT NULL AS liked FROM looks WHERE id = $1', [lookId]);
+    assert.equal(liked.rows[0].liked, true);
+    await assert.rejects(
+      setLookInCollection(database, {
+        accountId: fixtureIds.emptyAccount,
+        collectionId: trip.id,
+        lookId,
+        included: true,
+      }),
+    );
+
+    await setLookInCollection(database, { accountId, collectionId: trip.id, lookId, included: false });
+    assert.deepEqual((await listLookCollections(database, accountId))[0]!.lookIds, []);
+
+    await assert.rejects(deleteLookCollection(database, { accountId: fixtureIds.emptyAccount, collectionId: trip.id }));
+    await deleteLookCollection(database, { accountId, collectionId: trip.id });
+    assert.deepEqual(await listLookCollections(database, accountId), []);
+    const look = await database.query('SELECT 1 FROM looks WHERE id = $1', [lookId]);
+    assert.equal(look.rowCount, 1);
   } finally {
     storage.client.destroy();
     await database.end();

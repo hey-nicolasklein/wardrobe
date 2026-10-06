@@ -8,6 +8,7 @@ import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/connection_gate.dart';
 import 'package:form_mobile/app/form_theme.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
+import 'package:form_mobile/features/feed/look_collections_cubit.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/settings/character/character_cubit.dart';
 import 'package:form_mobile/features/settings/credits_cubit.dart';
@@ -98,6 +99,7 @@ class _FormAppState extends State<FormApp> {
         if (initial || path.startsWith('/feed')) ...[
           collectionCounts.refresh(Collection.feed),
           context.read<FeedCubit>().refresh(),
+          context.read<LookCollectionsCubit>().load(),
         ],
         if (initial ||
             path.startsWith('/wardrobe') ||

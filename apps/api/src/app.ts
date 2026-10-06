@@ -34,12 +34,18 @@ import {
   updateWardrobeItemRequestSchema,
   setLookShotPreferenceRequestSchema,
   setLookLikedRequestSchema,
+  createLookCollectionRequestSchema,
+  setLookInCollectionRequestSchema,
   addTryOnPhotoRequestSchema,
   contractVersion,
   type ApiError,
 } from '@form/contracts';
 import {
   ActiveJobLimitError,
+  createLookCollection,
+  deleteLookCollection,
+  listLookCollections,
+  setLookInCollection,
   authenticateSession,
   creditSummary,
   InsufficientCreditsError,
@@ -1247,6 +1253,78 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
           accountId: authenticated.session.id,
           lookId: context.req.param('lookId'),
           liked: parsed.data.liked,
+        }),
+      );
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.get('/v1/look-collections', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    return context.json({ collections: await listLookCollections(database, authenticated.session.id) });
+  });
+
+  app.post('/v1/look-collections', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    const parsed = createLookCollectionRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success)
+      return context.json(errorPayload('validation', 'invalid-collection', 'Send a name and an emoji.'), 400);
+    return context.json(
+      await createLookCollection(database, { accountId: authenticated.session.id, ...parsed.data }),
+      201,
+    );
+  });
+
+  app.delete('/v1/look-collections/:collectionId', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    try {
+      await deleteLookCollection(database, {
+        accountId: authenticated.session.id,
+        collectionId: context.req.param('collectionId'),
+      });
+      return context.body(null, 204);
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.put('/v1/look-collections/:collectionId/looks/:lookId', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    const parsed = setLookInCollectionRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success)
+      return context.json(errorPayload('validation', 'invalid-collection-look', 'Send included as true or false.'), 400);
+    try {
+      return context.json(
+        await setLookInCollection(database, {
+          accountId: authenticated.session.id,
+          collectionId: context.req.param('collectionId'),
+          lookId: context.req.param('lookId'),
+          included: parsed.data.included,
         }),
       );
     } catch (error) {

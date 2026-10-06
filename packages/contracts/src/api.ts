@@ -393,3 +393,8 @@ export type CreateUploadIntentRequest = z.infer<typeof createUploadIntentRequest
 export type CreateUploadIntentResponse = z.infer<typeof createUploadIntentResponseSchema>;
 export type CompleteSourceUploadResponse = z.infer<typeof completeSourceUploadResponseSchema>;
 export type CreateWardrobeItemRequest = z.infer<typeof createWardrobeItemRequestSchema>;
+// Sammlungen the user files looks into.
+export const createLookCollectionRequestSchema = z
+  .object({ name: z.string().trim().min(1).max(40), emoji: z.string().min(1).max(16) })
+  .strict();
+export const setLookInCollectionRequestSchema = z.object({ included: z.boolean() }).strict();

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/feed/collection_sheet.dart';
 import 'package:form_mobile/features/feed/composer_cubit.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
@@ -14,6 +15,7 @@ import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/feed/fitting_room_card.dart';
 import 'package:form_mobile/features/feed/flat_lay_widget.dart';
 import 'package:form_mobile/features/feed/look_card.dart';
+import 'package:form_mobile/features/feed/look_collections_cubit.dart';
 import 'package:form_mobile/features/feed/look_commands.dart';
 import 'package:form_mobile/features/feed/look_stacks.dart';
 import 'package:form_mobile/features/feed/look_stages.dart';
@@ -23,6 +25,7 @@ import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/credits_repository.dart';
+import 'package:form_mobile/repository/look_collection_repository.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
@@ -219,21 +222,28 @@ class FeedPage extends StatelessWidget {
     return null;
   }
 
-  static List<CachedLook> _stackLooks(FeedState state, LookStack stack) => [
+  static List<CachedLook> _stackLooks(
+    FeedState state,
+    LookStack stack, [
+    List<LookCollection> collections = const [],
+  ]) => [
     for (final record in state.looks ?? const <CachedLook>[])
       if (inLookStack(
         stack,
         record.look,
         itemsById: state.itemsById,
         saved: state.saved[record.look.id] ?? false,
+        collections: {for (final c in collections) c.id: c.lookIds},
       ))
         record,
   ];
 
-  /// The stacks to choose from: every look, the occasions, saved looks and
-  /// try-ons, then one stack per piece and per colour.
+  /// The stacks to choose from: every look, the occasions, the user's
+  /// Sammlungen with saved looks and try-ons, then one stack per piece and
+  /// per colour.
   List<Widget> _overview(BuildContext context, FeedState state) {
     final looks = state.looks ?? const <CachedLook>[];
+    final userCollections = context.watch<LookCollectionsCubit>().state;
     final online = state.online;
     final width = MediaQuery.sizeOf(context).width;
     final collections = [
@@ -382,32 +392,40 @@ class FeedPage extends StatelessWidget {
           ),
         ),
       ),
-      if (collections.isNotEmpty) ...[
-        _SectionTitle(context.tr(LocaleKeys.stackSectionCollections)),
-        row(
-          height: 176,
-          children: [
-            for (final (stack, stackLooks) in collections)
-              StackPressable(
-                index: index++,
-                semanticLabel: _stackTitle(context, state, stack),
-                onTap: () => _openStack(context, stack),
-                builder: (context, spread) => labelled(
-                  _stackTitle(context, state, stack),
-                  stackLooks.length,
-                  PhotoFan(
-                    looks: stackLooks,
-                    online: online,
-                    photoSize: const Size(80, 100),
-                    spread: spread,
-                    angle: 0.14,
-                    offset: 0.34,
-                  ),
+      _SectionTitle(context.tr(LocaleKeys.stackSectionCollections)),
+      row(
+        height: 176,
+        children: [
+          for (final collection in userCollections)
+            _collectionStack(
+              context,
+              state,
+              collection,
+              _stackLooks(state, CollectionStack(collection.id), [collection]),
+              index: index++,
+              labelled: labelled,
+            ),
+          for (final (stack, stackLooks) in collections)
+            StackPressable(
+              index: index++,
+              semanticLabel: _stackTitle(context, state, stack),
+              onTap: () => _openStack(context, stack),
+              builder: (context, spread) => labelled(
+                _stackTitle(context, state, stack),
+                stackLooks.length,
+                PhotoFan(
+                  looks: stackLooks,
+                  online: online,
+                  photoSize: const Size(80, 100),
+                  spread: spread,
+                  angle: 0.14,
+                  offset: 0.34,
                 ),
               ),
-          ],
-        ),
-      ],
+            ),
+          const _NewCollectionTile(),
+        ],
+      ),
       if (pieces.isNotEmpty) ...[
         _SectionTitle(context.tr(LocaleKeys.stackSectionPieces)),
         row(
@@ -493,6 +511,62 @@ class FeedPage extends StatelessWidget {
     );
   }
 
+  static LookCollection? _collection(BuildContext context, String id) => context
+      .read<LookCollectionsCubit>()
+      .state
+      .where((c) => c.id == id)
+      .firstOrNull;
+
+  /// A Sammlung on the overview. Empty ones show their emoji and wait for
+  /// looks. Holding one offers to delete it.
+  Widget _collectionStack(
+    BuildContext context,
+    FeedState state,
+    LookCollection collection,
+    List<CachedLook> looks, {
+    required int index,
+    required Widget Function(String, int, Widget) labelled,
+  }) {
+    final title = '${collection.emoji} ${collection.name}';
+    return GestureDetector(
+      onLongPress: () => confirmRemoveCollection(context, collection),
+      child: StackPressable(
+        index: index,
+        semanticLabel: title,
+        onTap: () => looks.isEmpty
+            ? showFormToast(context, context.tr(LocaleKeys.collectionEmpty))
+            : _openStack(context, CollectionStack(collection.id)),
+        builder: (context, spread) => labelled(
+          title,
+          looks.length,
+          looks.isEmpty
+              ? _EmptyCollection(emoji: collection.emoji, spread: spread)
+              : Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    PhotoFan(
+                      looks: looks,
+                      online: state.online,
+                      photoSize: const Size(80, 100),
+                      spread: spread,
+                      angle: 0.14,
+                      offset: 0.34,
+                    ),
+                    Positioned(
+                      right: -6,
+                      bottom: -6,
+                      child: Text(
+                        collection.emoji,
+                        style: const TextStyle(fontSize: 26),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
   static String _countText(BuildContext context, int count) => context.tr(
     count == 1 ? LocaleKeys.stackCountOne : LocaleKeys.stackCountMany,
     namedArgs: {'count': '$count'},
@@ -509,6 +583,13 @@ class FeedPage extends StatelessWidget {
     ),
     TryOnStack() => context.tr(LocaleKeys.stackTryOn),
     SavedStack() => context.tr(LocaleKeys.stackSaved),
+    CollectionStack(:final collectionId) => switch (_collection(
+      context,
+      collectionId,
+    )) {
+      final c? => '${c.emoji} ${c.name}',
+      null => '',
+    },
     PieceStack(:final itemId) => state.itemsById[itemId]?.metadata.name ?? '',
     ColorStack(:final family) => context.tr('colorFamilies.$family'),
   };
@@ -528,7 +609,7 @@ class FeedPage extends StatelessWidget {
           context,
           itemIds: [itemId],
         ),
-        SavedStack() || ColorStack() => null,
+        SavedStack() || ColorStack() || CollectionStack() => null,
       };
 
   void _openStack(BuildContext context, LookStack stack) {
@@ -1368,7 +1449,8 @@ class _StackPage extends StatefulWidget {
   });
 
   final LookStack stack;
-  final List<CachedLook> Function(FeedState, LookStack) looksOf;
+  final List<CachedLook> Function(FeedState, LookStack, List<LookCollection>)
+  looksOf;
   final String Function(BuildContext, FeedState, LookStack) titleOf;
   final VoidCallback? Function(BuildContext, LookStack) createIn;
   final Widget Function(BuildContext, FeedState, CachedLook) cardBuilder;
@@ -1386,7 +1468,11 @@ class _StackPageState extends State<_StackPage> {
   @override
   Widget build(BuildContext context) => BlocBuilder<FeedCubit, FeedState>(
     builder: (context, state) {
-      final looks = widget.looksOf(state, widget.stack);
+      final looks = widget.looksOf(
+        state,
+        widget.stack,
+        context.watch<LookCollectionsCubit>().state,
+      );
       if (looks.isEmpty && !_closing) {
         _closing = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1465,6 +1551,30 @@ class _StackPageState extends State<_StackPage> {
                           ),
                         ),
                         if (create != null) _NewPill(onPressed: create),
+                        if (widget.stack case CollectionStack(
+                          :final collectionId,
+                        ))
+                          IconButton(
+                            tooltip: context.tr(LocaleKeys.collectionRemove),
+                            onPressed: () async {
+                              final collection = FeedPage._collection(
+                                context,
+                                collectionId,
+                              );
+                              if (collection == null) return;
+                              final removed = await confirmRemoveCollection(
+                                context,
+                                collection,
+                              );
+                              if (removed && context.mounted) {
+                                Navigator.of(context).pop();
+                              }
+                            },
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: FormTokens.ink,
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -1575,6 +1685,71 @@ class _NewPill extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    ),
+  );
+}
+
+/// A Sammlung without looks yet: its emoji on a dashed card that lifts a
+/// little while held.
+class _EmptyCollection extends StatelessWidget {
+  const _EmptyCollection({required this.emoji, required this.spread});
+  final String emoji;
+  final double spread;
+
+  @override
+  Widget build(BuildContext context) => Transform.rotate(
+    angle: (spread - 1).clamp(0.0, 1.0) * -0.08,
+    child: Container(
+      width: 80,
+      height: 100,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: FormTokens.selectedTint,
+        borderRadius: BorderRadius.circular(FormTokens.cardRadius),
+        border: Border.all(color: FormTokens.uploadLine),
+      ),
+      child: Text(emoji, style: const TextStyle(fontSize: 36)),
+    ),
+  );
+}
+
+/// The last tile in Sammlungen. Opens the sheet to start a new one.
+class _NewCollectionTile extends StatelessWidget {
+  const _NewCollectionTile();
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: context.tr(LocaleKeys.collectionNew),
+    excludeSemantics: true,
+    child: GestureDetector(
+      onTap: () {
+        unawaited(HapticFeedback.lightImpact());
+        unawaited(showCollectionSheet(context));
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 80,
+            height: 100,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(FormTokens.cardRadius),
+              border: Border.all(color: FormTokens.uploadLine, width: 1.5),
+            ),
+            child: const Icon(Icons.add, size: 30, color: FormTokens.green),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            context.tr(LocaleKeys.collectionNew),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: FormTokens.green,
+            ),
+          ),
+        ],
       ),
     ),
   );
