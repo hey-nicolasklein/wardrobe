@@ -51,6 +51,7 @@ import {
   updateLookCollection,
   deleteLookCollection,
   listLookCollections,
+  likedOutfits,
   setLookInCollection,
   shotWeights,
 } from './index.js';
@@ -563,6 +564,11 @@ test('looks can be filed into Sammlungen, which can be removed again', { skip: !
     assert.deepEqual((await listLookCollections(database, accountId)).map((c) => c.lookIds), [[lookId]]);
     const liked = await database.query('SELECT liked_at IS NOT NULL AS liked FROM looks WHERE id = $1', [lookId]);
     assert.equal(liked.rows[0].liked, true);
+
+    // Filed looks are the taste the ranker scores proposals against.
+    await database.query('INSERT INTO look_items (look_id, wardrobe_item_id, ordinal) VALUES ($1, $2, 0)', [lookId, fixtureIds.readyItem]);
+    const taste = await likedOutfits(database, accountId);
+    assert.deepEqual(taste.map((look) => [look.collection, look.outfit.map((piece) => piece.name)]), [['Urlaub', ['Navy overshirt']]]);
     await assert.rejects(
       setLookInCollection(database, {
         accountId: fixtureIds.emptyAccount,

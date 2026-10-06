@@ -37,7 +37,7 @@ import {
 } from './look-proposals.js';
 import { pickShot, shotPrompt, shotStyle, shotWeights } from './look-shots.js';
 import { enqueueJob, type RemoteImageJob } from './jobs.js';
-import type { OutfitRanker } from './outfit-ranker.js';
+import type { LikedOutfit, OutfitRanker } from './outfit-ranker.js';
 import { collageModel, prepareIdentityReference, createIdentityCollage } from './identity-collage.js';
 import { IdempotencyConflictError, OwnedResourceNotFoundError } from './media.js';
 import type { PrivateObjectStorage } from './storage.js';
@@ -880,6 +880,25 @@ export async function proposeLooks(
 }
 
 /**
+ * The user's taste for the ranker: the 8 looks they filed into Sammlungen
+ * most recently, each with its Sammlung's name.
+ */
+export async function likedOutfits(database: Database, accountId: string): Promise<LikedOutfit[]> {
+  const result = await database.query<{ collection: string; outfit: LikedOutfit['outfit'] }>(
+    `SELECT c.name collection, json_agg(json_strip_nulls(json_build_object('name',i.name,'category',i.category,'colors',i.colors,
+       'traits',CASE WHEN t.wardrobe_item_id IS NULL THEN NULL ELSE json_build_object('warmth',t.warmth,'kind',t.kind,'formality',t.formality) END))) outfit
+     FROM look_collection_entries e JOIN look_collections c ON c.id=e.collection_id
+     JOIN looks l ON l.id=e.look_id AND l.deleted_at IS NULL
+     JOIN look_items li ON li.look_id=l.id
+     JOIN wardrobe_items i ON i.id=li.wardrobe_item_id AND i.deleted_at IS NULL
+     LEFT JOIN item_traits t ON t.wardrobe_item_id=i.id
+     WHERE c.account_id=$1 GROUP BY c.id, l.id ORDER BY max(e.added_at) DESC LIMIT 8`,
+    [accountId],
+  );
+  return result.rows;
+}
+
+/**
  * Draws outfit candidates from the closet in code and keeps the [count] best
  * by [ranker], so a batch of proposals takes a moment instead of a planner
  * call each. Fewer, or none, when the closet cannot complete an outfit.
@@ -897,7 +916,7 @@ async function composeProposals(
   ranker?: OutfitRanker,
 ): Promise<Array<{ itemIds: string[]; reasons: LookReason[] }>> {
   const exact = input.exactItemIds;
-  const [candidates, traits, recent, open] = await Promise.all([
+  const [candidates, traits, recent, open, liked] = await Promise.all([
     candidateItems(database, input.accountId, exact.length > 0 || input.categories.length > 0),
     traitsOf(database, input.accountId),
     database.query<{ ids: string[] }>(
@@ -910,6 +929,7 @@ async function composeProposals(
        WHERE l.account_id=$1 AND l.proposal AND l.state='proposed' AND l.deleted_at IS NULL GROUP BY l.id`,
       [input.accountId],
     ),
+    ranker ? likedOutfits(database, input.accountId) : Promise.resolve([]),
   ]);
   // createLook reports pieces that cannot be worn.
   if (exact.some((id) => !candidates.rows.some((item) => item.id === id))) return [];
@@ -924,7 +944,7 @@ async function composeProposals(
       createdAt: item.created_at,
     }));
   const byId = new Map(candidates.rows.map((item) => [item.id, item]));
-  const outfits = buildOutfits({ pool, exactItemIds: exact, categories: input.categories, usage, tries: 30 }).filter(
+  const outfits = buildOutfits({ pool, exactItemIds: exact, categories: input.categories, usage, tries: 80 }).filter(
     ({ itemIds }) => {
       const pieces = itemIds.map((id) => byId.get(id)!);
       return (
@@ -949,6 +969,7 @@ async function composeProposals(
             }),
           ),
           occasion: input.occasion ?? null,
+          liked,
         })
       : null;
   const picked = pickProposals({
