@@ -963,12 +963,13 @@ async function composeProposals(
 }
 
 /**
- * Applies swipe marks to every open proposal right away, see adjustOutfit.
+ * Applies swipe marks to the open proposals right away, see adjustOutfit,
+ * except [exceptLookIds], the outfit the user marked on, which stays as seen.
  * No planner call: a swap or a kept piece shows up in milliseconds.
  */
 export async function adjustLookProposals(
   database: Database,
-  input: { accountId: string; keepItemIds: string[]; excludeItemIds: string[] },
+  input: { accountId: string; keepItemIds: string[]; excludeItemIds: string[]; exceptLookIds?: string[] },
 ) {
   await withTransaction(database, async (client) => {
     // Quick taps arrive back to back; one adjustment at a time per account.
@@ -998,6 +999,7 @@ export async function adjustLookProposals(
     );
     const current = new Map(open.rows.map((look) => [look.id, look.ids]));
     for (const look of open.rows) {
+      if (input.exceptLookIds?.includes(look.id)) continue;
       const outfit = look.ids.flatMap((id) => pieces.get(id) ?? []);
       const next = adjustOutfit({
         outfit,

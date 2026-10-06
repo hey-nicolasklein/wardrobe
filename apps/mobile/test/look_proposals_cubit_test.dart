@@ -125,15 +125,17 @@ void main() {
       addTearDown(cubit.close);
       await cubit.refresh();
       await cubit.keep('jacket');
-      await cubit.swap('pants');
+      await cubit.swap('pants', onLookId: 'look-a');
       expect(adjustBodies, [
         {
           'keepItemIds': ['jacket'],
           'excludeItemIds': <String>[],
         },
+        // The outfit on screen stays; the marks shape the next ones.
         {
           'keepItemIds': <String>[],
           'excludeItemIds': ['pants'],
+          'exceptLookIds': ['look-a'],
         },
       ]);
       // The adjusted outfit replaces the waiting one in place.

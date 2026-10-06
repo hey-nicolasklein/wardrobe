@@ -682,7 +682,7 @@
   "proposalsPickedBody": "They develop at the top of your feed in a moment.",
   "proposalsNonePickedBody": "Start a new round, every outfit will be fresh.",
   "proposalsFailedTitle": "No outfits this time",
-  "proposalsSwap": "Swap",
+  "proposalsSwap": "Leave out",
   "proposalsKeep": "Keep",
   "proposalsKept": "Kept",
   "proposalsPlanningNext": "Putting the next outfit together…",
@@ -697,5 +697,6 @@
   "kind": "Type",
   "brandHint": "Add brand",
   "addBrand": "Brand",
-  "removeBrand": "Remove brand"
+  "removeBrand": "Remove brand",
+  "proposalsLeftOut": "Left out"
 }

@@ -122,9 +122,14 @@ test('proposals are planned for free and only the picked one is rendered and cha
     await assert.rejects(renderLookProposal(database, { accountId, lookId: picked, idempotencyKey: randomUUID() }), /nicht mehr verfügbar/);
     // Swipe marks edit the open proposals in place. Without another piece of
     // its category in the closet, an excluded piece simply leaves the outfit.
-    const adjusted = await adjustLookProposals(database, { accountId, keepItemIds: [], excludeItemIds: [fixtureIds.readyItem] });
+    // The outfit on screen while marking stays as the user saw it.
+    const onScreen = proposed.lookIds[0]!;
+    const adjusted = await adjustLookProposals(database, {
+      accountId, keepItemIds: [], excludeItemIds: [fixtureIds.readyItem], exceptLookIds: [onScreen],
+    });
     assert.equal(adjusted.length, 2);
-    assert.ok(adjusted.every((look) => !look.wardrobeItemIds.includes(fixtureIds.readyItem)));
+    assert.deepEqual(adjusted.find((look) => look.id === onScreen)!.wardrobeItemIds, [fixtureIds.readyItem]);
+    assert.ok(adjusted.every((look) => look.id === onScreen || !look.wardrobeItemIds.includes(fixtureIds.readyItem)));
     // A new batch replaces the unpicked proposals.
     await proposeLooks(database, { ...command, count: 1, idempotencyKey: randomUUID() });
     const [kept] = await listLookProposals(database, accountId);

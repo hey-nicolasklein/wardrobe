@@ -141,23 +141,28 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
     if (state.planning) _poll = Timer(pollInterval, () => unawaited(refresh()));
   }
 
-  /// Keeps a piece: it moves into every waiting outfit and all later ones.
-  Future<void> keep(String itemId) => _mark(itemId, PieceMark.keep);
+  /// Keeps a piece: it moves into the waiting outfits and all later ones.
+  /// The outfit it was marked on ([onLookId]) stays as the user sees it.
+  Future<void> keep(String itemId, {String? onLookId}) =>
+      _mark(itemId, PieceMark.keep, onLookId);
 
-  /// Swaps a piece out of the outfits for good. It is replaced in place.
-  Future<void> swap(String itemId) => _mark(itemId, PieceMark.exclude);
+  /// Swaps a piece out of the waiting outfits and all later ones. The outfit
+  /// it was marked on ([onLookId]) stays as the user sees it.
+  Future<void> swap(String itemId, {String? onLookId}) =>
+      _mark(itemId, PieceMark.exclude, onLookId);
 
   /// Drops a mark. Outfits already adjusted stay as they are.
   void unmark(String itemId) =>
       emit(state.copyWith(marks: {...state.marks}..remove(itemId)));
 
-  Future<void> _mark(String itemId, PieceMark mark) async {
+  Future<void> _mark(String itemId, PieceMark mark, String? onLookId) async {
     emit(state.copyWith(marks: {...state.marks, itemId: mark}));
     _revision++;
     try {
       final adjusted = await looks.adjustProposals(
         keep: mark == PieceMark.keep ? [itemId] : const [],
         exclude: mark == PieceMark.exclude ? [itemId] : const [],
+        except: [?onLookId],
       );
       if (isClosed) return;
       _revision++;

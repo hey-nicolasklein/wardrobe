@@ -682,7 +682,7 @@
   "proposalsPickedBody": "Sie entstehen gleich oben in deinem Feed.",
   "proposalsNonePickedBody": "Starte eine neue Runde, jedes Outfit ist frisch.",
   "proposalsFailedTitle": "Diesmal keine Outfits",
-  "proposalsSwap": "Tauschen",
+  "proposalsSwap": "Weglassen",
   "proposalsKeep": "Behalten",
   "proposalsKept": "Behalten",
   "proposalsPlanningNext": "Nächstes Outfit wird zusammengestellt…",
@@ -697,5 +697,6 @@
   "kind": "Art",
   "brandHint": "Marke hinzufügen",
   "addBrand": "Marke",
-  "removeBrand": "Marke entfernen"
+  "removeBrand": "Marke entfernen",
+  "proposalsLeftOut": "Weggelassen"
 }

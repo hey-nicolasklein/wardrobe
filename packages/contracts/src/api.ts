@@ -322,6 +322,8 @@ export const adjustLookProposalsRequestSchema = z
   .object({
     keepItemIds: z.array(opaqueIdSchema).max(20).default([]),
     excludeItemIds: z.array(opaqueIdSchema).max(200).default([]),
+    // The outfit on screen while marking stays as shown; marks shape the next ones.
+    exceptLookIds: z.array(opaqueIdSchema).max(20).default([]),
   })
   .strict();
 export const renderLookProposalRequestSchema = z

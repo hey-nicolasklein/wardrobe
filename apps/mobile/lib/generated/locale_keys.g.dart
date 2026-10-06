@@ -664,6 +664,7 @@ abstract class LocaleKeys {
   static const proposalsNonePickedBody = 'proposalsNonePickedBody';
   static const proposalsFailedTitle = 'proposalsFailedTitle';
   static const proposalsSwap = 'proposalsSwap';
+  static const proposalsLeftOut = 'proposalsLeftOut';
   static const proposalsKeep = 'proposalsKeep';
   static const proposalsKept = 'proposalsKept';
   static const proposalsPlanningNext = 'proposalsPlanningNext';

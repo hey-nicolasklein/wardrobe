@@ -330,14 +330,20 @@ class LookRepository {
   }
 
   /// Applies swipe marks to the open proposals in place and returns them.
+  /// [except] proposals stay as they are.
   Future<List<Look>> adjustProposals({
     List<String> keep = const [],
     List<String> exclude = const [],
+    List<String> except = const [],
   }) async {
     final response = await _request(
       'v1/looks/proposals/adjust',
       method: 'POST',
-      data: {'keepItemIds': keep, 'excludeItemIds': exclude},
+      data: {
+        'keepItemIds': keep,
+        'excludeItemIds': exclude,
+        if (except.isNotEmpty) 'exceptLookIds': except,
+      },
     );
     try {
       return [

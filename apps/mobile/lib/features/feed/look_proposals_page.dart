@@ -161,14 +161,18 @@ class _ProposalsViewState extends State<_ProposalsView> {
                                           HapticFeedback.mediumImpact(),
                                         );
                                         setState(() => _selected = null);
-                                        unawaited(cubit.keep(id));
+                                        unawaited(
+                                          cubit.keep(id, onLookId: look.id),
+                                        );
                                       },
                                       onSwap: (id) {
                                         unawaited(
                                           HapticFeedback.lightImpact(),
                                         );
                                         setState(() => _selected = null);
-                                        unawaited(cubit.swap(id));
+                                        unawaited(
+                                          cubit.swap(id, onLookId: look.id),
+                                        );
                                       },
                                     )
                                   : _PlanningCard(
@@ -645,6 +649,7 @@ class _ProposalCard extends StatelessWidget {
                 },
                 imageBuilder: (item) => _MarkedPiece(
                   kept: marks[item.id] == PieceMark.keep,
+                  leftOut: marks[item.id] == PieceMark.exclude,
                   child: CachedMedia(
                     identity: item.previewIdentity,
                     previewPath: item.previewPath,
@@ -680,6 +685,7 @@ class _ProposalCard extends StatelessWidget {
                     key: ValueKey(selected),
                     name: itemsById[selected]?.metadata.name ?? '',
                     kept: marks[selected] == PieceMark.keep,
+                    leftOut: marks[selected] == PieceMark.exclude,
                     onKeep: () => onKeep(selected),
                     onSwap: () => onSwap(selected),
                   ),
@@ -691,11 +697,12 @@ class _ProposalCard extends StatelessWidget {
 }
 
 /// What can happen to the selected piece: keep it for the next outfits, or
-/// swap it for another piece of its kind right on this card.
+/// leave it out of them. This card stays as it is either way.
 class _PieceActions extends StatelessWidget {
   const _PieceActions({
     required this.name,
     required this.kept,
+    required this.leftOut,
     required this.onKeep,
     required this.onSwap,
     super.key,
@@ -703,6 +710,7 @@ class _PieceActions extends StatelessWidget {
 
   final String name;
   final bool kept;
+  final bool leftOut;
   final VoidCallback onKeep;
   final VoidCallback onSwap;
 
@@ -725,9 +733,15 @@ class _PieceActions extends StatelessWidget {
         children: [
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: onSwap,
-              icon: const Icon(Icons.swap_horiz, size: 18),
-              label: Text(context.tr(LocaleKeys.proposalsSwap)),
+              onPressed: leftOut ? null : onSwap,
+              icon: const Icon(Icons.remove_circle_outline, size: 18),
+              label: Text(
+                context.tr(
+                  leftOut
+                      ? LocaleKeys.proposalsLeftOut
+                      : LocaleKeys.proposalsSwap,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -748,11 +762,17 @@ class _PieceActions extends StatelessWidget {
   );
 }
 
-/// A piece the user kept: a pin badge pops in.
+/// A piece the user kept gets a pin badge. One left out fades back: it stays
+/// on this card but not in the next outfits.
 class _MarkedPiece extends StatelessWidget {
-  const _MarkedPiece({required this.kept, required this.child});
+  const _MarkedPiece({
+    required this.kept,
+    required this.leftOut,
+    required this.child,
+  });
 
   final bool kept;
+  final bool leftOut;
   final Widget child;
 
   @override
@@ -760,7 +780,11 @@ class _MarkedPiece extends StatelessWidget {
     clipBehavior: Clip.none,
     fit: StackFit.expand,
     children: [
-      child,
+      AnimatedOpacity(
+        duration: const Duration(milliseconds: 220),
+        opacity: leftOut ? 0.3 : 1,
+        child: child,
+      ),
       Positioned(
         top: 0,
         right: 0,
