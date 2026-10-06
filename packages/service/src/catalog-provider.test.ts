@@ -106,6 +106,7 @@ test('uses strict Responses output and clamps detection boxes', async () => {
     assert.match(prompt ?? '', /exclude captions, controls, cards, background, and other garments/);
     assert.match(prompt ?? '', /Name a piece by brand and product model.*Never invent a brand or model/);
     assert.match(prompt ?? '', /Nike Air Force 1/);
+    assert.match(prompt ?? '', /A pair is one item/);
     assert.match(prompt ?? '', /normalized integer coordinates/);
     const imageInput = (
       requestBody?.input as Array<{
