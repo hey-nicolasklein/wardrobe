@@ -46,6 +46,9 @@ class CharacterSetupPage extends StatelessWidget {
         },
         builder: (context, state) {
           final cubit = context.read<CharacterSetupCubit>();
+          if (state.step == CharacterStep.crop) {
+            return _CropSheet(state: state);
+          }
           return FormSheet(
             title: context.tr(switch (state.step) {
               CharacterStep.select => LocaleKeys.character_collage,
@@ -84,65 +87,6 @@ class CharacterSetupPage extends StatelessWidget {
                         context.tr(LocaleKeys.character_continueCrop),
                       ),
                     ),
-                ],
-                if (state.step == CharacterStep.crop) ...[
-                  Text(
-                    context.tr(
-                      LocaleKeys.character_photoIndex,
-                      namedArgs: {
-                        'index': '${state.index + 1}',
-                        'count': '${state.draft!.photos.length}',
-                      },
-                    ),
-                    style: FormTokens.eyebrow,
-                  ),
-                  Text(
-                    context.tr(LocaleKeys.character_cropTitle),
-                    style: FormTokens.heading,
-                  ),
-                  Text(
-                    context.tr(LocaleKeys.character_cropBody),
-                    style: FormTokens.body,
-                  ),
-                  _Crop(state: state),
-                  if (state.lowResolution)
-                    FormNotice(
-                      text: context.tr(LocaleKeys.character_resolution),
-                    ),
-                  Text(context.tr(LocaleKeys.character_zoom)),
-                  Slider(
-                    value: state.photo.crop.zoom,
-                    min: 1,
-                    max: 6,
-                    onChanged: state.editable ? cubit.zoom : null,
-                    semanticFormatterCallback: (value) => context.tr(
-                      LocaleKeys.character_zoomValue,
-                      namedArgs: {'zoom': value.toStringAsFixed(1)},
-                    ),
-                  ),
-                  Row(
-                    spacing: 12,
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: state.editable ? cubit.back : null,
-                          child: Text(context.tr(LocaleKeys.character_back)),
-                        ),
-                      ),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: state.editable ? cubit.next : null,
-                          child: Text(
-                            context.tr(
-                              state.isLastPhoto
-                                  ? LocaleKeys.character_review
-                                  : LocaleKeys.character_nextPhoto,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
                 ],
                 if (state.step == CharacterStep.review) ...[
                   Text(
@@ -243,6 +187,97 @@ class CharacterSetupPage extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Keep the photo gesture separate from sheet scrolling, with controls pinned.
+class _CropSheet extends StatelessWidget {
+  const _CropSheet({required this.state});
+  final CharacterSetupState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<CharacterSetupCubit>();
+    return FormSheet(
+      title: context.tr(LocaleKeys.character_crop),
+      scrollable: false,
+      footer: Row(
+        spacing: 12,
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: state.editable ? cubit.back : null,
+              child: Text(context.tr(LocaleKeys.character_back)),
+            ),
+          ),
+          Expanded(
+            child: FilledButton(
+              onPressed: state.editable ? cubit.next : null,
+              child: Text(
+                context.tr(
+                  state.isLastPhoto
+                      ? LocaleKeys.character_review
+                      : LocaleKeys.character_nextPhoto,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Only the instructions may scroll at large text sizes. They never
+          // inherit the draggable sheet's primary scroll controller.
+          Flexible(
+            child: SingleChildScrollView(
+              primary: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 10,
+                children: [
+                  Text(
+                    context.tr(
+                      LocaleKeys.character_photoIndex,
+                      namedArgs: {
+                        'index': '${state.index + 1}',
+                        'count': '${state.draft!.photos.length}',
+                      },
+                    ),
+                    style: FormTokens.small,
+                  ),
+                  Text(
+                    context.tr(LocaleKeys.character_cropBody),
+                    style: FormTokens.body,
+                  ),
+                  if (!state.online)
+                    FormNotice(text: context.tr(LocaleKeys.character_offline)),
+                  if (state.error != null)
+                    FormNotice(text: context.tr(state.error!), error: true),
+                  if (state.lowResolution)
+                    FormNotice(
+                      text: context.tr(LocaleKeys.character_resolution),
+                    ),
+                  if (state.busy) const LinearProgressIndicator(),
+                ],
+              ),
+            ),
+          ),
+          Expanded(flex: 2, child: _Crop(state: state)),
+          Text(context.tr(LocaleKeys.character_zoom)),
+          Slider(
+            value: state.photo.crop.zoom,
+            min: 1,
+            max: 6,
+            onChanged: state.editable ? cubit.zoom : null,
+            semanticFormatterCallback: (value) => context.tr(
+              LocaleKeys.character_zoomValue,
+              namedArgs: {'zoom': value.toStringAsFixed(1)},
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Crop extends StatelessWidget {

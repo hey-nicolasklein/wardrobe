@@ -1,15 +1,26 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/native.dart';
+// The delegate supplies real translations without platform preferences.
+import 'package:easy_localization/src/localization.dart';
+import 'package:easy_localization/src/translations.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:form_mobile/app/form_theme.dart';
+import 'package:form_mobile/features/settings/character/character_cubit.dart';
 import 'package:form_mobile/features/settings/character/character_setup_cubit.dart';
+import 'package:form_mobile/features/settings/character/character_setup_page.dart';
 import 'package:form_mobile/features/settings/character/collage_geometry.dart';
-import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/character_draft.dart';
 import 'package:form_mobile/repository/character_draft_repository.dart';
 import 'package:form_mobile/repository/character_sheet_repository.dart';
 import 'package:form_mobile/services/app_database.dart';
 import 'package:form_mobile/services/photo_preparation.dart';
+import 'package:form_mobile/widgets/form_components.dart';
 import 'package:image/image.dart' as img;
 
 import 'support/character_fixtures.dart';
@@ -28,6 +39,28 @@ class TestPreparation extends PhotoPreparation {
     );
     return PreparedPhoto(img.encodeJpg(image), 120, 160);
   }
+}
+
+class _TestLocalization extends LocalizationsDelegate<Localization> {
+  const _TestLocalization();
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'de';
+
+  @override
+  Future<Localization> load(Locale locale) {
+    Localization.load(
+      locale,
+      translations: Translations(
+        jsonDecode(File('assets/translations/de.json').readAsStringSync())
+            as Map<String, dynamic>,
+      ),
+    );
+    return SynchronousFuture(Localization.instance);
+  }
+
+  @override
+  bool shouldReload(_TestLocalization old) => false;
 }
 
 void main() {
@@ -59,19 +92,105 @@ void main() {
     await directory.delete(recursive: true);
   });
 
-  test(
-    'selection cancellation and count validation leave the draft unchanged',
-    () async {
-      paths = [];
+  testWidgets('zoomed photo drags crop without moving the sheet', (
+    tester,
+  ) async {
+    paths = ['red', 'green'];
+    await tester.runAsync(() async {
       await cubit.choose();
-      expect(cubit.state.draft, isNull);
-      paths = ['a', 'b', 'c', 'd', 'e'];
-      await cubit.choose();
-      expect(cubit.state.error, LocaleKeys.character_photoCount);
-      expect(cubit.state.draft, isNull);
-      expect(api.requests, isEmpty);
-    },
-  );
+      cubit.zoom(3);
+      await repository.persist(cubit.state.draft!);
+    });
+    final character = CharacterCubit(sheets);
+    addTearDown(character.close);
+    for (final size in [const Size(393, 852), const Size(320, 568)]) {
+      for (final textScale in [1.0, 1.5]) {
+        await tester.binding.setSurfaceSize(size);
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.pumpWidget(
+          RepositoryProvider.value(
+            value: repository,
+            child: BlocProvider.value(
+              value: character,
+              child: MaterialApp(
+                theme: formTheme(),
+                locale: const Locale('de'),
+                supportedLocales: const [Locale('de')],
+                localizationsDelegates: const [
+                  _TestLocalization(),
+                  ...GlobalMaterialLocalizations.delegates,
+                ],
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(context).copyWith(
+                    textScaler: TextScaler.linear(textScale),
+                  ),
+                  child: child!,
+                ),
+                home: Builder(
+                  builder: (context) => Scaffold(
+                    body: TextButton(
+                      onPressed: () => showFormSheet<void>(
+                        context: context,
+                        enableDrag: false,
+                        builder: (_) => const CharacterSetupPage(),
+                      ),
+                      child: const Text('Open'),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.runAsync(() async {
+          await tester.tap(find.text('Open'));
+          await tester.pump();
+          // Allow the persisted draft to load from disk.
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        });
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: '$size at $textScale');
+        final crop = find.byType(FormCropViewport);
+        final editor = tester.element(crop).read<CharacterSetupCubit>();
+        final rect = tester.getRect(crop);
+        final footer = tester.getRect(
+          find.widgetWithText(FilledButton, 'Nächstes Foto'),
+        );
+        expect(rect.height, greaterThan(0));
+        expect(footer.bottom, lessThan(size.height));
+        final before = editor.state.photo.crop.y;
+        await tester.drag(crop, const Offset(0, 30));
+        await tester.pumpAndSettle();
+        expect(editor.state.photo.crop.y, isNot(before));
+        expect(tester.getRect(crop), rect);
+        expect(tester.takeException(), isNull, reason: '$size at $textScale');
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+      }
+    }
+  });
+
+  test('selection cancellation leaves an existing draft unchanged', () async {
+    await cubit.choose();
+    final draft = cubit.state.draft;
+    paths = [];
+    await cubit.choose();
+    expect(cubit.state.draft, same(draft));
+    expect(cubit.state.busy, false);
+    expect(cubit.state.error, isNull);
+    expect(api.requests, isEmpty);
+  });
+
+  test('excess selection keeps the first four photos for cropping', () async {
+    paths = ['red', 'green', 'blue', 'red', 'green'];
+    await cubit.choose();
+    expect(cubit.state.draft!.photos, hasLength(4));
+    expect(cubit.state.step, CharacterStep.crop);
+    expect(cubit.state.busy, false);
+    expect(cubit.state.error, isNull);
+    expect((await repository.load())!.photos, hasLength(4));
+    expect(api.requests, isEmpty);
+  });
 
   test(
     'draft photos survive the app container moving between launches',

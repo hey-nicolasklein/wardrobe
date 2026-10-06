@@ -69,7 +69,9 @@ class CharacterSetupCubit extends Cubit<CharacterSetupState> {
   final Future<List<String>> Function() pick;
 
   static Future<List<String>> _pick() async =>
-      (await ImagePicker().pickMultiImage()).map((f) => f.path).toList();
+      (await ImagePicker().pickMultiImage(
+        limit: 4,
+      )).map((f) => f.path).toList();
 
   void setOnline({required bool online}) =>
       emit(state.copyWith(online: online));
@@ -115,14 +117,10 @@ class CharacterSetupCubit extends Cubit<CharacterSetupState> {
         _update(state.copyWith(busy: false));
         return;
       }
-      if (paths.length > 4) {
-        _update(
-          state.copyWith(busy: false, error: LocaleKeys.character_photoCount),
-        );
-        return;
-      }
       final old = state.draft;
-      final draft = await repository.prepare(paths);
+      // Some platforms may ignore the picker limit. Keep the allowed photos
+      // rather than rejecting the entire selection.
+      final draft = await repository.prepare(paths.take(4).toList());
       // The old files are removed without clearing the new draft's checkpoint.
       if (old != null) await repository.removeFiles(old);
       _update(

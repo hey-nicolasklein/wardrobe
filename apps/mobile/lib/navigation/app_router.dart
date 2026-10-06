@@ -127,6 +127,7 @@ GoRouter createRouter({bool onboarding = false}) {
                     parentNavigatorKey: _rootNavigatorKey,
                     pageBuilder: (_, state) => FormSheetPage(
                       key: state.pageKey,
+                      enableDrag: false,
                       child: const CharacterSetupPage(fromFeed: true),
                     ),
                   ),
@@ -190,6 +191,7 @@ GoRouter createRouter({bool onboarding = false}) {
                     parentNavigatorKey: _rootNavigatorKey,
                     pageBuilder: (_, state) => FormSheetPage(
                       key: state.pageKey,
+                      enableDrag: false,
                       child: const CharacterSetupPage(),
                     ),
                   ),
@@ -255,6 +257,7 @@ GoRouter createRouter({bool onboarding = false}) {
             parentNavigatorKey: _rootNavigatorKey,
             pageBuilder: (_, state) => FormSheetPage(
               key: state.pageKey,
+              enableDrag: false,
               child: const CharacterSetupPage(),
             ),
           ),
@@ -268,14 +271,17 @@ class FormSheetPage extends Page<void> {
   const FormSheetPage({
     required this.child,
     this.maxExtent = formSheetExtent,
+    this.enableDrag = true,
     super.key,
   });
   final Widget child;
   final double maxExtent;
+  final bool enableDrag;
 
   @override
   Route<void> createRoute(BuildContext context) => ModalBottomSheetRoute<void>(
     settings: this,
+    enableDrag: enableDrag,
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,

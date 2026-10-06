@@ -974,8 +974,10 @@ class _FormSheetDraggableWrapperState
 Future<T?> showFormSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
+  bool enableDrag = true,
 }) => showModalBottomSheet<T>(
   context: context,
+  enableDrag: enableDrag,
   isScrollControlled: true,
   useSafeArea: true,
   showDragHandle: true,
@@ -1746,6 +1748,7 @@ class FormCropViewport extends StatelessWidget {
       builder: (context, constraints) {
         final scale = constraints.maxWidth / bounds.width;
         return GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onPanUpdate: onPan == null
               ? null
               : (event) => onPan!(
