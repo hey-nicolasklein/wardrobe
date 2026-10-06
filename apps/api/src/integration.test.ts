@@ -154,6 +154,36 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       'stale-record-version',
     );
 
+    const traits = { warmth: 'warm', kind: 'puffer jacket', brand: 'Arket', formality: 'casual' };
+    const traitsEdit = await app.request(`/v1/wardrobe-items/${fixtureIds.readyItem}`, {
+      method: 'PATCH',
+      headers: { ...ownerHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        traits,
+        expectedRecordVersion: 3,
+        idempotencyKey: 'integration-item-traits-edit-0001',
+      }),
+    });
+    assert.equal(traitsEdit.status, 200);
+    assert.deepEqual(
+      ((await traitsEdit.json()) as { wardrobeItem: { traits: unknown } }).wardrobeItem.traits,
+      traits,
+    );
+    const brandRemoval = await app.request(`/v1/wardrobe-items/${fixtureIds.readyItem}`, {
+      method: 'PATCH',
+      headers: { ...ownerHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        traits: { ...traits, brand: null },
+        expectedRecordVersion: 4,
+        idempotencyKey: 'integration-item-traits-edit-0002',
+      }),
+    });
+    assert.equal(
+      ((await brandRemoval.json()) as { wardrobeItem: { traits: { brand: unknown } } }).wardrobeItem
+        .traits.brand,
+      null,
+    );
+
     const additionalReviewAttempt = '50000000-0000-4000-8000-000000000099';
     await database.query(
       `INSERT INTO generation_attempts (
@@ -517,7 +547,7 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       { id: createdItemResponse.wardrobeItem.id, version: 0 },
       { id: fixtureIds.queuedItem, version: 0 },
       { id: fixtureIds.needsReviewItem, version: 3 },
-      { id: fixtureIds.readyItem, version: 3 },
+      { id: fixtureIds.readyItem, version: 5 },
     ];
     type DeletionBody = {
       sourcePhotoDeleted: boolean;

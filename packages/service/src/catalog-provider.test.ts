@@ -104,9 +104,8 @@ test('uses strict Responses output and clamps detection boxes', async () => {
       /Treat screenshots and product grids as multiple pictured instances/,
     );
     assert.match(prompt ?? '', /exclude captions, controls, cards, background, and other garments/);
-    assert.match(prompt ?? '', /Include the brand and product model.*clearly identifiable/);
-    assert.match(prompt ?? '', /Nike Air Max 95/);
-    assert.match(prompt ?? '', /Do not guess them when uncertain/);
+    assert.match(prompt ?? '', /Name a piece by brand and product model.*Never invent a brand or model/);
+    assert.match(prompt ?? '', /Nike Air Force 1/);
     assert.match(prompt ?? '', /normalized integer coordinates/);
     const imageInput = (
       requestBody?.input as Array<{

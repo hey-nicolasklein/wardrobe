@@ -14,7 +14,7 @@ import type {
   WardrobeItem,
 } from '@form/contracts';
 
-import { shelfImageModel, shelfImagePromptVersion } from './catalog-provider.js';
+import { shelfImageModel, shelfImagePromptVersion, type ItemTraits } from './catalog-provider.js';
 import type { Database, DatabaseClient } from './database.js';
 import { withTransaction } from './database.js';
 import { enqueueJob } from './jobs.js';
@@ -539,6 +539,7 @@ export async function updateWardrobeItem(
     wardrobeItemId: string;
     metadata?: ItemMetadata;
     state?: ItemState;
+    traits?: ItemTraits;
     currentShelfImageVersionId?: string | null;
     expectedRecordVersion: number;
     idempotencyKey: string;
@@ -548,6 +549,7 @@ export async function updateWardrobeItem(
     wardrobeItemId: input.wardrobeItemId,
     metadata: input.metadata,
     state: input.state,
+    traits: input.traits,
     currentShelfImageVersionId: input.currentShelfImageVersionId,
     expectedRecordVersion: input.expectedRecordVersion,
   };
@@ -578,6 +580,19 @@ export async function updateWardrobeItem(
           'The selected Shelf Image Version does not belong to this Wardrobe Item.',
         );
       }
+    }
+    if (input.traits) {
+      // Written before the item update so its RETURNING sees the new tags.
+      // The worker only tags pieces without a row, so manual tags stick.
+      const { warmth, kind, brand, formality } = input.traits;
+      await client.query(
+        `INSERT INTO item_traits (wardrobe_item_id, account_id, warmth, kind, brand, formality)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (wardrobe_item_id) DO UPDATE SET
+           warmth = EXCLUDED.warmth, kind = EXCLUDED.kind,
+           brand = EXCLUDED.brand, formality = EXCLUDED.formality`,
+        [input.wardrobeItemId, input.accountId, warmth, kind, brand, formality],
+      );
     }
     const metadata = input.metadata ?? mapWardrobeItem(row).metadata;
     const status =

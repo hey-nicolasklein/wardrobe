@@ -8,6 +8,7 @@ import {
   generationSizeSchema,
   itemMetadataSchema,
   itemStateSchema,
+  itemTraitsSchema,
   opaqueIdSchema,
   privateAssetSchema,
   recordVersionSchema,
@@ -139,14 +140,19 @@ export const updateWardrobeItemRequestSchema = z
   .object({
     metadata: itemMetadataSchema.optional(),
     state: itemStateSchema.optional(),
+    // Replaces the worker's tags. A null brand removes it.
+    traits: itemTraitsSchema.optional(),
     currentShelfImageVersionId: opaqueIdSchema.nullable().optional(),
     expectedRecordVersion: recordVersionSchema,
     idempotencyKey: idempotencyKeySchema,
   })
   .strict()
   .refine(
-    ({ metadata, state, currentShelfImageVersionId }) =>
-      metadata !== undefined || state !== undefined || currentShelfImageVersionId !== undefined,
+    ({ metadata, state, traits, currentShelfImageVersionId }) =>
+      metadata !== undefined ||
+      state !== undefined ||
+      traits !== undefined ||
+      currentShelfImageVersionId !== undefined,
     { message: 'At least one editable field is required' },
   );
 
