@@ -535,7 +535,6 @@ abstract class LocaleKeys {
   static const auth_apple = 'auth.apple';
   static const auth_google = 'auth.google';
   static const auth_failed = 'auth.failed';
-  static const auth_devTitle = 'auth.devTitle';
   static const auth_devAction = 'auth.devAction';
   static const auth_devAccountAction = 'auth.devAccountAction';
   static const auth_accountTitle = 'auth.accountTitle';
@@ -545,6 +544,7 @@ abstract class LocaleKeys {
   static const auth_deleteBody = 'auth.deleteBody';
   static const auth_deleteConfirm = 'auth.deleteConfirm';
   static const auth_emailTitle = 'auth.emailTitle';
+  static const auth_passwordLink = 'auth.passwordLink';
   static const auth_email = 'auth.email';
   static const auth_password = 'auth.password';
   static const auth_emailAction = 'auth.emailAction';
