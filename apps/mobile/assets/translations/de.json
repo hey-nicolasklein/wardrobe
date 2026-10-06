@@ -44,7 +44,7 @@
   "wardrobeRefreshFailed": "Aktualisierung fehlgeschlagen. Gespeicherte Stücke bleiben verfügbar.",
   "itemCount": "{shown} von {total} Stücken",
   "search": "Suchen",
-  "filters": "Kategorie und Farbe",
+  "filters": "Filter",
   "resetFilters": "Filter zurücksetzen",
   "filteredEmpty": "Keine passenden Stücke.",
   "itemActionFailed": "Aktion fehlgeschlagen. Aktualisiere das Stück und versuche es erneut.",
@@ -686,5 +686,16 @@
   "proposalsKeep": "Behalten",
   "proposalsKept": "Behalten",
   "proposalsPlanningNext": "Nächstes Outfit wird zusammengestellt…",
-  "proposalsSkipStamp": "Nächstes"
+  "proposalsSkipStamp": "Nächstes",
+  "season": "Saison",
+  "brand": "Marke",
+  "seasons": {
+    "light": "Sommer",
+    "mid": "Ganzjährig",
+    "warm": "Winter"
+  },
+  "kind": "Art",
+  "brandHint": "Marke hinzufügen",
+  "addBrand": "Marke",
+  "removeBrand": "Marke entfernen"
 }

@@ -1,3 +1,4 @@
+import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 
 final colorPatterns = <String, RegExp>{
@@ -32,27 +33,43 @@ class WardrobeFilter {
     this.query = '',
     this.categories = const {},
     this.colors = const {},
+    this.seasons = const {},
+    this.brands = const {},
   });
   final String state;
   final String query;
   final Set<String> categories;
   final Set<String> colors;
-  bool get isFiltered =>
-      state != 'all' ||
-      query.isNotEmpty ||
-      categories.isNotEmpty ||
-      colors.isNotEmpty;
+
+  /// Trait warmths ('light', 'mid', 'warm'), shown as seasons.
+  final Set<String> seasons;
+  final Set<String> brands;
+  int get chipCount =>
+      categories.length + colors.length + seasons.length + brands.length;
+  bool get isFiltered => state != 'all' || query.isNotEmpty || chipCount > 0;
   WardrobeFilter copyWith({
     String? state,
     String? query,
     Set<String>? categories,
     Set<String>? colors,
+    Set<String>? seasons,
+    Set<String>? brands,
   }) => WardrobeFilter(
     state: state ?? this.state,
     query: query ?? this.query,
     categories: categories ?? this.categories,
     colors: colors ?? this.colors,
+    seasons: seasons ?? this.seasons,
+    brands: brands ?? this.brands,
   );
+
+  /// Untagged items (traits == null) pass the season and brand filters.
+  bool matchesTraits(WardrobeItem item) {
+    final traits = item.traits;
+    return traits == null ||
+        ((seasons.isEmpty || seasons.contains(traits.warmth)) &&
+            (brands.isEmpty || brands.contains(traits.brand)));
+  }
 
   List<CachedItem> apply(
     List<CachedItem> records, {
@@ -75,6 +92,7 @@ class WardrobeFilter {
               metadata.colors.any(
                 (c) => colorFamilies(c).intersection(colors).isNotEmpty,
               )) &&
+          matchesTraits(item) &&
           searchable.contains(query.toLowerCase());
     }).toList()..sort((a, b) => b.item.createdAt.compareTo(a.item.createdAt));
   }

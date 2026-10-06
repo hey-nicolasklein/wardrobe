@@ -245,6 +245,29 @@ class _ItemViewState extends State<_ItemView> {
                         style: FormTokens.heading,
                       ),
                     ),
+                    if (detail.wardrobeItem.traits case final traits?)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            _TraitTag(label: traits.kind, onTap: openEdit),
+                            if (traits.brand case final brand?)
+                              _TraitTag(label: brand, onTap: openEdit)
+                            else
+                              _TraitTag(
+                                label: context.tr(LocaleKeys.addBrand),
+                                icon: Icons.add,
+                                onTap: openEdit,
+                              ),
+                            _TraitTag(
+                              label: context.tr('seasons.${traits.warmth}'),
+                              onTap: openEdit,
+                            ),
+                          ],
+                        ),
+                      ),
                     if (detail.wardrobeItem.metadata.colors.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 9),
@@ -657,6 +680,38 @@ final List<String> _colorFamilyKeys = FormTokens.colorSwatches.keys
     .where((key) => key != 'other')
     .toList();
 
+/// Worker-tagged trait, such as kind, brand or season. Tapping opens the
+/// edit sheet, where tags can be corrected.
+class _TraitTag extends StatelessWidget {
+  const _TraitTag({required this.label, this.onTap, this.icon});
+  final String label;
+  final VoidCallback? onTap;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) => _Pressable(
+    onTap: onTap,
+    label: label,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: const ShapeDecoration(
+        color: FormTokens.pill,
+        shape: StadiumBorder(),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: FormTokens.ink),
+            const SizedBox(width: 4),
+          ],
+          Text(label, style: FormTokens.small),
+        ],
+      ),
+    ),
+  );
+}
+
 /// One of the piece's colours. Colours FORM can group open the looks in
 /// that colour family.
 class _ItemColorChip extends StatelessWidget {
@@ -1048,6 +1103,9 @@ class _EditItemState extends State<_EditItem> {
   final _form = GlobalKey<FormState>();
   late final _name = TextEditingController(text: widget.item.metadata.name);
   late final _notes = TextEditingController(text: widget.item.metadata.notes);
+  late final _kind = TextEditingController(text: widget.item.traits?.kind);
+  late final _brand = TextEditingController(text: widget.item.traits?.brand);
+  late String? _warmth = widget.item.traits?.warmth;
 
   /// Colours outside FORM's families (typed or detected names such as
   /// "burgundy") stay on offer so editing never drops them silently.
@@ -1065,6 +1123,8 @@ class _EditItemState extends State<_EditItem> {
   void dispose() {
     _name.dispose();
     _notes.dispose();
+    _kind.dispose();
+    _brand.dispose();
     super.dispose();
   }
 
@@ -1158,6 +1218,53 @@ class _EditItemState extends State<_EditItem> {
             },
           ),
         ),
+        // Tags exist once the worker has tagged the piece, so only then can
+        // they be corrected.
+        if (widget.item.traits != null) ...[
+          _SheetField(
+            label: context.tr(LocaleKeys.kind),
+            child: TextFormField(
+              controller: _kind,
+              maxLength: 40,
+              decoration: const InputDecoration(counterText: ''),
+              validator: (v) => (v ?? '').trim().isEmpty
+                  ? context.tr(LocaleKeys.requiredField)
+                  : null,
+            ),
+          ),
+          _SheetField(
+            label: context.tr(LocaleKeys.brand),
+            child: TextFormField(
+              controller: _brand,
+              maxLength: 40,
+              decoration: InputDecoration(
+                counterText: '',
+                hintText: context.tr(LocaleKeys.brandHint),
+                suffixIcon: ListenableBuilder(
+                  listenable: _brand,
+                  builder: (context, _) => _brand.text.isEmpty
+                      ? const SizedBox.shrink()
+                      : IconButton(
+                          tooltip: context.tr(LocaleKeys.removeBrand),
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: _brand.clear,
+                        ),
+                ),
+              ),
+            ),
+          ),
+          _SheetField(
+            label: context.tr(LocaleKeys.season),
+            child: FormChoiceChips(
+              options: {
+                for (final warmth in warmths)
+                  warmth: context.tr('seasons.$warmth'),
+              },
+              selected: _warmth!,
+              onSelected: (value) => setState(() => _warmth = value),
+            ),
+          ),
+        ],
         _SheetField(
           label: context.tr(LocaleKeys.notes),
           child: TextFormField(
@@ -1190,6 +1297,17 @@ class _EditItemState extends State<_EditItem> {
                 colors: _colors.join(', '),
                 notes: _notes.text,
                 state: _state,
+                traits: switch (widget.item.traits) {
+                  final traits? => ItemTraits(
+                    warmth: _warmth!,
+                    kind: _kind.text.trim().toLowerCase(),
+                    brand: _brand.text.trim().isEmpty
+                        ? null
+                        : _brand.text.trim(),
+                    formality: traits.formality,
+                  ),
+                  null => null,
+                },
               ),
             );
           },

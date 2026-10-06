@@ -44,7 +44,7 @@
   "wardrobeRefreshFailed": "Refresh failed. Cached items remain available.",
   "itemCount": "{shown} of {total} items",
   "search": "Search",
-  "filters": "Category and color",
+  "filters": "Filters",
   "resetFilters": "Reset filters",
   "filteredEmpty": "No matching items.",
   "itemActionFailed": "Action failed. Refresh the item and try again.",
@@ -686,5 +686,16 @@
   "proposalsKeep": "Keep",
   "proposalsKept": "Kept",
   "proposalsPlanningNext": "Putting the next outfit together…",
-  "proposalsSkipStamp": "Next"
+  "proposalsSkipStamp": "Next",
+  "season": "Season",
+  "brand": "Brand",
+  "seasons": {
+    "light": "Summer",
+    "mid": "All-season",
+    "warm": "Winter"
+  },
+  "kind": "Type",
+  "brandHint": "Add brand",
+  "addBrand": "Brand",
+  "removeBrand": "Remove brand"
 }

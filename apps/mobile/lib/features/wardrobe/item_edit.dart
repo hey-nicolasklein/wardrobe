@@ -7,6 +7,7 @@ class ItemEdit {
     required String colors,
     required String notes,
     required this.state,
+    this.traits,
   }) : metadata = ItemMetadata.fromJson({
          'name': name.trim(),
          'category': category,
@@ -22,6 +23,9 @@ class ItemEdit {
   }
   final ItemMetadata metadata;
   final String state;
+
+  /// Manually corrected tags. Null leaves the worker's tags untouched.
+  final ItemTraits? traits;
   static List<String> parseColors(String value) =>
       value.split(',').map((c) => c.trim()).toList();
   static bool validColors(String value) =>
@@ -29,6 +33,7 @@ class ItemEdit {
   Map<String, dynamic> toJson() => {
     'metadata': metadata.toJson(),
     'state': state,
+    if (traits != null) 'traits': traits!.toJson(),
   };
 }
 

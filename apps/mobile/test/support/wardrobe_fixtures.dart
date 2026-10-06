@@ -13,6 +13,12 @@ Map<String, dynamic> itemJson({
     'colors': ['navy', 'weiß'],
     'notes': 'Summer',
   },
+  'traits': {
+    'warmth': 'light',
+    'kind': 'shirt',
+    'brand': null,
+    'formality': 'casual',
+  },
   'currentShelfImageVersionId': 'shelf-version-01',
   'recordVersion': version,
   'createdAt': '2026-09-01T10:00:00.000Z',

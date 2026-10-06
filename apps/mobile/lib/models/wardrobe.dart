@@ -27,6 +27,40 @@ const itemStatuses = [
   'failed',
 ];
 const qualities = ['low', 'medium', 'high'];
+const warmths = ['light', 'mid', 'warm'];
+const formalities = ['casual', 'smart-casual', 'business', 'formal'];
+
+/// Worker-tagged facts about a piece. Null on [WardrobeItem] until tagged.
+@JsonSerializable(checked: true)
+class ItemTraits {
+  const ItemTraits({
+    required this.warmth,
+    required this.kind,
+    required this.brand,
+    required this.formality,
+  });
+
+  factory ItemTraits.fromJson(Map<String, dynamic> json) {
+    final value = _$ItemTraitsFromJson(json);
+    if (!warmths.contains(value.warmth) ||
+        !formalities.contains(value.formality) ||
+        value.kind.isEmpty) {
+      throw const FormatException('Invalid traits');
+    }
+    return value;
+  }
+
+  @JsonKey(required: true)
+  final String warmth;
+  @JsonKey(required: true)
+  final String kind;
+  @JsonKey(required: true)
+  final String? brand;
+  @JsonKey(required: true)
+  final String formality;
+
+  Map<String, dynamic> toJson() => _$ItemTraitsToJson(this);
+}
 
 @JsonSerializable(checked: true, explicitToJson: true)
 class ItemMetadata {
@@ -78,6 +112,7 @@ class WardrobeItem {
     required this.recordVersion,
     required this.createdAt,
     required this.updatedAt,
+    this.traits,
   });
 
   factory WardrobeItem.fromJson(Map<String, dynamic> json) {
@@ -102,6 +137,7 @@ class WardrobeItem {
   final String status;
   @JsonKey(required: true)
   final ItemMetadata metadata;
+  final ItemTraits? traits;
   @JsonKey(required: true)
   final String? currentShelfImageVersionId;
   @JsonKey(required: true)

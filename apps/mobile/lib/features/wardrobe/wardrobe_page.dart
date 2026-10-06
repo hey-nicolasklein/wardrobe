@@ -68,6 +68,18 @@ class _WardrobePageState extends State<WardrobePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(context.tr(LocaleKeys.season), style: FormTokens.small),
+                const SizedBox(height: 8),
+                _TraitOptions(
+                  records: records,
+                  archived: archived,
+                  options: (traits) => [traits.warmth],
+                  order: warmths,
+                  selected: filter.seasons,
+                  label: (warmth) => context.tr('seasons.$warmth'),
+                  onChanged: (seasons) =>
+                      cubit.filter(filter.copyWith(seasons: seasons)),
+                ),
                 Text(context.tr(LocaleKeys.category), style: FormTokens.small),
                 const SizedBox(height: 8),
                 _CategoryOptions(
@@ -87,13 +99,29 @@ class _WardrobePageState extends State<WardrobePage> {
                   archived: archived,
                   onChanged: cubit.filter,
                 ),
+                Text(context.tr(LocaleKeys.brand), style: FormTokens.small),
+                const SizedBox(height: 8),
+                _TraitOptions(
+                  records: records,
+                  archived: archived,
+                  options: (traits) => [?traits.brand],
+                  selected: filter.brands,
+                  label: (brand) => brand,
+                  onChanged: (brands) =>
+                      cubit.filter(filter.copyWith(brands: brands)),
+                ),
                 // Always laid out, only disabled, so the sheet keeps its
                 // height when the first filter is picked.
                 TextButton(
-                  onPressed: filter.categories.isEmpty && filter.colors.isEmpty
+                  onPressed: filter.chipCount == 0
                       ? null
                       : () => cubit.filter(
-                          filter.copyWith(categories: {}, colors: {}),
+                          filter.copyWith(
+                            categories: {},
+                            colors: {},
+                            seasons: {},
+                            brands: {},
+                          ),
                         ),
                   style: TextButton.styleFrom(
                     foregroundColor: FormTokens.green,
@@ -221,8 +249,7 @@ class _WardrobePageState extends State<WardrobePage> {
                                 filter.copyWith(state: value),
                               ),
                             ),
-                          if (filter.categories.isNotEmpty ||
-                              filter.colors.isNotEmpty)
+                          if (filter.chipCount > 0)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 16),
                               child: Wrap(
@@ -255,6 +282,26 @@ class _WardrobePageState extends State<WardrobePage> {
                                         ),
                                       ),
                                     ),
+                                  for (final season in filter.seasons)
+                                    _ActiveFilterChip(
+                                      label: context.tr('seasons.$season'),
+                                      onRemove: () => cubit.filter(
+                                        filter.copyWith(
+                                          seasons: {...filter.seasons}
+                                            ..remove(season),
+                                        ),
+                                      ),
+                                    ),
+                                  for (final brand in filter.brands)
+                                    _ActiveFilterChip(
+                                      label: brand,
+                                      onRemove: () => cubit.filter(
+                                        filter.copyWith(
+                                          brands: {...filter.brands}
+                                            ..remove(brand),
+                                        ),
+                                      ),
+                                    ),
                                   if (filter.isFiltered)
                                     TextButton(
                                       onPressed: () => cubit.filter(
@@ -275,9 +322,7 @@ class _WardrobePageState extends State<WardrobePage> {
                           // only appears once a filter narrows the grid.
                           if (state.items != null &&
                               items.isNotEmpty &&
-                              (filter.query.isNotEmpty ||
-                                  filter.categories.isNotEmpty ||
-                                  filter.colors.isNotEmpty))
+                              (filter.query.isNotEmpty || filter.chipCount > 0))
                             Padding(
                               padding: const EdgeInsets.only(bottom: 17),
                               child: Text(
@@ -469,7 +514,7 @@ class _WardrobePageState extends State<WardrobePage> {
               focusNode: _searchFocus,
               bottom: _findBarBottom(context),
               hint: context.tr(LocaleKeys.visual_searchHint),
-              activeFilters: filter.categories.length + filter.colors.length,
+              activeFilters: filter.chipCount,
               onChanged: (value) => cubit.filter(filter.copyWith(query: value)),
               onFilters: _openFilterSheet,
             ),
@@ -493,6 +538,7 @@ Set<String> _availableOptions(
         final item = record.item;
         return (item.state == 'archived') == archived &&
             (archived || filter.state == 'all' || item.state == filter.state) &&
+            filter.matchesTraits(item) &&
             (kind == 'color'
                 ? filter.categories.isEmpty ||
                       filter.categories.contains(item.metadata.category)
@@ -956,6 +1002,55 @@ class _ColorOptions extends StatelessWidget {
                 ),
               ),
             ),
+      ],
+    );
+  }
+}
+
+/// Season or brand chips for the values present among tagged pieces.
+/// Untagged pieces contribute nothing here but still show under every filter.
+class _TraitOptions extends StatelessWidget {
+  const _TraitOptions({
+    required this.records,
+    required this.archived,
+    required this.options,
+    required this.selected,
+    required this.label,
+    required this.onChanged,
+    this.order,
+  });
+
+  final List<CachedItem> records;
+  final bool archived;
+  final Iterable<String> Function(ItemTraits traits) options;
+  final Set<String> selected;
+  final String Function(String value) label;
+  final ValueChanged<Set<String>> onChanged;
+
+  /// Fixed display order. Alphabetical when null.
+  final List<String>? order;
+
+  @override
+  Widget build(BuildContext context) {
+    final present = {
+      for (final record in records)
+        if ((record.item.state == 'archived') == archived)
+          if (record.item.traits case final traits?) ...options(traits),
+      ...selected,
+    };
+    final values =
+        order?.where(present.contains).toList() ?? (present.toList()..sort());
+    if (values.isEmpty) return const SizedBox(height: 16);
+    return _FilterOptionWrap(
+      children: [
+        for (final value in values)
+          _WardrobeFilterChip(
+            label: label(value),
+            selected: selected.contains(value),
+            onTap: () => onChanged(
+              {...selected}..toggle(value, selected: !selected.contains(value)),
+            ),
+          ),
       ],
     );
   }

@@ -6,6 +6,29 @@ part of 'wardrobe.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
+ItemTraits _$ItemTraitsFromJson(Map<String, dynamic> json) =>
+    $checkedCreate('ItemTraits', json, ($checkedConvert) {
+      $checkKeys(
+        json,
+        requiredKeys: const ['warmth', 'kind', 'brand', 'formality'],
+      );
+      final val = ItemTraits(
+        warmth: $checkedConvert('warmth', (v) => v as String),
+        kind: $checkedConvert('kind', (v) => v as String),
+        brand: $checkedConvert('brand', (v) => v as String?),
+        formality: $checkedConvert('formality', (v) => v as String),
+      );
+      return val;
+    });
+
+Map<String, dynamic> _$ItemTraitsToJson(ItemTraits instance) =>
+    <String, dynamic>{
+      'warmth': instance.warmth,
+      'kind': instance.kind,
+      'brand': instance.brand,
+      'formality': instance.formality,
+    };
+
 ItemMetadata _$ItemMetadataFromJson(Map<String, dynamic> json) =>
     $checkedCreate('ItemMetadata', json, ($checkedConvert) {
       $checkKeys(
@@ -58,6 +81,10 @@ WardrobeItem _$WardrobeItemFromJson(
       'metadata',
       (v) => ItemMetadata.fromJson(v as Map<String, dynamic>),
     ),
+    traits: $checkedConvert(
+      'traits',
+      (v) => v == null ? null : ItemTraits.fromJson(v as Map<String, dynamic>),
+    ),
     currentShelfImageVersionId: $checkedConvert(
       'currentShelfImageVersionId',
       (v) => v as String?,
@@ -76,6 +103,7 @@ Map<String, dynamic> _$WardrobeItemToJson(WardrobeItem instance) =>
       'state': instance.state,
       'status': instance.status,
       'metadata': instance.metadata.toJson(),
+      'traits': instance.traits?.toJson(),
       'currentShelfImageVersionId': instance.currentShelfImageVersionId,
       'recordVersion': instance.recordVersion,
       'createdAt': instance.createdAt.toIso8601String(),

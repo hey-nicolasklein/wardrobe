@@ -124,6 +124,7 @@ class ItemCubit extends Cubit<ItemState> {
         state: collection,
         status: item.status,
         metadata: item.metadata,
+        traits: item.traits,
         currentShelfImageVersionId: item.currentShelfImageVersionId,
         recordVersion: item.recordVersion,
         createdAt: item.createdAt,

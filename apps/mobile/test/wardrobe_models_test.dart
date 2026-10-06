@@ -78,7 +78,8 @@ void main() {
   test('strict DTOs round trip baseline item and complete detail', () {
     expect(WardrobeItem.fromJson(itemJson()).toJson(), itemJson());
     expect(ItemDetail.fromJson(detailJson()).toJson(), detailJson());
-    for (final field in itemJson().keys) {
+    // Traits stay optional so items cached before tagging still parse.
+    for (final field in itemJson().keys.where((k) => k != 'traits')) {
       expect(
         () => WardrobeItem.fromJson(itemJson()..remove(field)),
         throwsA(isA<Exception>()),
@@ -230,6 +231,34 @@ void main() {
       isNot(
         ItemCommand.generate(item.id, 'high', 'Details').body['idempotencyKey'],
       ),
+    );
+  });
+
+  test('edits send corrected traits and a removed brand as null', () {
+    ItemEdit edit(ItemTraits? traits) => ItemEdit(
+      name: 'Air Force 1',
+      category: 'shoes',
+      colors: 'white',
+      notes: '',
+      state: 'owning',
+      traits: traits,
+    );
+    expect(edit(null).toJson().containsKey('traits'), isFalse);
+    expect(
+      edit(
+        const ItemTraits(
+          warmth: 'mid',
+          kind: 'sneakers',
+          brand: null,
+          formality: 'casual',
+        ),
+      ).toJson()['traits'],
+      {
+        'warmth': 'mid',
+        'kind': 'sneakers',
+        'brand': null,
+        'formality': 'casual',
+      },
     );
   });
 }

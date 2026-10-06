@@ -49,6 +49,12 @@ abstract class LocaleKeys {
   static const itemCount = 'itemCount';
   static const search = 'search';
   static const filters = 'filters';
+  static const season = 'season';
+  static const brand = 'brand';
+  static const kind = 'kind';
+  static const brandHint = 'brandHint';
+  static const addBrand = 'addBrand';
+  static const removeBrand = 'removeBrand';
   static const resetFilters = 'resetFilters';
   static const filteredEmpty = 'filteredEmpty';
   static const itemActionFailed = 'itemActionFailed';
