@@ -16,22 +16,30 @@ Users meet FORM with no prior context. They sign in with Apple or Google, go thr
 
 ## Product Purpose
 
-FORM is a reliable and pleasant catalog of the clothes a person owns and the pieces they want. The wardrobe comes first. Generated looks are an extra built on top of it.
+FORM is the home for a person's clothes and looks. Today those live as selfies scattered across the camera roll. FORM replaces that with a clean wardrobe and managed looks, and every look links back to the pieces it is made of.
 
-Success means the catalog stays complete and trustworthy. Adding a piece takes little effort, finding one takes a moment, and the catalog matches what is actually in the closet.
+The wardrobe is the baseline. Everything around it is a bonus:
+- Inspiration from clothes the user already owns, so they buy less. That saves money and effort and is better for the environment.
+- AI-generated looks that inspire. Their quality varies a lot, so nothing in the wardrobe depends on them.
+- Trying looks on the user's own photos.
+
+FORM only works when the wardrobe is clean. A wardrobe of screenshots or raw phone photos is not usable. It is clean only once every piece has its generated catalog image.
+
+Success means the catalog stays complete and trustworthy. Adding a piece feels seamless, finding one takes a moment, and the catalog matches what is actually in the closet.
 
 ## Positioning
 
-FORM turns photos into a clean wardrobe. One photo can hold several pieces, FORM names them and can create a consistent catalog image for each. Owning and Wanting live side by side, so the wish list sits right next to the wardrobe. The same catalog then feeds looks that are laid out flat or worn by the user, based on their own photo collage.
+FORM is a better version of the selfie folder in Apple Photos. FORM turns photos into a clean wardrobe. One photo can hold several pieces, FORM names them and creates a consistent catalog image for each. Owning and Wanting live side by side, so the wish list sits right next to the wardrobe. The same catalog then feeds looks: laid out flat, tried on the user's own photo, or generated as inspiration.
 
 ## Operating Context
 
-- Intake: one or several photos, each piece named and saved directly. Optional detection proposes metadata and splits a photo into multiple pieces. Drafts survive interruption.
+- Intake: one or several photos, each piece named and saved directly. Saving a piece also orders its catalog image. Optional detection proposes metadata and splits a photo into multiple pieces. Drafts survive interruption.
 - Wardrobe: grid sorted by recency, Owning/Wanting/Archived, filters for category and color, localized search, item detail with edit, image versions and restore.
-- Catalog images: optional and paid. Users can choose a quality and give feedback (proportions, color, details) to request a better version. Older versions remain restorable.
-- Feed and looks: generated looks, Worn and Flat views, a look composer, share and save to Photos.
-- Personal photo collage: one to four photos of the user, used as the reference for worn looks.
+- Catalog images: part of every saved piece and paid. The first image is right in almost every case, so no review step is needed. In the rare bad case, users give feedback (proportions, color, details) to request a better version. Users can choose a quality. Older versions remain restorable.
+- Feed and looks: Worn and Flat views, a look composer, share and save to Photos. The composer has two distinct modes. Try on (Anprobe) puts the user's real pieces 1:1 on a full-body photo of them, which makes it a way to check pieces. Inspiration generates a full AI look whose quality varies.
+- Personal photo collage: one to four photos of the user, used as the reference for Inspiration looks.
 - Settings: language, account, credits and weekly costs, quality, feed weights, cache, archive.
+- Planned: upload selfies of the user wearing their clothes. FORM extracts the pieces into the wardrobe and keeps the selfie as a look linked to them. Not built yet.
 - Offline: cached grid, details and media stay readable. Changes are disabled until the connection returns.
 
 ## Capabilities and Constraints
@@ -40,7 +48,7 @@ FORM turns photos into a clean wardrobe. One photo can hold several pieces, FORM
 - German and English. The app follows the device language on first launch, falls back to German, and persists an override.
 - Accounts use Sign in with Apple and Google. Email and password remain for CLI/admin accounts and the PWA. Users can delete their account and all records.
 - Credits come from an append-only ledger. New accounts get 40. Detection costs 0, a catalog image 1, a look 2, a character sheet 2. Failed jobs are refunded. Errors such as running out of credits and too many active jobs must be surfaced.
-- AI work runs on OpenAI and costs money. Every paid generation requires an explicit user action. Photo-only intake, browsing, search and editing make no AI requests.
+- AI work runs on OpenAI and costs money. Every paid generation requires an explicit user action. Saving pieces is that action for catalog images, and the cost is stated before saving. Browsing, search and editing make no AI requests.
 - No analytics, tracking or remote crash reporting. Logs exclude wardrobe metadata, images, request bodies and credentials.
 - Light theme only for now.
 - Undecided: pricing, plans and credit packs. The ledger supports them, but no offer is defined.
@@ -49,7 +57,7 @@ FORM turns photos into a clean wardrobe. One photo can hold several pieces, FORM
 
 - Name: FORM, written in capitals.
 - Voice: short, warm and direct. Second person ("your wardrobe"). Honest about limits. Onboarding says openly what FORM cannot do: hidden pieces, size and fit, getting every detail right the first time, and working for free.
-- Terminology: Wardrobe, Feed, Look, Owning/Wanting/Archived, catalog image, collage, Worn/Flat.
+- Terminology: Wardrobe, Feed, Look, Owning/Wanting/Archived, catalog image, collage, Worn/Flat, Try on (Anprobe), Inspiration.
 - Visual identity is defined by the existing PWA and `docs/flutter-native/visual-guide.md` and is recorded separately in DESIGN.md.
 
 ## Evidence on Hand
@@ -60,11 +68,12 @@ FORM turns photos into a clean wardrobe. One photo can hold several pieces, FORM
 
 ## Product Principles
 
-1. The wardrobe is the product. Every feature has to keep the catalog trustworthy and cheap to maintain.
-2. Effort only where it pays off. Capturing a piece should take one photo and a name. Anything more is optional.
-3. Costs stay visible and opt-in. Users never trigger paid AI work by accident and can always see what it cost.
-4. Honest about AI. Say what works, what varies and what to do when an image is wrong.
-5. Personal data stays personal. No tracking, and the user's photos and collage are used only for the user.
+1. The wardrobe is the product. Every feature has to keep the catalog clean, trustworthy and cheap to maintain.
+2. Adding is seamless. Capturing a piece should take one photo and a name. The catalog image follows on its own, and anything more is optional.
+3. Looks are a bonus. Their quality varies, so nothing in the wardrobe may depend on them.
+4. Costs stay visible and opt-in. Users never trigger paid AI work by accident and can always see what it cost.
+5. Honest about AI. Say what works, what varies and what to do when an image is wrong.
+6. Personal data stays personal. No tracking, and the user's photos and collage are used only for the user.
 
 ## Accessibility & Inclusion
 
