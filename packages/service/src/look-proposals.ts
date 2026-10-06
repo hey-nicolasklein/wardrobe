@@ -59,6 +59,18 @@ export function pickAnchor(input: {
   return { itemId: anchor.id, reason };
 }
 
+/**
+ * Two proposals read as the same outfit when the pieces added around the
+ * user's exact pieces change in at most one slot, e.g. only the necklace.
+ */
+export function similarOutfit(a: string[], b: string[], exact: string[]) {
+  const added = (ids: string[]) => ids.filter((id) => !exact.includes(id));
+  const [left, right] = [added(a), added(b)];
+  const size = Math.max(left.length, right.length);
+  const shared = left.filter((id) => right.includes(id)).length;
+  return size >= 2 && size - shared <= 1;
+}
+
 export type OutfitPiece = { id: string; category: string; warmth?: Warmth | null; uses?: number };
 
 const lowerSlots = new Set(['pants', 'skirt']);
@@ -129,4 +141,120 @@ export function adjustOutfit(input: {
     if (replacement) outfit.push(replacement);
   }
   return outfit.map((piece) => piece.id);
+}
+
+export type BuilderPiece = OutfitPiece & { createdAt: Date };
+export type BuiltOutfit = { itemIds: string[]; anchor: { itemId: string; reason: LookReason | null } | null };
+
+const optionalExtras = ['bag', 'hat', 'scarf', 'accessory'];
+
+/**
+ * Samples distinct outfit candidates from the closet without a model: each
+ * starts from the user's exact pieces and an anchor (see pickAnchor), fills
+ * the core slots, shoes and maybe a jacket and one extra, and never mixes
+ * warm with light pieces. Less worn pieces are likelier at every step.
+ * A ranker then picks the best of them, see pickProposals.
+ */
+export function buildOutfits(input: {
+  pool: BuilderPiece[];
+  exactItemIds: string[];
+  categories: string[];
+  usage: Map<string, PieceUsage>;
+  tries: number;
+  random?: () => number;
+}): BuiltOutfit[] {
+  const random = input.random ?? Math.random;
+  const exact = input.pool.filter((piece) => input.exactItemIds.includes(piece.id));
+  const weight = (piece: BuilderPiece) => {
+    const usage = input.usage.get(piece.id) ?? { uses: 0, recent: false };
+    return (1 / (1 + usage.uses)) * (usage.recent ? 0.3 : 1);
+  };
+  const draw = (outfit: BuilderPiece[], categories: string[]) => {
+    const options = input.pool.filter(
+      (piece) =>
+        categories.includes(piece.category) &&
+        !outfit.some((worn) => worn.id === piece.id || sameSlot(worn.category, piece.category)) &&
+        !warmthClash([...outfit, piece]),
+    );
+    const total = options.reduce((sum, piece) => sum + weight(piece), 0);
+    let roll = random() * total;
+    return options.find((piece) => (roll -= weight(piece)) <= 0) ?? options.at(-1);
+  };
+  const seen = new Set<string>();
+  const outfits: BuiltOutfit[] = [];
+  for (let attempt = 0; attempt < input.tries; attempt += 1) {
+    const outfit = [...exact];
+    const anchor = pickAnchor({
+      candidates: input.pool.filter((piece) => !warmthClash([...exact, piece])),
+      usage: input.usage,
+      exactItemIds: input.exactItemIds,
+      siblingItemIds: [],
+      random,
+    });
+    const anchorPiece = input.pool.find((piece) => piece.id === anchor?.itemId);
+    if (anchorPiece && !outfit.some((worn) => sameSlot(worn.category, anchorPiece.category)))
+      outfit.push(anchorPiece);
+    const add = (...categories: string[]) => {
+      const piece = draw(outfit, categories);
+      if (piece) outfit.push(piece);
+    };
+    for (const category of input.categories)
+      if (!outfit.some((worn) => worn.category === category)) add(category);
+    const has = (...categories: string[]) => outfit.some((worn) => categories.includes(worn.category));
+    if (!has('dress', 'top', 'pants', 'skirt') && random() < 0.15) add('dress');
+    if (!has('dress')) {
+      if (!has('top')) add('top');
+      if (!has('pants', 'skirt')) add('pants', 'skirt');
+    }
+    if (!has('shoes')) add('shoes');
+    const season = new Set(outfit.map((piece) => piece.warmth));
+    const jacketOdds = season.has('warm') ? 0.9 : season.has('light') ? 0.15 : 0.5;
+    if (!has('jacket') && random() < jacketOdds) add('jacket');
+    if (!has(...optionalExtras) && random() < 0.35) add(...optionalExtras);
+    const itemIds = outfit.map((piece) => piece.id);
+    const key = [...itemIds].sort().join(',');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    outfits.push({ itemIds, anchor: anchor && itemIds.includes(anchor.itemId) ? anchor : null });
+  }
+  return outfits;
+}
+
+/**
+ * The best [count] outfits by [scores] that differ from each other, from
+ * [avoid] (open sibling proposals and recent looks) and, where possible, in
+ * their anchor. Falls back to similar, and then repeated, outfits only when
+ * nothing else is left.
+ */
+export function pickProposals<T extends { itemIds: string[]; anchor: { itemId: string } | null }>(input: {
+  outfits: T[];
+  scores: number[];
+  count: number;
+  exactItemIds: string[];
+  avoid: string[][];
+}): T[] {
+  const ranked = input.outfits
+    .map((outfit, index) => ({ outfit, score: input.scores[index] ?? 0 }))
+    .sort((a, b) => b.score - a.score)
+    .map(({ outfit }) => outfit);
+  const picked: T[] = [];
+  const similar = (outfit: T, others: string[][]) =>
+    others.some((other) => similarOutfit(other, outfit.itemIds, input.exactItemIds));
+  const passes: Array<(outfit: T) => boolean> = [
+    (outfit) =>
+      !similar(outfit, [...input.avoid, ...picked.map((p) => p.itemIds)]) &&
+      !picked.some((p) => p.anchor && p.anchor.itemId === outfit.anchor?.itemId),
+    (outfit) => !similar(outfit, [...input.avoid, ...picked.map((p) => p.itemIds)]),
+    (outfit) => !similar(outfit, picked.map((p) => p.itemIds)),
+    () => true,
+  ];
+  for (const pass of passes)
+    for (const outfit of ranked) {
+      if (picked.length >= input.count) return picked;
+      if (!picked.includes(outfit) && pass(outfit)) picked.push(outfit);
+    }
+  // A closet this small repeats its best outfits; the scenes still differ.
+  for (let index = 0; picked.length < input.count && ranked.length; index += 1)
+    picked.push(picked[index % picked.length]!);
+  return picked;
 }

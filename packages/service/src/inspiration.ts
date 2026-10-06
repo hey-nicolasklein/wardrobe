@@ -26,9 +26,18 @@ import {
   writeGarmentReferenceDebugGallery,
 } from './garment-reference-collage.js';
 import { withTransaction } from './database.js';
-import { adjustOutfit, pickAnchor, warmthClash, type PieceUsage } from './look-proposals.js';
+import {
+  adjustOutfit,
+  buildOutfits,
+  pickAnchor,
+  pickProposals,
+  similarOutfit,
+  warmthClash,
+  type PieceUsage,
+} from './look-proposals.js';
 import { pickShot, shotPrompt, shotStyle, shotWeights } from './look-shots.js';
 import { enqueueJob, type RemoteImageJob } from './jobs.js';
+import type { OutfitRanker } from './outfit-ranker.js';
 import { collageModel, prepareIdentityReference, createIdentityCollage } from './identity-collage.js';
 import { IdempotencyConflictError, OwnedResourceNotFoundError } from './media.js';
 import type { PrivateObjectStorage } from './storage.js';
@@ -384,17 +393,6 @@ export function normalizeAutomaticLookItems(
   return result;
 }
 
-/**
- * Two proposals read as the same outfit when the pieces added around the
- * user's exact pieces change in at most one slot, e.g. only the necklace.
- */
-export function similarOutfit(a: string[], b: string[], exact: string[]) {
-  const added = (ids: string[]) => ids.filter((id) => !exact.includes(id));
-  const [left, right] = [added(a), added(b)];
-  const size = Math.max(left.length, right.length);
-  const shared = left.filter((id) => right.includes(id)).length;
-  return size >= 2 && size - shared <= 1;
-}
 
 /** Stored traits of an account's pieces, keyed by item id. */
 async function traitsOf(database: Database | DatabaseClient, accountId: string): Promise<Map<string, ItemTraits>> {
@@ -554,6 +552,10 @@ export async function createLook(
     propose?: boolean;
     // Pieces the planner must leave out, see proposeLooks.
     excludedItemIds?: string[];
+    // A proposal whose outfit is already composed, see composeProposals. It
+    // skips the planner and is proposed at once; its scene is planned on render.
+    // Not part of the request, so a replay with a newly drawn outfit still matches.
+    composed?: { itemIds: string[]; reasons: LookReason[] };
     idempotencyKey: string;
   },
 ) {
@@ -741,6 +743,16 @@ export async function createLook(
       idempotencyKey: `look:${input.idempotencyKey}`,
     });
     await client.query('UPDATE remote_image_jobs SET look_id=$1 WHERE id=$2', [lookId, jobId]);
+    if (input.propose && input.composed) {
+      // The job only keeps the look's settings for the render, see renderLookProposal.
+      await client.query(`UPDATE remote_image_jobs SET state='succeeded',finished_at=now() WHERE id=$1`, [jobId]);
+      await client.query(
+        `UPDATE looks SET state='proposed',proposal_reasons=$2,finished_at=now() WHERE id=$1`,
+        [lookId, JSON.stringify(input.composed.reasons)],
+      );
+      for (const [ordinal, itemId] of input.composed.itemIds.entries())
+        await client.query('INSERT INTO look_items(look_id,wardrobe_item_id,ordinal) VALUES($1,$2,$3)', [lookId, itemId, ordinal]);
+    }
     const body = { jobId, lookId };
     await remember(client, input.accountId, input.idempotencyKey, 'create-look', request, body);
     return body;
@@ -819,11 +831,12 @@ export async function listLookProposals(database: Database, accountId: string): 
 /** Replaces the open proposals with `count` freshly planned ones. Nothing is rendered or charged. */
 export async function proposeLooks(
   database: Database,
-  input: Omit<Parameters<typeof createLook>[1], 'propose' | 'parentLookId'> & {
+  input: Omit<Parameters<typeof createLook>[1], 'propose' | 'parentLookId' | 'composed'> & {
     count: number;
     append?: boolean;
     discardLookIds?: string[];
   },
+  ranker?: OutfitRanker,
 ) {
   const { count, append, discardLookIds, ...look } = input;
   await database.query(
@@ -838,18 +851,115 @@ export async function proposeLooks(
      WHERE rj.look_id=l.id AND rj.kind='plan-look' AND rj.state='queued' AND l.account_id=$1 AND l.deleted_at IS NOT NULL`,
     [input.accountId],
   );
+  const completion = look.completion ?? ((look.completeWithWardrobe ?? true) ? 'wardrobe' : 'model');
+  // Outfits made from the user's own pieces only leave nothing to compose.
+  const composed = completion === 'wardrobe' ? await composeProposals(database, look, count, ranker) : [];
   const lookIds: string[] = [];
-  // Sequential, so each planning job sees the same inputs but its own idempotency key.
+  // Sequential, so each look sees the same inputs but its own idempotency key.
+  // Outfits the closet could not compose fall back to the planner.
   for (let index = 0; index < count; index += 1) {
     const created = await createLook(database, {
       ...look,
       parentLookId: null,
       propose: true,
+      ...(composed[index] ? { composed: composed[index] } : {}),
       idempotencyKey: `${input.idempotencyKey}:${index}`,
     });
     lookIds.push(created.lookId);
   }
   return { lookIds };
+}
+
+/**
+ * Draws outfit candidates from the closet in code and keeps the [count] best
+ * by [ranker], so a batch of proposals takes a moment instead of a planner
+ * call each. Fewer, or none, when the closet cannot complete an outfit.
+ */
+async function composeProposals(
+  database: Database,
+  input: {
+    accountId: string;
+    exactItemIds: string[];
+    categories: SupportedCategory[];
+    occasion?: string | null;
+    excludedItemIds?: string[];
+  },
+  count: number,
+  ranker?: OutfitRanker,
+): Promise<Array<{ itemIds: string[]; reasons: LookReason[] }>> {
+  const exact = input.exactItemIds;
+  const [candidates, traits, recent, open] = await Promise.all([
+    candidateItems(database, input.accountId, exact.length > 0 || input.categories.length > 0),
+    traitsOf(database, input.accountId),
+    database.query<{ ids: string[] }>(
+      `SELECT COALESCE(array_agg(li.wardrobe_item_id),'{}') ids FROM looks l LEFT JOIN look_items li ON li.look_id=l.id
+       WHERE l.account_id=$1 AND l.state='ready' GROUP BY l.id ORDER BY max(l.created_at) DESC LIMIT 12`,
+      [input.accountId],
+    ),
+    database.query<{ ids: string[] }>(
+      `SELECT COALESCE(array_agg(li.wardrobe_item_id),'{}') ids FROM looks l LEFT JOIN look_items li ON li.look_id=l.id
+       WHERE l.account_id=$1 AND l.proposal AND l.state='proposed' AND l.deleted_at IS NULL GROUP BY l.id`,
+      [input.accountId],
+    ),
+  ]);
+  // createLook reports pieces that cannot be worn.
+  if (exact.some((id) => !candidates.rows.some((item) => item.id === id))) return [];
+  const usage = await pieceUsage(database, input.accountId, recent.rows);
+  const excluded = new Set((input.excludedItemIds ?? []).filter((id) => !exact.includes(id)));
+  const pool = candidates.rows
+    .filter((item) => !excluded.has(item.id))
+    .map((item) => ({
+      id: item.id,
+      category: item.category,
+      warmth: traits.get(item.id)?.warmth ?? null,
+      createdAt: item.created_at,
+    }));
+  const byId = new Map(candidates.rows.map((item) => [item.id, item]));
+  const outfits = buildOutfits({ pool, exactItemIds: exact, categories: input.categories, usage, tries: 30 }).filter(
+    ({ itemIds }) => {
+      const pieces = itemIds.map((id) => byId.get(id)!);
+      return (
+        input.categories.every((category) => pieces.some((piece) => piece.category === category)) &&
+        (exact.length > 0 || input.categories.length > 0 || hasCore(pieces))
+      );
+    },
+  );
+  const ranking =
+    ranker && outfits.length > 1
+      ? await ranker({
+          outfits: outfits.map(({ itemIds }) =>
+            itemIds.map((id) => {
+              const item = byId.get(id)!;
+              const { brand: _brand, ...hints } = traits.get(id) ?? {};
+              return {
+                name: item.name,
+                category: item.category,
+                colors: item.colors,
+                ...(traits.has(id) ? { traits: hints as Omit<ItemTraits, 'brand'> } : {}),
+              };
+            }),
+          ),
+          occasion: input.occasion ?? null,
+        })
+      : null;
+  const picked = pickProposals({
+    outfits,
+    // Without scores the drawing order stands, which already favours less worn pieces.
+    scores: ranking?.scores ?? outfits.map((_, index) => -index),
+    count,
+    exactItemIds: exact,
+    avoid: [...open.rows, ...recent.rows].map((look) => look.ids),
+  });
+  return picked.map(({ itemIds, anchor }) => {
+    const reasons: LookReason[] = [
+      ...(exact.length ? [{ kind: 'your-pick' as const, itemIds: exact }] : []),
+      ...(anchor?.reason ? [anchor.reason] : []),
+      ...(input.occasion ? [{ kind: 'occasion' as const, occasion: input.occasion as LookOccasion }] : []),
+    ];
+    const repeatsRecent = recent.rows.some((look) => similarOutfit(look.ids, itemIds, exact));
+    if (!repeatsRecent && reasons.length < 2) reasons.push({ kind: 'fresh' });
+    return { itemIds, reasons };
+  });
 }
 
 /**
@@ -1308,6 +1418,14 @@ export async function executeInspirationJob(
     let concept = row.planned_concept,
       itemIds: string[] = [];
     const baseAssetId = row.base_asset_id;
+    const linked = baseAssetId
+      ? []
+      : (
+          await database.query<{ wardrobe_item_id: string }>(
+            'SELECT wardrobe_item_id FROM look_items WHERE look_id=$1 ORDER BY ordinal',
+            [id],
+          )
+        ).rows.map((r) => r.wardrobe_item_id);
     if (baseAssetId) {
       // A try-on wears exactly the picked pieces; there is no scene to plan.
       itemIds = row.exact_item_ids;
@@ -1317,18 +1435,18 @@ export async function executeInspirationJob(
           [id, itemId, ordinal],
         );
     } else if (concept) {
-      const links = await database.query<{ wardrobe_item_id: string }>(
-        'SELECT wardrobe_item_id FROM look_items WHERE look_id=$1 ORDER BY ordinal',
-        [id],
-      );
-      itemIds = links.rows.map((r) => r.wardrobe_item_id);
+      itemIds = linked;
     } else {
+      // A composed proposal brings its outfit (see composeProposals), so its
+      // pieces become mandatory and the planner only adds the scene.
+      const composed = job.kind === 'generate-look' && linked.length > 0;
+      const exactIds = composed ? linked : row.exact_item_ids;
       const excluded = (job.payload as { excludedItemIds?: string[] }).excludedItemIds ?? [];
-      const planningCandidates = candidatesForLookPlan(
-        candidates.rows,
-        row.exact_item_ids,
-        completeWithWardrobe,
-      ).filter((item) => !excluded.includes(item.id) || row.exact_item_ids.includes(item.id));
+      const planningCandidates = composed
+        ? candidates.rows.filter((item) => linked.includes(item.id))
+        : candidatesForLookPlan(candidates.rows, row.exact_item_ids, completeWithWardrobe).filter(
+            (item) => !excluded.includes(item.id) || row.exact_item_ids.includes(item.id),
+          );
       // Proposals of the same batch, planned one after another per account.
       const siblings =
         job.kind === 'plan-look'
@@ -1358,9 +1476,9 @@ export async function executeInspirationJob(
       const warmthOf = (itemId: string): { warmth?: Warmth } => ({ warmth: traits.get(itemId)?.warmth });
       // The exact items and the anchor set the season: the planner never sees
       // pieces that clash with them, so a winter coat cannot meet shorts.
-      const fixed = [...row.exact_item_ids, ...(anchor ? [anchor.itemId] : [])].map(warmthOf);
+      const fixed = [...exactIds, ...(anchor ? [anchor.itemId] : [])].map(warmthOf);
       const seasonal = planningCandidates.filter(
-        (item) => row.exact_item_ids.includes(item.id) || !warmthClash([...fixed, warmthOf(item.id)]),
+        (item) => exactIds.includes(item.id) || !warmthClash([...fixed, warmthOf(item.id)]),
       );
       const planned = await provider.planLook({
         candidates: seasonal.map((i) => {
@@ -1376,11 +1494,11 @@ export async function executeInspirationJob(
             ...hints,
           };
         }),
-        recent: recentForLookPlan(recent.rows, row.exact_item_ids),
-        ...(siblings.length ? { siblings: recentForLookPlan(siblings, row.exact_item_ids) } : {}),
+        recent: recentForLookPlan(recent.rows, exactIds),
+        ...(siblings.length ? { siblings: recentForLookPlan(siblings, exactIds) } : {}),
         ...(anchor ? { anchorItemId: anchor.itemId } : {}),
-        exactItemIds: row.exact_item_ids,
-        categories: row.category_constraints,
+        exactItemIds: exactIds,
+        categories: composed ? [] : row.category_constraints,
         occasion: (job.payload as { occasion?: string | null }).occasion ?? null,
         style,
         // Drawn by weight here, so hearts and hidden shots take effect; the
@@ -1397,23 +1515,21 @@ export async function executeInspirationJob(
         ...planned.concept,
         ...(style === 'mirror' ? {} : { camera: pickCamera((job.payload as { occasion?: string | null }).occasion ?? null) }),
       };
-      itemIds = normalizeAutomaticLookItems(
-        planned.itemIds,
-        planningCandidates,
-        row.exact_item_ids,
-      );
+      itemIds = composed
+        ? linked
+        : normalizeAutomaticLookItems(planned.itemIds, planningCandidates, exactIds);
       // Repeats are only accepted on the last attempt, so a small closet or a
       // mostly kept outfit still gets its proposal.
       const lastAttempt = job.attempts >= job.maxAttempts;
-      if (!lastAttempt && siblings.some((sibling) => similarOutfit(sibling.ids, itemIds, row.exact_item_ids)))
+      if (!lastAttempt && siblings.some((sibling) => similarOutfit(sibling.ids, itemIds, exactIds)))
         throw new CatalogJobError('validation', 'The proposal repeats a sibling outfit.', true);
       const repeatsRecent = recent.rows.some((look) =>
-        similarOutfit(look.ids, itemIds, row.exact_item_ids),
+        similarOutfit(look.ids, itemIds, exactIds),
       );
       // Never accepted, not even on the last attempt, unless the user picked the
       // clashing pieces themselves.
       if (
-        !warmthClash(row.exact_item_ids.map(warmthOf)) &&
+        !warmthClash(exactIds.map(warmthOf)) &&
         warmthClash(itemIds.map(warmthOf))
       )
         throw new CatalogJobError('validation', 'The plan mixes warm and light pieces.', true);

@@ -1,7 +1,10 @@
+import { shutdownTracing } from './instrumentation.js';
+
 import { serve } from '@hono/node-server';
 import {
   checkDependencies,
   createIdentityTokenVerifier,
+  createJevOutfitRanker,
   createDatabase,
   createPrivateObjectStorage,
   ensurePrivateBucket,
@@ -10,6 +13,7 @@ import {
 
 import { createApp } from './app.js';
 import { readApiConfig } from './config.js';
+import { tracedOutfitRanker } from './tracing.js';
 
 const config = readApiConfig();
 
@@ -32,6 +36,9 @@ const app = createApp({
   webOrigin: config.WEB_ORIGIN,
   publicOrigin: config.WEB_ORIGIN,
   detectionModel: config.OPENAI_DETECTION_MODEL,
+  ...(config.TYPESAFE_API_KEY
+    ? { outfitRanker: tracedOutfitRanker(createJevOutfitRanker(config.TYPESAFE_API_KEY)) }
+    : {}),
   identityVerifier: createIdentityTokenVerifier({
     apple: clientIds(config.APPLE_CLIENT_IDS),
     google: clientIds(config.GOOGLE_CLIENT_IDS),
@@ -54,6 +61,7 @@ async function stop(): Promise<void> {
   server.close();
   storage.client.destroy();
   await database.end();
+  await shutdownTracing();
 }
 
 process.once('SIGINT', () => void stop());

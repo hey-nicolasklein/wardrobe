@@ -8,9 +8,9 @@ import {
   pickCamera,
   tryOnPrompt,
   normalizeAutomaticLookItems,
-  similarOutfit,
   recentForLookPlan,
 } from './inspiration.js';
+import { similarOutfit } from './look-proposals.js';
 
 const candidates = [
   ['top-one', 'top'], ['top-two', 'top'], ['jacket-one', 'jacket'], ['jacket-two', 'jacket'],
