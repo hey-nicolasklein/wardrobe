@@ -21,3 +21,6 @@ apps/web/public/debug/
 
 # Account snapshots (records + images) from account-snapshot export. Personal data.
 snapshots/
+
+# Example outfit photos pulled from stargate for simulator testing. Personal data.
+.example-photos/
