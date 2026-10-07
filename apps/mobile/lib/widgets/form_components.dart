@@ -1014,6 +1014,7 @@ class FormSheet extends StatelessWidget {
     this.slivers,
     this.footer,
     this.leading,
+    this.trailing,
     this.scrollable = true,
     super.key,
   }) : assert(
@@ -1029,6 +1030,10 @@ class FormSheet extends StatelessWidget {
 
   /// Sits before the title, e.g. a back button for a step inside the sheet.
   final Widget? leading;
+
+  /// Replaces the close button, e.g. a "Done" for a sheet whose work is
+  /// already saved, where a cross would read as cancel.
+  final Widget? trailing;
 
   /// Off for content that sizes itself to the available height.
   final bool scrollable;
@@ -1108,16 +1113,17 @@ class FormSheet extends StatelessWidget {
                     Expanded(
                       child: Text(title, style: FormTokens.title),
                     ),
-                    IconButton(
-                      onPressed: () => context.pop(),
-                      tooltip: MaterialLocalizations.of(
-                        context,
-                      ).closeButtonTooltip,
-                      style: IconButton.styleFrom(
-                        backgroundColor: FormTokens.field,
-                      ),
-                      icon: const Icon(Icons.close),
-                    ),
+                    trailing ??
+                        IconButton(
+                          onPressed: () => context.pop(),
+                          tooltip: MaterialLocalizations.of(
+                            context,
+                          ).closeButtonTooltip,
+                          style: IconButton.styleFrom(
+                            backgroundColor: FormTokens.field,
+                          ),
+                          icon: const Icon(Icons.close),
+                        ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -1321,6 +1327,9 @@ void showFormToast(
       SnackBar(
         content: Text(message, style: const TextStyle(fontSize: 14)),
         duration: duration,
+        // Toasts with an undo action would otherwise stay until tapped,
+        // outliving the undo window they offer.
+        persist: false,
         action: action != null && onAction != null
             ? SnackBarAction(
                 label: action,

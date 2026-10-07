@@ -653,11 +653,9 @@ abstract class LocaleKeys {
   static const photosOfYouEmpty = 'photosOfYouEmpty';
   static const composerProposeAction = 'composerProposeAction';
   static const proposalsTitle = 'proposalsTitle';
-  static const proposalsHint = 'proposalsHint';
   static const proposalsSkip = 'proposalsSkip';
   static const proposalsDone = 'proposalsDone';
   static const proposalsFailed = 'proposalsFailed';
-  static const proposalsSkipOne = 'proposalsSkipOne';
   static const proposalsPicked = 'proposalsPicked';
   static const proposalsNonePicked = 'proposalsNonePicked';
   static const proposalsMore = 'proposalsMore';
@@ -677,7 +675,6 @@ abstract class LocaleKeys {
   static const proposalsFailedTitle = 'proposalsFailedTitle';
   static const proposalsPlanningNext = 'proposalsPlanningNext';
   static const proposalsSkipStamp = 'proposalsSkipStamp';
-  static const proposalsPickedToast = 'proposalsPickedToast';
   static const proposalsUndo = 'proposalsUndo';
   static const proposalsMarkRemoved = 'proposalsMarkRemoved';
   static const proposalsMarkKeptLabel = 'proposalsMarkKeptLabel';
@@ -752,7 +749,6 @@ abstract class LocaleKeys {
   static const pieceRemove = 'pieceRemove';
   static const pieceRemoveHint = 'pieceRemoveHint';
   static const pieceRemoved = 'pieceRemoved';
-  static const proposalsKeep = 'proposalsKeep';
   static const referenceAskTitle = 'referenceAskTitle';
   static const referenceAskBody = 'referenceAskBody';
   static const referenceAskPrivacy = 'referenceAskPrivacy';
@@ -762,4 +758,9 @@ abstract class LocaleKeys {
   static const proposalsKeepStamp = 'proposalsKeepStamp';
   static const piecesArrived = 'piecesArrived';
   static const lookFlatHint = 'lookFlatHint';
+  static const proposalsAdjust = 'proposalsAdjust';
+  static const proposalsProgress = 'proposalsProgress';
+  static const proposalsSavedCount = 'proposalsSavedCount';
+  static const proposalsDiscard = 'proposalsDiscard';
+  static const proposalsSave = 'proposalsSave';
 }

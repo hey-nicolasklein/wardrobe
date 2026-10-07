@@ -658,17 +658,15 @@
   "photosOfYouEmpty": "So looks on you actually look like you.",
   "composerProposeAction": "Show outfits",
   "proposalsTitle": "Pick outfits",
-  "proposalsHint": "Swipe left for another take, right for your outfit.",
   "proposalsSkip": "None of these",
   "proposalsDone": "Done",
   "proposalsFailed": "Planning failed. Try a new round.",
-  "proposalsSkipOne": "Another take",
   "proposalsPicked": {
     "one": "Saved to your looks",
     "other": "Saved to your looks"
   },
   "proposalsNonePicked": "Nothing for today?",
-  "proposalsMore": "Keep styling",
+  "proposalsMore": "Another round",
   "proposalsReasonNew": "New in your closet: {piece}",
   "proposalsReasonNever": "Never styled yet: {piece}",
   "proposalsReasonRarely": "Not worn in a while: {piece}",
@@ -690,8 +688,7 @@
   "proposalsNonePickedBody": "Keep styling with your pieces, or check back later.",
   "proposalsFailedTitle": "No outfits this time",
   "proposalsPlanningNext": "Putting the next outfit together…",
-  "proposalsSkipStamp": "Next",
-  "proposalsPickedToast": "Look kept",
+  "proposalsSkipStamp": "Nope",
   "proposalsUndo": "Undo",
   "proposalsMarkRemoved": "{name} removed",
   "proposalsMarkKeptLabel": "{name}, kept. Tap to remove",
@@ -773,17 +770,24 @@
   "pieceRemove": "Remove from wardrobe",
   "pieceRemoveHint": "Removed pieces move to the archive in Settings. You can bring them back anytime.",
   "pieceRemoved": "{name} moved to the archive",
-  "proposalsKeep": "Keep this look",
   "referenceAskTitle": "First, a few photos of you",
   "referenceAskBody": "Inspiration puts you into new scenes. For that, FORM needs one to four photos of you, with your face and full body.",
   "referenceAskPrivacy": "You only do this once. Your photos are used only for your looks and you can delete them in Settings.",
   "referenceAskStart": "Add my photos",
   "referenceAskLater": "Not now",
   "stackPhotos": "Worn by you",
-  "proposalsKeepStamp": "Keep",
+  "proposalsKeepStamp": "Save",
   "piecesArrived": {
     "one": "A new piece is in your wardrobe",
     "other": "{} new pieces are in your wardrobe"
   },
-  "lookFlatHint": "Tap a piece to see its name."
+  "lookFlatHint": "Tap a piece to see its name.",
+  "proposalsAdjust": "Adjust myself",
+  "proposalsProgress": "Outfit {current} of {total}",
+  "proposalsSavedCount": {
+    "one": "1 saved",
+    "other": "{} saved"
+  },
+  "proposalsDiscard": "Discard",
+  "proposalsSave": "Save"
 }

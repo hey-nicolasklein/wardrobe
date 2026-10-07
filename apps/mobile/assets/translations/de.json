@@ -658,17 +658,15 @@
   "photosOfYouEmpty": "Damit Looks an dir aussehen wie du.",
   "composerProposeAction": "Outfits vorschlagen",
   "proposalsTitle": "Outfits auswählen",
-  "proposalsHint": "Wische links für eine Variante, rechts für dein Outfit.",
   "proposalsSkip": "Keiner davon",
   "proposalsDone": "Fertig",
   "proposalsFailed": "Die Planung ist fehlgeschlagen. Versuch eine neue Runde.",
-  "proposalsSkipOne": "Andere Variante",
   "proposalsPicked": {
     "one": "In deinen Looks gespeichert",
     "other": "In deinen Looks gespeichert"
   },
   "proposalsNonePicked": "Heute nichts dabei?",
-  "proposalsMore": "Weiter stylen",
+  "proposalsMore": "Noch eine Runde",
   "proposalsReasonNew": "Neu im Schrank: {piece}",
   "proposalsReasonNever": "Noch nie kombiniert: {piece}",
   "proposalsReasonRarely": "Länger nicht getragen: {piece}",
@@ -690,8 +688,7 @@
   "proposalsNonePickedBody": "Style weiter mit deinen Teilen oder schau später wieder rein.",
   "proposalsFailedTitle": "Diesmal keine Outfits",
   "proposalsPlanningNext": "Nächstes Outfit wird zusammengestellt…",
-  "proposalsSkipStamp": "Nächstes",
-  "proposalsPickedToast": "Look behalten",
+  "proposalsSkipStamp": "Weg",
   "proposalsUndo": "Rückgängig",
   "proposalsMarkRemoved": "{name} entfernt",
   "proposalsMarkKeptLabel": "{name}, behalten. Tippen zum Entfernen",
@@ -773,17 +770,24 @@
   "pieceRemove": "Aus dem Schrank nehmen",
   "pieceRemoveHint": "Entfernte Stücke landen im Archiv in den Einstellungen. Du kannst sie jederzeit zurückholen.",
   "pieceRemoved": "{name} liegt jetzt im Archiv",
-  "proposalsKeep": "Look behalten",
   "referenceAskTitle": "Zuerst ein paar Fotos von dir",
   "referenceAskBody": "Inspiration zeigt dich in neuen Szenen. Dafür braucht FORM ein bis vier Fotos von dir, mit Gesicht und ganzem Körper.",
   "referenceAskPrivacy": "Das machst du nur einmal. Deine Fotos werden nur für deine Looks genutzt, und du kannst sie in den Einstellungen löschen.",
   "referenceAskStart": "Meine Fotos hinzufügen",
   "referenceAskLater": "Nicht jetzt",
   "stackPhotos": "Von dir getragen",
-  "proposalsKeepStamp": "Behalten",
+  "proposalsKeepStamp": "Merken",
   "piecesArrived": {
     "one": "Ein neues Stück ist in deinem Schrank",
     "other": "{} neue Stücke sind in deinem Schrank"
   },
-  "lookFlatHint": "Tippe ein Teil, um seinen Namen zu sehen."
+  "lookFlatHint": "Tippe ein Teil, um seinen Namen zu sehen.",
+  "proposalsAdjust": "Selbst anpassen",
+  "proposalsProgress": "Outfit {current} von {total}",
+  "proposalsSavedCount": {
+    "one": "1 gemerkt",
+    "other": "{} gemerkt"
+  },
+  "proposalsDiscard": "Verwerfen",
+  "proposalsSave": "Merken"
 }

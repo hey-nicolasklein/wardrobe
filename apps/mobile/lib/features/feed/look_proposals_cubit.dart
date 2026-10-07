@@ -6,9 +6,9 @@ import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/utils/idempotency_key.dart';
 
-/// Outfits one swipe session shows at most. High enough to feel endless while
-/// the user narrows the outfit down with marks, low enough to bound a session.
-const maxSessionProposals = 20;
+/// Outfits in one round. Short enough that the end is in sight, long enough
+/// for marks to steer the later outfits. "More outfits" starts the next round.
+const roundSize = 8;
 
 /// How the user marked a piece on a proposal card.
 enum PieceMark { keep, exclude }
@@ -21,12 +21,13 @@ class LookProposalsState {
     this.marks = const {},
     this.proposing = false,
     this.failure,
+    this.undoable,
   });
 
   /// The session's proposals in planning order. Null until the first load.
   final List<Look>? proposals;
 
-  /// Proposals swiped right and kept as looks.
+  /// Proposals swiped right and saved to the Looks feed.
   final Set<String> picked;
 
   /// Proposals swiped left.
@@ -38,6 +39,10 @@ class LookProposalsState {
   /// A batch is being requested from the server.
   final bool proposing;
   final ApiFailure? failure;
+
+  /// The latest pick while it can still be taken back with
+  /// [LookProposalsCubit.undoPick].
+  final String? undoable;
 
   Set<String> get kept => {
     for (final entry in marks.entries)
@@ -62,10 +67,9 @@ class LookProposalsState {
 
   bool get planning => proposals?.any((look) => look.isActive) ?? true;
 
-  /// A round ends with the one outfit the user picked, or when the deck runs
-  /// out of outfits.
-  bool get finished =>
-      proposals != null && !proposing && (picked.isNotEmpty || deck.isEmpty);
+  /// A round ends when the deck runs out of outfits: [roundSize] is
+  /// reached, or there is nothing to top up from.
+  bool get finished => proposals != null && !proposing && deck.isEmpty;
 
   LookProposalsState copyWith({
     List<Look>? proposals,
@@ -74,6 +78,7 @@ class LookProposalsState {
     Map<String, PieceMark>? marks,
     bool? proposing,
     ApiFailure? Function()? failure,
+    String? Function()? undoable,
   }) => LookProposalsState(
     proposals: proposals ?? this.proposals,
     picked: picked ?? this.picked,
@@ -81,13 +86,14 @@ class LookProposalsState {
     marks: marks ?? this.marks,
     proposing: proposing ?? this.proposing,
     failure: failure == null ? this.failure : failure(),
+    undoable: undoable == null ? this.undoable : undoable(),
   );
 }
 
-/// One swipe session. Polls proposals while they are planned, keeps the one
-/// swiped right as a look, for free, and keeps the deck topped up: kept
-/// pieces become fixed pieces of the next proposals, excluded ones never come
-/// back.
+/// One swipe session. Polls proposals while they are planned, saves every
+/// outfit swiped right as a look, for free, and keeps the deck topped up:
+/// kept pieces become fixed pieces of the next proposals, excluded ones never
+/// come back.
 class LookProposalsCubit extends Cubit<LookProposalsState> {
   LookProposalsCubit(
     this.looks, {
@@ -110,6 +116,7 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
   Timer? _poll;
   Timer? _pendingKeep;
   Completer<void>? _pendingPick;
+  String? _pendingId;
 
   /// Bumped by every adjustment, so a poll that started before it cannot
   /// bring back the outfits as they were.
@@ -209,30 +216,59 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
     unawaited(_topUp());
   }
 
-  /// Ends the round with the outfit and keeps it as a look once [undoWindow]
-  /// passed without [undoPick]. One pick per round. Completes once kept.
+  /// Saves the outfit as a look once [undoWindow] passed without [undoPick],
+  /// and moves on to the next one. Completes once kept.
   Future<void> pick(String lookId) {
-    if (state.picked.isNotEmpty) return Future.value();
-    emit(state.copyWith(picked: {...state.picked, lookId}));
+    if (state.picked.contains(lookId)) return Future.value();
+    _flushPending();
+    emit(
+      state.copyWith(
+        picked: {...state.picked, lookId},
+        undoable: () => lookId,
+      ),
+    );
     final done = _pendingPick = Completer<void>();
+    _pendingId = lookId;
     _pendingKeep = Timer(undoWindow, () {
       _pendingPick = null;
       _pendingKeep = null;
+      _pendingId = null;
+      if (!isClosed) emit(state.copyWith(undoable: () => null));
       done.complete(_keep(lookId));
     });
+    unawaited(_topUp());
     return done.future;
   }
 
-  /// Takes back a pick still inside its [undoWindow]: the outfit returns to
-  /// the top of the deck and nothing is saved.
+  /// Saves a pick still waiting out its undo window right away.
+  void _flushPending() {
+    final id = _pendingId;
+    if (id == null || !(_pendingKeep?.isActive ?? false)) return;
+    _pendingKeep!.cancel();
+    _pendingPick?.complete(_keep(id));
+    _pendingKeep = null;
+    _pendingPick = null;
+    _pendingId = null;
+    if (!isClosed) emit(state.copyWith(undoable: () => null));
+  }
+
+  /// Takes back the latest pick still inside its [undoWindow]: the outfit
+  /// returns to the top of the deck and nothing is saved.
   void undoPick() {
     final timer = _pendingKeep;
-    if (timer == null || !timer.isActive) return;
+    final id = _pendingId;
+    if (timer == null || !timer.isActive || id == null) return;
     timer.cancel();
     _pendingKeep = null;
+    _pendingId = null;
     _pendingPick?.complete();
     _pendingPick = null;
-    emit(state.copyWith(picked: const {}));
+    emit(
+      state.copyWith(
+        picked: {...state.picked}..remove(id),
+        undoable: () => null,
+      ),
+    );
   }
 
   Future<void> _keep(String lookId) async {
@@ -250,13 +286,13 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
     }
   }
 
-  /// Keeps three proposals ahead of the user until the session limit. New
+  /// Keeps three proposals ahead of the user until the round is full. New
   /// ones are planned with the marks so far.
   Future<void> _topUp() async {
     final body = request;
-    if (body == null || state.proposing || state.picked.isNotEmpty) return;
+    if (body == null || state.proposing) return;
     final ahead = state.deck.length;
-    final room = maxSessionProposals - state.decided - ahead;
+    final room = roundSize - state.decided - ahead;
     final count = (3 - ahead).clamp(0, room);
     if (count <= 0) return;
     final exact = {...?(body['exactItemIds'] as List?)?.cast<String>()};
@@ -311,10 +347,7 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
   Future<void> close() {
     _poll?.cancel();
     // Closing the sheet inside the undo window keeps the pick.
-    if (_pendingKeep?.isActive ?? false) {
-      _pendingKeep!.cancel();
-      _pendingPick?.complete(_keep(state.picked.first));
-    }
+    _flushPending();
     return super.close();
   }
 }

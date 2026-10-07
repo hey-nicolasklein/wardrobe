@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
+import 'package:form_mobile/features/feed/feed_page.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/feed/flat_lay_widget.dart';
 import 'package:form_mobile/features/feed/look_proposals_cubit.dart';
@@ -23,15 +24,15 @@ import 'package:form_mobile/widgets/cached_media.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
-/// Planned outfits from the composer as a swipe deck, to style towards one
-/// outfit. Tapping a piece keeps it for, or leaves it out of, the next
-/// outfits; left shows the next variation. Right keeps the outfit as a look,
-/// for free, and ends the round, from where the user can style on with the
-/// same marks.
+/// Planned outfits as a swipe deck. Right saves the outfit to the Looks
+/// feed, left discards it, both for free. Tapping a piece keeps it for, or
+/// leaves it out of, the next outfits, so the user steers without ever
+/// pressing "generate". "Adjust myself" opens the composer on the card.
 class LookProposalsPage extends StatelessWidget {
   const LookProposalsPage({this.request, super.key});
 
-  /// The composer's propose body, reused for every further proposal.
+  /// The propose body, reused for every further proposal. An optional
+  /// `label` (the user's own words for the occasion) heads the deck.
   final Map<String, dynamic>? request;
 
   @override
@@ -64,15 +65,10 @@ class _ProposalsViewState extends State<_ProposalsView> {
   void _decide(Look look, {required bool pick}) {
     final cubit = context.read<LookProposalsCubit>();
     if (pick) {
+      // The card's stamp and flight are the confirmation. Undo waits in
+      // the progress line instead of a toast over the controls.
       unawaited(HapticFeedback.mediumImpact());
       unawaited(cubit.pick(look.id));
-      showFormToast(
-        context,
-        context.tr(LocaleKeys.proposalsPickedToast),
-        action: context.tr(LocaleKeys.proposalsUndo),
-        onAction: cubit.undoPick,
-        duration: cubit.undoWindow,
-      );
     } else {
       unawaited(HapticFeedback.selectionClick());
       cubit.skip(look.id);
@@ -110,9 +106,29 @@ class _ProposalsViewState extends State<_ProposalsView> {
         .where((preset) => preset.value != null)
         .where((preset) => preset.value == cubit.request?['occasion'])
         .firstOrNull;
+    final label = cubit.request?['label'] as String?;
+    // Without a request there is nothing to top up from, so the round is
+    // whatever was planned.
+    final total = cubit.request == null
+        ? (state.proposals ?? const <Look>[])
+              .where((look) => look.state != 'failed')
+              .length
+        : roundSize;
     return FormSheet(
-      title: context.tr(occasion?.label ?? LocaleKeys.proposalsTitle),
+      title: label ?? context.tr(occasion?.label ?? LocaleKeys.proposalsTitle),
       scrollable: false,
+      // Every save is already kept, so leaving is finishing, not cancelling.
+      // The summary carries its own buttons.
+      trailing: state.finished
+          ? const SizedBox(height: 48)
+          : TextButton(
+              onPressed: () => context.pop(),
+              style: TextButton.styleFrom(
+                foregroundColor: FormTokens.green,
+                textStyle: FormTokens.title.copyWith(fontSize: 16),
+              ),
+              child: Text(context.tr(LocaleKeys.proposalsDone)),
+            ),
       footer: state.finished
           ? _FinishedActions(
               picked: state.picked.length,
@@ -121,8 +137,16 @@ class _ProposalsViewState extends State<_ProposalsView> {
             )
           : _DeckActions(
               enabled: topReady,
-              onSkip: () => _deck.currentState?.fling(right: false),
-              onPick: () => _deck.currentState?.fling(right: true),
+              onSkip: () =>
+                  _deck.currentState?.fling(right: false, fromButton: true),
+              onPick: () =>
+                  _deck.currentState?.fling(right: true, fromButton: true),
+              onAdjust: () {
+                final look = deck.firstOrNull;
+                if (look == null) return;
+                unawaited(HapticFeedback.lightImpact());
+                openLookComposer(context, from: look);
+              },
             ),
       child: LayoutBuilder(
         builder: (context, constraints) => SizedBox(
@@ -132,9 +156,16 @@ class _ProposalsViewState extends State<_ProposalsView> {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      context.tr(LocaleKeys.proposalsHint),
-                      style: FormTokens.small,
+                    _RoundProgress(
+                      outcomes: [
+                        for (final look in state.proposals ?? const <Look>[])
+                          if (state.picked.contains(look.id))
+                            true
+                          else if (state.skipped.contains(look.id))
+                            false,
+                      ],
+                      total: total,
+                      onUndo: state.undoable == null ? null : cubit.undoPick,
                     ),
                     _YourLook(
                       marks: state.marks,
@@ -149,7 +180,7 @@ class _ProposalsViewState extends State<_ProposalsView> {
                         error: true,
                       ),
                     ],
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
                     Expanded(
                       child: deck.isEmpty
                           ? _PlanningCard(building: state.kept.isNotEmpty)
@@ -163,6 +194,9 @@ class _ProposalsViewState extends State<_ProposalsView> {
                                       itemsById: itemsById,
                                       online: online,
                                       marks: state.marks,
+                                      // Once something is marked the user
+                                      // has learned the gesture.
+                                      showTapHint: state.marks.isEmpty,
                                       // Only the top card takes taps.
                                       onPieceTap: look == deck.first
                                           ? (id) {
@@ -187,6 +221,114 @@ class _ProposalsViewState extends State<_ProposalsView> {
                 ),
         ),
       ),
+    );
+  }
+}
+
+/// Where the user is in the round: one segment per outfit, green for saved,
+/// faded for discarded, dark for the one on top. The end is always in sight.
+class _RoundProgress extends StatelessWidget {
+  const _RoundProgress({
+    required this.outcomes,
+    required this.total,
+    required this.onUndo,
+  });
+
+  /// Decided outfits in deck order, true for saved.
+  final List<bool> outcomes;
+  final int total;
+
+  /// Takes back the latest save. Null once its undo window has passed.
+  final VoidCallback? onUndo;
+
+  @override
+  Widget build(BuildContext context) {
+    final saved = outcomes.where((pick) => pick).length;
+    final current = math.min(outcomes.length + 1, math.max(total, 1));
+    final figures = FormTokens.small.copyWith(
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 36,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  context.tr(
+                    LocaleKeys.proposalsProgress,
+                    namedArgs: {'current': '$current', 'total': '$total'},
+                  ),
+                  style: figures,
+                ),
+              ),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: saved == 0
+                    ? const SizedBox.shrink()
+                    : Text(
+                        context.plural(LocaleKeys.proposalsSavedCount, saved),
+                        key: ValueKey(saved),
+                        style: figures.copyWith(
+                          color: FormTokens.green,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 260),
+                curve: FormTokens.easeOut,
+                child: onUndo == null
+                    ? const SizedBox(height: 36)
+                    : Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: TextButton.icon(
+                          onPressed: onUndo,
+                          style: TextButton.styleFrom(
+                            foregroundColor: FormTokens.ink,
+                            minimumSize: const Size(44, 36),
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            backgroundColor: FormTokens.field,
+                            shape: const StadiumBorder(),
+                            textStyle: FormTokens.small.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          icon: const Icon(Icons.undo, size: 15),
+                          label: Text(context.tr(LocaleKeys.proposalsUndo)),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          spacing: 4,
+          children: [
+            for (var index = 0; index < total; index++)
+              Expanded(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 260),
+                  curve: FormTokens.easeOut,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    color: switch (outcomes.elementAtOrNull(index)) {
+                      true => FormTokens.green,
+                      false => FormTokens.muted.withValues(alpha: 0.4),
+                      null when index == outcomes.length =>
+                        FormTokens.ink.withValues(alpha: 0.7),
+                      null => FormTokens.line,
+                    },
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -220,7 +362,7 @@ class _YourLook extends StatelessWidget {
       child: marked.isEmpty
           ? const SizedBox(width: double.infinity)
           : Padding(
-              padding: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.only(top: 14),
               child: Row(
                 children: [
                   Text(
@@ -234,9 +376,7 @@ class _YourLook extends StatelessWidget {
                   Expanded(
                     child: SizedBox(
                       height: 48,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        clipBehavior: Clip.none,
+                      child: _FadingRow(
                         children: [
                           for (final entry in marked)
                             _MarkThumb(
@@ -258,6 +398,68 @@ class _YourLook extends StatelessWidget {
             ),
     );
   }
+}
+
+/// A sideways-scrolling row that fades out at an edge while more is hidden
+/// past it, instead of cutting its content off.
+class _FadingRow extends StatefulWidget {
+  const _FadingRow({required this.children, this.spacing = 0});
+
+  final List<Widget> children;
+  final double spacing;
+
+  @override
+  State<_FadingRow> createState() => _FadingRowState();
+}
+
+class _FadingRowState extends State<_FadingRow> {
+  static const _fade = 28.0;
+  bool _fadeStart = false;
+  bool _fadeEnd = false;
+
+  bool _update(ScrollMetrics metrics) {
+    final start = metrics.pixels > metrics.minScrollExtent + 1;
+    final end = metrics.pixels < metrics.maxScrollExtent - 1;
+    if (start != _fadeStart || end != _fadeEnd) {
+      setState(() {
+        _fadeStart = start;
+        _fadeEnd = end;
+      });
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final stop = (_fade / constraints.maxWidth).clamp(0.0, 0.5);
+      return ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (bounds) => LinearGradient(
+          colors: [
+            Colors.black.withValues(alpha: _fadeStart ? 0 : 1),
+            Colors.black,
+            Colors.black,
+            Colors.black.withValues(alpha: _fadeEnd ? 0 : 1),
+          ],
+          stops: [0, stop, 1 - stop, 1],
+        ).createShader(bounds),
+        child: NotificationListener<ScrollMetricsNotification>(
+          onNotification: (notification) => _update(notification.metrics),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) => _update(notification.metrics),
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.zero,
+              itemCount: widget.children.length,
+              separatorBuilder: (_, _) => SizedBox(width: widget.spacing),
+              itemBuilder: (_, index) => widget.children[index],
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _MarkThumb extends StatelessWidget {
@@ -379,10 +581,25 @@ class _SwipeDeckState extends State<_SwipeDeck>
   }
 
   /// Throws the top card off to one side, from a swipe or the buttons.
-  Future<void> fling({required bool right, double velocity = 0}) async {
+  Future<void> fling({
+    required bool right,
+    double velocity = 0,
+    bool fromButton = false,
+  }) async {
     final look = _top;
     if (look == null || look.state != 'proposed' || _flinging) return;
     _flinging = true;
+    if (fromButton) {
+      // From a button: lean the card over until its stamp shows, as a swipe
+      // would, and let it register before the card flies.
+      await _dx.animateTo(
+        (right ? 1 : -1) * _threshold,
+        duration: const Duration(milliseconds: 220),
+        curve: FormTokens.easeOut,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 160));
+      if (!mounted) return;
+    }
     final target = (right ? 1 : -1) * _width * 1.5;
     final distance = (target - _dx.value).abs();
     await _dx.animateTo(
@@ -592,6 +809,7 @@ class _ProposalCard extends StatelessWidget {
     required this.itemsById,
     required this.online,
     required this.marks,
+    required this.showTapHint,
     required this.onPieceTap,
   });
 
@@ -599,6 +817,9 @@ class _ProposalCard extends StatelessWidget {
   final Map<String, WardrobeItem> itemsById;
   final bool online;
   final Map<String, PieceMark> marks;
+
+  /// Teaches tapping a piece until the user has marked one.
+  final bool showTapHint;
 
   /// Null on cards below the top one.
   final ValueChanged<String>? onPieceTap;
@@ -613,6 +834,15 @@ class _ProposalCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Why this outfit, read before the outfit itself. One row that
+          // scrolls sideways, so the flat lay keeps the card's height.
+          if (reasons.isNotEmpty) ...[
+            SizedBox(
+              height: 30,
+              child: _FadingRow(spacing: 6, children: reasons),
+            ),
+            const SizedBox(height: 12),
+          ],
           Expanded(
             child: Center(
               child: FlatLayBoard(
@@ -633,23 +863,41 @@ class _ProposalCard extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            context.tr(LocaleKeys.proposalsTapHint),
-            textAlign: TextAlign.center,
-            style: FormTokens.small,
+          AnimatedSize(
+            duration: const Duration(milliseconds: 280),
+            curve: FormTokens.easeOut,
+            child: showTapHint
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      spacing: 6,
+                      children: [
+                        const Icon(
+                          Icons.touch_app_outlined,
+                          size: 15,
+                          color: FormTokens.muted,
+                        ),
+                        Flexible(
+                          child: Text(
+                            context.tr(LocaleKeys.proposalsTapHint),
+                            textAlign: TextAlign.center,
+                            style: FormTokens.small,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
           ),
-          if (reasons.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Wrap(spacing: 6, runSpacing: 6, children: reasons),
-          ],
         ],
       ),
     );
   }
 }
 
-/// A piece the user kept gets a pin badge. One left out fades back: it stays
-/// on this card but not in the next outfits.
+/// A piece the user kept gets a green pin. One left out gets a brick cross
+/// and fades back: it stays on this card but not in the next outfits.
 class _MarkedPiece extends StatelessWidget {
   const _MarkedPiece({
     required this.kept,
@@ -668,34 +916,38 @@ class _MarkedPiece extends StatelessWidget {
     children: [
       AnimatedOpacity(
         duration: const Duration(milliseconds: 220),
-        opacity: leftOut ? 0.3 : 1,
+        opacity: leftOut ? 0.45 : 1,
         child: child,
       ),
       Positioned(
         top: 0,
         right: 0,
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 320),
-          curve: FormTokens.pop,
-          scale: kept ? 1 : 0,
-          child: Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              color: FormTokens.green,
-              shape: BoxShape.circle,
-              border: Border.all(color: FormTokens.surface, width: 2),
-            ),
-            child: const Icon(
-              Icons.push_pin,
-              size: 13,
-              color: FormTokens.surface,
-            ),
-          ),
+        child: Stack(
+          children: [
+            _badge(Icons.push_pin, FormTokens.green, visible: kept),
+            _badge(Icons.close, FormTokens.danger, visible: leftOut),
+          ],
         ),
       ),
     ],
   );
+
+  static Widget _badge(IconData icon, Color color, {required bool visible}) =>
+      AnimatedScale(
+        duration: const Duration(milliseconds: 320),
+        curve: FormTokens.pop,
+        scale: visible ? 1 : 0,
+        child: Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: FormTokens.surface, width: 2),
+          ),
+          child: Icon(icon, size: 14, color: FormTokens.surface),
+        ),
+      );
 }
 
 /// A short, factual reason chip. Null for kinds this app does not know.
@@ -747,7 +999,9 @@ Widget? _reasonChip(
   };
   if (content == null) return null;
   return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    // Bounds the name inside the sideways-scrolling row.
+    constraints: const BoxConstraints(maxWidth: 240),
+    padding: const EdgeInsets.symmetric(horizontal: 11),
     decoration: BoxDecoration(
       color: FormTokens.flatLayPaper,
       borderRadius: BorderRadius.circular(FormTokens.chipRadius),
@@ -755,7 +1009,7 @@ Widget? _reasonChip(
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(content.$1, size: 14, color: FormTokens.green),
+        Icon(content.$1, size: 14, color: FormTokens.muted),
         const SizedBox(width: 6),
         Flexible(
           child: Text(
@@ -873,39 +1127,100 @@ class _PlanningCardState extends State<_PlanningCard>
   }
 }
 
+/// The card's own decisions mirror the swipe: discard on the left, save on
+/// the right, "adjust myself" between them as the quieter third option.
+/// Closing the sheet leaves the card on top unsaved.
 class _DeckActions extends StatelessWidget {
   const _DeckActions({
     required this.enabled,
     required this.onSkip,
     required this.onPick,
+    required this.onAdjust,
   });
 
   final bool enabled;
   final VoidCallback onSkip;
   final VoidCallback onPick;
+  final VoidCallback onAdjust;
 
   @override
   Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.end,
     children: [
-      // Skipping shows the next outfit, keeping ends the round.
-      TextButton.icon(
-        onPressed: enabled ? onSkip : null,
-        style: TextButton.styleFrom(foregroundColor: FormTokens.muted),
-        icon: const Icon(Icons.refresh, size: 18),
-        label: Text(context.tr(LocaleKeys.proposalsSkipOne)),
-      ),
-      const SizedBox(width: 8),
       Expanded(
-        child: FilledButton(
+        child: _RoundAction(
+          icon: Icons.close,
+          label: context.tr(LocaleKeys.proposalsDiscard),
+          onPressed: enabled ? onSkip : null,
+        ),
+      ),
+      Expanded(
+        child: _RoundAction(
+          icon: Icons.tune,
+          label: context.tr(LocaleKeys.proposalsAdjust),
+          size: 52,
+          onPressed: enabled ? onAdjust : null,
+        ),
+      ),
+      Expanded(
+        child: _RoundAction(
+          icon: Icons.bookmark_add_outlined,
+          label: context.tr(LocaleKeys.proposalsSave),
+          filled: true,
           onPressed: enabled ? onPick : null,
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 56),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-          ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(context.tr(LocaleKeys.proposalsKeep), maxLines: 1),
-          ),
+        ),
+      ),
+    ],
+  );
+}
+
+/// A round decision button with its label below, like the swipe it stands
+/// for.
+class _RoundAction extends StatelessWidget {
+  const _RoundAction({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.filled = false,
+    this.size = 64,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool filled;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    spacing: 8,
+    children: [
+      IconButton(
+        onPressed: onPressed,
+        tooltip: label,
+        style: IconButton.styleFrom(
+          fixedSize: Size.square(size),
+          backgroundColor: filled ? FormTokens.green : FormTokens.surface,
+          foregroundColor: filled ? FormTokens.surface : FormTokens.ink,
+          disabledBackgroundColor: filled
+              ? FormTokens.green.withValues(alpha: 0.45)
+              : FormTokens.surface,
+          disabledForegroundColor: filled
+              ? FormTokens.surface
+              : FormTokens.muted.withValues(alpha: 0.5),
+          side: filled ? null : const BorderSide(color: FormTokens.line),
+        ),
+        icon: Icon(icon, size: size * 0.4),
+      ),
+      Text(
+        label,
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: FormTokens.small.copyWith(
+          color: FormTokens.ink,
+          fontWeight: FontWeight.w600,
         ),
       ),
     ],

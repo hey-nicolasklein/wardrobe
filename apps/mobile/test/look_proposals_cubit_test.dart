@@ -89,7 +89,7 @@ void main() {
   });
 
   test(
-    'swiping works through the deck and keeps only the picked outfit',
+    'swiping works through the deck and saves the picked outfits',
     () async {
       final cubit = LookProposalsCubit(
         looks,
@@ -152,7 +152,7 @@ void main() {
       expect(body.containsKey('discardLookIds'), isFalse);
     },
   );
-  test('a pick ends the round and the next round keeps the marks', () async {
+  test('every pick is saved and the next round keeps the marks', () async {
     final cubit = LookProposalsCubit(
       looks,
       undoWindow: Duration.zero,
@@ -171,13 +171,13 @@ void main() {
     await cubit.swap('pants', onLookId: 'look-a');
     await cubit.pick('look-a');
     await cubit.pick('look-b');
-    expect(kept, ['look-a']);
-    expect(cubit.state.finished, isTrue);
-    // No more outfits are planned once the round has its outfit.
-    expect(proposeBodies, isEmpty);
+    expect(kept, ['look-a', 'look-b']);
+    // Saving tops the deck up with outfits planned around the marks.
+    expect(proposeBodies.first['append'], isTrue);
 
+    await Future<void>.delayed(const Duration(milliseconds: 20));
     await cubit.restyle();
-    final body = proposeBodies.single;
+    final body = proposeBodies.last;
     expect(body['append'], isNot(isTrue));
     expect(body['exactItemIds'], ['jacket']);
     expect(body['excludedItemIds'], ['pants']);
@@ -192,7 +192,7 @@ void main() {
     addTearDown(cubit.close);
     await cubit.refresh();
     final pick = cubit.pick('look-a');
-    expect(cubit.state.finished, isTrue);
+    expect(cubit.state.deck.first.id, 'look-b');
     cubit.undoPick();
     await pick;
     await Future<void>.delayed(const Duration(milliseconds: 80));
