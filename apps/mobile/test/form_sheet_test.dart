@@ -3,14 +3,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 
 void main() {
-  testWidgets('sheet follows a step that swaps in non-scrolling content', (
+  testWidgets('sheet follows steps that swap scrolling and fixed content', (
     tester,
   ) async {
-    const size = Size(393, 852);
-    final cropping = ValueNotifier(false);
-    addTearDown(cropping.dispose);
-    await tester.binding.setSurfaceSize(size);
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    // An iPhone 16 Pro Max with its notch and home indicator insets.
+    const size = Size(440, 956);
+    tester.view.devicePixelRatio = 3;
+    tester.view.physicalSize = size * 3;
+    tester.view.padding = const FakeViewPadding(top: 62 * 3, bottom: 34 * 3);
+    addTearDown(tester.view.reset);
+    // Like the collage setup: a short scrolling selection, a crop step that
+    // fills the sheet without a scroll view, then a long scrolling review.
+    final step = ValueNotifier('select');
+    addTearDown(step.dispose);
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -19,20 +24,27 @@ void main() {
               onPressed: () => showFormSheet<void>(
                 context: context,
                 enableDrag: false,
-                // Like the collage setup: a short scrolling step, then a
-                // crop step that fills the sheet without a scroll view.
                 builder: (_) => ValueListenableBuilder(
-                  valueListenable: cropping,
-                  builder: (_, crop, _) => crop
-                      ? const FormSheet(
-                          title: 'Crop',
-                          scrollable: false,
-                          footer: Text('Next'),
-                          child: Column(
-                            children: [Expanded(child: Placeholder())],
-                          ),
-                        )
-                      : const FormSheet(title: 'Select', child: Text('Pick')),
+                  valueListenable: step,
+                  builder: (_, value, _) => switch (value) {
+                    'crop' => FormSheet(
+                      title: 'Crop',
+                      scrollable: false,
+                      footer: const Text('Next'),
+                      child: LayoutBuilder(
+                        builder: (_, constraints) =>
+                            SizedBox(height: constraints.maxHeight),
+                      ),
+                    ),
+                    'review' => const FormSheet(
+                      title: 'Review',
+                      footer: Text('Next'),
+                      child: Column(
+                        children: [SizedBox(height: 1200), Text('Save')],
+                      ),
+                    ),
+                    _ => const FormSheet(title: 'Select', child: Text('Pick')),
+                  },
                 ),
               ),
               child: const Text('Open'),
@@ -46,13 +58,23 @@ void main() {
     Rect sheet() => tester.getRect(find.byType(FractionallySizedBox).last);
     final select = sheet();
 
-    cropping.value = true;
+    step.value = 'crop';
     await tester.pumpAndSettle();
     final crop = sheet();
     expect(crop.top, lessThan(select.top));
     expect(tester.getRect(find.text('Next')).bottom, lessThan(crop.bottom));
 
-    cropping.value = false;
+    step.value = 'review';
+    await tester.pumpAndSettle();
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(0, -1000),
+    );
+    await tester.pumpAndSettle();
+    expect(sheet().top, closeTo(crop.top, 1));
+    expect(tester.getRect(find.text('Save')).bottom, lessThan(sheet().bottom));
+
+    step.value = 'select';
     await tester.pumpAndSettle();
     expect(sheet().top, closeTo(select.top, 1));
   });

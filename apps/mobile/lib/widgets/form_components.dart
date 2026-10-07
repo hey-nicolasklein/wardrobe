@@ -942,6 +942,8 @@ class _FormSheetDraggableWrapperState
   // Content without a scroll view on the sheet's controller (e.g. the crop
   // step) cannot drag the sheet, and the controller cannot move it either.
   // A matching minChildSize then makes the sheet clamp itself to the content.
+  // While pinned, the sheet takes every drag, so a scroll view that appears
+  // at the same height must unpin it again.
   bool _pinned = false;
 
   @override
@@ -963,17 +965,23 @@ class _FormSheetDraggableWrapperState
                   _scheduleExtentUpdate();
                   return false;
                 },
-                child: ClipRect(
-                  child: OverflowBox(
-                    alignment: Alignment.topCenter,
-                    minHeight: 0,
-                    maxHeight: constraints.maxHeight * widget.maxExtent,
-                    child: PrimaryScrollController(
-                      controller: scrollController,
-                      child: SizeChangedLayoutNotifier(
-                        child: KeyedSubtree(
-                          key: _contentKey,
-                          child: widget.child,
+                child: NotificationListener<ScrollMetricsNotification>(
+                  onNotification: (_) {
+                    if (_pinned) _scheduleExtentUpdate();
+                    return false;
+                  },
+                  child: ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.topCenter,
+                      minHeight: 0,
+                      maxHeight: constraints.maxHeight * widget.maxExtent,
+                      child: PrimaryScrollController(
+                        controller: scrollController,
+                        child: SizeChangedLayoutNotifier(
+                          child: KeyedSubtree(
+                            key: _contentKey,
+                            child: widget.child,
+                          ),
                         ),
                       ),
                     ),
@@ -1327,9 +1335,6 @@ void showFormToast(
       SnackBar(
         content: Text(message, style: const TextStyle(fontSize: 14)),
         duration: duration,
-        // Toasts with an undo action would otherwise stay until tapped,
-        // outliving the undo window they offer.
-        persist: false,
         action: action != null && onAction != null
             ? SnackBarAction(
                 label: action,
