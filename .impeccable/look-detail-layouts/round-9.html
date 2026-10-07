@@ -1,0 +1,378 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FORM · Look-Detail · Runde 8</title><style>
+@font-face { font-family: "Libre Baskerville"; src: url("assets/LibreBaskerville.ttf"); font-display: swap; }
+:root {
+  --forest: #344D3F; --paper: #F6F5F1; --ink: #242923; --muted: #777B72; --note: #626E5E;
+  --hair: #E2E4DC; --field: #EAECE5; --white: #FFFFFF; --coin-ink: #7E5F2C; --stage: #E7E9E2;
+  --serif: "Libre Baskerville", Georgia, serif;
+  --sans: -apple-system, "SF Pro Text", system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+::selection { background: #DFE8D2; color: var(--ink); }
+html { background: #ECEBE5; color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+body { padding: 56px 40px 96px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+button:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; border-radius: 10px; }
+svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i.sm { width: 18px; height: 18px; }
+
+/* page */
+.intro { max-width: 1000px; margin: 0 auto 40px; }
+.intro h1 { font-family: var(--serif); font-weight: 400; font-size: 38px; letter-spacing: -1.1px; line-height: 1.1; }
+.intro p { margin-top: 12px; font-size: 15px; line-height: 1.6; color: var(--note); max-width: 70ch; }
+.intro a { color: var(--forest); }
+.changes { margin-top: 18px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 32px; list-style: none; font-size: 13.5px; line-height: 1.5; color: var(--note); }
+.changes b { color: var(--ink); font-weight: 600; }
+.variants { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; }
+.variant > header { margin-bottom: 18px; }
+.variant .tag { font-size: 13px; font-weight: 600; color: var(--forest); }
+.variant h3 { font-family: var(--serif); font-weight: 400; font-size: 24px; letter-spacing: -.4px; margin-top: 4px; }
+.variant > header p { margin-top: 6px; font-size: 13.5px; line-height: 1.55; color: var(--note); }
+
+/* phone */
+.phone { width: 375px; height: 780px; margin: 0 auto; border-radius: 46px; background: #1d1f1c; padding: 10px; box-shadow: 0 30px 60px -30px rgba(29,40,28,.45); }
+.screen { position: relative; height: 100%; border-radius: 37px; overflow: hidden; background: var(--paper); }
+.scroll { height: 100%; overflow-y: auto; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.statusbar { height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 6px 30px 0 34px; font-size: 15px; font-weight: 600; color: var(--ink); }
+.statusbar .island { width: 104px; height: 30px; border-radius: 20px; background: #000; }
+.statusbar i { display: block; width: 24px; height: 11px; border-radius: 3px; border: 1.5px solid var(--ink); position: relative; }
+.statusbar i::after { content: ""; position: absolute; inset: 1px 4px 1px 1px; background: var(--ink); border-radius: 1px; }
+
+.top { position: absolute; top: 0; left: 0; right: 0; z-index: 4; }
+.top::before { content: ""; position: absolute; inset: 0 0 -28px; z-index: -1; opacity: 0; transition: opacity .32s cubic-bezier(.22,1,.36,1); background: linear-gradient(var(--paper) 62%, transparent); }
+.top.scrolled::before { opacity: 1; }
+.top .bar { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+.float-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(246,245,241,.8); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 1px 4px rgba(39,55,27,.06); }
+.counter { height: 32px; padding: 0 12px 0 6px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; background: rgba(246,245,241,.8); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 1px 4px rgba(39,55,27,.06); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.counter img { width: 22px; height: 22px; border-radius: 6px; object-fit: cover; }
+
+/* hero: photo starts below the bar, its top fades into paper */
+.hero { position: relative; height: 540px; background: var(--paper); }
+.hero > img { position: absolute; left: 0; right: 0; top: 70px; width: 100%; height: calc(100% - 70px); object-fit: cover; object-position: 50% 0; }
+.hero::before { content: ""; position: absolute; left: 0; right: 0; top: 70px; height: 90px; z-index: 1; background: linear-gradient(var(--paper), color-mix(in srgb, var(--paper) 55%, transparent) 45%, transparent); }
+.hero .controls { position: absolute; left: 14px; right: 14px; bottom: 38px; z-index: 2; display: flex; align-items: center; justify-content: space-between; }
+.seg { display: inline-flex; padding: 3px; border-radius: 999px; background: rgba(246,245,241,.72); border: 1px solid rgba(255,255,255,.5); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.seg button { height: 34px; padding: 0 16px; border-radius: 999px; font-size: 13px; color: var(--note); }
+.seg button.on { background: var(--white); color: var(--ink); font-weight: 600; box-shadow: 0 1px 4px rgba(39,55,27,.06); }
+
+.sheet { position: relative; z-index: 3; margin-top: -24px; background: var(--paper); border-radius: 25px 25px 0 0; padding: 26px 22px 48px; }
+.title-row { display: flex; gap: 8px; align-items: flex-start; }
+.title-row h2 { flex: 1; font-family: var(--serif); font-weight: 400; font-size: 23px; line-height: 1.25; letter-spacing: -.4px; text-wrap: balance; }
+.heart { width: 44px; height: 44px; margin: -8px -10px 0 0; display: grid; place-items: center; color: var(--ink); }
+.meta { margin-top: 6px; font-size: 13px; color: var(--muted); }
+
+.section { margin-top: 30px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.section-head h4 { font-size: 15px; font-weight: 600; }
+.section-head button { font-size: 13px; color: var(--muted); min-height: 32px; }
+
+.rows { list-style: none; }
+.row { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 6px 0; }
+.row + .row { border-top: 1px solid var(--hair); }
+.ph { width: 46px; height: 54px; border-radius: 10px; overflow: hidden; flex: none; display: grid; place-items: center; }
+.ph img { width: 84%; }
+.ph img.fill, .face img.fill { width: 100%; height: 100%; object-fit: cover; }
+.row .txt { flex: 1; min-width: 0; }
+.row .txt b { display: block; font-size: 14.5px; font-weight: 600; }
+.row .txt small { font-size: 12.5px; color: var(--muted); }
+.chev { color: #A9ACA3; }
+
+.strip { display: flex; gap: 10px; margin-top: 8px; }
+.tile { width: 96px; }
+.tile .face { width: 96px; height: 112px; border-radius: 14px; overflow: hidden; display: grid; place-items: center; }
+.tile .face img { width: 82%; }
+.tile b { display: block; margin-top: 7px; font-size: 12.5px; font-weight: 500; line-height: 1.3; }
+.tile small { display: block; font-size: 11.5px; color: var(--muted); }
+
+.group { background: var(--white); border: 1px solid var(--hair); border-radius: 14px; overflow: hidden; margin-top: 8px; }
+.opt { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 14px; }
+.opt + .opt { border-top: 1px solid var(--hair); }
+.opt > svg:first-child { color: var(--forest); }
+.opt .lbl { flex: 1; min-width: 0; }
+.opt .lbl b { display: block; font-size: 15px; font-weight: 500; }
+.opt .lbl small { display: block; margin-top: 1px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.coin { color: var(--coin-ink); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.cut { max-width: 1000px; margin: 56px auto 0; padding-top: 26px; border-top: 1px solid #D9DBD2; display: grid; grid-template-columns: 1fr 1.5fr; gap: 48px; }
+.cut h2 { font-family: var(--serif); font-weight: 400; font-size: 24px; letter-spacing: -.4px; }
+.cut ul { padding-left: 18px; display: grid; gap: 6px; font-size: 14px; line-height: 1.55; color: var(--note); }
+.cut b { color: var(--ink); font-weight: 600; }
+@media (max-width: 900px) { .variants, .cut, .changes { grid-template-columns: 1fr; } body { padding: 32px 18px; } }
+
+/* round 3: in-app header, whole photo, controls below it */
+.appbar { display: flex; align-items: center; gap: 6px; padding: 2px 16px 10px 6px; border-bottom: 1px solid var(--hair); }
+.appbar .ttl { flex: 1; }
+.appbar .ttl b { display: block; font-family: var(--serif); font-weight: 400; font-size: 22px; letter-spacing: -.4px; }
+.appbar .ttl small { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.new-pill { height: 36px; padding: 0 14px 0 11px; border-radius: 999px; background: #DFE8D2; color: var(--forest); font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.icon-btn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; flex: none; }
+.content { padding: 16px 22px 48px; }
+.photo { display: block; width: 100%; height: auto; aspect-ratio: 432 / 660; object-fit: contain; background: var(--stage); }
+.photo.card { border-radius: 14px; }
+.bleed { margin: 0 -22px; }
+.under { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.under .seg { background: var(--field); border-color: var(--hair); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.under .more { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--ink); }
+.title-block { margin-top: 22px; }
+
+.appbar.plain .ttl b { font-size: 20px; }
+.tools { display: flex; align-items: center; margin-right: -8px; }
+.tools .icon-btn { width: 40px; }
+.under .seg button { padding: 0 13px; }
+.tools .icon-btn { color: var(--ink); }
+.pieces { align-items: start; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 22px; }
+.pc { display: block; }
+.pc .face { aspect-ratio: 3 / 4; border-radius: 12px; display: grid; place-items: center; overflow: hidden; }
+.pc .face img { width: 80%; }
+.pc span { display: block; margin-top: 6px; font-size: 11.5px; line-height: 1.3; color: var(--note); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pc.unmarked .face { outline: 1px dashed #C5C8BE; outline-offset: -1px; }
+.group.tight { margin-top: 26px; }
+.removed { list-style: none; display: grid; gap: 10px; font-size: 13.5px; line-height: 1.5; color: var(--note); }
+.removed b { color: var(--ink); font-weight: 600; }
+
+.variants.three { max-width: 1240px; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.intro, .cut { max-width: 1240px; }
+.media-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.thumbs { flex: 1; min-width: 0; display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; padding: 3px; margin: -3px; }
+.th { position: relative; flex: none; width: 42px; height: 54px; border-radius: 10px; overflow: hidden; background: var(--stage); }
+.th img { width: 100%; height: 100%; object-fit: cover; }
+.th.on { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--forest); }
+.th .ki { position: absolute; left: 3px; bottom: 3px; height: 15px; padding: 0 4px; border-radius: 5px; background: rgba(246,245,241,.92); font-size: 9px; font-weight: 700; letter-spacing: .3px; line-height: 15px; color: var(--ink); }
+.th.add { display: grid; place-items: center; background: transparent; border: 1.5px dashed #C5C8BE; color: var(--forest); }
+.caption { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.caption b { color: var(--note); font-weight: 600; }
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 24px; }
+.ib { display: flex; flex-direction: column; align-items: flex-start; padding: 14px; border-radius: 14px; background: var(--white); border: 1px solid var(--hair); }
+.ib.primary { background: var(--forest); border-color: var(--forest); color: #fff; }
+.ib .ic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: #DFE8D2; color: var(--forest); }
+.ib.primary .ic { background: rgba(255,255,255,.14); color: #fff; }
+.ib .ic svg { width: 19px; height: 19px; }
+.ib b { margin-top: 12px; font-size: 15px; font-weight: 600; }
+.ib small { margin-top: 3px; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.ib.primary small { color: rgba(255,255,255,.85); }
+.flatlay { position: relative; aspect-ratio: 4 / 5; border-radius: 14px; background: #F0EEE6; overflow: hidden; }
+.flatlay img { position: absolute; filter: drop-shadow(0 6px 10px rgba(29,40,28,.10)); }
+.answer { max-width: 1240px; margin: 0 auto 44px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.answer div { background: var(--paper); border: 1px solid var(--hair); border-radius: 18px; padding: 18px 20px; font-size: 13.5px; line-height: 1.55; color: var(--note); }
+.answer h2 { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.answer b { color: var(--ink); font-weight: 600; }
+@media (max-width: 1220px) { .variants.three, .answer { grid-template-columns: 1fr; } }
+
+.dots { display: flex; justify-content: center; gap: 6px; margin-top: 12px; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: #CDD0C6; }
+.dots i.on { background: var(--ink); }
+.cap-row { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; min-height: 44px; }
+.cap-row .caption { margin: 0; }
+.peek { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -22px; padding: 0 22px; scroll-padding: 0 22px; }
+.peek::-webkit-scrollbar { display: none; }
+.peek > * { flex: none; width: 78%; scroll-snap-align: start; }
+.peek img { display: block; width: 78%; aspect-ratio: 432 / 660; object-fit: cover; border-radius: 14px; background: var(--stage); }
+.peek .add-slide { aspect-ratio: 432 / 660; border-radius: 14px; border: 1.5px dashed #C5C8BE; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--forest); font-size: 14px; font-weight: 600; }
+.peek .add-slide small { color: var(--muted); font-weight: 400; font-size: 12.5px; }
+.gallery-head { display: flex; align-items: baseline; justify-content: space-between; margin-top: 32px; }
+.gallery-head h4 { font-size: 15px; font-weight: 600; }
+.gallery-head small { font-size: 13px; color: var(--muted); }
+.gallery { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 10px; margin-top: 10px; }
+.gallery figure img { display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 12px; }
+.gallery figcaption { margin-top: 6px; font-size: 12.5px; color: var(--note); }
+.gallery figcaption span { color: var(--muted); }
+.gallery .add { aspect-ratio: 3 / 4; border-radius: 12px; border: 1.5px dashed #C5C8BE; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--forest); font-size: 13.5px; font-weight: 600; }
+
+.stage { position: relative; aspect-ratio: 432 / 660; border-radius: 14px; overflow: hidden; background: var(--stage); cursor: pointer; user-select: none; -webkit-user-select: none; }
+.stage > * { position: absolute; inset: 0; opacity: 0; transition: opacity .22s cubic-bezier(.22,1,.36,1); }
+.stage > .on { opacity: 1; }
+.stage img.slide { width: 100%; height: 100%; object-fit: cover; }
+.stage .flatlay { border-radius: 0; aspect-ratio: auto; }
+.stage:active > .on { transform: scale(.995); }
+.dots i { transition: background .2s, transform .2s; }
+.dots i.ai { border-radius: 2px; }
+.from { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px; padding: 0 10px; height: 26px; border-radius: 999px; background: #DFE8D2; color: var(--forest); font-size: 12px; font-weight: 600; }
+.tapzones { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 2fr; z-index: 2; opacity: 1; }
+.tapzones button { height: 100%; }
+.legend { margin-top: 10px; font-size: 13px; color: var(--note); line-height: 1.55; }
+
+.variants.four { max-width: 1640px; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+.intro, .cut { max-width: 1640px; }
+/* Instagram-style dots: small, centered, a window of five, edges shrink */
+.dots { display: flex; justify-content: center; align-items: center; gap: 4px; height: 6px; margin-top: 12px; overflow: hidden; }
+.dots i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #C9CCC2; transition: transform .25s cubic-bezier(.22,1,.36,1), background .2s; }
+.dots i.on { background: var(--forest); }
+.dots i.edge { transform: scale(.62); }
+.dots i.far { transform: scale(.38); }
+.dots i.hide { display: none; }
+.box { position: absolute; z-index: 3; border: 2px solid #fff; border-radius: 12px; box-shadow: 0 0 0 1px rgba(29,40,28,.18), 0 6px 18px rgba(29,40,28,.18); pointer-events: none; }
+.box-label { position: absolute; z-index: 3; transform: translate(-50%, 8px); height: 26px; padding: 0 10px; border-radius: 999px; background: rgba(255,255,255,.94); font-size: 12px; font-weight: 600; line-height: 26px; white-space: nowrap; box-shadow: 0 6px 18px rgba(29,40,28,.12); }
+.review-head { display: flex; align-items: baseline; justify-content: space-between; margin-top: 22px; }
+.review-head h4 { font-size: 15px; font-weight: 600; }
+.review-head small { font-size: 13px; color: var(--muted); }
+.review { margin-top: 10px; background: var(--white); border: 1px solid var(--hair); border-radius: 14px; overflow: hidden; }
+.rv { display: grid; grid-template-columns: 46px 1fr; gap: 6px 12px; padding: 12px 14px; }
+.rv + .rv { border-top: 1px solid var(--hair); }
+.rv.sel { background: #F3F6EE; }
+.rv .crop { grid-row: span 2; width: 46px; height: 54px; border-radius: 10px; overflow: hidden; }
+.rv .crop img { width: 100%; height: 100%; object-fit: cover; }
+.rv .q b { display: block; font-size: 14.5px; font-weight: 600; }
+.rv .q small { font-size: 12.5px; color: var(--muted); }
+.rv .acts { width: 100%; display: flex; gap: 6px; align-items: center; }
+.pill-btn { white-space: nowrap; height: 34px; padding: 0 13px; border-radius: 999px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+.pill-btn.yes { background: #DFE8D2; color: var(--forest); }
+.pill-btn.add { background: var(--forest); color: #fff; }
+.pill-btn.add .c { color: #E9D7AE; font-weight: 600; }
+.pill-btn.skip { width: 34px; padding: 0; justify-content: center; margin-left: auto; }
+.pill-btn.ghost { color: var(--note); font-weight: 500; padding: 0 8px; }
+.pc.pending .face { position: relative; }
+.pc.pending .face img.fill { width: 100%; height: 100%; object-fit: cover; filter: saturate(.7); opacity: .75; }
+.pc.pending .face::after { content: ""; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.55) 50%, transparent 70%); background-size: 220% 100%; animation: sheen 1.8s ease-in-out infinite; }
+@keyframes sheen { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+@media (prefers-reduced-motion: reduce) { .pc.pending .face::after { animation: none; } }
+.pc.pending span { color: var(--muted); }
+.pc .new { display: block; font-size: 11px; color: var(--forest); font-weight: 600; }
+.toast { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--field); font-size: 12.5px; color: var(--note); line-height: 1.45; }
+@media (max-width: 1500px) { .variants.four { grid-template-columns: 1fr 1fr; } }
+
+.rv.match { grid-template-columns: auto 1fr; }
+.rv.match .acts { grid-column: 1 / -1; }
+.rv.match .q { align-self: center; }
+.pair { grid-row: auto; display: flex; align-items: center; gap: 4px; }
+.pair .crop, .pair .cand { width: 46px; height: 56px; border-radius: 10px; overflow: hidden; display: grid; place-items: center; }
+.pair .crop img { width: 100%; height: 100%; object-fit: cover; }
+.pair .cand { background: #E7E5DF; }
+.pair .cand img { width: 84%; }
+.pair svg { width: 14px; height: 14px; color: var(--muted); }
+.rv .q b { line-height: 1.3; }
+.after { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+</style></head><body><svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.1" fill="currentColor"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/><circle cx="18" cy="12" r="1.1" fill="currentColor"/></symbol>
+  <symbol id="heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></symbol>
+  <symbol id="person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6"/></symbol>
+  <symbol id="spark" viewBox="0 0 24 24"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6z"/><path d="M17.5 14l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="M10 7l5 5-5 5"/></symbol>
+<symbol id="image" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><circle cx="9.5" cy="10" r="1.6"/><path d="M5 17l4.5-4 3.5 3 2.5-2 3.5 3"/></symbol><symbol id="x" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></symbol><symbol id="check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol></svg>
+<section class="intro">
+  <h1>Look-Detail · Runde 9 · clarify</h1>
+  <p>Punkte wie bei Instagram, und ein hochgeladenes Foto vom Erkennen bis zum fertigen Look. Alles bedienbar: rechts ins Bild tippen für das nächste. <a href="round-8.html">Runde 8</a> · <a href="round-7.html">7</a></p>
+  <ul class="changes">
+    <li><b>Punkte:</b> klein und mittig, der aktive in Waldgrün. Höchstens fünf sind sichtbar, die äußeren schrumpfen, wenn dahinter mehr kommt. Bei nur einem Bild gibt es keine Punkte.</li>
+    <li><b>Welches Teil?</b> Bei einem Vorschlag stehen jetzt Ausschnitt vom Foto und Katalogbild aus deinem Schrank nebeneinander. Darunter steht, als was FORM das Teil erkannt hat. Tippe „Nein“: die Zeile wird zum neuen Teil, wie heute in der App.</li><li><b>Hochgeladenes Foto:</b> Statt Teile-Raster steht zuerst eine Prüfliste. Jede Zeile fragt genau eine Sache und markiert das Teil auf dem Foto.</li>
+  </ul>
+</section>
+<main class="variants four">
+  <article class="variant"><header><div class="tag">Punkte</div><h3>Viele Bilder</h3><p>Acht Bilder. Tippe dich durch: das Fenster wandert mit, die Randpunkte schrumpfen.</p></header><div class="phone"><div class="screen"><div class="scroll">
+  <div style="position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)">
+    <div class="statusbar"><span>16:42</span><span class="island"></span><i></i></div>
+    <div class="appbar plain"><button class="icon-btn" aria-label="Zurück"><svg class="i"><use href="#back"/></svg></button><span class="ttl"><b>Alle Looks</b><small>1 / 12</small></span></div>
+  </div>
+  <div class="content">
+    <div class="stage" data-start="0"><img class="slide" data-cap="Dein Foto|1 von 3" src="assets/fullbody.jpg" alt=""><img class="slide" data-cap="Dein Foto|2 von 3" src="assets/photo2.jpg" alt=""><img class="slide" data-cap="Dein Foto|3 von 3" src="assets/fullbody.jpg" alt=""><img class="slide" data-cap="Anprobe|von KI erstellt" data-ai src="assets/tryon.jpg" alt=""><img class="slide" data-cap="Anprobe|von KI erstellt" data-ai src="assets/tryon.jpg" alt=""><img class="slide" data-cap="Inspiration|von KI erstellt" data-ai src="assets/inspo.jpg" alt=""><img class="slide" data-cap="Inspiration|von KI erstellt" data-ai src="assets/inspo.jpg" alt=""><div class="flatlay slide-flat" data-cap="Gelegt|deine Teile" style="background:#F0EEE6">
+  <img src="assets/leather-jacket.webp" style="left:6%;top:6%;width:54%" alt=""><img src="assets/black-shirt.webp" style="right:5%;top:12%;width:42%" alt="">
+  <img src="assets/black-pants.webp" style="left:14%;top:44%;width:38%" alt=""><img src="assets/white-sneaker.webp" style="right:7%;bottom:12%;width:40%" alt=""></div><div class="tapzones"><button aria-label="Vorheriges Bild"></button><button aria-label="Nächstes Bild"></button></div></div>
+    <div class="dots"></div>
+    <div class="cap-row"><p class="caption"></p><div class="tools"><button class="icon-btn" aria-label="Zur Sammlung"><svg class="i"><use href="#heart"/></svg></button><button class="icon-btn" aria-label="Aktionen"><svg class="i sm"><use href="#more"/></svg></button></div></div>
+    <div class="pieces"><button class="pc"><span class="face" style="background:#E7E5DF"><img src="assets/leather-jacket.webp" alt=""></span><span>Leather Jacket</span></button><button class="pc"><span class="face" style="background:#E7E5DF"><img src="assets/black-shirt.webp" alt=""></span><span>Black Shirt</span></button><button class="pc"><span class="face" style="background:#E9E4EA"><img src="assets/black-pants.webp" alt=""></span><span>Wide Black Trousers</span></button><button class="pc"><span class="face" style="background:#E2E7EC"><img src="assets/white-sneaker.webp" alt=""></span><span>White Sneaker</span></button></div><div class="cards">
+  <button class="ib primary"><span class="ic"><svg class="i"><use href="#person"/></svg></span><b>An mir zeigen</b><small>Zieht dir den Look auf einem Foto von dir an.</small></button>
+  <button class="ib"><span class="ic"><svg class="i"><use href="#spark"/></svg></span><b>Inspiration</b><small>Zeigt dich in diesem Look in einer neuen Szene.</small></button>
+</div>
+  </div>
+</div></div></div></article>
+  <article class="variant"><header><div class="tag">Vorher</div><h3>Teile erkannt</h3><p>Zwei Teile ähneln deinem Schrank, zwei sind neu. Die gewählte Zeile ist auf dem Foto markiert. Noch keine Karten, weil der Look noch keine Teile hat.</p></header><div class="phone"><div class="screen"><div class="scroll">
+  <div style="position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)">
+    <div class="statusbar"><span>16:42</span><span class="island"></span><i></i></div>
+    <div class="appbar plain"><button class="icon-btn" aria-label="Zurück"><svg class="i"><use href="#back"/></svg></button><span class="ttl"><b>Alle Looks</b><small>1 / 12</small></span></div>
+  </div>
+  <div class="content">
+    <div class="stage" data-start="0"><img class="slide" data-cap="Dein Foto|gerade hochgeladen" src="assets/fullbody.jpg" alt=""><span class="box" style="left:34.7%;top:12%;width:51%;height:36.4%"></span><span class="box-label" style="left:60%;top:48.4%">Leather Jacket</span><div class="tapzones"><button aria-label="Vorheriges Bild"></button><button aria-label="Nächstes Bild"></button></div></div>
+    <div class="dots"></div>
+    <div class="cap-row"><p class="caption"></p><div class="tools"><button class="icon-btn" aria-label="Zur Sammlung"><svg class="i"><use href="#heart"/></svg></button><button class="icon-btn" aria-label="Aktionen"><svg class="i sm"><use href="#more"/></svg></button></div></div>
+    <div class="review-head"><h4>Auf deinem Foto erkannt</h4><small>4 Teile</small></div>
+<div class="review">
+  <div class="rv match sel" data-row="jacket"><span class="pair"><span class="crop"><img src="assets/d-jacket.jpg" alt="Ausschnitt vom Foto"></span><svg class="i"><use href="#chev"/></svg><span class="cand" style="background:#E7E5DF"><img src="assets/leather-jacket.webp" alt="Teil aus deinem Schrank"></span></span><span class="q"><b>Ist das deine Leather Jacket?</b><small>Erkannt als schwarze Lederjacke</small></span><span class="acts"><button class="pill-btn yes"><svg class="i xs"><use href="#check"/></svg>Ja, das ist es</button><button class="pill-btn ghost no">Nein</button></span></div>
+  <div class="rv match" data-row="sneaker"><span class="pair"><span class="crop"><img src="assets/d-sneaker.jpg" alt="Ausschnitt vom Foto"></span><svg class="i"><use href="#chev"/></svg><span class="cand" style="background:#E2E7EC"><img src="assets/white-sneaker.webp" alt="Teil aus deinem Schrank"></span></span><span class="q"><b>Ist das dein White Sneaker?</b><small>Erkannt als weißer Sneaker</small></span><span class="acts"><button class="pill-btn yes"><svg class="i xs"><use href="#check"/></svg>Ja, das ist es</button><button class="pill-btn ghost no">Nein</button></span></div>
+  <div class="rv"><span class="crop"><img src="assets/d-shirt.jpg" alt=""></span><span class="q"><b>Schwarzes Hemd</b><small>Noch nicht in deinem Schrank</small></span><span class="acts"><button class="pill-btn add">In den Schrank <span class="c">1 Credit</span></button><button class="pill-btn ghost skip" aria-label="Überspringen"><svg class="i sm"><use href="#x"/></svg></button></span></div>
+  <div class="rv"><span class="crop"><img src="assets/d-pants.jpg" alt=""></span><span class="q"><b>Weite schwarze Hose</b><small>Noch nicht in deinem Schrank</small></span><span class="acts"><button class="pill-btn add">In den Schrank <span class="c">1 Credit</span></button><button class="pill-btn ghost skip" aria-label="Überspringen"><svg class="i sm"><use href="#x"/></svg></button></span></div>
+</div>
+  </div>
+</div></div></div></article>
+  <article class="variant"><header><div class="tag">Dazwischen</div><h3>Teile kommen hinzu</h3><p>Jacke und Sneaker bestätigt, Hemd und Hose landen im Schrank. Ihre Kacheln zeigen den Ausschnitt vom Foto, bis das Katalogbild fertig ist.</p></header><div class="phone"><div class="screen"><div class="scroll">
+  <div style="position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)">
+    <div class="statusbar"><span>16:42</span><span class="island"></span><i></i></div>
+    <div class="appbar plain"><button class="icon-btn" aria-label="Zurück"><svg class="i"><use href="#back"/></svg></button><span class="ttl"><b>Alle Looks</b><small>1 / 12</small></span></div>
+  </div>
+  <div class="content">
+    <div class="stage" data-start="0"><img class="slide" data-cap="Dein Foto|1 Bild" src="assets/fullbody.jpg" alt=""><div class="tapzones"><button aria-label="Vorheriges Bild"></button><button aria-label="Nächstes Bild"></button></div></div>
+    <div class="dots"></div>
+    <div class="cap-row"><p class="caption"></p><div class="tools"><button class="icon-btn" aria-label="Zur Sammlung"><svg class="i"><use href="#heart"/></svg></button><button class="icon-btn" aria-label="Aktionen"><svg class="i sm"><use href="#more"/></svg></button></div></div>
+    <div class="pieces"><button class="pc"><span class="face" style="background:#E7E5DF"><img src="assets/leather-jacket.webp" alt=""></span><span>Leather Jacket</span></button><button class="pc"><span class="face" style="background:#E2E7EC"><img src="assets/white-sneaker.webp" alt=""></span><span>White Sneaker</span></button><button class="pc pending"><span class="face" style="background:#E7E5DF"><img class="fill" src="assets/d-shirt.jpg" alt=""></span><span>Katalogbild entsteht …</span></button><button class="pc pending"><span class="face" style="background:#E9E4EA"><img class="fill" src="assets/d-pants.jpg" alt=""></span><span>Katalogbild entsteht …</span></button></div><p class="toast">Zwei Teile kommen in deinen Schrank. Du kannst weitermachen, sie erscheinen hier, sobald ihr Katalogbild fertig ist.</p><div class="cards">
+  <button class="ib primary"><span class="ic"><svg class="i"><use href="#person"/></svg></span><b>An mir zeigen</b><small>Zieht dir den Look auf einem Foto von dir an.</small></button>
+  <button class="ib"><span class="ic"><svg class="i"><use href="#spark"/></svg></span><b>Inspiration</b><small>Zeigt dich in diesem Look in einer neuen Szene.</small></button>
+</div>
+  </div>
+</div></div></div></article>
+  <article class="variant"><header><div class="tag">Nachher</div><h3>Look fertig</h3><p>Vier Teile mit Katalogbild. „Gelegt“ ist jetzt das zweite Bild, also zwei Punkte. Die neuen Teile tragen kurz „Neu im Schrank“.</p></header><div class="phone"><div class="screen"><div class="scroll">
+  <div style="position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)">
+    <div class="statusbar"><span>16:42</span><span class="island"></span><i></i></div>
+    <div class="appbar plain"><button class="icon-btn" aria-label="Zurück"><svg class="i"><use href="#back"/></svg></button><span class="ttl"><b>Alle Looks</b><small>1 / 12</small></span></div>
+  </div>
+  <div class="content">
+    <div class="stage" data-start="0"><img class="slide" data-cap="Dein Foto|1 von 1" src="assets/fullbody.jpg" alt=""><div class="flatlay slide-flat" data-cap="Gelegt|deine Teile" style="background:#F0EEE6">
+  <img src="assets/leather-jacket.webp" style="left:6%;top:6%;width:54%" alt=""><img src="assets/black-shirt.webp" style="right:5%;top:12%;width:42%" alt="">
+  <img src="assets/black-pants.webp" style="left:14%;top:44%;width:38%" alt=""><img src="assets/white-sneaker.webp" style="right:7%;bottom:12%;width:40%" alt=""></div><div class="tapzones"><button aria-label="Vorheriges Bild"></button><button aria-label="Nächstes Bild"></button></div></div>
+    <div class="dots"></div>
+    <div class="cap-row"><p class="caption"></p><div class="tools"><button class="icon-btn" aria-label="Zur Sammlung"><svg class="i"><use href="#heart"/></svg></button><button class="icon-btn" aria-label="Aktionen"><svg class="i sm"><use href="#more"/></svg></button></div></div>
+    <div class="pieces"><button class="pc"><span class="face" style="background:#E7E5DF"><img src="assets/leather-jacket.webp" alt=""></span><span>Leather Jacket</span></button><button class="pc"><span class="face" style="background:#E2E7EC"><img src="assets/white-sneaker.webp" alt=""></span><span>White Sneaker</span></button><button class="pc"><span class="face" style="background:#E7E5DF"><img src="assets/black-shirt.webp" alt=""></span><span>Black Shirt<em class="new" style="font-style:normal">Neu im Schrank</em></span></button><button class="pc"><span class="face" style="background:#E9E4EA"><img src="assets/black-pants.webp" alt=""></span><span>Wide Black Trousers<em class="new" style="font-style:normal">Neu im Schrank</em></span></button></div><div class="cards">
+  <button class="ib primary"><span class="ic"><svg class="i"><use href="#person"/></svg></span><b>An mir zeigen</b><small>Zieht dir den Look auf einem Foto von dir an.</small></button>
+  <button class="ib"><span class="ic"><svg class="i"><use href="#spark"/></svg></span><b>Inspiration</b><small>Zeigt dich in diesem Look in einer neuen Szene.</small></button>
+</div>
+  </div>
+</div></div></div></article>
+</main>
+<section class="cut">
+  <h2>Annahmen</h2>
+  <ul>
+    <li><b>Texte</b> der Prüfliste stammen aus der App („Ist das dein …?“, „Ja, das ist es“, „Noch nicht in deinem Schrank“, „In den Schrank“, „Überspringen“, „Katalogbild entsteht …“).</li>
+    <li><b>Preis am Knopf:</b> Ein Teil in den Schrank kostet sein Katalogbild, 1 Credit. Laut Design steht der Preis direkt auf der Aktion.</li>
+    <li><b>× überspringt</b> ein neues Teil. Es verschwindet aus der Liste und landet im „…“-Menü, wie in Runde 4.</li>
+  </ul>
+</section>
+<script>
+// Instagram-style dots: at most five visible, the ones at the window's edge shrink
+// when more images lie beyond. Tap the left third for back, the rest for next.
+const renderDots = (dots, count, index) => {
+  if (count < 2) { dots.innerHTML = ''; return; }
+  const size = Math.min(count, 5);
+  const start = Math.max(0, Math.min(index - 2, count - size));
+  dots.innerHTML = Array.from({ length: count }, (_, i) => {
+    const inWindow = i >= start && i < start + size;
+    const edge = inWindow && ((i === start && start > 0) || (i === start + size - 1 && start + size < count));
+    return `<i class="${i === index ? 'on' : ''} ${!inWindow ? 'hide' : ''} ${edge ? 'edge' : ''}"></i>`;
+  }).join('');
+};
+document.querySelectorAll('.stage').forEach((stage) => {
+  const content = stage.parentElement;
+  const slides = [...stage.querySelectorAll(':scope > [data-cap]')];
+  const dots = content.querySelector('.dots');
+  const caption = content.querySelector('.caption');
+  let index = Number(stage.dataset.start);
+  const show = () => {
+    slides.forEach((s, i) => s.classList.toggle('on', i === index));
+    renderDots(dots, slides.length, index);
+    const [kind, detail] = slides[index].dataset.cap.split('|');
+    caption.innerHTML = `<b>${kind}</b> · ${detail}`;
+  };
+  const [back, next] = stage.querySelectorAll('.tapzones button');
+  back.addEventListener('click', () => { index = Math.max(0, index - 1); show(); });
+  next.addEventListener('click', () => { index = Math.min(slides.length - 1, index + 1); show(); });
+  show();
+});
+</script>
+<script>
+document.querySelectorAll('.rv.match .no').forEach((button) => button.addEventListener('click', () => {
+  const row = button.closest('.rv');
+  const crop = row.querySelector('.crop').innerHTML;
+  const detected = row.querySelector('.q small').textContent.replace('Erkannt als ', '');
+  row.className = 'rv';
+  row.innerHTML = `<span class="crop">${crop}</span><span class="q"><b>${detected[0].toUpperCase() + detected.slice(1)}</b><small>Noch nicht in deinem Schrank</small></span><span class="acts"><button class="pill-btn add">In den Schrank <span class="c">1 Credit</span></button><button class="pill-btn ghost skip" aria-label="Überspringen"><svg class="i sm"><use href="#x"/></svg></button></span>`;
+}));
+</script></body></html>

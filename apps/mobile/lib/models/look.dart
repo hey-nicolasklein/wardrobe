@@ -26,7 +26,9 @@ class LookFoundPiece {
     required this.name,
     required this.category,
     required this.colors,
+    this.boundingBox,
     this.wardrobeItemId,
+    this.added = false,
   });
 
   factory LookFoundPiece.fromJson(Map<String, dynamic> json) =>
@@ -40,13 +42,67 @@ class LookFoundPiece {
   final String category;
   @JsonKey(defaultValue: <String>[])
   final List<String> colors;
+
+  /// Where the piece sits on the photo, in its 0–1000 frame.
+  final LookBox? boundingBox;
+
+  /// The wardrobe piece the user said this is, on this look.
   final String? wardrobeItemId;
+
+  /// The linked piece was created from this one, so it can be taken out of
+  /// the wardrobe again from here.
+  @JsonKey(defaultValue: false)
+  final bool added;
 
   Map<String, dynamic> toJson() => _$LookFoundPieceToJson(this);
 }
 
 /// Output sizes the server has produced. Feed images moved to 768x960; older
 /// looks keep 1024x1280.
+/// What background analysis found about a photo look's photo as a whole.
+@JsonSerializable(checked: true, explicitToJson: true)
+class LookPhoto {
+  const LookPhoto({required this.source, this.outfitBox});
+
+  factory LookPhoto.fromJson(Map<String, dynamic> json) =>
+      _$LookPhotoFromJson(json);
+
+  /// `personal` for a photo of the user, `reference` for someone else's,
+  /// such as a shop screenshot or street style.
+  @JsonKey(required: true)
+  final String source;
+
+  /// The outfit as a whole, in the 0–1000 frame of the photo. Cards crop to
+  /// it so prices and app controls on screenshots stay out.
+  @JsonKey(includeIfNull: false)
+  final LookBox? outfitBox;
+
+  bool get isReference => source == 'reference';
+
+  Map<String, dynamic> toJson() => _$LookPhotoToJson(this);
+}
+
+/// A box in the photo's normalised 0–1000 frame.
+@JsonSerializable(checked: true)
+class LookBox {
+  const LookBox({
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+  });
+
+  factory LookBox.fromJson(Map<String, dynamic> json) =>
+      _$LookBoxFromJson(json);
+
+  final int x;
+  final int y;
+  final int width;
+  final int height;
+
+  Map<String, dynamic> toJson() => _$LookBoxToJson(this);
+}
+
 const lookSizes = ['1024x1280', '768x960'];
 
 /// Why a proposal was suggested. [kind] is one of `new-piece`,
@@ -156,6 +212,7 @@ class Look {
     this.kind = 'inspiration',
     this.sourcePhotoId,
     this.found,
+    this.photo,
     this.baseAssetId,
     this.feedAssetId,
     this.settings,
@@ -196,6 +253,13 @@ class Look {
   /// and for every other kind.
   @JsonKey(includeIfNull: false)
   final List<LookFoundPiece>? found;
+
+  /// Photo looks, once analysed: whose photo it is and where the outfit is.
+  @JsonKey(includeIfNull: false)
+  final LookPhoto? photo;
+
+  /// A photo of someone else: its new pieces go to Wanting.
+  bool get isReference => photo?.isReference ?? false;
 
   /// A smaller WebP of [assetId] for cards. Missing on looks cached before
   /// the API sent it.

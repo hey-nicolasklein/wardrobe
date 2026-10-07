@@ -15,6 +15,19 @@
       ]
     },
     {
+      "name": "FORM \u00b7 Local Server",
+      "type": "dart",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/apps/mobile",
+      "program": "${workspaceFolder}/apps/mobile/lib/main.dart",
+      "toolArgs": [
+        "--flavor",
+        "development",
+        "--dart-define-from-file",
+        ".env.simulator.json"
+      ]
+    },
+    {
       "name": "FORM \u00b7 Production",
       "type": "dart",
       "request": "launch",

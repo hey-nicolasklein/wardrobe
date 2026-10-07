@@ -1,0 +1,251 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FORM · Look-Detail · Runde 5</title><style>
+@font-face { font-family: "Libre Baskerville"; src: url("assets/LibreBaskerville.ttf"); font-display: swap; }
+:root {
+  --forest: #344D3F; --paper: #F6F5F1; --ink: #242923; --muted: #777B72; --note: #626E5E;
+  --hair: #E2E4DC; --field: #EAECE5; --white: #FFFFFF; --coin-ink: #7E5F2C; --stage: #E7E9E2;
+  --serif: "Libre Baskerville", Georgia, serif;
+  --sans: -apple-system, "SF Pro Text", system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+::selection { background: #DFE8D2; color: var(--ink); }
+html { background: #ECEBE5; color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+body { padding: 56px 40px 96px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+button:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; border-radius: 10px; }
+svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i.sm { width: 18px; height: 18px; }
+
+/* page */
+.intro { max-width: 1000px; margin: 0 auto 40px; }
+.intro h1 { font-family: var(--serif); font-weight: 400; font-size: 38px; letter-spacing: -1.1px; line-height: 1.1; }
+.intro p { margin-top: 12px; font-size: 15px; line-height: 1.6; color: var(--note); max-width: 70ch; }
+.intro a { color: var(--forest); }
+.changes { margin-top: 18px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 32px; list-style: none; font-size: 13.5px; line-height: 1.5; color: var(--note); }
+.changes b { color: var(--ink); font-weight: 600; }
+.variants { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; }
+.variant > header { margin-bottom: 18px; }
+.variant .tag { font-size: 13px; font-weight: 600; color: var(--forest); }
+.variant h3 { font-family: var(--serif); font-weight: 400; font-size: 24px; letter-spacing: -.4px; margin-top: 4px; }
+.variant > header p { margin-top: 6px; font-size: 13.5px; line-height: 1.55; color: var(--note); }
+
+/* phone */
+.phone { width: 375px; height: 780px; margin: 0 auto; border-radius: 46px; background: #1d1f1c; padding: 10px; box-shadow: 0 30px 60px -30px rgba(29,40,28,.45); }
+.screen { position: relative; height: 100%; border-radius: 37px; overflow: hidden; background: var(--paper); }
+.scroll { height: 100%; overflow-y: auto; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.statusbar { height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 6px 30px 0 34px; font-size: 15px; font-weight: 600; color: var(--ink); }
+.statusbar .island { width: 104px; height: 30px; border-radius: 20px; background: #000; }
+.statusbar i { display: block; width: 24px; height: 11px; border-radius: 3px; border: 1.5px solid var(--ink); position: relative; }
+.statusbar i::after { content: ""; position: absolute; inset: 1px 4px 1px 1px; background: var(--ink); border-radius: 1px; }
+
+.top { position: absolute; top: 0; left: 0; right: 0; z-index: 4; }
+.top::before { content: ""; position: absolute; inset: 0 0 -28px; z-index: -1; opacity: 0; transition: opacity .32s cubic-bezier(.22,1,.36,1); background: linear-gradient(var(--paper) 62%, transparent); }
+.top.scrolled::before { opacity: 1; }
+.top .bar { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+.float-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(246,245,241,.8); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 1px 4px rgba(39,55,27,.06); }
+.counter { height: 32px; padding: 0 12px 0 6px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; background: rgba(246,245,241,.8); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 1px 4px rgba(39,55,27,.06); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.counter img { width: 22px; height: 22px; border-radius: 6px; object-fit: cover; }
+
+/* hero: photo starts below the bar, its top fades into paper */
+.hero { position: relative; height: 540px; background: var(--paper); }
+.hero > img { position: absolute; left: 0; right: 0; top: 70px; width: 100%; height: calc(100% - 70px); object-fit: cover; object-position: 50% 0; }
+.hero::before { content: ""; position: absolute; left: 0; right: 0; top: 70px; height: 90px; z-index: 1; background: linear-gradient(var(--paper), color-mix(in srgb, var(--paper) 55%, transparent) 45%, transparent); }
+.hero .controls { position: absolute; left: 14px; right: 14px; bottom: 38px; z-index: 2; display: flex; align-items: center; justify-content: space-between; }
+.seg { display: inline-flex; padding: 3px; border-radius: 999px; background: rgba(246,245,241,.72); border: 1px solid rgba(255,255,255,.5); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.seg button { height: 34px; padding: 0 16px; border-radius: 999px; font-size: 13px; color: var(--note); }
+.seg button.on { background: var(--white); color: var(--ink); font-weight: 600; box-shadow: 0 1px 4px rgba(39,55,27,.06); }
+
+.sheet { position: relative; z-index: 3; margin-top: -24px; background: var(--paper); border-radius: 25px 25px 0 0; padding: 26px 22px 48px; }
+.title-row { display: flex; gap: 8px; align-items: flex-start; }
+.title-row h2 { flex: 1; font-family: var(--serif); font-weight: 400; font-size: 23px; line-height: 1.25; letter-spacing: -.4px; text-wrap: balance; }
+.heart { width: 44px; height: 44px; margin: -8px -10px 0 0; display: grid; place-items: center; color: var(--ink); }
+.meta { margin-top: 6px; font-size: 13px; color: var(--muted); }
+
+.section { margin-top: 30px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.section-head h4 { font-size: 15px; font-weight: 600; }
+.section-head button { font-size: 13px; color: var(--muted); min-height: 32px; }
+
+.rows { list-style: none; }
+.row { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 6px 0; }
+.row + .row { border-top: 1px solid var(--hair); }
+.ph { width: 46px; height: 54px; border-radius: 10px; overflow: hidden; flex: none; display: grid; place-items: center; }
+.ph img { width: 84%; }
+.ph img.fill, .face img.fill { width: 100%; height: 100%; object-fit: cover; }
+.row .txt { flex: 1; min-width: 0; }
+.row .txt b { display: block; font-size: 14.5px; font-weight: 600; }
+.row .txt small { font-size: 12.5px; color: var(--muted); }
+.chev { color: #A9ACA3; }
+
+.strip { display: flex; gap: 10px; margin-top: 8px; }
+.tile { width: 96px; }
+.tile .face { width: 96px; height: 112px; border-radius: 14px; overflow: hidden; display: grid; place-items: center; }
+.tile .face img { width: 82%; }
+.tile b { display: block; margin-top: 7px; font-size: 12.5px; font-weight: 500; line-height: 1.3; }
+.tile small { display: block; font-size: 11.5px; color: var(--muted); }
+
+.group { background: var(--white); border: 1px solid var(--hair); border-radius: 14px; overflow: hidden; margin-top: 8px; }
+.opt { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 14px; }
+.opt + .opt { border-top: 1px solid var(--hair); }
+.opt > svg:first-child { color: var(--forest); }
+.opt .lbl { flex: 1; min-width: 0; }
+.opt .lbl b { display: block; font-size: 15px; font-weight: 500; }
+.opt .lbl small { display: block; margin-top: 1px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.coin { color: var(--coin-ink); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.cut { max-width: 1000px; margin: 56px auto 0; padding-top: 26px; border-top: 1px solid #D9DBD2; display: grid; grid-template-columns: 1fr 1.5fr; gap: 48px; }
+.cut h2 { font-family: var(--serif); font-weight: 400; font-size: 24px; letter-spacing: -.4px; }
+.cut ul { padding-left: 18px; display: grid; gap: 6px; font-size: 14px; line-height: 1.55; color: var(--note); }
+.cut b { color: var(--ink); font-weight: 600; }
+@media (max-width: 900px) { .variants, .cut, .changes { grid-template-columns: 1fr; } body { padding: 32px 18px; } }
+
+/* round 3: in-app header, whole photo, controls below it */
+.appbar { display: flex; align-items: center; gap: 6px; padding: 2px 16px 10px 6px; border-bottom: 1px solid var(--hair); }
+.appbar .ttl { flex: 1; }
+.appbar .ttl b { display: block; font-family: var(--serif); font-weight: 400; font-size: 22px; letter-spacing: -.4px; }
+.appbar .ttl small { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.new-pill { height: 36px; padding: 0 14px 0 11px; border-radius: 999px; background: #DFE8D2; color: var(--forest); font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.icon-btn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; flex: none; }
+.content { padding: 16px 22px 48px; }
+.photo { display: block; width: 100%; height: auto; aspect-ratio: 432 / 660; object-fit: contain; background: var(--stage); }
+.photo.card { border-radius: 14px; }
+.bleed { margin: 0 -22px; }
+.under { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.under .seg { background: var(--field); border-color: var(--hair); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.under .more { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--ink); }
+.title-block { margin-top: 22px; }
+
+.appbar.plain .ttl b { font-size: 20px; }
+.tools { display: flex; align-items: center; margin-right: -8px; }
+.tools .icon-btn { width: 40px; }
+.under .seg button { padding: 0 13px; }
+.tools .icon-btn { color: var(--ink); }
+.pieces { align-items: start; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 22px; }
+.pc { display: block; }
+.pc .face { aspect-ratio: 3 / 4; border-radius: 12px; display: grid; place-items: center; overflow: hidden; }
+.pc .face img { width: 80%; }
+.pc span { display: block; margin-top: 6px; font-size: 11.5px; line-height: 1.3; color: var(--note); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pc.unmarked .face { outline: 1px dashed #C5C8BE; outline-offset: -1px; }
+.group.tight { margin-top: 26px; }
+.removed { list-style: none; display: grid; gap: 10px; font-size: 13.5px; line-height: 1.5; color: var(--note); }
+.removed b { color: var(--ink); font-weight: 600; }
+
+.variants.three { max-width: 1240px; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.intro, .cut { max-width: 1240px; }
+.media-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.thumbs { flex: 1; min-width: 0; display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; padding: 3px; margin: -3px; }
+.th { position: relative; flex: none; width: 42px; height: 54px; border-radius: 10px; overflow: hidden; background: var(--stage); }
+.th img { width: 100%; height: 100%; object-fit: cover; }
+.th.on { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--forest); }
+.th .ki { position: absolute; left: 3px; bottom: 3px; height: 15px; padding: 0 4px; border-radius: 5px; background: rgba(246,245,241,.92); font-size: 9px; font-weight: 700; letter-spacing: .3px; line-height: 15px; color: var(--ink); }
+.th.add { display: grid; place-items: center; background: transparent; border: 1.5px dashed #C5C8BE; color: var(--forest); }
+.caption { margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.caption b { color: var(--note); font-weight: 600; }
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 24px; }
+.ib { display: flex; flex-direction: column; align-items: flex-start; padding: 14px; border-radius: 14px; background: var(--white); border: 1px solid var(--hair); }
+.ib.primary { background: var(--forest); border-color: var(--forest); color: #fff; }
+.ib .ic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: #DFE8D2; color: var(--forest); }
+.ib.primary .ic { background: rgba(255,255,255,.14); color: #fff; }
+.ib .ic svg { width: 19px; height: 19px; }
+.ib b { margin-top: 12px; font-size: 15px; font-weight: 600; }
+.ib small { margin-top: 3px; font-size: 12px; line-height: 1.4; color: var(--muted); }
+.ib.primary small { color: rgba(255,255,255,.85); }
+.flatlay { position: relative; aspect-ratio: 4 / 5; border-radius: 14px; background: #F0EEE6; overflow: hidden; }
+.flatlay img { position: absolute; filter: drop-shadow(0 6px 10px rgba(29,40,28,.10)); }
+.answer { max-width: 1240px; margin: 0 auto 44px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+.answer div { background: var(--paper); border: 1px solid var(--hair); border-radius: 18px; padding: 18px 20px; font-size: 13.5px; line-height: 1.55; color: var(--note); }
+.answer h2 { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.answer b { color: var(--ink); font-weight: 600; }
+@media (max-width: 1220px) { .variants.three, .answer { grid-template-columns: 1fr; } }
+</style></head><body><svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.1" fill="currentColor"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/><circle cx="18" cy="12" r="1.1" fill="currentColor"/></symbol>
+  <symbol id="heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></symbol>
+  <symbol id="person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6"/></symbol>
+  <symbol id="spark" viewBox="0 0 24 24"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6z"/><path d="M17.5 14l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="M10 7l5 5-5 5"/></symbol>
+<symbol id="image" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><circle cx="9.5" cy="10" r="1.6"/><path d="M5 17l4.5-4 3.5 3 2.5-2 3.5 3"/></symbol></svg>
+<section class="intro">
+  <h1>Look-Detail · Runde 5</h1>
+  <p>Kein Schalter mehr. Ein Look ist immer die Kombination seiner Teile, Bilder hängen nur daran. Darum zeigt die Seite die Bilder als Reihe, und die Teile stehen immer darunter. <a href="round-4.html">Runde 4</a> · <a href="round-3.html">3</a> · <a href="round-2.html">2</a> · <a href="round-1.html">1</a></p>
+</section>
+<section class="answer">
+  <div><h2>Warum „Gelegt“ verschwinden kann</h2>„Gelegt“ zeigt nur die Teile flach. Die stehen ohnehin als Raster unter dem Bild. Nur ein Look <b>ohne Bild</b> zeigt die flache Lage oben, weil sie dann sein einziges Bild ist.</div>
+  <div><h2>Mehrere Fotos, mehrere KI-Bilder</h2>Alle Bilder eines Looks stehen als Miniaturen unter dem großen Bild: <b>deine Fotos zuerst, dann KI-Bilder</b> mit kleinem „KI“-Schild. Wischen oder tippen wechselt. Eine Zeile darunter sagt, was du siehst. Das „+“ am Ende hängt ein eigenes Foto an, kostenlos.</div>
+  <div><h2>Was „+ Neu“ oben macht</h2>Es erstellt einen <b>neuen Look im Stapel</b>, durch den du blätterst: aus „Alle Looks“ einen leeren, aus dem Stapel eines Teils einen mit diesem Teil. Mit diesem Look hat es nichts zu tun. Darum fällt es hier weg und bleibt in der Stapel-Übersicht.</div>
+</section>
+<main class="variants three">
+  <article class="variant"><header><div class="tag">H1</div><h3>Mehrere Bilder</h3><p>Zwei eigene Fotos, eine Anprobe, eine Inspiration. Dein erstes Foto ist gewählt.</p></header><div class="phone"><div class="screen"><div class="scroll">
+  <div style="position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)">
+    <div class="statusbar"><span>16:42</span><span class="island"></span><i></i></div>
+    <div class="appbar plain">
+      <button class="icon-btn" aria-label="Zurück"><svg class="i"><use href="#back"/></svg></button>
+      <span class="ttl"><b>Alle Looks</b><small>1 / 12</small></span>
+    </div>
+  </div>
+  <div class="content">
+    <img class="photo card" src="assets/fullbody.jpg" alt="Eigenes Foto 1">
+    <div class="media-row"><div class="thumbs"><button class="th on"><img src="assets/fullbody.jpg" alt=""></button><button class="th"><img src="assets/photo2.jpg" alt=""></button><button class="th"><img src="assets/tryon.jpg" alt=""><span class=ki>KI</span></button><button class="th"><img src="assets/inspo.jpg" alt=""><span class=ki>KI</span></button><button class="th add" aria-label="Eigenes Foto hinzufügen"><svg class="i sm"><use href="#plus"/></svg></button></div><div class="tools"><button class="icon-btn" aria-label="Zur Sammlung"><svg class="i"><use href="#heart"/></svg></button><button class="icon-btn" aria-label="Aktionen"><svg class="i sm"><use href="#more"/></svg></button></div></div>
+    <p class="caption"><b>Dein Foto</b> · 1 von 2</p>
+    <div class="pieces"><button class="pc"><span class="face" style="background:#E7E5DF"><img src="assets/leather-jacket.webp" alt=""></span><span>Leather Jacket</span></button><button class="pc"><span class="face" style="background:#E7E5DF"><img src="assets/black-shirt.webp" alt=""></span><span>Black Shirt</span></button><button class="pc"><span class="face" style="background:#E9E4EA"><img src="assets/black-pants.webp" alt=""></span><span>Wide Black Trousers</span></button><button class="pc unmarked"><span class="face" style="background:#E2E7EC"><img src="assets/white-sneaker.webp" alt=""></span><span>White Sneaker</span></button></div>
+    <div class="cards">
+  <button class="ib primary"><span class="ic"><svg class="i"><use href="#person"/></svg></span><b>An mir zeigen</b><small>Zieht dir den Look auf einem Foto von dir an.</small></button>
+  <button class="ib"><span class="ic"><svg class="i"><use href="#spark"/></svg></span><b>Inspiration</b><small>Zeigt dich in diesem Look in einer neuen Szene.</small></button>
+</div>
+  </div>
+</div></div></div></article>
+  <article class="variant"><header><div class="tag">H2</div><h3>KI-Bild gewählt</h3><p>Die Bildzeile sagt ehrlich, dass es von KI ist und wann es entstand. Das große Bild bleibt frei.</p></header><div class="phone"><div class="screen"><div class="scroll">
+  <div style="position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)">
+    <div class="statusbar"><span>16:42</span><span class="island"></span><i></i></div>
+    <div class="appbar plain">
+      <button class="icon-btn" aria-label="Zurück"><svg class="i"><use href="#back"/></svg></button>
+      <span class="ttl"><b>Alle Looks</b><small>1 / 12</small></span>
+    </div>
+  </div>
+  <div class="content">
+    <img class="photo card" src="assets/tryon.jpg" alt="Anprobe, von KI erstellt">
+    <div class="media-row"><div class="thumbs"><button class="th"><img src="assets/fullbody.jpg" alt=""></button><button class="th"><img src="assets/photo2.jpg" alt=""></button><button class="th on"><img src="assets/tryon.jpg" alt=""><span class=ki>KI</span></button><button class="th"><img src="assets/inspo.jpg" alt=""><span class=ki>KI</span></button><button class="th add" aria-label="Eigenes Foto hinzufügen"><svg class="i sm"><use href="#plus"/></svg></button></div><div class="tools"><button class="icon-btn" aria-label="Zur Sammlung"><svg class="i"><use href="#heart"/></svg></button><button class="icon-btn" aria-label="Aktionen"><svg class="i sm"><use href="#more"/></svg></button></div></div>
+    <p class="caption"><b>Anprobe</b> · von KI erstellt · 12. Okt.</p>
+    <div class="pieces"><button class="pc"><span class="face" style="background:#E7E5DF"><img src="assets/leather-jacket.webp" alt=""></span><span>Leather Jacket</span></button><button class="pc"><span class="face" style="background:#E7E5DF"><img src="assets/black-shirt.webp" alt=""></span><span>Black Shirt</span></button><button class="pc"><span class="face" style="background:#E9E4EA"><img src="assets/black-pants.webp" alt=""></span><span>Wide Black Trousers</span></button><button class="pc unmarked"><span class="face" style="background:#E2E7EC"><img src="assets/white-sneaker.webp" alt=""></span><span>White Sneaker</span></button></div>
+    <div class="cards">
+  <button class="ib primary"><span class="ic"><svg class="i"><use href="#person"/></svg></span><b>An mir zeigen</b><small>Zieht dir den Look auf einem Foto von dir an.</small></button>
+  <button class="ib"><span class="ic"><svg class="i"><use href="#spark"/></svg></span><b>Inspiration</b><small>Zeigt dich in diesem Look in einer neuen Szene.</small></button>
+</div>
+  </div>
+</div></div></div></article>
+  <article class="variant"><header><div class="tag">H3</div><h3>Noch kein Bild</h3><p>Die flache Lage ist das Bild. Das Raster entfällt, weil es dasselbe zeigen würde. Tippen auf ein Teil öffnet es.</p></header><div class="phone"><div class="screen"><div class="scroll">
+  <div style="position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)">
+    <div class="statusbar"><span>16:42</span><span class="island"></span><i></i></div>
+    <div class="appbar plain">
+      <button class="icon-btn" aria-label="Zurück"><svg class="i"><use href="#back"/></svg></button>
+      <span class="ttl"><b>Alle Looks</b><small>1 / 12</small></span>
+    </div>
+  </div>
+  <div class="content">
+    <div class="flatlay">
+  <img src="assets/leather-jacket.webp" style="left:6%;top:5%;width:52%" alt="">
+  <img src="assets/black-shirt.webp" style="right:6%;top:9%;width:40%" alt="">
+  <img src="assets/black-pants.webp" style="left:16%;top:47%;width:36%" alt="">
+  <img src="assets/white-sneaker.webp" style="right:8%;bottom:9%;width:38%" alt="">
+</div>
+    <div class="media-row"><div class="thumbs"><button class="th add" aria-label="Eigenes Foto hinzufügen"><svg class="i sm"><use href="#plus"/></svg></button></div><div class="tools"><button class="icon-btn" aria-label="Zur Sammlung"><svg class="i"><use href="#heart"/></svg></button><button class="icon-btn" aria-label="Aktionen"><svg class="i sm"><use href="#more"/></svg></button></div></div>
+    
+    
+    <div class="cards">
+  <button class="ib primary"><span class="ic"><svg class="i"><use href="#person"/></svg></span><b>An mir zeigen</b><small>Zieht dir den Look auf einem Foto von dir an.</small></button>
+  <button class="ib"><span class="ic"><svg class="i"><use href="#spark"/></svg></span><b>Inspiration</b><small>Zeigt dich in diesem Look in einer neuen Szene.</small></button>
+</div>
+  </div>
+</div></div></div></article>
+</main>
+<section class="cut">
+  <h2>Karten wie im Schrank</h2>
+  <ul>
+    <li><b>Gleiche Komponente</b> wie auf der Teil-Seite (<code>InspireButton</code>): grüne Hauptkarte, weiße Nebenkarte, Icon im Kreis, Titel und ein Satz.</li>
+    <li><b>Kein Preis auf der Karte,</b> wie auf der Teil-Seite. Den Preis nennt das Bestätigungs-Sheet vor dem Erstellen.</li>
+    <li><b>Platzhalter:</b> Das zweite Foto und die beiden KI-Bilder sind eingefärbte Varianten deines Fotos, nur zur Darstellung.</li>
+  </ul>
+</section>
+</body></html>

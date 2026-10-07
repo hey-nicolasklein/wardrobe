@@ -84,9 +84,16 @@ class TryOnStack extends LookStack {
   const TryOnStack();
 }
 
-/// Looks kept from photos the user wore them in.
+/// Looks kept from photos the user wore them in: "what have I worn".
 class PhotoStack extends LookStack {
   const PhotoStack();
+}
+
+/// Looks that show someone other than the user: someone else's photo, a
+/// shop screenshot or street style, and AI inspirations. Try-ons show the
+/// user, so they are not references.
+class ReferenceStack extends LookStack {
+  const ReferenceStack();
 }
 
 class SavedStack extends LookStack {
@@ -128,7 +135,8 @@ bool inLookStack(
         look.settings != null &&
         look.settings!.occasion == occasion,
   TryOnStack() => look.isTryOn,
-  PhotoStack() => look.isPhoto,
+  PhotoStack() => look.isPhoto && !look.isReference,
+  ReferenceStack() => look.isReference || (look.isGenerated && !look.isTryOn),
   SavedStack() => saved,
   CollectionStack(:final collectionId) =>
     collections[collectionId]?.contains(look.id) ?? false,

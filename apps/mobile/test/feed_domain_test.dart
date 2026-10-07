@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
+import 'package:form_mobile/features/feed/look_tile.dart';
 import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/look_repository.dart';
@@ -104,6 +105,32 @@ void main() {
     expect(higherQualities('high'), isEmpty);
   });
 
+  test('a card shows the worn photo, then an AI image, then the flat lay', () {
+    CachedLook record(Map<String, dynamic> json) =>
+        CachedLook(Look.fromJson(json));
+    String? cover(CachedLook look, List<CachedLook> looks) =>
+        switch (lookCover(look, FeedState(looks: looks))) {
+          PhotoCover(:final record) => record.look.id,
+          FlatCover() => null,
+        };
+    final combination = record(
+      lookJson(id: 'combination', kind: 'combination', assetId: null),
+    );
+    final inspiration = record(
+      lookJson(id: 'inspiration', parentLookId: 'combination'),
+    );
+    final tryOn = record(
+      lookJson(id: 'try-on', kind: 'try-on', parentLookId: 'combination'),
+    );
+    expect(cover(combination, [combination]), isNull);
+    expect(cover(combination, [inspiration, combination]), 'inspiration');
+    expect(cover(combination, [inspiration, tryOn, combination]), 'try-on');
+
+    final worn = record(lookJson(id: 'worn', kind: 'photo'));
+    final image = record(lookJson(id: 'image', parentLookId: 'worn'));
+    expect(cover(worn, [image, worn]), 'worn');
+  });
+
   group('look stacks', () {
     Look look({
       String id = 'look-0001',
@@ -154,6 +181,17 @@ void main() {
         isFalse,
       );
       expect(inStack(const SavedStack(), look(), saved: true), isTrue);
+    });
+
+    test('references are every look that does not show the user', () {
+      // An AI inspiration shows a model, a try-on shows the user.
+      expect(inStack(const ReferenceStack(), look()), isTrue);
+      expect(
+        inStack(const ReferenceStack(), look(baseAssetId: 'asset-1')),
+        isFalse,
+      );
+      final photo = Look.fromJson(lookJson(kind: 'photo'));
+      expect(inStack(const ReferenceStack(), photo), isFalse);
     });
 
     test('pieces and colours gather the looks they appear in', () {

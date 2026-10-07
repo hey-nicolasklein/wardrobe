@@ -5,6 +5,7 @@ import {
   type GarmentDetection,
   type GenerationQuality,
   type ItemMetadata,
+  type LookPhoto,
   type NormalizedBoundingBox,
   type LookConcept,
   type LookStyle,
@@ -37,6 +38,8 @@ export class CatalogProviderError extends Error {
 export type DetectionProviderResult = {
   requestId: string;
   detections: GarmentDetection[];
+  // The photo as a whole. Optional, so replays recorded before it stay valid.
+  photo?: LookPhoto;
   usage: DetectionUsage;
 };
 
@@ -180,8 +183,26 @@ const detectionOutputSchema = z
         })
         .strict(),
     ),
+    photo: z
+      .object({
+        source: z.enum(['personal', 'reference']),
+        outfitBox: z.object({ top: z.number(), left: z.number(), bottom: z.number(), right: z.number() }),
+      })
+      .strict(),
   })
   .strict();
+
+const boxJsonSchema = {
+  type: 'object',
+  properties: {
+    top: { type: 'integer', minimum: 0, maximum: 999 },
+    left: { type: 'integer', minimum: 0, maximum: 999 },
+    bottom: { type: 'integer', minimum: 1, maximum: 1000 },
+    right: { type: 'integer', minimum: 1, maximum: 1000 },
+  },
+  required: ['top', 'left', 'bottom', 'right'],
+  additionalProperties: false,
+} as const;
 
 function detectionJsonSchema() {
   return {
@@ -216,24 +237,23 @@ function detectionJsonSchema() {
               minItems: 1,
               maxItems: 6,
             },
-            boundingBox: {
-              type: 'object',
-              properties: {
-                top: { type: 'integer', minimum: 0, maximum: 999 },
-                left: { type: 'integer', minimum: 0, maximum: 999 },
-                bottom: { type: 'integer', minimum: 1, maximum: 1000 },
-                right: { type: 'integer', minimum: 1, maximum: 1000 },
-              },
-              required: ['top', 'left', 'bottom', 'right'],
-              additionalProperties: false,
-            },
+            boundingBox: boxJsonSchema,
           },
           required: ['name', 'category', 'colors', 'boundingBox'],
           additionalProperties: false,
         },
       },
+      photo: {
+        type: 'object',
+        properties: {
+          source: { type: 'string', enum: ['personal', 'reference'] },
+          outfitBox: boxJsonSchema,
+        },
+        required: ['source', 'outfitBox'],
+        additionalProperties: false,
+      },
     },
-    required: ['detections'],
+    required: ['detections', 'photo'],
     additionalProperties: false,
   } as const;
 }
@@ -245,7 +265,9 @@ Treat screenshots and product grids as multiple pictured instances. Return each 
 
 A pair is one item: return two matching shoes, gloves, socks or earrings as a single proposal whose box covers both, even when they stand apart. Only return the same product twice when it is clearly pictured as separate products, such as tiles in a product grid. Return layered garments and small accessories separately. Use coat for outerwear that reaches past the hips, such as overcoats, trench coats, parkas, and long fur coats; use jacket for outerwear that ends at or above the hips. Do not infer hidden items or return materials, tags, notes, masks, or polygons. Propose a concise visible-pixel-supported name and color list. Name a piece by brand and product model whenever they are identifiable, for example "Nike Air Force 1", "Adidas Samba" or "Converse Chuck 70". A visible logo, wordmark or signature mark (such as the Nike Swoosh, Adidas three stripes or the Converse star patch) together with a well-known silhouette is enough to name the model. Add the colorway after it only when it helps tell pieces apart, for example "Nike Air Force 1 Sail". Fall back to a descriptive name like "White Leather Sneakers" only when no brand mark is visible. Never invent a brand or model without such a mark. Write every name in title case, capitalizing each meaningful word, for example "Black Wide-Leg Pants" or "Oversized Black Jacket with Faux-Fur Leopard Collar". Use category accessory for glasses, jewelry, watches, belts, gloves, and similar worn accessories. Only return an accessory when it is clearly visible and large enough to recognize; skip tiny, blurry, or mostly hidden ones. Use category unsupported for a visible wearable outside the supported categories.
 
-For every bounding box, locate the outermost visible pixels of exactly one garment. Use a tight box with at most 2% padding and exclude captions, controls, cards, background, and other garments. Return normalized integer coordinates in the standard order top, left, bottom, right, where the image spans 0 to 1000 on both axes and the origin is the top-left corner. Before responding, verify that the center of each box lies on its named garment and that the box does not group multiple pictured instances.`;
+For every bounding box, locate the outermost visible pixels of exactly one garment. Use a tight box with at most 2% padding and exclude captions, controls, cards, background, and other garments. Return normalized integer coordinates in the standard order top, left, bottom, right, where the image spans 0 to 1000 on both axes and the origin is the top-left corner. Before responding, verify that the center of each box lies on its named garment and that the box does not group multiple pictured instances.
+
+Finally describe the photo as a whole. Set photo.source to personal for a casual photo someone took of themselves or a friend, such as a mirror selfie or a snapshot. Set it to reference for a shop or product screenshot, an editorial, a lookbook, a celebrity or street style photo, or anything with shop prices, product names or app controls. Set photo.outfitBox to one box around the person in focus from head to shoes, or around all returned garments when nobody is pictured. It must exclude captions, prices, controls and surrounding interface, in the same coordinates as the garment boxes.`;
 }
 
 export const shelfImagePromptVersion = 'laid-flat-v6';
@@ -295,7 +317,7 @@ OUTPUT
 }
 
 function clampBox(
-  box: z.infer<typeof detectionOutputSchema>['detections'][number]['boundingBox'],
+  box: { top: number; left: number; bottom: number; right: number },
 ): NormalizedBoundingBox {
   const x = Math.max(0, Math.min(999, Math.round(box.left)));
   const y = Math.max(0, Math.min(999, Math.round(box.top)));
@@ -510,6 +532,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
     return {
       requestId: raw.id ?? response.headers.get('x-request-id') ?? randomUUID(),
       detections,
+      photo: { source: parsed.photo.source, outfitBox: clampBox(parsed.photo.outfitBox) },
       usage: {
         inputTokens: raw.usage.input_tokens,
         cachedInputTokens: raw.usage.input_tokens_details?.cached_tokens ?? 0,

@@ -28,6 +28,7 @@ class FeedState {
     this.online = true,
     this.pendingPhotos = const [],
     this.pendingWorn = const {},
+    this.dismissedFound = const {},
   });
 
   final List<CachedLook>? looks;
@@ -50,6 +51,10 @@ class FeedState {
   /// Local photos being added to a combination as the photo it was worn in,
   /// by look id. The look shows it developing until the server has it.
   final Map<String, String> pendingWorn;
+
+  /// Pieces found on photos that the user waved off ("not mine, skip"), so
+  /// they no longer light a look's discovery dot. Kept for the session.
+  final Set<String> dismissedFound;
 
   /// Looks shown on their own: combinations, photo looks and generated looks
   /// that are not an image of one of them, see [imagesOf].
@@ -111,6 +116,7 @@ class FeedState {
     bool? online,
     List<String>? pendingPhotos,
     Map<String, String>? pendingWorn,
+    Set<String>? dismissedFound,
   }) => FeedState(
     looks: looks ?? this.looks,
     itemsById: itemsById ?? this.itemsById,
@@ -127,6 +133,7 @@ class FeedState {
     online: online ?? this.online,
     pendingPhotos: pendingPhotos ?? this.pendingPhotos,
     pendingWorn: pendingWorn ?? this.pendingWorn,
+    dismissedFound: dismissedFound ?? this.dismissedFound,
   );
 }
 
@@ -142,13 +149,19 @@ class FeedCubit extends Cubit<FeedState> {
     _subscription = lookRepository.changes.listen(
       (_) => unawaited(_reloadLocal()),
     );
+    // Pieces added from a photo get their catalog image a little later.
+    _wardrobeSubscription = wardrobeRepository.changes.listen(
+      (_) => unawaited(_reloadLocal()),
+    );
   }
 
   final LookRepository lookRepository;
   final WardrobeRepository wardrobeRepository;
   final CharacterSheetRepository characterSheets;
   late final StreamSubscription<void> _subscription;
+  late final StreamSubscription<void> _wardrobeSubscription;
   late final StreamSubscription<void> _characterSubscription;
+  Timer? _generatingPoll;
 
   Future<void> _reloadCharacter() async {
     final sheets = await characterSheets.cached();
@@ -269,6 +282,25 @@ class FeedCubit extends Cubit<FeedState> {
         saved: saved,
       ),
     );
+    _pollGenerating();
+  }
+
+  /// While a piece on a look still waits for its catalog image, asks the
+  /// server again every few seconds, so the look shows it once it is there.
+  void _pollGenerating() {
+    _generatingPoll?.cancel();
+    final generating = state.itemsById.values.any(
+      (item) => const ['queued', 'generating'].contains(item.status),
+    );
+    if (!generating || !state.online) return;
+    _generatingPoll = Timer(const Duration(seconds: 3), () async {
+      try {
+        await wardrobeRepository.refresh();
+      } on FormApiException {
+        return;
+      }
+      await _reloadLocal();
+    });
   }
 
   void markUnavailable() {
@@ -335,6 +367,7 @@ class FeedCubit extends Cubit<FeedState> {
           stale: false,
           pendingPhotos: state.pendingPhotos,
           pendingWorn: state.pendingWorn,
+          dismissedFound: state.dismissedFound,
         ),
       );
     } on FormApiException catch (error) {
@@ -431,27 +464,53 @@ class FeedCubit extends Cubit<FeedState> {
   Future<void> setLookItems(String lookId, List<String> itemIds) =>
       lookRepository.setItems(lookId, itemIds);
 
+  /// "Yes, that's mine": the piece found on [look]'s photo is [itemId].
+  Future<void> linkFound(Look look, LookFoundPiece piece, String itemId) =>
+      lookRepository.linkFound(look.id, piece.id, itemId);
+
+  /// Takes back a confirmation: the piece is open again on the photo.
+  Future<void> unlinkFound(Look look, LookFoundPiece piece) =>
+      lookRepository.unlinkFound(look.id, piece.id);
+
+  /// Takes a piece that was added from [look]'s photo out of the wardrobe
+  /// again, after unlinking it.
+  Future<void> removeFoundPiece(Look look, LookFoundPiece piece) async {
+    final item = state.itemsById[piece.wardrobeItemId];
+    await lookRepository.unlinkFound(look.id, piece.id);
+    if (item != null) {
+      await wardrobeRepository.execute(item.id, ItemCommand.delete(item));
+    }
+    await _reloadLocal();
+  }
+
   /// Adds a piece detected on a photo look to the wardrobe, orders its
   /// catalog image and links it to the look.
   Future<void> addFoundPiece(
     Look look,
     LookFoundPiece piece, {
     required String quality,
+    bool wanting = false,
   }) async {
     final itemId = await lookRepository.addFoundPiece(
       piece,
       quality: quality,
+      wanting: wanting,
     );
-    await lookRepository.setItems(
-      look.id,
-      {
-        ...look.wardrobeItemIds,
-        itemId,
-      }.toList(),
-    );
+    await lookRepository.linkFound(look.id, piece.id, itemId);
     await wardrobeRepository.refreshAndNotify();
     await _reloadLocal();
   }
+
+  /// Waves off a piece found on a photo: it stays listed, but no longer
+  /// asks for attention.
+  void dismissFound(String pieceId) => emit(
+    state.copyWith(dismissedFound: {...state.dismissedFound, pieceId}),
+  );
+
+  /// Brings a skipped piece back up for a decision.
+  void restoreFound(String pieceId) => emit(
+    state.copyWith(dismissedFound: {...state.dismissedFound}..remove(pieceId)),
+  );
 
   Future<void> retryLook(String lookId) async {
     await lookRepository.execute(LookCommand.retry(lookId));
@@ -464,7 +523,9 @@ class FeedCubit extends Cubit<FeedState> {
   @override
   Future<void> close() async {
     _poll?.cancel();
+    _generatingPoll?.cancel();
     await _subscription.cancel();
+    await _wardrobeSubscription.cancel();
     await _characterSubscription.cancel();
     return super.close();
   }

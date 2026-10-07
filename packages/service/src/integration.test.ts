@@ -15,6 +15,8 @@ import {
   createLookImage,
   keepLookProposal,
   setLookItems,
+  linkFoundPiece,
+  unlinkFoundPiece,
   deleteLook,
   recordDetectionProposals,
   createCharacterSheet,
@@ -238,6 +240,17 @@ test('looks are combinations first: free without a reference, with photos and AI
     await database.query("UPDATE detection_attempts SET state='succeeded', finished_at=now() WHERE source_photo_id=$1", [fixtureIds.sourcePhoto]);
     photoLook = (await listLooks(database, accountId)).find((look) => look.id === photo.lookId)!;
     assert.ok(photoLook.found?.some((piece) => piece.id === detectionId && piece.wardrobeItemId === null));
+    // "Yes, that's mine" links the found piece and adds it to the look; taking it back removes both.
+    await linkFoundPiece(database, { accountId, lookId: photo.lookId, foundId: detectionId, wardrobeItemId: fixtureIds.readyItem });
+    photoLook = (await listLooks(database, accountId)).find((look) => look.id === photo.lookId)!;
+    assert.deepEqual(photoLook.wardrobeItemIds, [fixtureIds.readyItem]);
+    assert.equal(photoLook.found?.find((piece) => piece.id === detectionId)?.wardrobeItemId, fixtureIds.readyItem);
+    assert.deepEqual(await unlinkFoundPiece(database, { accountId, lookId: photo.lookId, foundId: detectionId }), { wardrobeItemIds: [] });
+    photoLook = (await listLooks(database, accountId)).find((look) => look.id === photo.lookId)!;
+    assert.equal(photoLook.found?.find((piece) => piece.id === detectionId)?.wardrobeItemId, null);
+    await assert.rejects(
+      linkFoundPiece(database, { accountId: fixtureIds.emptyAccount, lookId: photo.lookId, foundId: detectionId, wardrobeItemId: fixtureIds.readyItem }),
+    );
     await setLookItems(database, { accountId, lookId: photo.lookId, itemIds: [fixtureIds.readyItem] });
     photoLook = (await listLooks(database, accountId)).find((look) => look.id === photo.lookId)!;
     assert.deepEqual(photoLook.wardrobeItemIds, [fixtureIds.readyItem]);

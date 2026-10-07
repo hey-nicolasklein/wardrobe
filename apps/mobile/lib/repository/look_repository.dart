@@ -197,6 +197,23 @@ class LookRepository {
     await refreshAndNotify();
   }
 
+  /// Says the piece [foundId] on photo look [lookId] is the wardrobe piece
+  /// [itemId]. The piece joins the look.
+  Future<void> linkFound(String lookId, String foundId, String itemId) async {
+    await _request(
+      'v1/looks/$lookId/found/$foundId',
+      method: 'PUT',
+      data: {'wardrobeItemId': itemId},
+    );
+    await refreshAndNotify();
+  }
+
+  /// Takes back [linkFound]. The piece leaves the look.
+  Future<void> unlinkFound(String lookId, String foundId) async {
+    await _request('v1/looks/$lookId/found/$foundId', method: 'DELETE');
+    await refreshAndNotify();
+  }
+
   /// Puts an AI image on top of the combination or photo look [lookId]:
   /// `try-on` on [baseAssetId], or an `inspiration`. Paid. Returns the image's
   /// look id.
@@ -222,17 +239,19 @@ class LookRepository {
   }
 
   /// Creates a wardrobe piece from [piece], detected on a photo look, and
-  /// orders its catalog image. Returns the piece's id.
+  /// orders its catalog image. [wanting] puts it on the wish list, for pieces
+  /// seen on someone else. Returns the piece's id.
   Future<String> addFoundPiece(
     LookFoundPiece piece, {
     required String quality,
+    bool wanting = false,
   }) async {
     final created = await _request(
       'v1/wardrobe-items',
       method: 'POST',
       data: {
         'detectionProposalId': piece.id,
-        'state': 'owning',
+        'state': wanting ? 'wanting' : 'owning',
         'idempotencyKey': 'found-${piece.id}',
       },
     );

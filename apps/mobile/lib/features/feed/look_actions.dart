@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
-import 'package:form_mobile/features/feed/feed_page.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/intake/intake_picker.dart';
 import 'package:form_mobile/features/settings/credits_cubit.dart';
@@ -23,68 +22,22 @@ import 'package:form_mobile/widgets/cached_media.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
-/// The ways to start a look, all free: lay out pieces from the Schrank, keep
-/// photos the user wore an outfit in, or swipe through FORM's suggestions.
-Future<void> showNewLookSheet(BuildContext context) {
+/// "Create look": occasion, must-have pieces, then a deck of free proposals.
+/// [occasion] and [itemIds] preselect the two steps, e.g. from a stack.
+void openCreateLook(
+  BuildContext context, {
+  String? occasion,
+  List<String> itemIds = const [],
+}) {
   unawaited(HapticFeedback.lightImpact());
-  return showFormSheet<void>(
-    context: context,
-    builder: (sheetContext) {
-      void then(void Function() action) {
-        Navigator.pop(sheetContext);
-        action();
-      }
-
-      return FormSheet(
-        title: context.tr(LocaleKeys.newLookTitle),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 10,
-          children: [
-            _NewLookOption(
-              index: 0,
-              icon: Icons.checkroom_outlined,
-              title: context.tr(LocaleKeys.newLookCombine),
-              body: context.tr(LocaleKeys.newLookCombineBody),
-              onTap: () => then(() => openLookComposer(context)),
-            ),
-            _NewLookOption(
-              index: 1,
-              icon: Icons.photo_library_outlined,
-              title: context.tr(LocaleKeys.newLookPhotos),
-              body: context.tr(LocaleKeys.newLookPhotosBody),
-              onTap: () => then(() => unawaited(addPhotoLooks(context))),
-            ),
-            _NewLookOption(
-              index: 2,
-              icon: Icons.auto_awesome_outlined,
-              title: context.tr(LocaleKeys.newLookSuggest),
-              body: context.tr(LocaleKeys.newLookSuggestBody),
-              onTap: () => then(() => unawaited(suggestLooks(context))),
-            ),
-          ],
-        ),
-      );
-    },
+  final query = [
+    if (occasion != null) 'occasion=${Uri.encodeComponent(occasion)}',
+    ...itemIds.map((id) => 'item=${Uri.encodeComponent(id)}'),
+  ].join('&');
+  unawaited(
+    context.push(query.isEmpty ? '/feed/create' : '/feed/create?$query'),
   );
 }
-
-/// Starts a round of FORM's suggestions from the whole Schrank.
-Future<void> suggestLooks(BuildContext context) =>
-    runFeedAction(context, () async {
-      final body = <String, dynamic>{
-        'exactItemIds': <String>[],
-        'categories': <String>[],
-        'occasion': null,
-        'style': 'candid',
-        'completion': 'wardrobe',
-        'idempotencyKey': newIdempotencyKey(),
-      };
-      await context.read<LookRepository>().propose(body);
-      if (context.mounted) {
-        unawaited(context.push('/feed/proposals', extra: body));
-      }
-    });
 
 /// Keeps photos from the library as looks. They land on the Looks pile right
 /// away and their pieces are found in the background.
@@ -166,74 +119,6 @@ Future<void> addLookImage(
   await showFormSheet<void>(
     context: context,
     builder: (_) => _LookImageSheet(look: look, mode: mode, page: context),
-  );
-}
-
-class _NewLookOption extends StatelessWidget {
-  const _NewLookOption({
-    required this.index,
-    required this.icon,
-    required this.title,
-    required this.body,
-    required this.onTap,
-  });
-
-  final int index;
-  final IconData icon;
-  final String title;
-  final String body;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => FormReveal(
-    delay: Duration(milliseconds: 60 * index),
-    child: Material(
-      color: FormTokens.surface,
-      borderRadius: BorderRadius.circular(FormTokens.cardRadius),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () {
-          unawaited(HapticFeedback.selectionClick());
-          onTap();
-        },
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
-          child: Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: const BoxDecoration(
-                  color: FormTokens.selectedTint,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: FormTokens.green, size: 22),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  spacing: 2,
-                  children: [
-                    Text(
-                      title,
-                      style: FormTokens.body.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(body, style: FormTokens.small),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right_rounded,
-                color: FormTokens.muted,
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
   );
 }
 

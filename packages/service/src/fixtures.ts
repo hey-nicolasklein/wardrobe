@@ -164,7 +164,7 @@ export async function resetFixtures(
   await withTransaction(database, async (client) => {
     await client.query(`
       TRUNCATE TABLE
-        idempotency_commands, remote_image_jobs, look_items, looks, character_sheets, shelf_image_versions,
+        idempotency_commands, remote_image_jobs, look_found_links, look_items, looks, character_sheets, shelf_image_versions,
         generation_attempts, detection_proposals, wardrobe_items,
         source_photos, private_assets, sessions, accounts
       CASCADE

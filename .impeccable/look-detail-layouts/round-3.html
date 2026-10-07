@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FORM · Look-Detail · Runde 3</title>
+<style>
+@font-face { font-family: "Libre Baskerville"; src: url("assets/LibreBaskerville.ttf"); font-display: swap; }
+:root {
+  --forest: #344D3F; --paper: #F6F5F1; --ink: #242923; --muted: #777B72; --note: #626E5E;
+  --hair: #E2E4DC; --field: #EAECE5; --white: #FFFFFF; --coin-ink: #7E5F2C; --stage: #E7E9E2;
+  --serif: "Libre Baskerville", Georgia, serif;
+  --sans: -apple-system, "SF Pro Text", system-ui, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+::selection { background: #DFE8D2; color: var(--ink); }
+html { background: #ECEBE5; color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+body { padding: 56px 40px 96px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; text-align: left; }
+button:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; border-radius: 10px; }
+svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.i.sm { width: 18px; height: 18px; }
+
+/* page */
+.intro { max-width: 1000px; margin: 0 auto 40px; }
+.intro h1 { font-family: var(--serif); font-weight: 400; font-size: 38px; letter-spacing: -1.1px; line-height: 1.1; }
+.intro p { margin-top: 12px; font-size: 15px; line-height: 1.6; color: var(--note); max-width: 70ch; }
+.intro a { color: var(--forest); }
+.changes { margin-top: 18px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px 32px; list-style: none; font-size: 13.5px; line-height: 1.5; color: var(--note); }
+.changes b { color: var(--ink); font-weight: 600; }
+.variants { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 48px; }
+.variant > header { margin-bottom: 18px; }
+.variant .tag { font-size: 13px; font-weight: 600; color: var(--forest); }
+.variant h3 { font-family: var(--serif); font-weight: 400; font-size: 24px; letter-spacing: -.4px; margin-top: 4px; }
+.variant > header p { margin-top: 6px; font-size: 13.5px; line-height: 1.55; color: var(--note); }
+
+/* phone */
+.phone { width: 375px; height: 780px; margin: 0 auto; border-radius: 46px; background: #1d1f1c; padding: 10px; box-shadow: 0 30px 60px -30px rgba(29,40,28,.45); }
+.screen { position: relative; height: 100%; border-radius: 37px; overflow: hidden; background: var(--paper); }
+.scroll { height: 100%; overflow-y: auto; scrollbar-width: none; }
+.scroll::-webkit-scrollbar { display: none; }
+.statusbar { height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 6px 30px 0 34px; font-size: 15px; font-weight: 600; color: var(--ink); }
+.statusbar .island { width: 104px; height: 30px; border-radius: 20px; background: #000; }
+.statusbar i { display: block; width: 24px; height: 11px; border-radius: 3px; border: 1.5px solid var(--ink); position: relative; }
+.statusbar i::after { content: ""; position: absolute; inset: 1px 4px 1px 1px; background: var(--ink); border-radius: 1px; }
+
+.top { position: absolute; top: 0; left: 0; right: 0; z-index: 4; }
+.top::before { content: ""; position: absolute; inset: 0 0 -28px; z-index: -1; opacity: 0; transition: opacity .32s cubic-bezier(.22,1,.36,1); background: linear-gradient(var(--paper) 62%, transparent); }
+.top.scrolled::before { opacity: 1; }
+.top .bar { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; }
+.float-btn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(246,245,241,.8); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 1px 4px rgba(39,55,27,.06); }
+.counter { height: 32px; padding: 0 12px 0 6px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px; background: rgba(246,245,241,.8); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 1px 4px rgba(39,55,27,.06); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.counter img { width: 22px; height: 22px; border-radius: 6px; object-fit: cover; }
+
+/* hero: photo starts below the bar, its top fades into paper */
+.hero { position: relative; height: 540px; background: var(--paper); }
+.hero > img { position: absolute; left: 0; right: 0; top: 70px; width: 100%; height: calc(100% - 70px); object-fit: cover; object-position: 50% 0; }
+.hero::before { content: ""; position: absolute; left: 0; right: 0; top: 70px; height: 90px; z-index: 1; background: linear-gradient(var(--paper), color-mix(in srgb, var(--paper) 55%, transparent) 45%, transparent); }
+.hero .controls { position: absolute; left: 14px; right: 14px; bottom: 38px; z-index: 2; display: flex; align-items: center; justify-content: space-between; }
+.seg { display: inline-flex; padding: 3px; border-radius: 999px; background: rgba(246,245,241,.72); border: 1px solid rgba(255,255,255,.5); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.seg button { height: 34px; padding: 0 16px; border-radius: 999px; font-size: 13px; color: var(--note); }
+.seg button.on { background: var(--white); color: var(--ink); font-weight: 600; box-shadow: 0 1px 4px rgba(39,55,27,.06); }
+
+.sheet { position: relative; z-index: 3; margin-top: -24px; background: var(--paper); border-radius: 25px 25px 0 0; padding: 26px 22px 48px; }
+.title-row { display: flex; gap: 8px; align-items: flex-start; }
+.title-row h2 { flex: 1; font-family: var(--serif); font-weight: 400; font-size: 23px; line-height: 1.25; letter-spacing: -.4px; text-wrap: balance; }
+.heart { width: 44px; height: 44px; margin: -8px -10px 0 0; display: grid; place-items: center; color: var(--ink); }
+.meta { margin-top: 6px; font-size: 13px; color: var(--muted); }
+
+.section { margin-top: 30px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.section-head h4 { font-size: 15px; font-weight: 600; }
+.section-head button { font-size: 13px; color: var(--muted); min-height: 32px; }
+
+.rows { list-style: none; }
+.row { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 6px 0; }
+.row + .row { border-top: 1px solid var(--hair); }
+.ph { width: 46px; height: 54px; border-radius: 10px; overflow: hidden; flex: none; display: grid; place-items: center; }
+.ph img { width: 84%; }
+.ph img.fill, .face img.fill { width: 100%; height: 100%; object-fit: cover; }
+.row .txt { flex: 1; min-width: 0; }
+.row .txt b { display: block; font-size: 14.5px; font-weight: 600; }
+.row .txt small { font-size: 12.5px; color: var(--muted); }
+.chev { color: #A9ACA3; }
+
+.strip { display: flex; gap: 10px; margin-top: 8px; }
+.tile { width: 96px; }
+.tile .face { width: 96px; height: 112px; border-radius: 14px; overflow: hidden; display: grid; place-items: center; }
+.tile .face img { width: 82%; }
+.tile b { display: block; margin-top: 7px; font-size: 12.5px; font-weight: 500; line-height: 1.3; }
+.tile small { display: block; font-size: 11.5px; color: var(--muted); }
+
+.group { background: var(--white); border: 1px solid var(--hair); border-radius: 14px; overflow: hidden; margin-top: 8px; }
+.opt { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 14px; }
+.opt + .opt { border-top: 1px solid var(--hair); }
+.opt > svg:first-child { color: var(--forest); }
+.opt .lbl { flex: 1; min-width: 0; }
+.opt .lbl b { display: block; font-size: 15px; font-weight: 500; }
+.opt .lbl small { display: block; margin-top: 1px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.coin { color: var(--coin-ink); font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.cut { max-width: 1000px; margin: 56px auto 0; padding-top: 26px; border-top: 1px solid #D9DBD2; display: grid; grid-template-columns: 1fr 1.5fr; gap: 48px; }
+.cut h2 { font-family: var(--serif); font-weight: 400; font-size: 24px; letter-spacing: -.4px; }
+.cut ul { padding-left: 18px; display: grid; gap: 6px; font-size: 14px; line-height: 1.55; color: var(--note); }
+.cut b { color: var(--ink); font-weight: 600; }
+@media (max-width: 900px) { .variants, .cut, .changes { grid-template-columns: 1fr; } body { padding: 32px 18px; } }
+
+/* round 3: in-app header, whole photo, controls below it */
+.appbar { display: flex; align-items: center; gap: 6px; padding: 2px 16px 10px 6px; border-bottom: 1px solid var(--hair); }
+.appbar .ttl { flex: 1; }
+.appbar .ttl b { display: block; font-family: var(--serif); font-weight: 400; font-size: 22px; letter-spacing: -.4px; }
+.appbar .ttl small { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.new-pill { height: 36px; padding: 0 14px 0 11px; border-radius: 999px; background: #DFE8D2; color: var(--forest); font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.icon-btn { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; flex: none; }
+.content { padding: 16px 22px 48px; }
+.photo { display: block; width: 100%; height: auto; aspect-ratio: 432 / 660; object-fit: contain; background: var(--stage); }
+.photo.card { border-radius: 14px; }
+.bleed { margin: 0 -22px; }
+.under { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.under .seg { background: var(--field); border-color: var(--hair); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.under .more { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--ink); }
+.title-block { margin-top: 22px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.1" fill="currentColor"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/><circle cx="18" cy="12" r="1.1" fill="currentColor"/></symbol>
+  <symbol id="heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/></symbol>
+  <symbol id="person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.6 3.6-5.6 7-5.6s6.2 2 7 5.6"/></symbol>
+  <symbol id="spark" viewBox="0 0 24 24"><path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6z"/><path d="M17.5 14l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="M10 7l5 5-5 5"/></symbol>
+</svg>
+<section class="intro">
+  <h1>Look-Detail · Runde 3</h1>
+  <p>Zurück zum App-Header und zum ganzen Foto. Nichts liegt mehr auf dem Bild: Ebenen-Schalter und Menü stehen darunter. Der Rest ist aus Runde 2 übernommen, Teile als Liste. <a href="round-2.html">Runde 2</a> · <a href="round-1.html">Runde 1</a></p>
+  <ul class="changes">
+    <li><b>Ganzes Outfit.</b> Das Foto zeigt sich in seinem eigenen Format, nicht beschnitten. Kopf und Schuhe sind immer drin.</li>
+    <li><b>Keine UI auf dem Foto.</b> „…“ und der Schalter Getragen/Gelegt/Inspiration rücken in eine Zeile unter das Bild.</li>
+  </ul>
+</section>
+<main class="variants">
+  <article class="variant">
+    <header><div class="tag">E1</div><h3>Foto als Karte</h3><p>Mit Rand und runden Ecken, wie die Kacheln im Schrank. Ruhiger und näher an heute.</p></header>
+    <div class="phone"><div class="screen"><div class="scroll">
+      <div class="sticky-head" style="position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)">
+        <div class="statusbar"><span>16:42</span><span class="island"></span><i></i></div>
+        <div class="appbar">
+          <button class="icon-btn" aria-label="Zurück"><svg class="i"><use href="#back"/></svg></button>
+          <span class="ttl"><b>Alle Looks</b><small>1 / 12</small></span>
+          <button class="new-pill"><svg class="i sm"><use href="#plus"/></svg>Neu</button>
+        </div>
+      </div>
+      <div class="content">
+        <img class="photo card" src="assets/fullbody.jpg" alt="Getragenes Foto des Looks">
+        <div class="under">
+          <div class="seg"><button class="on">Getragen</button><button>Gelegt</button><button>Inspiration</button></div>
+          <button class="more" aria-label="Aktionen"><svg class="i sm"><use href="#more"/></svg></button>
+        </div>
+        <div class="title-block">
+          <div class="title-row"><h2>Leather Jacket &amp; Black Shirt</h2><button class="heart" aria-label="Zur Sammlung"><svg class="i"><use href="#heart"/></svg></button></div>
+          <p class="meta">Heute · Alles aus deinem Schrank</p>
+        </div>
+        <div class="section">
+          <div class="section-head"><h4>Teile</h4><button>1 übersprungen</button></div>
+          <ul class="rows"><li class="row"><span class="ph" style="background:#E7E5DF"><img src="assets/leather-jacket.webp" alt=""></span><span class="txt"><b>Leather Jacket</b></span><svg class="i sm chev"><use href="#chev"/></svg></li><li class="row"><span class="ph" style="background:#E7E5DF"><img src="assets/black-shirt.webp" alt=""></span><span class="txt"><b>Black Shirt</b></span><svg class="i sm chev"><use href="#chev"/></svg></li><li class="row"><span class="ph" style="background:#E9E4EA"><img src="assets/black-pants.webp" alt=""></span><span class="txt"><b>Wide Black Trousers</b></span><svg class="i sm chev"><use href="#chev"/></svg></li><li class="row"><span class="ph" style="background:#E2E7EC"><img src="assets/white-sneaker.webp" alt=""></span><span class="txt"><b>White Sneaker</b><small>Nicht auf dem Foto markiert</small></span><svg class="i sm chev"><use href="#chev"/></svg></li></ul>
+        </div>
+        <div class="section">
+          <div class="section-head"><h4>Dich darin sehen</h4></div>
+          <div class="group">
+            <button class="opt"><svg class="i"><use href="#person"/></svg><span class="lbl"><b>Anprobieren</b><small>KI setzt die Teile auf ein Foto von dir</small></span><span class="coin">2 Credits</span></button>
+            <button class="opt"><svg class="i"><use href="#spark"/></svg><span class="lbl"><b>Inspiration</b><small>KI zeigt dich in einer neuen Szene</small></span><span class="coin">2 Credits</span></button>
+          </div>
+        </div>
+      </div>
+    </div></div></div>
+  </article>
+  <article class="variant">
+    <header><div class="tag">E2</div><h3>Foto in voller Breite</h3><p>Ohne Rand, rund 15 % größer. Das Outfit wirkt präsenter, der Screen etwas weniger gefasst.</p></header>
+    <div class="phone"><div class="screen"><div class="scroll">
+      <div class="sticky-head" style="position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)">
+        <div class="statusbar"><span>16:42</span><span class="island"></span><i></i></div>
+        <div class="appbar">
+          <button class="icon-btn" aria-label="Zurück"><svg class="i"><use href="#back"/></svg></button>
+          <span class="ttl"><b>Alle Looks</b><small>1 / 12</small></span>
+          <button class="new-pill"><svg class="i sm"><use href="#plus"/></svg>Neu</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="bleed"><img class="photo" src="assets/fullbody.jpg" alt="Getragenes Foto des Looks"></div>
+        <div class="under">
+          <div class="seg"><button class="on">Getragen</button><button>Gelegt</button><button>Inspiration</button></div>
+          <button class="more" aria-label="Aktionen"><svg class="i sm"><use href="#more"/></svg></button>
+        </div>
+        <div class="title-block">
+          <div class="title-row"><h2>Leather Jacket &amp; Black Shirt</h2><button class="heart" aria-label="Zur Sammlung"><svg class="i"><use href="#heart"/></svg></button></div>
+          <p class="meta">Heute · Alles aus deinem Schrank</p>
+        </div>
+        <div class="section">
+          <div class="section-head"><h4>Teile</h4><button>1 übersprungen</button></div>
+          <ul class="rows"><li class="row"><span class="ph" style="background:#E7E5DF"><img src="assets/leather-jacket.webp" alt=""></span><span class="txt"><b>Leather Jacket</b></span><svg class="i sm chev"><use href="#chev"/></svg></li><li class="row"><span class="ph" style="background:#E7E5DF"><img src="assets/black-shirt.webp" alt=""></span><span class="txt"><b>Black Shirt</b></span><svg class="i sm chev"><use href="#chev"/></svg></li><li class="row"><span class="ph" style="background:#E9E4EA"><img src="assets/black-pants.webp" alt=""></span><span class="txt"><b>Wide Black Trousers</b></span><svg class="i sm chev"><use href="#chev"/></svg></li><li class="row"><span class="ph" style="background:#E2E7EC"><img src="assets/white-sneaker.webp" alt=""></span><span class="txt"><b>White Sneaker</b><small>Nicht auf dem Foto markiert</small></span><svg class="i sm chev"><use href="#chev"/></svg></li></ul>
+        </div>
+        <div class="section">
+          <div class="section-head"><h4>Dich darin sehen</h4></div>
+          <div class="group">
+            <button class="opt"><svg class="i"><use href="#person"/></svg><span class="lbl"><b>Anprobieren</b><small>KI setzt die Teile auf ein Foto von dir</small></span><span class="coin">2 Credits</span></button>
+            <button class="opt"><svg class="i"><use href="#spark"/></svg><span class="lbl"><b>Inspiration</b><small>KI zeigt dich in einer neuen Szene</small></span><span class="coin">2 Credits</span></button>
+          </div>
+        </div>
+      </div>
+    </div></div></div>
+  </article>
+</main>
+<section class="cut">
+  <h2>Für die Umsetzung</h2>
+  <ul>
+    <li><b>Format:</b> Das Bild bekommt sein echtes Seitenverhältnis. Sehr hohe Fotos deckeln wir bei etwa 70 % der Bildschirmhöhe und zeigen sie dann eingepasst auf dem Bühnen-Grau, nie beschnitten.</li>
+    <li><b>Der schwarze Balken</b> aus deinem ersten Screenshot verschwindet damit auch.</li>
+    <li><b>Mit nur einer Ebene</b> entfällt der Schalter, „…“ bleibt rechts allein.</li>
+  </ul>
+</section>
+</body>
+</html>

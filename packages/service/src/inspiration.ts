@@ -8,6 +8,7 @@ import {
   type LookCompletion,
   type LookConcept,
   type LookFoundPiece,
+  type LookPhoto,
   type LookKind,
   type LookOccasion,
   type LookReason,
@@ -78,6 +79,7 @@ type LookRow = {
   base_asset_id: string | null;
   source_photo_id: string | null;
   found: LookFoundPiece[] | null;
+  photo: LookPhoto | null;
   occasion: LookOccasion | null;
   liked: boolean;
   planned_concept: LookConcept | null;
@@ -99,14 +101,19 @@ type LookRow = {
 const characterColumns = `id, state, reference_asset_ids, note, asset_id, active, model, quality,
   output_size, provider_request_id, cost_microunits, failure_category, created_at, finished_at`;
 // A photo look lists its detected pieces once the latest analysis finished,
-// each with the wardrobe piece it was added as.
+// each with the wardrobe piece the user linked it to on this look.
 const foundColumn = `CASE WHEN l.source_photo_id IS NULL THEN NULL
   WHEN COALESCE((SELECT da.state FROM detection_attempts da WHERE da.source_photo_id=l.source_photo_id ORDER BY da.created_at DESC, da.id DESC LIMIT 1),'queued') NOT IN ('succeeded','failed') THEN NULL
   ELSE COALESCE((SELECT json_agg(json_build_object('id',dp.id,'name',dp.name,'category',dp.category,'colors',dp.colors,'boundingBox',dp.bounding_box,
-    'wardrobeItemId',(SELECT wi.id FROM wardrobe_items wi WHERE wi.detection_proposal_id=dp.id AND wi.deleted_at IS NULL ORDER BY wi.created_at LIMIT 1)) ORDER BY dp.created_at, dp.id)
+    'wardrobeItemId',(SELECT lf.wardrobe_item_id FROM look_found_links lf JOIN wardrobe_items wi ON wi.id=lf.wardrobe_item_id AND wi.deleted_at IS NULL WHERE lf.look_id=l.id AND lf.detection_proposal_id=dp.id),
+    'added',EXISTS(SELECT 1 FROM wardrobe_items wi WHERE wi.detection_proposal_id=dp.id AND wi.deleted_at IS NULL)) ORDER BY dp.created_at, dp.id)
     FROM detection_proposals dp WHERE dp.source_photo_id=l.source_photo_id AND dp.category<>'unsupported'),'[]'::json) END AS found`;
+// What the latest finished analysis says about the photo as a whole.
+const photoColumn = `(SELECT json_build_object('source',da.photo_source,'outfitBox',da.outfit_box)
+  FROM detection_attempts da WHERE da.source_photo_id=l.source_photo_id AND da.state='succeeded' AND da.photo_source IS NOT NULL
+  ORDER BY da.created_at DESC, da.id DESC LIMIT 1) AS photo`;
 const lookColumns = `l.id, l.kind, l.state, l.asset_id, l.feed_asset_id, l.character_sheet_id, l.parent_look_id,
-  l.base_asset_id, l.source_photo_id, l.occasion, ${foundColumn},
+  l.base_asset_id, l.source_photo_id, l.occasion, ${foundColumn}, ${photoColumn},
   l.liked_at IS NOT NULL AS liked, l.planned_concept, l.category_constraints, l.proposal, l.proposal_reasons,
   (SELECT payload FROM remote_image_jobs rj WHERE rj.look_id=l.id ORDER BY rj.created_at DESC LIMIT 1) AS job_payload,
   l.model, l.quality,
@@ -145,6 +152,7 @@ const mapLook = (row: LookRow): Look => ({
   baseAssetId: row.base_asset_id,
   sourcePhotoId: row.source_photo_id,
   found: row.found,
+  photo: row.photo,
   liked: row.liked,
   concept: row.planned_concept,
   settings: lookSettings(row),
@@ -979,8 +987,101 @@ export async function setLookItems(
     await client.query('DELETE FROM look_items WHERE look_id=$1', [input.lookId]);
     await insertLookItems(client, input.lookId, itemIds);
     await client.query('UPDATE looks SET exact_item_ids=$3 WHERE id=$1 AND account_id=$2', [input.lookId, input.accountId, itemIds]);
+    // A piece taken off the look no longer stands for anything found on its photo.
+    await client.query('DELETE FROM look_found_links WHERE look_id=$1 AND NOT (wardrobe_item_id = ANY($2::uuid[]))', [
+      input.lookId,
+      itemIds,
+    ]);
     return { wardrobeItemIds: itemIds };
   });
+}
+
+async function photoLookForUpdate(client: DatabaseClient, accountId: string, lookId: string, foundId: string) {
+  const look = await client.query<{ id: string }>(
+    `SELECT l.id FROM looks l JOIN detection_proposals dp ON dp.source_photo_id=l.source_photo_id AND dp.id=$3
+     WHERE l.id=$1 AND l.account_id=$2 AND l.kind='photo' AND l.deleted_at IS NULL AND NOT l.proposal FOR UPDATE OF l`,
+    [lookId, accountId, foundId],
+  );
+  if (!look.rows[0]) throw new OwnedResourceNotFoundError();
+}
+
+async function lookItemIds(client: DatabaseClient, lookId: string): Promise<string[]> {
+  const rows = await client.query<{ wardrobe_item_id: string }>(
+    'SELECT wardrobe_item_id FROM look_items WHERE look_id=$1 ORDER BY ordinal',
+    [lookId],
+  );
+  return rows.rows.map((row) => row.wardrobe_item_id);
+}
+
+/**
+ * Says that the piece `foundId`, found on a photo look, is the wardrobe piece
+ * `wardrobeItemId`. The piece joins the look's combination. Linking again
+ * replaces the earlier answer.
+ */
+export async function linkFoundPiece(
+  database: Database,
+  input: { accountId: string; lookId: string; foundId: string; wardrobeItemId: string },
+) {
+  return withTransaction(database, async (client) => {
+    await photoLookForUpdate(client, input.accountId, input.lookId, input.foundId);
+    await assertOwnedItems(client, input.accountId, [input.wardrobeItemId]);
+    const previous = await client.query<{ wardrobe_item_id: string }>(
+      'SELECT wardrobe_item_id FROM look_found_links WHERE look_id=$1 AND detection_proposal_id=$2',
+      [input.lookId, input.foundId],
+    );
+    await client.query(
+      `INSERT INTO look_found_links (look_id, detection_proposal_id, wardrobe_item_id, account_id)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (look_id, detection_proposal_id) DO UPDATE SET wardrobe_item_id = EXCLUDED.wardrobe_item_id`,
+      [input.lookId, input.foundId, input.wardrobeItemId, input.accountId],
+    );
+    let itemIds = await lookItemIds(client, input.lookId);
+    const replaced = previous.rows[0]?.wardrobe_item_id;
+    if (replaced && replaced !== input.wardrobeItemId) itemIds = await dropUnlinked(client, input.lookId, replaced, itemIds);
+    if (!itemIds.includes(input.wardrobeItemId)) {
+      itemIds = [...itemIds, input.wardrobeItemId];
+      await writeLookItems(client, input.lookId, itemIds);
+    }
+    return { wardrobeItemIds: itemIds };
+  });
+}
+
+/**
+ * Takes back what `linkFoundPiece` said. The wardrobe piece leaves the look
+ * unless another found piece still stands for it.
+ */
+export async function unlinkFoundPiece(
+  database: Database,
+  input: { accountId: string; lookId: string; foundId: string },
+) {
+  return withTransaction(database, async (client) => {
+    await photoLookForUpdate(client, input.accountId, input.lookId, input.foundId);
+    const removed = await client.query<{ wardrobe_item_id: string }>(
+      'DELETE FROM look_found_links WHERE look_id=$1 AND detection_proposal_id=$2 RETURNING wardrobe_item_id',
+      [input.lookId, input.foundId],
+    );
+    let itemIds = await lookItemIds(client, input.lookId);
+    if (removed.rows[0]) itemIds = await dropUnlinked(client, input.lookId, removed.rows[0].wardrobe_item_id, itemIds);
+    return { wardrobeItemIds: itemIds };
+  });
+}
+
+/** Removes `itemId` from the look unless a found piece still links to it. */
+async function dropUnlinked(client: DatabaseClient, lookId: string, itemId: string, itemIds: string[]) {
+  const still = await client.query('SELECT 1 FROM look_found_links WHERE look_id=$1 AND wardrobe_item_id=$2', [
+    lookId,
+    itemId,
+  ]);
+  if (still.rows[0] || !itemIds.includes(itemId)) return itemIds;
+  const next = itemIds.filter((id) => id !== itemId);
+  await writeLookItems(client, lookId, next);
+  return next;
+}
+
+async function writeLookItems(client: DatabaseClient, lookId: string, itemIds: string[]) {
+  await client.query('DELETE FROM look_items WHERE look_id=$1', [lookId]);
+  await insertLookItems(client, lookId, itemIds);
+  await client.query('UPDATE looks SET exact_item_ids=$2 WHERE id=$1', [lookId, itemIds]);
 }
 
 /**

@@ -19,12 +19,11 @@ import 'package:form_mobile/features/feed/look_card.dart';
 import 'package:form_mobile/features/feed/look_collections_cubit.dart';
 import 'package:form_mobile/features/feed/look_commands.dart';
 import 'package:form_mobile/features/feed/look_stacks.dart';
-import 'package:form_mobile/features/feed/look_stages.dart';
+import 'package:form_mobile/features/feed/look_tile.dart';
 import 'package:form_mobile/features/feed/occasion_tile.dart';
 import 'package:form_mobile/features/settings/credits_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
-import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/credits_repository.dart';
 import 'package:form_mobile/repository/look_collection_repository.dart';
 import 'package:form_mobile/repository/look_repository.dart';
@@ -59,11 +58,14 @@ void openLookComposer(
   );
 }
 
-/// Opens [stack]'s looks to leaf through, from anywhere in the app.
+/// Opens [stack]'s looks as a grid, from anywhere in the app.
 void openLookStack(BuildContext context, LookStack stack) =>
-    const FeedPage()._openStack(context, stack);
+    const FeedPage()._openOverview(context, stack);
 
-/// Lifecycle and connection changes reach [FeedCubit] through `FormApp`.
+/// The Looks tab: a collection of outfit ideas. Two ways in sit in the
+/// header, "Create look" for what's next and the photo button for what was
+/// worn or seen. Lifecycle and connection changes reach [FeedCubit] through
+/// `FormApp`.
 class FeedPage extends StatelessWidget {
   const FeedPage({super.key});
 
@@ -82,97 +84,98 @@ class FeedPage extends StatelessWidget {
       return Scaffold(
         backgroundColor: FormTokens.paper,
         extendBodyBehindAppBar: true,
-        // Look photos set the status bar style themselves, see
-        // MediaStatusBarRegion; everything else keeps dark icons.
         appBar: const FormScrollEdge(adaptive: true),
         body: AnnotatedRegion(
           value: SystemUiOverlayStyle.dark,
-          child: Stack(
-            children: [
-              CustomScrollView(
-                // The iOS refresh control needs overscroll on every platform.
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
+          child: CustomScrollView(
+            // The iOS refresh control needs overscroll on every platform.
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: [
+              SliverSafeArea(
+                left: false,
+                right: false,
+                bottom: false,
+                sliver: CupertinoSliverRefreshControl(onRefresh: cubit.refresh),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(
+                  FormTokens.gutter,
+                  0,
+                  FormTokens.gutter,
+                  6,
                 ),
-                slivers: [
-                  SliverSafeArea(
-                    left: false,
-                    right: false,
-                    bottom: false,
-                    sliver: CupertinoSliverRefreshControl(
-                      onRefresh: cubit.refresh,
+                sliver: SliverList.list(
+                  children: [
+                    FormWordmark(title: context.tr(LocaleKeys.appName)),
+                    _LooksHeader(
+                      onCreate: loading ? null : () => openCreateLook(context),
+                      onPhoto: loading
+                          ? null
+                          : () => unawaited(addPhotoLooks(context)),
+                    ),
+                    if (state.stale && !state.online && state.looks != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: FormNotice(
+                          text: context.tr(LocaleKeys.feedStale),
+                        ),
+                      ),
+                    if (state.failure != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: FormNotice(
+                          text: context.tr(state.failureKey),
+                          error: true,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (loading)
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: FormTokens.gutter,
+                  ),
+                  sliver: SliverToBoxAdapter(
+                    child: Semantics(
+                      label: context.tr(LocaleKeys.feedLoading),
+                      excludeSemantics: true,
+                      child: const Column(
+                        spacing: 16,
+                        children: [_LookCardSkeleton(), _LookCardSkeleton()],
+                      ),
                     ),
                   ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(
-                      FormTokens.gutter,
-                      0,
-                      FormTokens.gutter,
-                      6,
-                    ),
-                    sliver: SliverList.list(
+                )
+              else if (empty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: FormEmptyState(
+                    title: context.tr(LocaleKeys.feedEmptyTitle),
+                    message: context.tr(LocaleKeys.feedEmptyBody),
+                    action: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 6,
                       children: [
-                        FormWordmark(title: context.tr(LocaleKeys.appName)),
-                        _LooksHeader(
-                          onCreate: empty || loading
-                              ? null
-                              : () => unawaited(showNewLookSheet(context)),
+                        FilledButton(
+                          onPressed: () => openCreateLook(context),
+                          child: Text(context.tr(LocaleKeys.createLook)),
                         ),
-                        if (state.stale && !state.online && state.looks != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: FormNotice(
-                              text: context.tr(LocaleKeys.feedStale),
-                            ),
-                          ),
-                        if (state.failure != null)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: FormNotice(
-                              text: context.tr(state.failureKey),
-                              error: true,
-                            ),
-                          ),
+                        TextButton.icon(
+                          onPressed: () => unawaited(addPhotoLooks(context)),
+                          icon: const Icon(Icons.add_photo_alternate_outlined),
+                          label: Text(context.tr(LocaleKeys.looksAddPhoto)),
+                        ),
                       ],
                     ),
                   ),
-                  if (loading)
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: FormTokens.gutter,
-                      ),
-                      sliver: SliverToBoxAdapter(
-                        child: Semantics(
-                          label: context.tr(LocaleKeys.feedLoading),
-                          excludeSemantics: true,
-                          child: const Column(
-                            spacing: 16,
-                            children: [
-                              _LookCardSkeleton(),
-                              _LookCardSkeleton(),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
-                  else if (empty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: FormEmptyState(
-                        title: context.tr(LocaleKeys.feedEmptyTitle),
-                        message: context.tr(LocaleKeys.feedEmptyBody),
-                        action: FilledButton(
-                          onPressed: () => unawaited(showNewLookSheet(context)),
-                          child: Text(context.tr(LocaleKeys.feedFirstLook)),
-                        ),
-                      ),
-                    )
-                  else
-                    ..._overview(context, state),
-                  // Clears the translucent tab bar.
-                  SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
-                ],
-              ),
+                )
+              else
+                ..._overview(context, state),
+              // Clears the translucent tab bar.
+              SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
             ],
           ),
         ),
@@ -180,32 +183,9 @@ class FeedPage extends StatelessWidget {
     },
   );
 
-  static const _cloudMinimum = 6;
-
-  /// Up to 18 pieces with a catalog image for the create cloud, in a fixed
-  /// shuffled order so the cloud does not reshuffle on every rebuild.
-  static List<WardrobeItem> _cloudItems(FeedState state) {
-    final items = [
-      for (final item in state.itemsById.values)
-        if (item.state != 'archived' && item.currentShelfImageVersionId != null)
-          item,
-    ]..sort((a, b) => a.id.hashCode.compareTo(b.id.hashCode));
-    return items.take(18).toList();
-  }
-
-  /// The newest finished try-on, shown as the user's figure on the worn
-  /// stage.
-  static ({String identity, String previewPath})? _figure(FeedState state) {
-    for (final record in state.looks ?? const <CachedLook>[]) {
-      if (record.look case Look(isTryOn: true, :final assetId?)) {
-        return (identity: assetId, previewPath: record.previewPath(assetId));
-      }
-    }
-    return null;
-  }
-
   /// [stack]'s looks as the archive shows them. A combination counts as a
-  /// try-on once one of its images is.
+  /// try-on once one of its images is, and as a reference once one of its
+  /// images is an inspiration.
   static List<CachedLook> _stackLooks(
     FeedState state,
     LookStack stack, [
@@ -220,23 +200,36 @@ class FeedPage extends StatelessWidget {
             collections: {for (final c in collections) c.id: c.lookIds},
           ) ||
           (stack is TryOnStack &&
-              state.imagesOf(record.look.id).any((i) => i.look.isTryOn)))
+              state.imagesOf(record.look.id).any((i) => i.look.isTryOn)) ||
+          (stack is ReferenceStack &&
+              state.imagesOf(record.look.id).any((i) => !i.look.isTryOn)))
         record,
   ];
 
-  /// The stacks to choose from: every look, the occasions, the user's
-  /// Sammlungen with saved looks and try-ons, then one stack per piece and
-  /// per colour.
+  /// [filter]'s looks within [scope], e.g. the worn looks with one piece.
+  static List<CachedLook> _scopedLooks(
+    FeedState state,
+    LookStack scope,
+    LookStack filter, [
+    List<LookCollection> collections = const [],
+  ]) {
+    final looks = _stackLooks(state, scope, collections);
+    if (filter is AllLooksStack) return looks;
+    final ids = {
+      for (final r in _stackLooks(state, filter, collections)) r.look.id,
+    };
+    return [
+      for (final r in looks)
+        if (ids.contains(r.look.id)) r,
+    ];
+  }
+
+  /// Every look as one fanned stack that opens the collection, the occasions,
+  /// then one stack per piece and per colour to browse by.
   List<Widget> _overview(BuildContext context, FeedState state) {
     final looks = state.archive;
-    final userCollections = context.watch<LookCollectionsCubit>().state;
     final online = state.online;
     final width = MediaQuery.sizeOf(context).width;
-    final collections = [
-      for (final stack in const [PhotoStack(), TryOnStack(), SavedStack()])
-        if (_stackLooks(state, stack) case final looks when looks.isNotEmpty)
-          (stack, looks),
-    ];
     final pieces = pieceStacks(looks, state.itemsById).take(16).toList();
     final colors = colorStacks(looks, state.itemsById);
     var index = 0;
@@ -291,7 +284,6 @@ class FeedPage extends StatelessWidget {
         );
 
     final heroPhoto = Size(width * 0.42, width * 0.42 * 5 / 4);
-    final cloudItems = _cloudItems(state);
     return [
       SliverScrollProgress(
         distance: heroPhoto.height,
@@ -300,7 +292,7 @@ class FeedPage extends StatelessWidget {
           child: StackPressable(
             index: index++,
             semanticLabel: context.tr(LocaleKeys.stackAll),
-            onTap: () => _openStack(context, const AllLooksStack()),
+            onTap: () => _openOverview(context, const AllLooksStack()),
             // Pulling down opens the fan wider; scrolling away gathers the
             // prints into a pile that lifts off a little slower than the
             // page. The label fades before the sinking pile reaches it.
@@ -345,75 +337,18 @@ class FeedPage extends StatelessWidget {
           ),
         ),
       ),
-      if (cloudItems.length >= _cloudMinimum)
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(
-            FormTokens.gutter,
-            20,
-            FormTokens.gutter,
-            0,
-          ),
-          sliver: SliverToBoxAdapter(
-            child: LookStages(
-              items: cloudItems,
-              figure: _figure(state),
-              online: online,
-              flatLabel: context.tr(LocaleKeys.createLook),
-              wornLabel: context.tr(LocaleKeys.composerTryOnAction),
-              onFlat: () => openLookComposer(context),
-              onWorn: () => openLookComposer(context, tryOn: true),
-            ),
-          ),
-        ),
       _SectionTitle(context.tr(LocaleKeys.stackSectionOccasions)),
       SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: FormTokens.gutter),
         sliver: SliverToBoxAdapter(
           child: Row(
-            spacing: 10,
+            spacing: 8,
             children: [
               for (final preset in occasionPresets)
-                Expanded(
-                  child: _occasionTile(context, state, preset.value),
-                ),
+                Expanded(child: _occasionTile(context, state, preset.value)),
             ],
           ),
         ),
-      ),
-      _SectionTitle(context.tr(LocaleKeys.stackSectionCollections)),
-      row(
-        height: 176,
-        children: [
-          for (final collection in userCollections)
-            _collectionStack(
-              context,
-              state,
-              collection,
-              _stackLooks(state, CollectionStack(collection.id), [collection]),
-              index: index++,
-              labelled: labelled,
-            ),
-          for (final (stack, stackLooks) in collections)
-            StackPressable(
-              index: index++,
-              semanticLabel: _stackTitle(context, state, stack),
-              onTap: () => _openStack(context, stack),
-              builder: (context, spread) => labelled(
-                _stackTitle(context, state, stack),
-                stackLooks.length,
-                PhotoFan(
-                  looks: stackLooks,
-                  feed: state,
-                  online: online,
-                  photoSize: const Size(80, 100),
-                  spread: spread,
-                  angle: 0.14,
-                  offset: 0.34,
-                ),
-              ),
-            ),
-          const _NewCollectionTile(),
-        ],
       ),
       if (pieces.isNotEmpty) ...[
         _SectionTitle(context.tr(LocaleKeys.stackSectionPieces)),
@@ -426,7 +361,7 @@ class FeedPage extends StatelessWidget {
                 child: StackPressable(
                   index: index++,
                   semanticLabel: item.metadata.name,
-                  onTap: () => _openStack(context, PieceStack(item.id)),
+                  onTap: () => _openOverview(context, PieceStack(item.id)),
                   builder: (context, spread) => labelled(
                     item.metadata.name,
                     stackLooks.length,
@@ -453,7 +388,7 @@ class FeedPage extends StatelessWidget {
                 child: StackPressable(
                   index: index++,
                   semanticLabel: context.tr('colorFamilies.$family'),
-                  onTap: () => _openStack(context, ColorStack(family)),
+                  onTap: () => _openOverview(context, ColorStack(family)),
                   builder: (context, spread) => labelled(
                     context.tr('colorFamilies.$family'),
                     stackLooks.length,
@@ -473,8 +408,9 @@ class FeedPage extends StatelessWidget {
     ];
   }
 
-  /// An occasion card. It plays its icon animation first, then opens the
-  /// occasion's stack, or the composer for that occasion while it is empty.
+  /// An occasion as in "Create look". It plays its icon animation first,
+  /// then opens the occasion's stack, or "Create look" for that occasion
+  /// while it is empty.
   Widget _occasionTile(BuildContext context, FeedState state, String? value) {
     final preset = occasionPresets.firstWhere((p) => p.value == value);
     final count = _stackLooks(state, OccasionStack(value)).length;
@@ -491,11 +427,33 @@ class FeedPage extends StatelessWidget {
         () {
           if (!context.mounted) return;
           if (count == 0) {
-            openLookComposer(context, occasion: value);
+            openCreateLook(context, occasion: value);
           } else {
-            _openStack(context, OccasionStack(value));
+            _openOverview(context, OccasionStack(value));
           }
         },
+      ),
+    );
+  }
+
+  /// Opens [scope]'s looks as a grid under the general filters. A card
+  /// opens the filtered looks at that card to swipe through.
+  void _openOverview(BuildContext context, LookStack scope) {
+    unawaited(
+      Navigator.of(context).push(
+        CupertinoPageRoute<void>(
+          builder: (_) => _LooksOverviewPage(
+            scope: scope,
+            looksOf: _scopedLooks,
+            titleOf: _stackTitle,
+            onOpen: (context, filter, index) => _openStack(
+              context,
+              scope,
+              filter: filter,
+              initialIndex: index,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -505,47 +463,6 @@ class FeedPage extends StatelessWidget {
       .state
       .where((c) => c.id == id)
       .firstOrNull;
-
-  /// A Sammlung on the overview. Empty ones show their emoji and wait for
-  /// looks. Holding one opens it to rename or delete.
-  Widget _collectionStack(
-    BuildContext context,
-    FeedState state,
-    LookCollection collection,
-    List<CachedLook> looks, {
-    required int index,
-    required Widget Function(String, int, Widget) labelled,
-  }) {
-    final title = '${collection.emoji} ${collection.name}';
-    return GestureDetector(
-      onLongPress: () {
-        unawaited(HapticFeedback.mediumImpact());
-        unawaited(showCollectionSheet(context, edit: collection));
-      },
-      child: StackPressable(
-        index: index,
-        semanticLabel: title,
-        onTap: () => looks.isEmpty
-            ? showFormToast(context, context.tr(LocaleKeys.collectionEmpty))
-            : _openStack(context, CollectionStack(collection.id)),
-        builder: (context, spread) => labelled(
-          title,
-          looks.length,
-          looks.isEmpty
-              ? _EmptyCollection(emoji: collection.emoji, spread: spread)
-              : PhotoFan(
-                  looks: looks,
-                  feed: state,
-                  online: state.online,
-                  photoSize: const Size(80, 100),
-                  spread: spread,
-                  angle: 0.14,
-                  offset: 0.34,
-                ),
-        ),
-      ),
-    );
-  }
 
   static String _countText(BuildContext context, int count) => context.tr(
     count == 1 ? LocaleKeys.stackCountOne : LocaleKeys.stackCountMany,
@@ -562,7 +479,8 @@ class FeedPage extends StatelessWidget {
       occasionPresets.firstWhere((p) => p.value == occasion).label,
     ),
     TryOnStack() => context.tr(LocaleKeys.stackTryOn),
-    PhotoStack() => context.tr(LocaleKeys.stackPhotos),
+    PhotoStack() => context.tr(LocaleKeys.looksFilterWorn),
+    ReferenceStack() => context.tr(LocaleKeys.looksFilterReference),
     SavedStack() => context.tr(LocaleKeys.stackSaved),
     CollectionStack(:final collectionId) => switch (_collection(
       context,
@@ -575,26 +493,36 @@ class FeedPage extends StatelessWidget {
     ColorStack(:final family) => context.tr('colorFamilies.$family'),
   };
 
-  /// What "+ New" starts inside [stack]: the composer with the stack's
-  /// occasion, piece or try-on mode. Saved looks and colours have no
-  /// natural starting point, so they get none.
+  /// What "+ New" starts inside [stack]: "Create look" with the stack's
+  /// occasion or piece, or a photo for the photo stacks. Paid images live
+  /// on a look, so try-ons get no starting point here, nor do saved looks
+  /// and colours.
   static VoidCallback? _createIn(BuildContext context, LookStack stack) =>
       switch (stack) {
-        AllLooksStack() => () => unawaited(showNewLookSheet(context)),
-        PhotoStack() => () => unawaited(addPhotoLooks(context)),
-        OccasionStack(:final occasion) => () => openLookComposer(
+        AllLooksStack() => () => openCreateLook(context),
+        PhotoStack() || ReferenceStack() => () => unawaited(
+          addPhotoLooks(context),
+        ),
+        OccasionStack(:final occasion) => () => openCreateLook(
           context,
           occasion: occasion,
         ),
-        TryOnStack() => () => openLookComposer(context, tryOn: true),
-        PieceStack(:final itemId) => () => openLookComposer(
+        PieceStack(:final itemId) => () => openCreateLook(
           context,
           itemIds: [itemId],
         ),
-        SavedStack() || ColorStack() || CollectionStack() => null,
+        TryOnStack() ||
+        SavedStack() ||
+        ColorStack() ||
+        CollectionStack() => null,
       };
 
-  void _openStack(BuildContext context, LookStack stack) {
+  void _openStack(
+    BuildContext context,
+    LookStack stack, {
+    LookStack filter = const AllLooksStack(),
+    int initialIndex = 0,
+  }) {
     unawaited(
       Navigator.of(context).push(
         PageRouteBuilder<void>(
@@ -602,7 +530,9 @@ class FeedPage extends StatelessWidget {
           reverseTransitionDuration: const Duration(milliseconds: 320),
           pageBuilder: (_, _, _) => _StackPage(
             stack: stack,
-            looksOf: _stackLooks,
+            filter: filter,
+            initialIndex: initialIndex,
+            looksOf: _scopedLooks,
             titleOf: _stackTitle,
             createIn: _createIn,
             cardBuilder: _lookCard,
@@ -638,7 +568,7 @@ class FeedPage extends StatelessWidget {
         onMenu: (look) => _openLookMenu(context, look),
         onRetry: (look) =>
             runFeedAction(context, () => cubit.retryLook(look.id)),
-        onOpenStack: (stack) => _openStack(context, stack),
+        onOpenStack: (stack) => _openOverview(context, stack),
       );
     }
     return LookCard(
@@ -1116,7 +1046,7 @@ class FeedPage extends StatelessWidget {
                                     successAction: context.tr(
                                       LocaleKeys.lookView,
                                     ),
-                                    onAction: () => openLookStack(
+                                    onAction: () => _openStack(
                                       context,
                                       const AllLooksStack(),
                                     ),
@@ -1395,10 +1325,12 @@ class _MenuRow extends StatelessWidget {
   }
 }
 
-/// The page title with the create button beside it.
+/// The page title with the two ways in: "Create look" first, adding a
+/// photo second.
 class _LooksHeader extends StatelessWidget {
-  const _LooksHeader({required this.onCreate});
+  const _LooksHeader({required this.onCreate, required this.onPhoto});
   final VoidCallback? onCreate;
+  final VoidCallback? onPhoto;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -1414,8 +1346,24 @@ class _LooksHeader extends StatelessWidget {
             ),
           ),
         ),
+        if (onPhoto case final onPhoto?)
+          IconButton(
+            onPressed: () {
+              unawaited(HapticFeedback.lightImpact());
+              onPhoto();
+            },
+            tooltip: context.tr(LocaleKeys.looksAddPhoto),
+            style: IconButton.styleFrom(
+              backgroundColor: FormTokens.pill,
+              minimumSize: const Size(48, 48),
+            ),
+            icon: const Icon(
+              Icons.add_photo_alternate_outlined,
+              color: FormTokens.ink,
+            ),
+          ),
         if (onCreate case final onCreate?) ...[
-          const SizedBox(width: 15),
+          const SizedBox(width: 10),
           FormAddButton(
             label: context.tr(LocaleKeys.createLook),
             onPressed: onCreate,
@@ -1453,14 +1401,25 @@ class _SectionTitle extends StatelessWidget {
 class _StackPage extends StatefulWidget {
   const _StackPage({
     required this.stack,
+    required this.filter,
     required this.looksOf,
     required this.titleOf,
     required this.createIn,
     required this.cardBuilder,
+    this.initialIndex = 0,
   });
 
   final LookStack stack;
-  final List<CachedLook> Function(FeedState, LookStack, List<LookCollection>)
+
+  /// The general filter applied within [stack], see [_IdeaCollection].
+  final LookStack filter;
+  final int initialIndex;
+  final List<CachedLook> Function(
+    FeedState,
+    LookStack,
+    LookStack,
+    List<LookCollection>,
+  )
   looksOf;
   final String Function(BuildContext, FeedState, LookStack) titleOf;
   final VoidCallback? Function(BuildContext, LookStack) createIn;
@@ -1473,7 +1432,7 @@ class _StackPage extends StatefulWidget {
 }
 
 class _StackPageState extends State<_StackPage> {
-  var _index = 0;
+  late int _index = widget.initialIndex;
   var _closing = false;
 
   @override
@@ -1482,6 +1441,7 @@ class _StackPageState extends State<_StackPage> {
       final looks = widget.looksOf(
         state,
         widget.stack,
+        widget.filter,
         context.watch<LookCollectionsCubit>().state,
       );
       if (looks.isEmpty && !_closing) {
@@ -1491,7 +1451,11 @@ class _StackPageState extends State<_StackPage> {
         });
       }
       final index = looks.isEmpty ? 0 : math.min(_index, looks.length - 1);
-      final create = widget.createIn(context, widget.stack);
+      // Across every look, the filter names what is shown.
+      final named = widget.stack is AllLooksStack
+          ? widget.filter
+          : widget.stack;
+      final create = widget.createIn(context, named);
       return Scaffold(
         backgroundColor: FormTokens.paper,
         // The cards scroll under the frosted header.
@@ -1526,7 +1490,8 @@ class _StackPageState extends State<_StackPage> {
                             color: FormTokens.ink,
                           ),
                         ),
-                        if (_origin(state) case final origin?)
+                        if (_stackOrigin(widget.stack, state)
+                            case final origin?)
                           Padding(
                             padding: const EdgeInsets.only(right: 12),
                             child: origin,
@@ -1537,7 +1502,7 @@ class _StackPageState extends State<_StackPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                widget.titleOf(context, state, widget.stack),
+                                widget.titleOf(context, state, named),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: FormTokens.heading.copyWith(
@@ -1600,6 +1565,7 @@ class _StackPageState extends State<_StackPage> {
                     // Below the header, which the scaffold adds to the top
                     // padding.
                     topInset: MediaQuery.paddingOf(context).top + 12,
+                    initialPage: widget.initialIndex,
                     itemCount: looks.length,
                     itemBuilder: (context, i) =>
                         widget.cardBuilder(context, state, looks[i]),
@@ -1615,38 +1581,38 @@ class _StackPageState extends State<_StackPage> {
       );
     },
   );
+}
 
-  /// What the stack was gathered from, beside its title: the piece's image
-  /// or the colour's swatch. Other stacks are named well enough by title.
-  Widget? _origin(FeedState state) => switch (widget.stack) {
-    PieceStack(:final itemId) => switch (state.itemsById[itemId]) {
-      final item? => ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: SizedBox(
-          width: 40,
-          height: 50,
-          child: ColoredBox(
-            color: FormTokens.tileTint(item.id, item.metadata.colors),
-            child: Padding(
-              padding: const EdgeInsets.all(3),
-              child: CachedMedia(
-                identity: item.previewIdentity,
-                previewPath: item.previewPath,
-                online: state.online && !state.stale,
-              ),
+/// What [stack] was gathered from, beside its title: the piece's image or
+/// the colour's swatch. Other stacks are named well enough by title.
+Widget? _stackOrigin(LookStack stack, FeedState state) => switch (stack) {
+  PieceStack(:final itemId) => switch (state.itemsById[itemId]) {
+    final item? => ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 40,
+        height: 50,
+        child: ColoredBox(
+          color: FormTokens.tileTint(item.id, item.metadata.colors),
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: CachedMedia(
+              identity: item.previewIdentity,
+              previewPath: item.previewPath,
+              online: state.online && !state.stale,
             ),
           ),
         ),
       ),
-      null => null,
-    },
-    ColorStack(:final family) => ColorDot(
-      color: colorFamilySwatches[family],
-      size: 34,
     ),
-    _ => null,
-  };
-}
+    null => null,
+  },
+  ColorStack(:final family) => ColorDot(
+    color: colorFamilySwatches[family],
+    size: 34,
+  ),
+  _ => null,
+};
 
 /// "+ New" in a stack's header, in the selected tint.
 class _NewPill extends StatelessWidget {
@@ -1697,67 +1663,242 @@ class _NewPill extends StatelessWidget {
   );
 }
 
-/// A Sammlung without looks yet: its emoji on a dashed card that lifts a
-/// little while held.
-class _EmptyCollection extends StatelessWidget {
-  const _EmptyCollection({required this.emoji, required this.spread});
-  final String emoji;
-  final double spread;
+/// [scope]'s looks as a grid under the general filter chips, one level below
+/// the stacks: every look, a piece's, a colour's or an occasion's.
+class _LooksOverviewPage extends StatelessWidget {
+  const _LooksOverviewPage({
+    required this.scope,
+    required this.looksOf,
+    required this.titleOf,
+    required this.onOpen,
+  });
+
+  final LookStack scope;
+  final _ScopedLooks looksOf;
+  final String Function(BuildContext, FeedState, LookStack) titleOf;
+  final void Function(BuildContext context, LookStack filter, int index) onOpen;
 
   @override
-  Widget build(BuildContext context) => Transform.rotate(
-    angle: (spread - 1).clamp(0.0, 1.0) * -0.08,
-    child: Container(
-      width: 80,
-      height: 100,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: FormTokens.selectedTint,
-        borderRadius: BorderRadius.circular(FormTokens.cardRadius),
-        border: Border.all(color: FormTokens.uploadLine),
+  Widget build(BuildContext context) => BlocBuilder<FeedCubit, FeedState>(
+    builder: (context, state) => Scaffold(
+      backgroundColor: FormTokens.paper,
+      extendBodyBehindAppBar: true,
+      appBar: const FormScrollEdge(adaptive: true),
+      body: AnnotatedRegion(
+        value: SystemUiOverlayStyle.dark,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          slivers: [
+            SliverSafeArea(
+              left: false,
+              right: false,
+              bottom: false,
+              sliver: CupertinoSliverRefreshControl(
+                onRefresh: context.read<FeedCubit>().refresh,
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(4, 0, FormTokens.gutter, 10),
+              sliver: SliverToBoxAdapter(
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      tooltip: MaterialLocalizations.of(
+                        context,
+                      ).backButtonTooltip,
+                      icon: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 20,
+                        color: FormTokens.ink,
+                      ),
+                    ),
+                    if (_stackOrigin(scope, state) case final origin?)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: origin,
+                      ),
+                    Expanded(
+                      child: Semantics(
+                        header: true,
+                        child: Text(
+                          titleOf(context, state, scope),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: FormTokens.display.copyWith(fontSize: 32),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            _IdeaCollection(
+              state: state,
+              scope: scope,
+              looksOf: looksOf,
+              titleOf: (stack) => titleOf(context, state, stack),
+              onOpen: (filter, index) => onOpen(context, filter, index),
+            ),
+            // Clears the translucent tab bar.
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: MediaQuery.paddingOf(context).bottom + 24,
+              ),
+            ),
+          ],
+        ),
       ),
-      child: Text(emoji, style: const TextStyle(fontSize: 36)),
     ),
   );
 }
 
-/// The last tile in Sammlungen. Opens the sheet to start a new one.
-class _NewCollectionTile extends StatelessWidget {
-  const _NewCollectionTile();
+/// [filter]'s looks within [scope], see `FeedPage._scopedLooks`.
+typedef _ScopedLooks =
+    List<CachedLook> Function(
+      FeedState state,
+      LookStack scope,
+      LookStack filter,
+      List<LookCollection> collections,
+    );
+
+/// [scope]'s looks under the general filters, every look, worn and
+/// references, as a grid of cards. Tapping a card opens the filtered looks
+/// at that card.
+class _IdeaCollection extends StatefulWidget {
+  const _IdeaCollection({
+    required this.state,
+    required this.scope,
+    required this.looksOf,
+    required this.titleOf,
+    required this.onOpen,
+  });
+
+  final FeedState state;
+  final LookStack scope;
+  final _ScopedLooks looksOf;
+  final String Function(LookStack) titleOf;
+  final void Function(LookStack filter, int index) onOpen;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: context.tr(LocaleKeys.collectionNew),
-    excludeSemantics: true,
-    child: GestureDetector(
-      onTap: () {
-        unawaited(HapticFeedback.lightImpact());
-        unawaited(showCollectionSheet(context));
-      },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 80,
-            height: 100,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(FormTokens.cardRadius),
-              border: Border.all(color: FormTokens.uploadLine, width: 1.5),
+  State<_IdeaCollection> createState() => _IdeaCollectionState();
+}
+
+class _IdeaCollectionState extends State<_IdeaCollection> {
+  static const _filters = <(LookStack, IconData?)>[
+    (AllLooksStack(), null),
+    (PhotoStack(), Icons.photo_camera_outlined),
+    (ReferenceStack(), Icons.bookmark_outline),
+  ];
+
+  LookStack _filter = const AllLooksStack();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
+    final collections = context.watch<LookCollectionsCubit>().state;
+    List<CachedLook> looksOf(LookStack filter) =>
+        widget.looksOf(state, widget.scope, filter, collections);
+
+    final filter = _filter;
+    final looks = looksOf(filter);
+    final pending =
+        widget.scope is AllLooksStack &&
+            (filter is AllLooksStack || filter is PhotoStack)
+        ? state.pendingPhotos
+        : const <String>[];
+    final width = MediaQuery.sizeOf(context).width;
+    const spacing = 12.0;
+    final tile = (width - FormTokens.gutter * 2 - spacing) / 2;
+    // Cover at 4:5 inside a 5 px frame.
+    final extent = (tile - 10) * 5 / 4 + 10;
+
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: 48,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(
+                horizontal: FormTokens.gutter,
+              ),
+              children: [
+                for (final (stack, icon) in _filters)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FormPill(
+                      label: stack is AllLooksStack
+                          ? '${context.tr(LocaleKeys.stackAll)} · '
+                                '${looksOf(stack).length}'
+                          : widget.titleOf(stack),
+                      leading: icon == null ? null : Icon(icon, size: 16),
+                      selected: stack.runtimeType == filter.runtimeType,
+                      onTap: () {
+                        unawaited(HapticFeedback.selectionClick());
+                        setState(() => _filter = stack);
+                      },
+                    ),
+                  ),
+              ],
             ),
-            child: const Icon(Icons.add, size: 30, color: FormTokens.green),
           ),
-          const SizedBox(height: 10),
-          Text(
-            context.tr(LocaleKeys.collectionNew),
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: FormTokens.green,
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 14)),
+        if (looks.isEmpty && pending.isEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              FormTokens.gutter + 2,
+              24,
+              FormTokens.gutter,
+              24,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: Text(
+                context.tr(switch (filter) {
+                  PhotoStack() => LocaleKeys.looksEmptyWorn,
+                  ReferenceStack() => LocaleKeys.looksEmptyReference,
+                  _ => LocaleKeys.looksEmptyFilter,
+                }),
+                style: FormTokens.body.copyWith(color: FormTokens.muted),
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: FormTokens.gutter,
+            ),
+            sliver: SliverGrid.builder(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: spacing + 4,
+                crossAxisSpacing: spacing,
+                mainAxisExtent: extent,
+              ),
+              itemCount: pending.length + looks.length,
+              itemBuilder: (context, index) {
+                if (index < pending.length) {
+                  return PendingLookTile(
+                    key: ValueKey(pending[index]),
+                    path: pending[index],
+                  );
+                }
+                final i = index - pending.length;
+                final record = looks[i];
+                return LookTile(
+                  key: ValueKey(record.look.id),
+                  record: record,
+                  state: state,
+                  index: index,
+                  onTap: () => widget.onOpen(filter, i),
+                );
+              },
             ),
           ),
-        ],
-      ),
-    ),
-  );
+      ],
+    );
+  }
 }

@@ -17,7 +17,12 @@ LookFoundPiece _$LookFoundPieceFromJson(Map<String, dynamic> json) =>
           'colors',
           (v) => (v as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
         ),
+        boundingBox: $checkedConvert(
+          'boundingBox',
+          (v) => v == null ? null : LookBox.fromJson(v as Map<String, dynamic>),
+        ),
         wardrobeItemId: $checkedConvert('wardrobeItemId', (v) => v as String?),
+        added: $checkedConvert('added', (v) => v as bool? ?? false),
       );
       return val;
     });
@@ -28,8 +33,46 @@ Map<String, dynamic> _$LookFoundPieceToJson(LookFoundPiece instance) =>
       'name': instance.name,
       'category': instance.category,
       'colors': instance.colors,
+      'boundingBox': ?instance.boundingBox,
       'wardrobeItemId': ?instance.wardrobeItemId,
+      'added': instance.added,
     };
+
+LookPhoto _$LookPhotoFromJson(Map<String, dynamic> json) =>
+    $checkedCreate('LookPhoto', json, ($checkedConvert) {
+      $checkKeys(json, requiredKeys: const ['source']);
+      final val = LookPhoto(
+        source: $checkedConvert('source', (v) => v as String),
+        outfitBox: $checkedConvert(
+          'outfitBox',
+          (v) => v == null ? null : LookBox.fromJson(v as Map<String, dynamic>),
+        ),
+      );
+      return val;
+    });
+
+Map<String, dynamic> _$LookPhotoToJson(LookPhoto instance) => <String, dynamic>{
+  'source': instance.source,
+  'outfitBox': ?instance.outfitBox?.toJson(),
+};
+
+LookBox _$LookBoxFromJson(Map<String, dynamic> json) =>
+    $checkedCreate('LookBox', json, ($checkedConvert) {
+      final val = LookBox(
+        x: $checkedConvert('x', (v) => (v as num).toInt()),
+        y: $checkedConvert('y', (v) => (v as num).toInt()),
+        width: $checkedConvert('width', (v) => (v as num).toInt()),
+        height: $checkedConvert('height', (v) => (v as num).toInt()),
+      );
+      return val;
+    });
+
+Map<String, dynamic> _$LookBoxToJson(LookBox instance) => <String, dynamic>{
+  'x': instance.x,
+  'y': instance.y,
+  'width': instance.width,
+  'height': instance.height,
+};
 
 LookReason _$LookReasonFromJson(Map<String, dynamic> json) =>
     $checkedCreate('LookReason', json, ($checkedConvert) {
@@ -167,6 +210,10 @@ Look _$LookFromJson(Map<String, dynamic> json) => $checkedCreate('Look', json, (
           ?.map((e) => LookFoundPiece.fromJson(e as Map<String, dynamic>))
           .toList(),
     ),
+    photo: $checkedConvert(
+      'photo',
+      (v) => v == null ? null : LookPhoto.fromJson(v as Map<String, dynamic>),
+    ),
     baseAssetId: $checkedConvert('baseAssetId', (v) => v as String?),
     feedAssetId: $checkedConvert('feedAssetId', (v) => v as String?),
     settings: $checkedConvert(
@@ -192,6 +239,7 @@ Map<String, dynamic> _$LookToJson(Look instance) => <String, dynamic>{
   'assetId': instance.assetId,
   'sourcePhotoId': ?instance.sourcePhotoId,
   'found': ?instance.found?.map((e) => e.toJson()).toList(),
+  'photo': ?instance.photo?.toJson(),
   'feedAssetId': ?instance.feedAssetId,
   'wardrobeItemIds': instance.wardrobeItemIds,
   'characterSheetId': instance.characterSheetId,

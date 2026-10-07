@@ -1335,6 +1335,9 @@ void showFormToast(
       SnackBar(
         content: Text(message, style: const TextStyle(fontSize: 14)),
         duration: duration,
+        // Toasts with an undo action would otherwise stay until tapped,
+        // outliving the undo window they offer.
+        persist: false,
         action: action != null && onAction != null
             ? SnackBarAction(
                 label: action,

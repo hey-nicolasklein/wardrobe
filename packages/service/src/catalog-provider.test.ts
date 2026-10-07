@@ -51,6 +51,7 @@ test('uses strict Responses output and clamps detection boxes', async () => {
                     boundingBox: { top: 10, left: 900, bottom: 410, right: 1000 },
                   },
                 ],
+                photo: { source: 'reference', outfitBox: { top: 0, left: 850, bottom: 1000, right: 1000 } },
               }),
             },
           ],
@@ -74,6 +75,10 @@ test('uses strict Responses output and clamps detection boxes', async () => {
       y: 10,
       width: 100,
       height: 400,
+    });
+    assert.deepEqual(result.photo, {
+      source: 'reference',
+      outfitBox: { x: 850, y: 0, width: 150, height: 1000 },
     });
     assert.deepEqual(result.usage, {
       inputTokens: 2_500,

@@ -1,8 +1,8 @@
 # Looks page restructure (prototype plan)
 
-Status: agreed direction, not built. Target: `apps/mobile` (iOS first). Scope is a
-working prototype on the dev wardrobe. Production deploy and TestFlight are separate
-requests.
+Status: prototype built on `feat/looks-as-combinations` (all five build steps).
+Target: `apps/mobile` (iOS first), tried on the dev wardrobe (`npm run dev:seed`).
+Production deploy and TestFlight are separate requests.
 
 ## Why
 
@@ -147,3 +147,62 @@ Step 4 touches contracts, service and worker: run
   creates its own look that can be merged.
 - Copy for the new terms (Reference) in DE/EN, aligned with PRODUCT.md terminology.
 - PRODUCT.md "Operating Context → Looks" needs an update once the prototype holds.
+
+## Feed navigation (shaped 2026-10-07)
+
+The bottom sections "Nach Stück" and "Nach Farbe" do not scale past a few dozen looks.
+Users open Looks mostly to pick something to wear (for an occasion or around a piece),
+and a realistic collection is 100–300 looks. The tab becomes one grid with Sammlung
+tiles above it and search and filters at the bottom.
+
+### Layout
+
+- Header keeps the two entry points (Create look, Add photo).
+- Below it, the Sammlungen as coloured tiles in the style of the occasion tiles
+  in Create look: "Alle" first, then each Sammlung with its look count, then
+  "Neue Sammlung". Holding a tile renames it. One tap switches.
+- Search and filters float at the bottom, the same find bar as in the Schrank
+  (`lib/widgets/find_bar.dart`). Search matches piece names, Sammlungen and the
+  look's caption. The filter sheet holds "Anzeigen" (zu prüfen, Getragen,
+  Referenzen), Farbe and Stücke, applied live like the Schrank's sheet.
+- No horizontally scrolling chip row at the top.
+
+### Cards
+
+A look with an image (own photo, reference, try-on, inspiration) shows it with the
+strip of its pieces below. A look that is only a combination shows its flat lay across
+the whole card, without the strip, since the pieces are already in view.
+
+### Sammlungen replace occasions
+
+Sammlung and occasion are one concept: a folder of looks.
+
+- Users create, rename and fill Sammlungen by hand, as today.
+- Flow A files a look into the Sammlung named after its occasion, creating it if it does
+  not exist. From then on it behaves like any manual Sammlung.
+- No separate occasion filter.
+
+Within the filter sheet, values that would leave no look are hidden. Picked pieces
+combine: a look must contain all of them.
+
+### Results
+
+- While a filter is set, the count sits above the grid. The filter button shows how
+  many sheet filters are on.
+- Filters combine with AND. Changing one replays the grid's entrance and scrolls to
+  the top.
+- Filters survive tab switches and reset on app restart. They work offline.
+- **0 results:** "Noch kein Look mit …" plus the primary action "Look damit erstellen".
+  It opens Flow A with the filtered pieces as must-haves.
+
+### Entry from the Schrank
+
+The item detail gets an "In 3 Looks" row that opens Looks filtered to that piece. It also
+gets "Look damit erstellen", which opens Flow A with the piece as a must-have.
+
+### Open
+
+- Existing looks with `settings.occasion` but no Sammlung need a one-time backfill.
+  That is a data migration and its own explicit request.
+- Sammlungen created automatically from other context, such as a trip from photo dates,
+  are a possible later step. They are not part of this change.

@@ -10,6 +10,7 @@ import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/flat_lay_widget.dart';
 import 'package:form_mobile/features/feed/look_card.dart';
+import 'package:form_mobile/features/feed/look_tile.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/look_repository.dart';
@@ -225,22 +226,25 @@ class PhotoFan extends StatelessWidget {
     final photos = <_PrintFace>[
       for (final path in pendingPhotos.reversed) _PrintFace(localPath: path),
       for (final record in looks)
-        if (record.look.assetId != null ||
+        // With the feed, a ready look shows the same cover as its grid card.
+        if (feed != null && record.look.isReady)
+          switch (lookCover(record, feed)) {
+            PhotoCover(record: final cover) => _PrintFace(
+              record: cover,
+              developing: _developing(feed, record),
+            ),
+            FlatCover() => _PrintFace(
+              record: record,
+              flat: FlatLayBoard(
+                garments: lookGarments(record.look, feed.itemsById),
+                online: online,
+              ),
+              developing: _developing(feed, record),
+            ),
+          }
+        else if (record.look.assetId != null ||
             (developingFace != null && record.look.isActive))
-          _PrintFace(record: record)
-        else if (feed != null && record.look.isReady)
-          _PrintFace(
-            record: feed.coverOf(record) ?? record,
-            flat: feed.coverOf(record) == null
-                ? FlatLayBoard(
-                    garments: lookGarments(record.look, feed.itemsById),
-                    online: online,
-                  )
-                : null,
-            developing: feed
-                .imagesOf(record.look.id)
-                .any((image) => image.look.isActive),
-          ),
+          _PrintFace(record: record),
     ].take(3).toList();
     // Back to front: right, left, then the top print.
     final layers = <(int, double)>[
@@ -277,6 +281,9 @@ class PhotoFan extends StatelessWidget {
     );
   }
 }
+
+bool _developing(FeedState feed, CachedLook record) =>
+    feed.imagesOf(record.look.id).any((image) => image.look.isActive);
 
 /// What one print in a [PhotoFan] shows: a look's photo, its pieces laid out
 /// [flat], or a local photo still being uploaded.
@@ -553,8 +560,12 @@ class LookPager extends StatefulWidget {
     required this.onPage,
     required this.onDismiss,
     this.topInset = 0,
+    this.initialPage = 0,
     super.key,
   });
+
+  /// The card shown first, e.g. the one tapped in the grid.
+  final int initialPage;
 
   final int itemCount;
   final Widget Function(BuildContext context, int index) itemBuilder;
@@ -572,7 +583,10 @@ class _LookPagerState extends State<LookPager>
     with SingleTickerProviderStateMixin {
   static const _dismissDistance = 110.0;
 
-  final _controller = PageController(viewportFraction: 0.86);
+  late final _controller = PageController(
+    viewportFraction: 0.86,
+    initialPage: widget.initialPage,
+  );
 
   /// How far the cards are pulled down past the top.
   late final _pull = AnimationController.unbounded(vsync: this);

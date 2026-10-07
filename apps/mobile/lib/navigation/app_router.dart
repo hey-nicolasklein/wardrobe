@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/feed/create_look_page.dart';
 import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
 import 'package:form_mobile/features/feed/look_composer_page.dart';
@@ -169,6 +170,19 @@ GoRouter createRouter({bool onboarding = false}) {
                         tryOn: state.uri.queryParameters['mode'] == 'try-on',
                         occasion: state.uri.queryParameters['occasion'],
                         from: state.extra as Look?,
+                      ),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'create',
+                    parentNavigatorKey: _rootNavigatorKey,
+                    pageBuilder: (_, state) => FormSheetPage(
+                      key: state.pageKey,
+                      maxExtent: 0.985,
+                      child: CreateLookPage(
+                        occasion: state.uri.queryParameters['occasion'],
+                        itemIds:
+                            state.uri.queryParametersAll['item'] ?? const [],
                       ),
                     ),
                   ),

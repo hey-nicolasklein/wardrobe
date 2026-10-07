@@ -320,6 +320,10 @@ export const createPhotoLookRequestSchema = z
 export const setLookItemsRequestSchema = z
   .object({ itemIds: z.array(opaqueIdSchema).max(12) })
   .strict();
+// Says which wardrobe piece a piece found on a photo look is. The piece joins the look.
+export const linkFoundPieceRequestSchema = z
+  .object({ wardrobeItemId: opaqueIdSchema })
+  .strict();
 // An AI image on top of a combination or photo look. A try-on dresses `baseAssetId`; an
 // inspiration needs the user's character sheet.
 export const createLookImageRequestSchema = z

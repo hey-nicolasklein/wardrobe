@@ -17,6 +17,8 @@ import 'package:form_mobile/features/feed/look_card.dart';
 import 'package:form_mobile/features/feed/look_collections_cubit.dart';
 import 'package:form_mobile/features/feed/look_positions.dart';
 import 'package:form_mobile/features/feed/look_stacks.dart';
+import 'package:form_mobile/features/feed/look_tile.dart';
+import 'package:form_mobile/features/intake/intake_picker.dart';
 import 'package:form_mobile/features/settings/credits_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -26,6 +28,7 @@ import 'package:form_mobile/repository/credits_repository.dart';
 import 'package:form_mobile/repository/look_collection_repository.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
+import 'package:form_mobile/services/photo_preparation.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
 import 'package:form_mobile/widgets/form_icon.dart';
 import 'package:go_router/go_router.dart';
@@ -89,15 +92,15 @@ class _FittingRoomCardState extends State<FittingRoomCard> {
   /// The layer the user picked. Null follows the newest image.
   String? _layerId;
 
-  /// The layers in pill order: the look's own photo, then images newest
-  /// first, then the flat lay, which every look has.
+  /// The layers in pill order: the combination laid flat, which every look
+  /// has, then what is attached to it: its photo, then images newest first.
   List<_Layer> _layers() {
     final look = widget.record.look;
     return [
-      if (look.assetId != null) _Layer.photo(widget.record),
-      if (look.isCombination)
-        for (final image in widget.state.imagesOf(look.id)) _Layer.photo(image),
       const _Layer.flat(),
+      if (look.assetId != null) _Layer.photo(widget.record),
+      if (look.isBase)
+        for (final image in widget.state.imagesOf(look.id)) _Layer.photo(image),
     ];
   }
 
@@ -117,6 +120,45 @@ class _FittingRoomCardState extends State<FittingRoomCard> {
       if (mounted) setState(() => _hints = null);
     });
   }
+
+  /// The confirmed piece whose found box holds [point] (percent of [frame]),
+  /// the smallest when boxes overlap, e.g. a necklace on a jacket.
+  String? _garmentInBox(
+    Offset point,
+    Size frame,
+    Size image,
+    Map<String, LookBox> boxes,
+  ) {
+    final tap = Offset(
+      point.dx / 100 * frame.width,
+      point.dy / 100 * frame.height,
+    );
+    String? hit;
+    var smallest = double.infinity;
+    for (final MapEntry(key: id, value: box) in boxes.entries) {
+      final rect = boxInFrame(box, frame, image).inflate(12);
+      final area = rect.width * rect.height;
+      if (rect.contains(tap) && area < smallest) {
+        hit = id;
+        smallest = area;
+      }
+    }
+    return hit;
+  }
+
+  /// A marker around [rect], a found piece in frame pixels.
+  static LookItemPosition _boxPosition(Rect rect, Size frame) =>
+      LookItemPosition(
+        x: 0,
+        y: 0,
+        // The marker's ring is 1.35 × size, in percent of the frame width.
+        size: math.max(rect.width, rect.height) / frame.width * 100 / 1.35,
+        originX: rect.center.dx / frame.width * 100,
+        originY: rect.center.dy / frame.height * 100,
+        originScale: 1,
+        order: 0,
+        count: 1,
+      );
 
   /// The piece whose body region centre is closest to [point], given in
   /// percent of the photo, if the tap landed roughly on it.
@@ -141,15 +183,23 @@ class _FittingRoomCardState extends State<FittingRoomCard> {
     final look = widget.record.look;
     final garments = widget.garments;
     final layers = _layers();
+    // The combination leads. A look's own photo is where its pieces are
+    // marked, so photo looks open on the photo instead.
     final layer =
         layers.where((l) => l.id == _layerId).firstOrNull ??
-        layers.firstWhere(
-          (l) =>
-              l.record == null ||
-              !l.record!.look.isGenerated ||
-              l.record!.look.isReady,
-          orElse: () => layers.last,
-        );
+        ((look.isPhoto || garments.isEmpty) && layers.length > 1
+            ? layers[1]
+            : layers.first);
+    // Where each confirmed piece sits on the look's own photo, from the boxes
+    // found when the photo was analysed.
+    final boxes = <String, LookBox>{
+      for (final piece in look.found ?? const <LookFoundPiece>[])
+        if ((piece.wardrobeItemId, piece.boundingBox) case (
+          final id?,
+          final box?,
+        ))
+          id: box,
+    };
     final shown = layer.record;
     final items = [
       for (final garment in garments) ?garment.item,
@@ -215,8 +265,12 @@ class _FittingRoomCardState extends State<FittingRoomCard> {
                       : _LookPhoto(
                           record: shown,
                           online: widget.online,
-                          onTapAt: (point) {
-                            final id = _garmentNear(point, positions);
+                          onTapAt: (point, frame, image) {
+                            final ownPhoto =
+                                shown.look.id == look.id && image != null;
+                            final id = ownPhoto
+                                ? _garmentInBox(point, frame, image, boxes)
+                                : _garmentNear(point, positions);
                             setState(() {
                               _selectedId = id == _selectedId ? null : id;
                               if (id == null) {
@@ -227,32 +281,50 @@ class _FittingRoomCardState extends State<FittingRoomCard> {
                               }
                             });
                           },
-                          overlay: (size) => Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              _TapAreaHints(
-                                visible: _hints != null,
-                                points: [
-                                  for (var i = 0; i < positions.length; i++)
-                                    if (garments[i].item != null)
-                                      Offset(
-                                        positions[i].originX,
-                                        positions[i].originY,
-                                      ),
-                                ],
-                                size: size,
-                              ),
-                              _PieceMarker(
-                                garment: selected,
-                                position:
-                                    selectedIndex < 0 ||
-                                        selectedIndex >= positions.length
-                                    ? null
-                                    : positions[selectedIndex],
-                                size: size,
-                              ),
-                            ],
-                          ),
+                          overlay: (size, image) {
+                            // On its own photo a piece sits where it was
+                            // found; elsewhere, where its category usually
+                            // sits on a body.
+                            final ownPhoto =
+                                shown.look.id == look.id && image != null;
+                            final onPhoto = [
+                              for (var i = 0; i < garments.length; i++)
+                                ownPhoto
+                                    ? switch (boxes[garments[i].id]) {
+                                        final box? => _boxPosition(
+                                          boxInFrame(box, size, image),
+                                          size,
+                                        ),
+                                        null => null,
+                                      }
+                                    : positions.elementAtOrNull(i),
+                            ];
+                            return Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                _TapAreaHints(
+                                  visible: _hints != null,
+                                  points: [
+                                    for (var i = 0; i < onPhoto.length; i++)
+                                      if (garments[i].item != null)
+                                        if (onPhoto[i] case final position?)
+                                          Offset(
+                                            position.originX,
+                                            position.originY,
+                                          ),
+                                  ],
+                                  size: size,
+                                ),
+                                _PieceMarker(
+                                  garment: selected,
+                                  position: selectedIndex < 0
+                                      ? null
+                                      : onPhoto[selectedIndex],
+                                  size: size,
+                                ),
+                              ],
+                            );
+                          },
                         ),
                 ),
               ),
@@ -279,6 +351,7 @@ class _FittingRoomCardState extends State<FittingRoomCard> {
               layers: layers,
               selectedId: layer.id,
               ownPhoto: look.isPhoto,
+              reference: look.isReference,
               onSelected: (id) {
                 unawaited(HapticFeedback.selectionClick());
                 setState(() {
@@ -288,62 +361,80 @@ class _FittingRoomCardState extends State<FittingRoomCard> {
               },
             ),
           ],
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            child: Row(
-              children: [
-                for (final garment in garments)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _PieceTile(
-                      garment: garment,
-                      online: widget.online,
-                      selected: garment.id == _selectedId,
-                      onTap: garment.item == null
-                          ? null
-                          : () {
-                              unawaited(HapticFeedback.selectionClick());
-                              setState(
-                                () => _selectedId = garment.id == _selectedId
-                                    ? null
-                                    : garment.id,
-                              );
-                            },
+          // A photo look lists its pieces with what was found on the photo
+          // below, so the strip would only repeat them.
+          if (!look.isPhoto) ...[
+            const SizedBox(height: 12),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              clipBehavior: Clip.none,
+              child: Row(
+                children: [
+                  for (final garment in garments)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _PieceTile(
+                        garment: garment,
+                        online: widget.online,
+                        selected: garment.id == _selectedId,
+                        onTap: garment.item == null
+                            ? null
+                            : () {
+                                unawaited(HapticFeedback.selectionClick());
+                                setState(
+                                  () => _selectedId = garment.id == _selectedId
+                                      ? null
+                                      : garment.id,
+                                );
+                              },
+                      ),
                     ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          // A photo look starts without linked pieces, so there is nothing
-          // to tap yet.
-          if (garments.isNotEmpty)
-            AnimatedSwitcher(
-              duration: FormTokens.quick,
-              child: Text(
-                selected?.item?.metadata.name ??
-                    context.tr(
-                      shown == null
-                          ? LocaleKeys.lookFlatHint
-                          : LocaleKeys.lookFittingHint,
-                    ),
-                key: ValueKey(selected?.id),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: FormTokens.small.copyWith(
-                  color: selected == null ? FormTokens.muted : FormTokens.ink,
-                ),
+                ],
               ),
             ),
-          if (look.isCombination) ...[
-            const SizedBox(height: 18),
-            _AddImage(look: look, online: widget.online),
+            const SizedBox(height: 8),
+            // A photo look starts without linked pieces, so there is nothing
+            // to tap yet.
+            if (garments.isNotEmpty)
+              AnimatedSwitcher(
+                duration: FormTokens.quick,
+                child: Text(
+                  selected?.item?.metadata.name ??
+                      context.tr(
+                        shown == null
+                            ? LocaleKeys.lookFlatHint
+                            : LocaleKeys.lookFittingHint,
+                      ),
+                  key: ValueKey(selected?.id),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: FormTokens.small.copyWith(
+                    color: selected == null ? FormTokens.muted : FormTokens.ink,
+                  ),
+                ),
+              ),
           ],
           if (look.isPhoto) ...[
             const SizedBox(height: 22),
-            FoundPieces(look: look, state: widget.state, online: widget.online),
+            FoundPieces(
+              look: look,
+              state: widget.state,
+              online: widget.online,
+              selectedId: _selectedId,
+              onSelect: (id) => setState(() {
+                _selectedId = id;
+                // The marker shows on the photo, so bring it up.
+                if (id != null && boxes.containsKey(id)) _layerId = look.id;
+              }),
+            ),
+          ],
+          if (look.isBase) ...[
+            const SizedBox(height: 22),
+            _AddImage(
+              look: look,
+              online: widget.online,
+              attaching: widget.state.pendingWorn.containsKey(look.id),
+            ),
           ],
           const SizedBox(height: 24),
           Padding(
@@ -876,8 +967,9 @@ class _CollectButton extends StatelessWidget {
   }
 }
 
-/// The worn photo at 4:5 in a card-radius frame. [overlay] draws on top at
-/// the photo's laid-out size.
+/// The worn photo at 4:5 in a card-radius frame, cropped like a cover.
+/// [overlay] draws on top at the frame's size and gets the photo's pixel
+/// size once decoded, so found boxes can be placed exactly.
 class _LookPhoto extends StatelessWidget {
   const _LookPhoto({
     required this.record,
@@ -889,9 +981,10 @@ class _LookPhoto extends StatelessWidget {
   final CachedLook record;
   final bool online;
 
-  /// Receives the tap position in percent of the photo's width and height.
-  final ValueChanged<Offset>? onTapAt;
-  final Widget Function(Size size)? overlay;
+  /// Receives the tap position in percent of the frame, the frame and the
+  /// photo's pixel size.
+  final void Function(Offset point, Size frame, Size? image)? onTapAt;
+  final Widget Function(Size frame, Size? image)? overlay;
 
   @override
   Widget build(BuildContext context) {
@@ -903,31 +996,33 @@ class _LookPhoto extends StatelessWidget {
         child: ColoredBox(
           color: FormTokens.lookStage,
           child: LayoutBuilder(
-            builder: (context, constraints) => Stack(
-              fit: StackFit.expand,
-              children: [
-                GestureDetector(
-                  onTapUp: onTapAt == null
-                      ? null
-                      : (details) => onTapAt!(
-                          Offset(
-                            details.localPosition.dx /
-                                constraints.maxWidth *
-                                100,
-                            details.localPosition.dy /
-                                constraints.maxHeight *
-                                100,
+            builder: (context, constraints) => LoadedPhoto(
+              identity: assetId,
+              previewPath: record.previewPath(assetId),
+              online: online,
+              builder: (context, file, image) => Stack(
+                fit: StackFit.expand,
+                children: [
+                  GestureDetector(
+                    onTapUp: onTapAt == null
+                        ? null
+                        : (details) => onTapAt!(
+                            Offset(
+                              details.localPosition.dx /
+                                  constraints.maxWidth *
+                                  100,
+                              details.localPosition.dy /
+                                  constraints.maxHeight *
+                                  100,
+                            ),
+                            constraints.biggest,
+                            image,
                           ),
-                        ),
-                  child: CachedMedia(
-                    identity: assetId,
-                    previewPath: record.previewPath(assetId),
-                    online: online,
-                    fit: BoxFit.cover,
+                    child: Image.file(file, fit: BoxFit.cover),
                   ),
-                ),
-                ?overlay?.call(constraints.biggest),
-              ],
+                  ?overlay?.call(constraints.biggest, image),
+                ],
+              ),
             ),
           ),
         ),
@@ -1111,6 +1206,7 @@ class _LayerPills extends StatelessWidget {
     required this.layers,
     required this.selectedId,
     required this.ownPhoto,
+    required this.reference,
     required this.onSelected,
   });
 
@@ -1119,12 +1215,16 @@ class _LayerPills extends StatelessWidget {
 
   /// The look is a photo the user wore it in, so its photo is "Worn".
   final bool ownPhoto;
+
+  /// The photo shows someone else, so it is a "Reference".
+  final bool reference;
   final ValueChanged<String> onSelected;
 
   String _label(BuildContext context, _Layer layer) {
     final look = layer.record?.look;
     return context.tr(switch (look) {
       null => LocaleKeys.lookLayerFlat,
+      _ when reference && look.isPhoto => LocaleKeys.looksReference,
       _ when ownPhoto && look.isPhoto => LocaleKeys.lookLayerWorn,
       _ when look.isTryOn => LocaleKeys.lookLayerTryOn,
       _ => LocaleKeys.lookLayerInspiration,
@@ -1190,13 +1290,36 @@ class _LayerPills extends StatelessWidget {
   );
 }
 
-/// Puts an image on top of a combination: on a photo of the user, or as an
-/// AI inspiration. The combination stays as it is either way.
+/// What can be attached to a look, each with its price: a photo the user
+/// wore it in (free, combinations only), a try-on and an inspiration (paid).
+/// The combination itself stays as it is.
 class _AddImage extends StatelessWidget {
-  const _AddImage({required this.look, required this.online});
+  const _AddImage({
+    required this.look,
+    required this.online,
+    required this.attaching,
+  });
 
   final Look look;
   final bool online;
+
+  /// A photo is on its way to this look.
+  final bool attaching;
+
+  Future<void> _attachPhoto(BuildContext context) async {
+    final paths = await pickPhotos(context, camera: false);
+    if (paths.isEmpty || !context.mounted) return;
+    unawaited(HapticFeedback.mediumImpact());
+    final feed = context.read<FeedCubit>();
+    await runFeedAction(
+      context,
+      () => feed.addWornPhoto(
+        look.id,
+        paths.first,
+        (path) async => (await PhotoPreparation().prepare(path)).bytes,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1207,39 +1330,53 @@ class _AddImage extends StatelessWidget {
             LocaleKeys.lookCostBadge,
             namedArgs: {'cost': '$lookCreditCost'},
           );
-    Widget option(String mode, IconData icon, String label) => Expanded(
+    Widget option(
+      IconData icon,
+      String label,
+      String? price, {
+      required VoidCallback? onTap,
+      bool free = false,
+      bool busy = false,
+    }) => Expanded(
       child: Material(
         color: FormTokens.field,
         borderRadius: BorderRadius.circular(FormTokens.cardRadius),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: online
+          onTap: online && onTap != null
               ? () {
                   unawaited(HapticFeedback.lightImpact());
-                  unawaited(addLookImage(context, look, mode: mode));
+                  onTap();
                 }
               : null,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            padding: const EdgeInsets.all(12),
             child: Opacity(
               opacity: online ? 1 : 0.45,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 spacing: 6,
                 children: [
-                  Icon(icon, size: 22, color: FormTokens.green),
+                  if (busy)
+                    const SizedBox.square(
+                      dimension: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else
+                    Icon(icon, size: 22, color: FormTokens.green),
                   Text(
                     label,
+                    maxLines: 2,
                     style: FormTokens.body.copyWith(
                       fontWeight: FontWeight.w600,
                       height: 1.2,
                     ),
                   ),
-                  if (cost != null)
+                  if (price != null)
                     Text(
-                      cost,
+                      price,
                       style: FormTokens.small.copyWith(
-                        color: FormTokens.coinInk,
+                        color: free ? FormTokens.green : FormTokens.coinInk,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1260,20 +1397,38 @@ class _AddImage extends StatelessWidget {
             style: FormTokens.small,
           ),
         ),
-        Row(
-          spacing: 10,
-          children: [
-            option(
-              'try-on',
-              Icons.person_outline,
-              context.tr(LocaleKeys.lookTryOn),
-            ),
-            option(
-              'inspiration',
-              Icons.auto_awesome_outlined,
-              context.tr(LocaleKeys.lookInspiration),
-            ),
-          ],
+        IntrinsicHeight(
+          child: Row(
+            spacing: 8,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (look.isCombination)
+                option(
+                  Icons.add_photo_alternate_outlined,
+                  context.tr(LocaleKeys.lookAttachPhoto),
+                  context.tr(LocaleKeys.lookFree),
+                  free: true,
+                  busy: attaching,
+                  onTap: attaching
+                      ? null
+                      : () => unawaited(_attachPhoto(context)),
+                ),
+              option(
+                Icons.person_outline,
+                context.tr(LocaleKeys.lookTryOn),
+                cost,
+                onTap: () =>
+                    unawaited(addLookImage(context, look, mode: 'try-on')),
+              ),
+              option(
+                Icons.auto_awesome_outlined,
+                context.tr(LocaleKeys.lookInspiration),
+                cost,
+                onTap: () =>
+                    unawaited(addLookImage(context, look, mode: 'inspiration')),
+              ),
+            ],
+          ),
         ),
       ],
     );
