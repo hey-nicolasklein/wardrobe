@@ -178,7 +178,8 @@ class LookRepository {
       LookCommand('v1/looks/photos', 'POST', {
         'sourcePhotoId': sourcePhotoId,
         'lookId': ?lookId,
-        // Keyed by the uploaded photo, so a retried request never adds it twice.
+        // Keyed by the uploaded photo, so a retried request never adds it
+        // twice.
         'idempotencyKey': 'photo-look-$sourcePhotoId',
       }),
     );
@@ -196,8 +197,9 @@ class LookRepository {
     await refreshAndNotify();
   }
 
-  /// Puts an AI image on top of the combination or photo look [lookId]: `try-on` on
-  /// [baseAssetId], or an `inspiration`. Paid. Returns the image's look id.
+  /// Puts an AI image on top of the combination or photo look [lookId]:
+  /// `try-on` on [baseAssetId], or an `inspiration`. Paid. Returns the image's
+  /// look id.
   Future<String> createImage(
     String lookId, {
     required String mode,
