@@ -918,9 +918,15 @@ class _FormSheetDraggableWrapperState
         0.05,
         widget.maxExtent,
       );
-      if ((_openExtent - openExtent).abs() < 0.002) return;
+      final pinned = !_sheetController.isAttached;
+      if ((_openExtent - openExtent).abs() < 0.002 && _pinned == pinned) {
+        return;
+      }
 
-      setState(() => _openExtent = openExtent);
+      setState(() {
+        _openExtent = openExtent;
+        _pinned = pinned;
+      });
       // Once dragged, the sheet ignores a new initialChildSize, so move it
       // after the rebuild has applied the new maxChildSize.
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -933,6 +939,11 @@ class _FormSheetDraggableWrapperState
 
   double _availableHeight = 0;
 
+  // Content without a scroll view on the sheet's controller (e.g. the crop
+  // step) cannot drag the sheet, and the controller cannot move it either.
+  // A matching minChildSize then makes the sheet clamp itself to the content.
+  bool _pinned = false;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -942,7 +953,7 @@ class _FormSheetDraggableWrapperState
           expand: false,
           controller: _sheetController,
           initialChildSize: _openExtent,
-          minChildSize: 0,
+          minChildSize: _pinned ? _openExtent : 0,
           maxChildSize: _openExtent,
           snap: true,
           snapAnimationDuration: FormTokens.sheetDuration,
