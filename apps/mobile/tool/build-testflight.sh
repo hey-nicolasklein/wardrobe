@@ -25,6 +25,8 @@ if [[ "${1:-}" == "--check-only" ]]; then
   exit 0
 fi
 
+node tool/generate-ios-icons.mjs
+
 fvm flutter build ipa \
   --flavor production \
   --dart-define-from-file=.env.production.json \

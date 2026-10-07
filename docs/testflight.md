@@ -115,3 +115,48 @@ Apple's developer portal confirms that team `4KAD6BZY57` is enrolled as an
 individual in the Apple Developer Program, renewing October 7, 2027. Xcode's
 cached Personal Team label was stale; uploading through `xcodebuild` with the
 explicit paid team succeeded.
+
+## App icon
+
+The icon source is `apps/web/public/icon.svg`. Run
+`node apps/mobile/tool/generate-ios-icons.mjs` from the repo root after changing
+it; this updates every PNG in the iOS `AppIcon.appiconset`, including the
+1024px artwork Apple uses for TestFlight. The TestFlight build script also runs
+the generator automatically. Install the root npm dependencies before building.
+Native PNGs are opaque squares because iOS supplies the rounded corner mask.
+
+The icon update originally changed only the web assets. The local archive for
+`0.1.0 (1)` contains the old white F on green, matching the old native catalog.
+A read-only App Store Connect check on 2026-10-06 also confirmed that the latest
+processed build, `0.1.0 (2)`, serves the old icon artwork.
+Updating web assets or TestFlight notes cannot change an uploaded binary's icon.
+The corrected native assets need a new build number, upload, assignment to
+FORM Internal, and installation through TestFlight.
+
+## Icon-only release on 2026-10-07
+
+Released **0.1.0 (3)** to **FORM Internal**. The build came from a detached
+checkout of `bce9b3e3472a423cc4b532a5e2380a3265430517`, with only the 15 iOS
+icon PNGs, `generate-ios-icons.mjs`, and its build hook applied. No unrelated
+working-directory edits were copied into the release checkout.
+
+- Flutter analysis passed and all 184 tests passed in the isolated checkout.
+- Archive identity, paid signing team, signature, and Apple sign-in verified.
+- The archive's launcher icon matched the new source PNG pixel-for-pixel.
+- Exported IPA signature verified, with `beta-reports-active=true` and
+  `get-task-allow=false`.
+- Upload succeeded at 00:05 CEST. Apple completed processing without warnings
+  or errors and serves the new hanger-and-F icon for this build.
+- German **What to Test** notes saved; build assigned to the existing
+  **FORM Internal** group. App Store Connect reports `IN_BETA_TESTING`.
+- Nicolas's existing internal tester account remains in the group. Installation
+  of build 3 on the physical phone has not been observed.
+
+The pipeline stopped before upload because its `codesign` entitlement reader
+expected stdout; this Xcode emitted the plist on stderr. The same archive was
+verified directly and uploaded through `xcodebuild -exportArchive` with the paid
+team; no rebuild or duplicate upload was needed.
+
+The isolated checkout and archive are preserved at
+`/tmp/form-icon-release-20261006`. Release scope and icon hashes are recorded in
+`/tmp/form-icon-release-build-3-scope.json`.
