@@ -13,9 +13,11 @@ import 'package:form_mobile/repository/character_draft_repository.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
+/// Sets up the photos of the user that inspirations are made from. Pops with
+/// `true` once the reference is saved, so a feature that asked for it can
+/// carry on.
 class CharacterSetupPage extends StatelessWidget {
-  const CharacterSetupPage({this.fromFeed = false, super.key});
-  final bool fromFeed;
+  const CharacterSetupPage({super.key});
 
   @override
   Widget build(BuildContext context) => BlocProvider(
@@ -38,11 +40,7 @@ class CharacterSetupPage extends StatelessWidget {
           await context.read<FeedCubit>().refresh();
           if (!context.mounted) return;
           showFormToast(context, context.tr(LocaleKeys.character_saved));
-          if (fromFeed) {
-            context.go('/feed');
-          } else {
-            context.pop();
-          }
+          context.pop(true);
         },
         builder: (context, state) {
           final cubit = context.read<CharacterSetupCubit>();

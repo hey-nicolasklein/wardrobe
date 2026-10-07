@@ -99,6 +99,13 @@ IntakeChoice choice([String id = 'proposal-0000000001']) => IntakeChoice(
   proposal: proposal(id),
 );
 
+/// Goes online and waits for the work that starts with it to settle.
+Future<void> goOnline(IntakeBloc bloc) async {
+  final done = bloc.stream.firstWhere((s) => !s.busy);
+  bloc.availability(online: true);
+  await done.timeout(const Duration(seconds: 5));
+}
+
 Future<void> send(IntakeBloc bloc, IntakeEvent event) async {
   final done = bloc.stream.firstWhere((s) => !s.busy);
   bloc.add(event);
@@ -339,16 +346,16 @@ void main() {
         return api.answer(path, body);
       };
       final complete = bloc.stream.firstWhere((s) => !s.busy);
-      bloc.availability(online: true, visible: true);
+      bloc.availability(online: true);
       await complete;
       expect(
         bloc.state.drafts.firstWhere((d) => d.id == first.id).failure,
         'unavailable',
       );
-      expect(
-        bloc.state.drafts.firstWhere((d) => d.id == second.id).phase,
-        DraftPhase.ready,
-      );
+      // The second photo's pieces went straight into the wardrobe.
+      expect(bloc.state.drafts.map((d) => d.id), isNot(contains(second.id)));
+      expect(bloc.state.drafts.map((d) => d.id), [first.id]);
+      expect(bloc.state.arrived, isNotEmpty);
       expect(api.uploads, 2);
       final paths = api.calls.map((c) => c.$1).toList();
       expect(
@@ -357,10 +364,7 @@ void main() {
       );
       fail = false;
       await send(bloc, IntakeEvent(IntakeAction.retry, id: first.id));
-      expect(
-        bloc.state.drafts.every((d) => d.phase == DraftPhase.ready),
-        isTrue,
-      );
+      expect(bloc.state.drafts, isEmpty);
       expect(api.uploads, 2);
       expect(
         api.calls
@@ -488,7 +492,7 @@ void main() {
       );
       var bloc = IntakeBloc(repository);
       await send(bloc, const IntakeEvent(IntakeAction.restore));
-      bloc.availability(online: true);
+      await goOnline(bloc);
       var fail = true;
       api.respond = (path, body) async {
         if (path == 'v1/generations' &&
@@ -512,7 +516,7 @@ void main() {
       await bloc.close();
       bloc = IntakeBloc(repository);
       await send(bloc, const IntakeEvent(IntakeAction.restore));
-      bloc.availability(online: true);
+      await goOnline(bloc);
       fail = false;
       await send(bloc, IntakeEvent(IntakeAction.retry, id: saved.id));
       expect(bloc.state.drafts, isEmpty);
@@ -537,6 +541,35 @@ void main() {
     expect(api.calls, isEmpty);
     await bloc.close();
   });
+
+  test(
+    'detected pieces land in the wardrobe on their own, accessories stay out',
+    () async {
+      await draft(phase: DraftPhase.detecting);
+      api.respond = (path, body) async =>
+          path.endsWith('/detections') && body == null
+          ? {
+              'attempt': {'state': 'succeeded'},
+              'detections': [
+                proposal().toJson(),
+                {...proposal('accessory').toJson(), 'category': 'accessory'},
+              ],
+            }
+          : api.answer(path, body);
+      final bloc = IntakeBloc(repository);
+      await send(bloc, const IntakeEvent(IntakeAction.restore));
+      await goOnline(bloc);
+      final created = api.calls
+          .where((c) => c.$1 == 'v1/wardrobe-items')
+          .map((c) => c.$2!['detectionProposalId'])
+          .toList();
+      expect(created, [proposal().id]);
+      expect(api.calls.where((c) => c.$1 == 'v1/generations'), hasLength(1));
+      expect(bloc.state.drafts, isEmpty);
+      expect(bloc.state.arrived, hasLength(1));
+      await bloc.close();
+    },
+  );
 
   test('accessories are opt-in and retain their selection on reload', () async {
     final saved = await draft(phase: DraftPhase.detecting);
@@ -588,7 +621,7 @@ void main() {
       final saved = await draft(phase: DraftPhase.manual);
       final bloc = IntakeBloc(repository);
       await send(bloc, const IntakeEvent(IntakeAction.restore));
-      bloc.availability(online: true);
+      await goOnline(bloc);
       await send(
         bloc,
         IntakeEvent(
@@ -623,7 +656,7 @@ void main() {
   );
 
   test(
-    'route and foreground return resume polling',
+    'polling runs in the background of the app and pauses with it',
     () async {
       await draft(phase: DraftPhase.detecting);
       api.respond = (_, _) async => {
@@ -635,24 +668,20 @@ void main() {
         pollInterval: const Duration(milliseconds: 15),
       );
       await send(bloc, const IntakeEvent(IntakeAction.restore));
-      var next = bloc.stream.firstWhere((s) => !s.busy);
-      bloc.availability(online: true, visible: true);
+      final next = bloc.stream.firstWhere((s) => !s.busy);
+      bloc.availability(online: true);
       await next;
-      bloc.availability(visible: false);
+      // No intake page is open, and the photo is still polled.
       final count = api.calls.length;
-      await Future<void>.delayed(const Duration(milliseconds: 40));
-      expect(api.calls.length, count);
-      next = bloc.stream.firstWhere((s) => !s.busy);
-      bloc.availability(visible: true);
-      await next;
+      await Future<void>.delayed(const Duration(milliseconds: 60));
       expect(api.calls.length, greaterThan(count));
       bloc.availability(foreground: false);
       final paused = api.calls.length;
       await Future<void>.delayed(const Duration(milliseconds: 40));
       expect(api.calls.length, paused);
-      next = bloc.stream.firstWhere((s) => !s.busy);
+      final resumed = bloc.stream.firstWhere((s) => !s.busy);
       bloc.availability(foreground: true);
-      await next;
+      await resumed;
       expect(api.calls.length, greaterThan(paused));
       expect(api.calls.every((c) => c.$2 == null), isTrue);
       await bloc.close();
@@ -678,7 +707,7 @@ void main() {
       uploaded.complete();
       await release.future;
     };
-    bloc.availability(online: true, visible: true);
+    bloc.availability(online: true);
     await uploaded.future;
     final discarded = bloc.stream.firstWhere(
       (s) => !s.busy && s.drafts.isEmpty,
@@ -697,7 +726,7 @@ void main() {
       final saved = await draft(phase: DraftPhase.ready, choices: [choice()]);
       var bloc = IntakeBloc(repository);
       await send(bloc, const IntakeEvent(IntakeAction.restore));
-      bloc.availability(online: true);
+      await goOnline(bloc);
       api.respond = (path, body) async {
         if (path == 'v1/wardrobe-items') {
           throw const FormApiException(ApiFailure.unavailable);
@@ -720,7 +749,7 @@ void main() {
       );
       expect(bloc.state.drafts.single.choices.single.selected, isTrue);
       api.respond = null;
-      bloc.availability(online: true);
+      await goOnline(bloc);
       await send(bloc, IntakeEvent(IntakeAction.retry, id: saved.id));
       expect(
         api.calls.where((c) => c.$1 == 'v1/wardrobe-items').last.$2,
@@ -752,7 +781,7 @@ void main() {
       final bloc = IntakeBloc(repository);
       await send(bloc, const IntakeEvent(IntakeAction.restore));
       final done = bloc.stream.firstWhere((s) => !s.busy);
-      bloc.availability(online: true, visible: true);
+      bloc.availability(online: true);
       await done;
       expect(bloc.state.drafts.single.phase, DraftPhase.finished);
       expect(File(saved.filePath).existsSync(), isTrue);

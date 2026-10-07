@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
@@ -7,9 +8,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/intake/intake_bloc.dart';
+import 'package:form_mobile/features/intake/intake_picker.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
+import 'package:form_mobile/models/intake.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
@@ -27,6 +31,9 @@ class WardrobePage extends StatefulWidget {
 class _WardrobePageState extends State<WardrobePage> {
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
+
+  /// Fresh pieces the user already opened. They lose their "new" badge.
+  final _seen = <String>{};
 
   /// Height of the tab bar under the find bar. The shell drops it from the
   /// padding while the keyboard is up, so the last value seen without the
@@ -139,6 +146,102 @@ class _WardrobePageState extends State<WardrobePage> {
     );
   }
 
+  /// Quick fixes for a piece without opening it: a wrongly detected piece is
+  /// renamed or moved to the archive, with a way back.
+  Future<void> _quickActions(WardrobeItem item) async {
+    unawaited(HapticFeedback.mediumImpact());
+    final action = await showFormSheet<String>(
+      context: context,
+      builder: (sheetContext) => FormSheet(
+        title: item.metadata.name,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 10,
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => Navigator.pop(sheetContext, 'rename'),
+              icon: const Icon(Icons.edit_outlined, size: 20),
+              label: Text(context.tr(LocaleKeys.pieceRename)),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.pop(sheetContext, 'remove'),
+              icon: const Icon(Icons.inventory_2_outlined, size: 20),
+              label: Text(context.tr(LocaleKeys.pieceRemove)),
+            ),
+            Text(
+              context.tr(LocaleKeys.pieceRemoveHint),
+              style: FormTokens.small,
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    final cubit = context.read<WardrobeCubit>();
+    if (action == 'rename') {
+      final name = await _askName(item.metadata.name);
+      if (name == null || name == item.metadata.name || !mounted) return;
+      await _run(() => cubit.rename(item.id, name));
+    } else if (action == 'remove') {
+      final previous = item.state;
+      final removed = await _run(() => cubit.moveTo(item.id, 'archived'));
+      if (!removed || !mounted) return;
+      showFormToast(
+        context,
+        context.tr(
+          LocaleKeys.pieceRemoved,
+          namedArgs: {'name': item.metadata.name},
+        ),
+        action: context.tr(LocaleKeys.proposalsUndo),
+        onAction: () => unawaited(cubit.moveTo(item.id, previous)),
+      );
+    }
+  }
+
+  /// Runs a wardrobe command and reports a failure. Returns whether it worked.
+  Future<bool> _run(Future<void> Function() command) async {
+    try {
+      await command();
+      return true;
+    } on Object {
+      if (mounted) showFormToast(context, context.tr(LocaleKeys.unavailable));
+      return false;
+    }
+  }
+
+  Future<String?> _askName(String current) {
+    final controller = TextEditingController(text: current);
+    return showFormSheet<String>(
+      context: context,
+      builder: (sheetContext) => FormSheet(
+        title: context.tr(LocaleKeys.pieceRename),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 14,
+          children: [
+            TextField(
+              controller: controller,
+              autofocus: true,
+              maxLength: 80,
+              textCapitalization: TextCapitalization.sentences,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (value) => value.trim().isEmpty
+                  ? null
+                  : Navigator.pop(sheetContext, value.trim()),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = controller.text.trim();
+                if (value.isNotEmpty) Navigator.pop(sheetContext, value);
+              },
+              child: Text(context.tr(LocaleKeys.save)),
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(controller.dispose);
+  }
+
   /// Keeps the find bar just above whichever is taller, the tab bar or the
   /// keyboard. The shell lifts the body's bottom edge to the keyboard frame
   /// by frame, so the bar follows it smoothly in both directions.
@@ -173,6 +276,13 @@ class _WardrobePageState extends State<WardrobePage> {
       final count = (state.items ?? [])
           .where((r) => (r.item.state == 'archived') == archived)
           .length;
+      final intake = context.watch<IntakeBloc>().state;
+      // Photos still being turned into pieces lead the grid, until their
+      // pieces arrive as tiles of their own.
+      final drafts = archived || filter.isFiltered || filter.query.isNotEmpty
+          ? const <IntakeDraft>[]
+          : intake.drafts;
+      final arrived = intake.arrived.toSet().difference(_seen);
 
       return Scaffold(
         backgroundColor: FormTokens.paper,
@@ -217,7 +327,7 @@ class _WardrobePageState extends State<WardrobePage> {
                             totalCount: count,
                             onAdd: archived
                                 ? null
-                                : () => context.push('/wardrobe/intake'),
+                                : () => unawaited(addClothesPhotos(context)),
                           ),
                           if (!archived)
                             _CollectionTabs(
@@ -337,7 +447,7 @@ class _WardrobePageState extends State<WardrobePage> {
                       ),
                     ),
                   ),
-                  if (items.isEmpty)
+                  if (items.isEmpty && drafts.isEmpty)
                     SliverFillRemaining(
                       hasScrollBody: false,
                       child: FormEmptyState(
@@ -357,7 +467,7 @@ class _WardrobePageState extends State<WardrobePage> {
                                 !state.loading
                             ? FilledButton(
                                 onPressed: () =>
-                                    context.push('/wardrobe/intake'),
+                                    unawaited(addClothesPhotos(context)),
                                 child: Text(
                                   context.tr(LocaleKeys.intake_title),
                                 ),
@@ -381,100 +491,124 @@ class _WardrobePageState extends State<WardrobePage> {
                               mainAxisSpacing: 22,
                               childAspectRatio: 0.6,
                             ),
-                        itemCount: items.length,
+                        itemCount: drafts.length + items.length,
                         itemBuilder: (context, index) {
-                          final record = items[index];
+                          if (index < drafts.length) {
+                            final draft = drafts[index];
+                            return _Arrival(
+                              key: ValueKey('draft-${draft.id}'),
+                              child: _DraftTile(
+                                draft: draft,
+                                onTap: () => context.push('/wardrobe/intake'),
+                              ),
+                            );
+                          }
+                          final record = items[index - drafts.length];
                           final item = record.item;
+                          final fresh = arrived.contains(item.id);
                           final status = item.status.replaceAll('-', '_');
                           final category =
                               'categories.${item.metadata.category}';
-                          return Semantics(
-                            button: true,
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () => context.push(
-                                  archived
-                                      ? '/settings/archive/items/${item.id}'
-                                      : '/wardrobe/items/${item.id}',
-                                ),
-                                borderRadius: BorderRadius.circular(
-                                  FormTokens.cardRadius,
-                                ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Expanded(
-                                      child: LayoutBuilder(
-                                        builder: (context, constraints) {
-                                          final width = constraints.maxWidth;
-                                          final height = math.min(
-                                            constraints.maxHeight,
-                                            width * 4 / 3,
-                                          );
-                                          return Align(
-                                            alignment: Alignment.topCenter,
-                                            child: SizedBox(
-                                              width: width,
-                                              height: height,
-                                              child: ClipRRect(
-                                                borderRadius:
-                                                    BorderRadius.circular(
-                                                      FormTokens.cardRadius,
+                          return _Arrival(
+                            key: ValueKey(item.id),
+                            animate: fresh,
+                            child: Semantics(
+                              button: true,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    setState(() => _seen.add(item.id));
+                                    unawaited(
+                                      context.push(
+                                        archived
+                                            ? '/settings/archive/items/${item.id}'
+                                            : '/wardrobe/items/${item.id}',
+                                      ),
+                                    );
+                                  },
+                                  onLongPress: archived
+                                      ? null
+                                      : () => unawaited(_quickActions(item)),
+                                  borderRadius: BorderRadius.circular(
+                                    FormTokens.cardRadius,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Expanded(
+                                        child: LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            final width = constraints.maxWidth;
+                                            final height = math.min(
+                                              constraints.maxHeight,
+                                              width * 4 / 3,
+                                            );
+                                            return Align(
+                                              alignment: Alignment.topCenter,
+                                              child: SizedBox(
+                                                width: width,
+                                                height: height,
+                                                child: ClipRRect(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        FormTokens.cardRadius,
+                                                      ),
+                                                  child: _TileMedia(
+                                                    record: record,
+                                                    tint: FormTokens.tileTint(
+                                                      item.id,
+                                                      item.metadata.colors,
                                                     ),
-                                                child: _TileMedia(
-                                                  record: record,
-                                                  tint: FormTokens.tileTint(
-                                                    item.id,
-                                                    item.metadata.colors,
+                                                    online: !state.stale,
+                                                    fresh: fresh,
                                                   ),
-                                                  online: !state.stale,
                                                 ),
                                               ),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      item.metadata.name,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: FormTokens.body.copyWith(
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.35,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      context.tr(category),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: FormTokens.small.copyWith(
-                                        color: FormTokens.noteInk,
-                                      ),
-                                    ),
-                                    // Generating and failed show on the tile.
-                                    if (!const {
-                                      'ready',
-                                      'queued',
-                                      'generating',
-                                      'failed',
-                                    }.contains(item.status))
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          top: 4,
+                                            );
+                                          },
                                         ),
-                                        child: Text(
-                                          context.tr('itemStatus.$status'),
-                                          style: FormTokens.small.copyWith(
-                                            color: FormTokens.noteInk,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        item.metadata.name,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: FormTokens.body.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        context.tr(category),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: FormTokens.small.copyWith(
+                                          color: FormTokens.noteInk,
+                                        ),
+                                      ),
+                                      // Generating and failed show on the tile.
+                                      if (!const {
+                                        'ready',
+                                        'queued',
+                                        'generating',
+                                        'failed',
+                                      }.contains(item.status))
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 4,
+                                          ),
+                                          child: Text(
+                                            context.tr('itemStatus.$status'),
+                                            style: FormTokens.small.copyWith(
+                                              color: FormTokens.noteInk,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -1194,11 +1328,15 @@ class _TileMedia extends StatelessWidget {
     required this.record,
     required this.tint,
     required this.online,
+    this.fresh = false,
   });
 
   final CachedItem record;
   final Color tint;
   final bool online;
+
+  /// Just added in the background. Wears a "new" badge until opened.
+  final bool fresh;
 
   @override
   Widget build(BuildContext context) {
@@ -1236,6 +1374,16 @@ class _TileMedia extends StatelessWidget {
               bottom: 8,
               child: _StatusBadge(label: context.tr('itemStatus.$status')),
             ),
+          Positioned(
+            left: 8,
+            top: 8,
+            child: AnimatedScale(
+              scale: fresh ? 1 : 0,
+              duration: const Duration(milliseconds: 420),
+              curve: fresh ? FormTokens.pop : FormTokens.easeOut,
+              child: const _NewBadge(),
+            ),
+          ),
         ],
       ),
     );
@@ -1375,4 +1523,219 @@ extension on Set<String> {
       remove(value);
     }
   }
+}
+
+/// A small green "new" pill on pieces that just arrived.
+class _NewBadge extends StatelessWidget {
+  const _NewBadge();
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: FormTokens.green,
+      borderRadius: BorderRadius.circular(FormTokens.chipRadius),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 9, 4),
+      child: Text(
+        context.tr(LocaleKeys.pieceNew),
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        ),
+      ),
+    ),
+  );
+}
+
+/// Pops a tile in when it first appears: a new photo, or a piece that just
+/// arrived from one. Other tiles are drawn at rest.
+class _Arrival extends StatelessWidget {
+  const _Arrival({required this.child, this.animate = true, super.key});
+
+  final Widget child;
+  final bool animate;
+
+  @override
+  Widget build(BuildContext context) =>
+      !animate || MediaQuery.disableAnimationsOf(context)
+      ? child
+      : TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: const Duration(milliseconds: 560),
+          curve: FormTokens.pop,
+          builder: (context, value, child) => Opacity(
+            opacity: value.clamp(0, 1),
+            child: Transform.scale(scale: 0.82 + 0.18 * value, child: child),
+          ),
+          child: child,
+        );
+}
+
+/// A photo on its way into the wardrobe: the photo itself while FORM looks
+/// for pieces on it, with a light sweeping over it. Detected pieces replace it
+/// as tiles of their own. Photos that need the user say so.
+class _DraftTile extends StatelessWidget {
+  const _DraftTile({required this.draft, required this.onTap});
+
+  final IntakeDraft draft;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final attention =
+        draft.failure != null ||
+        draft.phase == DraftPhase.manual ||
+        draft.phase == DraftPhase.ready;
+    final label = context.tr(switch (draft.phase) {
+      _ when draft.failure != null => LocaleKeys.intake_tileFailed,
+      DraftPhase.manual || DraftPhase.ready => LocaleKeys.intake_tileAttention,
+      DraftPhase.saving || DraftPhase.finished => LocaleKeys.intake_tileSaving,
+      _ => LocaleKeys.intake_tileFinding,
+    });
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) => Align(
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    width: constraints.maxWidth,
+                    height: math.min(
+                      constraints.maxHeight,
+                      constraints.maxWidth * 4 / 3,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(
+                        FormTokens.cardRadius,
+                      ),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.file(
+                            File(draft.filePath),
+                            fit: BoxFit.cover,
+                            cacheWidth: 400,
+                            errorBuilder: (_, _, _) =>
+                                const ColoredBox(color: FormTokens.field),
+                          ),
+                          ColoredBox(
+                            color: Colors.white.withValues(
+                              alpha: attention ? 0.15 : 0.35,
+                            ),
+                          ),
+                          if (!attention) const _Sweep(),
+                          if (attention)
+                            const Center(
+                              child: CircleAvatar(
+                                radius: 22,
+                                backgroundColor: Colors.white,
+                                child: Icon(
+                                  Icons.edit_outlined,
+                                  color: FormTokens.green,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: FormTokens.body.copyWith(
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+                color: attention ? FormTokens.green : FormTokens.ink,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              context.tr(
+                attention
+                    ? LocaleKeys.intake_tileOpen
+                    : LocaleKeys.intake_tileBackground,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: FormTokens.small.copyWith(color: FormTokens.noteInk),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A soft band of light that sweeps down a photo while it is analysed.
+class _Sweep extends StatefulWidget {
+  const _Sweep();
+
+  @override
+  State<_Sweep> createState() => _SweepState();
+}
+
+class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1900),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller
+        ..stop()
+        ..value = 0.5;
+    } else if (!_controller.isAnimating) {
+      unawaited(_controller.repeat());
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _controller,
+    builder: (context, _) {
+      final t = FormTokens.easeOut.transform(_controller.value);
+      return Align(
+        alignment: Alignment(0, -1.4 + 2.8 * t),
+        child: FractionallySizedBox(
+          heightFactor: 0.35,
+          widthFactor: 1,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white.withValues(alpha: 0),
+                  Colors.white.withValues(alpha: 0.55),
+                  Colors.white.withValues(alpha: 0),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }

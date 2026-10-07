@@ -136,11 +136,135 @@ class LookRepository {
 
   /// Uploads a photo of the user as a try-on base and returns its asset id.
   Future<String> uploadTryOnPhoto(Uint8List jpeg) async {
+    final (:assetId, sourcePhotoId: _) = await _uploadSourcePhoto(
+      jpeg,
+      'try-on.jpg',
+    );
+    // Kept in the try-on photo list even before a try-on uses it.
+    await _request(
+      'v1/try-on-photos',
+      method: 'POST',
+      data: {'assetId': assetId},
+    );
+    return assetId;
+  }
+
+  /// Saves [itemIds] as a look laid out flat. Free. Returns the new look id.
+  Future<String> createCombination(
+    List<String> itemIds, {
+    String? occasion,
+    String? idempotencyKey,
+  }) async {
+    final lookId = await executeCreate(
+      LookCommand('v1/looks/combinations', 'POST', {
+        'itemIds': itemIds,
+        'occasion': occasion,
+        'idempotencyKey': ?idempotencyKey,
+      }),
+    );
+    await refreshAndNotify();
+    return lookId;
+  }
+
+  /// Uploads a photo the user wore an outfit in and keeps it as a look. The
+  /// server detects its pieces in the background. With [lookId], the photo
+  /// is added to that combination instead. Returns the look id.
+  Future<String> createPhotoLook(Uint8List jpeg, {String? lookId}) async {
+    final sourcePhotoId = (await _uploadSourcePhoto(
+      jpeg,
+      'look.jpg',
+    )).sourcePhotoId;
+    final created = await executeCreate(
+      LookCommand('v1/looks/photos', 'POST', {
+        'sourcePhotoId': sourcePhotoId,
+        'lookId': ?lookId,
+        // Keyed by the uploaded photo, so a retried request never adds it twice.
+        'idempotencyKey': 'photo-look-$sourcePhotoId',
+      }),
+    );
+    await refreshAndNotify();
+    return created;
+  }
+
+  /// Replaces the pieces of a combination or photo look.
+  Future<void> setItems(String lookId, List<String> itemIds) async {
+    await _request(
+      'v1/looks/$lookId/items',
+      method: 'PUT',
+      data: {'itemIds': itemIds},
+    );
+    await refreshAndNotify();
+  }
+
+  /// Puts an AI image on top of the combination or photo look [lookId]: `try-on` on
+  /// [baseAssetId], or an `inspiration`. Paid. Returns the image's look id.
+  Future<String> createImage(
+    String lookId, {
+    required String mode,
+    required String idempotencyKey,
+    String? baseAssetId,
+    String quality = 'low',
+    String? style,
+  }) async {
+    final imageId = await executeCreate(
+      LookCommand('v1/looks/$lookId/images', 'POST', {
+        'mode': mode,
+        'baseAssetId': ?baseAssetId,
+        'style': ?style,
+        'quality': quality,
+        'idempotencyKey': idempotencyKey,
+      }),
+    );
+    await refreshAndNotify();
+    return imageId;
+  }
+
+  /// Creates a wardrobe piece from [piece], detected on a photo look, and
+  /// orders its catalog image. Returns the piece's id.
+  Future<String> addFoundPiece(
+    LookFoundPiece piece, {
+    required String quality,
+  }) async {
+    final created = await _request(
+      'v1/wardrobe-items',
+      method: 'POST',
+      data: {
+        'detectionProposalId': piece.id,
+        'state': 'owning',
+        'idempotencyKey': 'found-${piece.id}',
+      },
+    );
+    final itemId =
+        (created['wardrobeItem'] as Map<String, dynamic>)['id'] as String;
+    await _request(
+      'v1/generations',
+      method: 'POST',
+      data: {
+        'wardrobeItemId': itemId,
+        'quality': quality,
+        'size': '816x816',
+        'autoKeep': true,
+        'idempotencyKey': 'found-image-${piece.id}',
+      },
+    );
+    return itemId;
+  }
+
+  /// Keeps a proposal's outfit as a combination. Free.
+  Future<void> keepProposal(String lookId) async {
+    await _request('v1/looks/$lookId/keep', method: 'POST', data: {});
+    await refreshAndNotify();
+  }
+
+  Future<({String assetId, String sourcePhotoId})> _uploadSourcePhoto(
+    Uint8List jpeg,
+    String fileName,
+  ) async {
     final intent = await _request(
       'v1/source-photos/upload-intents',
       method: 'POST',
       data: {
-        'fileName': 'try-on.jpg',
+        'fileName': fileName,
         'contentType': 'image/jpeg',
         'byteSize': jpeg.length,
       },
@@ -159,15 +283,11 @@ class LookRepository {
         'idempotencyKey': newIdempotencyKey(),
       },
     );
-    final assetId =
-        (completed['asset'] as Map<String, dynamic>)['id'] as String;
-    // Kept in the try-on photo list even before a try-on uses it.
-    await _request(
-      'v1/try-on-photos',
-      method: 'POST',
-      data: {'assetId': assetId},
+    return (
+      assetId: (completed['asset'] as Map<String, dynamic>)['id'] as String,
+      sourcePhotoId:
+          (completed['sourcePhoto'] as Map<String, dynamic>)['id'] as String,
     );
-    return assetId;
   }
 
   Future<bool> hasSnapshot() async =>

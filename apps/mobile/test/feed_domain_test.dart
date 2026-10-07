@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
@@ -59,6 +60,44 @@ void main() {
     );
   });
 
+  test('images of a combination stay with it, other looks stand alone', () {
+    CachedLook record(Map<String, dynamic> json) =>
+        CachedLook(Look.fromJson(json));
+    final combination = record(
+      lookJson(id: 'combination', kind: 'combination', assetId: null),
+    );
+    final developing = record(
+      lookJson(
+        id: 'developing',
+        kind: 'try-on',
+        state: 'generating',
+        assetId: null,
+        parentLookId: 'combination',
+      ),
+    );
+    final ready = record(
+      lookJson(id: 'ready', parentLookId: 'combination'),
+    );
+    // A variation of a generated look is a look of its own, as before.
+    final legacy = record(lookJson(id: 'legacy'));
+    final variation = record(lookJson(id: 'variation', parentLookId: 'legacy'));
+    final state = FeedState(
+      looks: [developing, ready, combination, legacy, variation],
+    );
+    expect(state.archive.map((r) => r.look.id), [
+      'combination',
+      'legacy',
+      'variation',
+    ]);
+    expect(state.imagesOf('combination').map((r) => r.look.id), [
+      'developing',
+      'ready',
+    ]);
+    // The newest finished image covers the combination on its print.
+    expect(state.coverOf(combination)?.look.id, 'ready');
+    expect(state.coverOf(legacy)?.look.id, 'legacy');
+  });
+
   test('higherQualities offers only upgrades', () {
     expect(higherQualities('low'), ['medium', 'high']);
     expect(higherQualities('medium'), ['high']);
@@ -106,6 +145,10 @@ void main() {
       final tryOn = look(baseAssetId: 'asset-1');
       expect(inStack(const OccasionStack(null), tryOn), isFalse);
       expect(inStack(const TryOnStack(), tryOn), isTrue);
+      // A photo look has no settings and is not a surprise look.
+      final photo = Look.fromJson({...lookJson(kind: 'photo')});
+      expect(inStack(const OccasionStack(null), photo), isFalse);
+      expect(inStack(const PhotoStack(), photo), isTrue);
       expect(
         inStack(const OccasionStack('party'), look(occasion: 'night-out')),
         isFalse,

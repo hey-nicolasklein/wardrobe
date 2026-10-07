@@ -87,14 +87,21 @@ class _ComposerViewState extends State<_ComposerView> {
     if (_search.text != state.query) _search.text = state.query;
     if (state.proposed) {
       context.go(
-        '/feed/proposals?quality=${state.quality}',
+        '/feed/proposals',
         extra: context.read<ComposerCubit>().command().body,
       );
     }
     if (state.createdLookId != null) {
-      // The new look develops on top of the All looks pile.
+      // The new look lands on top of the All looks pile.
       context.go('/feed');
-      showFormToast(context, context.tr(LocaleKeys.lookCreating));
+      showFormToast(
+        context,
+        context.tr(
+          state.savedCombination
+              ? LocaleKeys.lookSaved
+              : LocaleKeys.lookCreating,
+        ),
+      );
     }
   }
 
@@ -1176,6 +1183,7 @@ class _ComposerFooter extends StatelessWidget {
     );
     final credits = context.watch<CreditsCubit>().state;
     // Why the action is disabled, so a grey button never goes unexplained.
+    // Saving and proposing are free; only a try-on spends credits.
     final blocked = !connected
         ? LocaleKeys.composerBlockedOffline
         : state.tryOn && state.baseAssetId == null
@@ -1184,9 +1192,15 @@ class _ComposerFooter extends StatelessWidget {
         ? LocaleKeys.composerBlockedPieces
         : !state.tryOn && state.completion == 'selected' && !frameable
         ? LocaleKeys.composerBlockedFrame
-        : credits != null && credits.metered && credits.looksLeft == 0
+        : state.tryOn &&
+              credits != null &&
+              credits.metered &&
+              credits.looksLeft == 0
         ? LocaleKeys.composerBlockedCredits
         : null;
+    // With pieces picked, saving them is the main action and FORM's
+    // suggestions are the second one.
+    final saves = !state.tryOn && selected.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1207,6 +1221,20 @@ class _ComposerFooter extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
+        if (saves && blocked == null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: state.submitting
+                    ? null
+                    : () => unawaited(cubit.submit()),
+                icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                label: Text(context.tr(LocaleKeys.composerCompleteAction)),
+              ),
+            ),
+          ),
         // With nothing picked, the line says what FORM will do instead.
         if (selected.isEmpty && !state.previewExpanded && blocked == null)
           Padding(
@@ -1234,7 +1262,7 @@ class _ComposerFooter extends StatelessWidget {
               child: FilledButton(
                 onPressed: state.submitting || blocked != null
                     ? null
-                    : () => unawaited(cubit.submit()),
+                    : () => unawaited(saves ? cubit.save() : cubit.submit()),
                 child: state.submitting
                     ? const SizedBox.square(
                         dimension: 18,
@@ -1246,7 +1274,6 @@ class _ComposerFooter extends StatelessWidget {
                     // Stays on one line beside the tray. Long labels shrink.
                     : FittedBox(
                         fit: BoxFit.scaleDown,
-                        // Proposing is free; the cost shows on each proposal.
                         child: Text(
                           state.tryOn
                               ? lookCostLabel(
@@ -1254,7 +1281,11 @@ class _ComposerFooter extends StatelessWidget {
                                   context.tr(LocaleKeys.composerTryOnAction),
                                   context.watch<CreditsCubit>().state,
                                 )
-                              : context.tr(LocaleKeys.composerProposeAction),
+                              : context.tr(
+                                  saves
+                                      ? LocaleKeys.composerSaveAction
+                                      : LocaleKeys.composerProposeAction,
+                                ),
                           maxLines: 1,
                         ),
                       ),

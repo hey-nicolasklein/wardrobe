@@ -7,6 +7,8 @@ import {
   type Look,
   type LookCompletion,
   type LookConcept,
+  type LookFoundPiece,
+  type LookKind,
   type LookOccasion,
   type LookReason,
   type LookStyle,
@@ -17,6 +19,7 @@ import {
   calculateCostMicrounits,
   type CatalogExecutionConfig,
   CatalogJobError,
+  enqueueSourcePhotoDetection,
 } from './catalog.js';
 import { CatalogProviderError, type CatalogProvider, type ItemTraits, type Warmth } from './catalog-provider.js';
 import type { Database, DatabaseClient } from './database.js';
@@ -66,12 +69,16 @@ type CharacterRow = {
 };
 type LookRow = {
   id: string;
+  kind: LookKind;
   state: Look['state'];
   asset_id: string | null;
   feed_asset_id: string | null;
-  character_sheet_id: string;
+  character_sheet_id: string | null;
   parent_look_id: string | null;
   base_asset_id: string | null;
+  source_photo_id: string | null;
+  found: LookFoundPiece[] | null;
+  occasion: LookOccasion | null;
   liked: boolean;
   planned_concept: LookConcept | null;
   category_constraints: string[];
@@ -91,11 +98,19 @@ type LookRow = {
 
 const characterColumns = `id, state, reference_asset_ids, note, asset_id, active, model, quality,
   output_size, provider_request_id, cost_microunits, failure_category, created_at, finished_at`;
-const lookColumns = `l.id, l.state, l.asset_id, l.feed_asset_id, l.character_sheet_id, l.parent_look_id,
-  l.base_asset_id, l.liked_at IS NOT NULL AS liked, l.planned_concept, l.category_constraints, l.proposal, l.proposal_reasons,
+// A photo look lists its detected pieces once the latest analysis finished,
+// each with the wardrobe piece it was added as.
+const foundColumn = `CASE WHEN l.source_photo_id IS NULL THEN NULL
+  WHEN COALESCE((SELECT da.state FROM detection_attempts da WHERE da.source_photo_id=l.source_photo_id ORDER BY da.created_at DESC, da.id DESC LIMIT 1),'queued') NOT IN ('succeeded','failed') THEN NULL
+  ELSE COALESCE((SELECT json_agg(json_build_object('id',dp.id,'name',dp.name,'category',dp.category,'colors',dp.colors,'boundingBox',dp.bounding_box,
+    'wardrobeItemId',(SELECT wi.id FROM wardrobe_items wi WHERE wi.detection_proposal_id=dp.id AND wi.deleted_at IS NULL ORDER BY wi.created_at LIMIT 1)) ORDER BY dp.created_at, dp.id)
+    FROM detection_proposals dp WHERE dp.source_photo_id=l.source_photo_id AND dp.category<>'unsupported'),'[]'::json) END AS found`;
+const lookColumns = `l.id, l.kind, l.state, l.asset_id, l.feed_asset_id, l.character_sheet_id, l.parent_look_id,
+  l.base_asset_id, l.source_photo_id, l.occasion, ${foundColumn},
+  l.liked_at IS NOT NULL AS liked, l.planned_concept, l.category_constraints, l.proposal, l.proposal_reasons,
   (SELECT payload FROM remote_image_jobs rj WHERE rj.look_id=l.id ORDER BY rj.created_at DESC LIMIT 1) AS job_payload,
   l.model, l.quality,
-  COALESCE(pa.pixel_width::text || 'x' || pa.pixel_height::text,
+  COALESCE(CASE WHEN l.kind IN ('inspiration','try-on') THEN pa.pixel_width::text || 'x' || pa.pixel_height::text END,
     CASE WHEN (SELECT payload->>'outputSize' FROM remote_image_jobs rj WHERE rj.look_id=l.id ORDER BY rj.created_at DESC LIMIT 1) = '768x960'
       THEN '768x960' ELSE '1024x1280' END) AS output_size,
   l.provider_request_id,
@@ -120,6 +135,7 @@ const mapCharacter = (row: CharacterRow): CharacterSheet => ({
 });
 const mapLook = (row: LookRow): Look => ({
   id: row.id,
+  kind: row.kind,
   state: row.state,
   assetId: row.asset_id,
   feedAssetId: row.feed_asset_id,
@@ -127,6 +143,8 @@ const mapLook = (row: LookRow): Look => ({
   characterSheetId: row.character_sheet_id,
   parentLookId: row.parent_look_id,
   baseAssetId: row.base_asset_id,
+  sourcePhotoId: row.source_photo_id,
+  found: row.found,
   liked: row.liked,
   concept: row.planned_concept,
   settings: lookSettings(row),
@@ -143,7 +161,10 @@ const mapLook = (row: LookRow): Look => ({
 // Reads the composer choices back from the look's job payload, see createLook.
 const lookSettings = (row: LookRow): Look['settings'] => {
   const payload = row.job_payload;
-  if (row.base_asset_id || !payload) return null;
+  if (row.base_asset_id) return null;
+  // Combinations made in the composer have no job, only their occasion.
+  if (!payload)
+    return row.occasion ? { occasion: row.occasion, style: 'candid', completion: 'wardrobe', categories: [] } : null;
   const parsed = lookSettingsSchema.safeParse({
     occasion: payload.occasion ?? null,
     // Upgrades do not repeat the style, but their shot still implies it.
@@ -601,11 +622,9 @@ export async function createLook(
        WHERE account_id = $1 AND active AND state = 'ready' AND deleted_at IS NULL`,
       [input.accountId],
     );
-    if (!active.rows[0])
-      throw new InspirationValidationError(
-        'character-sheet-required',
-        'Erstelle zuerst ein Character Sheet in den Einstellungen.',
-      );
+    // Try-ons dress the user's own photo and proposals render later, so only an
+    // inspiration rendered now needs the character sheet.
+    if (!active.rows[0] && !input.baseAssetId && !input.propose) throw characterSheetRequired();
     if (input.baseAssetId) {
       if (!input.exactItemIds.length)
         throw new InspirationValidationError('item-required', 'Wähle mindestens ein Stück zum Anprobieren.');
@@ -710,11 +729,11 @@ export async function createLook(
     // The legacy column is constrained to 1024x1280. The job payload records the
     // requested size; ready looks report the actual dimensions of their asset.
     await client.query(
-      `INSERT INTO looks(id,account_id,character_sheet_id,parent_look_id,state,exact_item_ids,category_constraints,model,quality,output_size,prompt_version,planned_concept,base_asset_id,proposal) VALUES($1,$2,$3,$4,'queued',$5,$6,$7,$9,'1024x1280',$8,$10,$11,$12)`,
+      `INSERT INTO looks(id,account_id,character_sheet_id,parent_look_id,state,exact_item_ids,category_constraints,model,quality,output_size,prompt_version,planned_concept,base_asset_id,proposal,kind) VALUES($1,$2,$3,$4,'queued',$5,$6,$7,$9,'1024x1280',$8,$10,$11,$12,$13)`,
       [
         lookId,
         input.accountId,
-        preserved?.characterId ?? active.rows[0].id,
+        preserved?.characterId ?? active.rows[0]?.id ?? null,
         parentId,
         exactIds,
         input.categories,
@@ -724,6 +743,7 @@ export async function createLook(
         preserved || reshot ? JSON.stringify((preserved ?? reshot)!.concept) : null,
         input.baseAssetId ?? null,
         input.propose ?? false,
+        input.baseAssetId ? 'try-on' : 'inspiration',
       ],
     );
     // The photo stays pickable, and deletable, from the try-on photo list.
@@ -822,11 +842,256 @@ export async function retryLook(
   });
 }
 export async function deleteLook(database: Database, input: { accountId: string; lookId: string }) {
-  const result = await database.query(
-    `UPDATE looks SET deleted_at=now() WHERE id=$1 AND account_id=$2 AND deleted_at IS NULL`,
+  const result = await database.query<{ kind: LookKind }>(
+    `UPDATE looks SET deleted_at=now() WHERE id=$1 AND account_id=$2 AND deleted_at IS NULL RETURNING kind`,
     [input.lookId, input.accountId],
   );
-  if (!result.rowCount) throw new OwnedResourceNotFoundError();
+  if (!result.rows[0]) throw new OwnedResourceNotFoundError();
+  // The images of a combination or photo look go with it. Other looks' variations stay, they are looks of their own.
+  if (result.rows[0].kind === 'combination' || result.rows[0].kind === 'photo')
+    await database.query(
+      `UPDATE looks SET deleted_at=now() WHERE parent_look_id=$1 AND account_id=$2 AND deleted_at IS NULL`,
+      [input.lookId, input.accountId],
+    );
+}
+const characterSheetRequired = () =>
+  new InspirationValidationError(
+    'character-sheet-required',
+    'Lege zuerst deine Fotos als Referenz an.',
+  );
+
+async function activeCharacterSheet(client: DatabaseClient, accountId: string): Promise<string | null> {
+  const active = await client.query<{ id: string }>(
+    `SELECT id FROM character_sheets WHERE account_id = $1 AND active AND state = 'ready' AND deleted_at IS NULL`,
+    [accountId],
+  );
+  return active.rows[0]?.id ?? null;
+}
+
+// Combination and photo looks are not rendered, so they carry no model or prompt.
+const unrenderedColumns = `model,quality,output_size,prompt_version`;
+const unrenderedValues = `'none','low','1024x1280','none'`;
+
+async function insertLookItems(client: DatabaseClient, lookId: string, itemIds: string[]) {
+  for (const [ordinal, itemId] of itemIds.entries())
+    await client.query('INSERT INTO look_items(look_id,wardrobe_item_id,ordinal) VALUES($1,$2,$3)', [lookId, itemId, ordinal]);
+}
+
+async function assertOwnedItems(client: DatabaseClient, accountId: string, itemIds: string[]) {
+  const owned = await client.query<{ count: string }>(
+    `SELECT count(*) FROM wardrobe_items WHERE account_id=$1 AND id = ANY($2::uuid[]) AND deleted_at IS NULL`,
+    [accountId, itemIds],
+  );
+  if (Number(owned.rows[0]!.count) !== new Set(itemIds).size) throw new OwnedResourceNotFoundError();
+}
+
+/** Saves the user's own pieces as a look, laid out flat. Free and ready at once. */
+export async function createCombinationLook(
+  database: Database,
+  input: { accountId: string; itemIds: string[]; occasion?: LookOccasion | null; idempotencyKey: string },
+) {
+  const itemIds = [...new Set(input.itemIds)];
+  const request = { itemIds, occasion: input.occasion ?? null };
+  return withTransaction(database, async (client) => {
+    const prior = await replay<{ lookId: string }>(client, input.accountId, input.idempotencyKey, 'create-combination-look', request);
+    if (prior) return prior;
+    if (!itemIds.length) throw new InspirationValidationError('item-required', 'Wähle mindestens ein Stück.');
+    await assertOwnedItems(client, input.accountId, itemIds);
+    const lookId = randomUUID();
+    await client.query(
+      `INSERT INTO looks(id,account_id,kind,state,exact_item_ids,occasion,finished_at,${unrenderedColumns})
+       VALUES($1,$2,'combination','ready',$3,$4,now(),${unrenderedValues})`,
+      [lookId, input.accountId, itemIds, request.occasion],
+    );
+    await insertLookItems(client, lookId, itemIds);
+    const body = { lookId };
+    await remember(client, input.accountId, input.idempotencyKey, 'create-combination-look', request, body);
+    return body;
+  });
+}
+
+/**
+ * Keeps an uploaded photo the user wore as a look. Its pieces are detected in
+ * the background, for free, and listed on the look; none are added to the
+ * wardrobe until the user picks them. With `lookId`, the photo is added to
+ * that combination instead, which keeps its pieces and images.
+ */
+export async function createPhotoLook(
+  database: Database,
+  input: { accountId: string; sourcePhotoId: string; lookId?: string; detectionModel: string; idempotencyKey: string },
+) {
+  const request = { sourcePhotoId: input.sourcePhotoId, ...(input.lookId ? { lookId: input.lookId } : {}) };
+  const created = await withTransaction(database, async (client) => {
+    const prior = await replay<{ lookId: string }>(client, input.accountId, input.idempotencyKey, 'create-photo-look', request);
+    if (prior) return prior;
+    const source = await client.query<{ asset_id: string }>(
+      `SELECT sp.asset_id FROM source_photos sp JOIN private_assets pa ON pa.id=sp.asset_id
+       WHERE sp.id=$1 AND sp.account_id=$2 AND pa.state='ready' AND pa.deleted_at IS NULL`,
+      [input.sourcePhotoId, input.accountId],
+    );
+    if (!source.rows[0]) throw new OwnedResourceNotFoundError();
+    const lookId = input.lookId ?? randomUUID();
+    if (input.lookId) {
+      const worn = await client.query(
+        `UPDATE looks SET kind='photo',asset_id=$3,source_photo_id=$4
+         WHERE id=$1 AND account_id=$2 AND kind='combination' AND NOT proposal AND deleted_at IS NULL RETURNING id`,
+        [lookId, input.accountId, source.rows[0].asset_id, input.sourcePhotoId],
+      );
+      if (!worn.rows[0]) throw new OwnedResourceNotFoundError();
+    } else {
+      await client.query(
+        `INSERT INTO looks(id,account_id,kind,state,asset_id,source_photo_id,finished_at,${unrenderedColumns})
+         VALUES($1,$2,'photo','ready',$3,$4,now(),${unrenderedValues})`,
+        [lookId, input.accountId, source.rows[0].asset_id, input.sourcePhotoId],
+      );
+    }
+    const body = { lookId };
+    await remember(client, input.accountId, input.idempotencyKey, 'create-photo-look', request, body);
+    return body;
+  });
+  // Its own idempotency key, so a replayed request never detects twice.
+  await enqueueSourcePhotoDetection(database, {
+    accountId: input.accountId,
+    sourcePhotoId: input.sourcePhotoId,
+    model: input.detectionModel,
+    idempotencyKey: `${input.idempotencyKey}:detect`,
+  });
+  return created;
+}
+
+/** Replaces the pieces of a combination or photo look. Generated looks keep the pieces they were made of. */
+export async function setLookItems(
+  database: Database,
+  input: { accountId: string; lookId: string; itemIds: string[] },
+) {
+  const itemIds = [...new Set(input.itemIds)];
+  return withTransaction(database, async (client) => {
+    const look = await client.query<{ kind: LookKind }>(
+      `SELECT kind FROM looks WHERE id=$1 AND account_id=$2 AND deleted_at IS NULL AND NOT proposal FOR UPDATE`,
+      [input.lookId, input.accountId],
+    );
+    if (!look.rows[0]) throw new OwnedResourceNotFoundError();
+    if (look.rows[0].kind !== 'combination' && look.rows[0].kind !== 'photo')
+      throw new InspirationValidationError('look-items-fixed', 'Die Stücke dieses Looks stehen fest.');
+    if (look.rows[0].kind === 'combination' && !itemIds.length)
+      throw new InspirationValidationError('item-required', 'Ein Look braucht mindestens ein Stück.');
+    await assertOwnedItems(client, input.accountId, itemIds);
+    await client.query('DELETE FROM look_items WHERE look_id=$1', [input.lookId]);
+    await insertLookItems(client, input.lookId, itemIds);
+    await client.query('UPDATE looks SET exact_item_ids=$3 WHERE id=$1 AND account_id=$2', [input.lookId, input.accountId, itemIds]);
+    return { wardrobeItemIds: itemIds };
+  });
+}
+
+/**
+ * Puts an AI image on top of a combination or photo look: a try-on on the
+ * user's photo, or an inspiration scene. The image is a look of its own whose
+ * parent is the look, so a failed or bad image never touches its pieces.
+ */
+export async function createLookImage(
+  database: Database,
+  input: {
+    accountId: string;
+    lookId: string;
+    mode: 'inspiration' | 'try-on';
+    baseAssetId?: string;
+    style?: LookStyle;
+    quality?: Look['quality'];
+    idempotencyKey: string;
+  },
+) {
+  const request = {
+    lookId: input.lookId,
+    mode: input.mode,
+    ...(input.baseAssetId ? { baseAssetId: input.baseAssetId } : {}),
+    style: input.style ?? 'candid',
+    quality: input.quality ?? 'low',
+  };
+  return withTransaction(database, async (client) => {
+    const prior = await replay<{ jobId: string; lookId: string }>(client, input.accountId, input.idempotencyKey, 'create-look-image', request);
+    if (prior) return prior;
+    const parent = await client.query<{ ids: string[]; occasion: LookOccasion | null }>(
+      `SELECT COALESCE(array_agg(li.wardrobe_item_id ORDER BY li.ordinal) FILTER (WHERE li.wardrobe_item_id IS NOT NULL),'{}') ids, l.occasion
+       FROM looks l LEFT JOIN look_items li ON li.look_id=l.id
+       WHERE l.id=$1 AND l.account_id=$2 AND l.kind IN ('combination','photo') AND l.deleted_at IS NULL AND NOT l.proposal GROUP BY l.id`,
+      [input.lookId, input.accountId],
+    );
+    const combination = parent.rows[0];
+    if (!combination) throw new OwnedResourceNotFoundError();
+    const candidates = await candidateItems(client, input.accountId, true);
+    if (!combination.ids.length || combination.ids.some((id) => !candidates.rows.some((row) => row.id === id)))
+      throw new InspirationValidationError('item-not-eligible', 'Mindestens ein Stück hat noch kein Katalogbild.');
+    const sheet = input.mode === 'inspiration' ? await activeCharacterSheet(client, input.accountId) : null;
+    if (input.mode === 'inspiration' && !sheet) throw characterSheetRequired();
+    if (input.mode === 'try-on') {
+      if (!input.baseAssetId)
+        throw new InspirationValidationError('try-on-photo-missing', 'Wähle ein Foto von dir.');
+      const base = await client.query(
+        `SELECT 1 FROM private_assets WHERE id=$1 AND account_id=$2 AND purpose='source-photo' AND state='ready' AND deleted_at IS NULL`,
+        [input.baseAssetId, input.accountId],
+      );
+      if (!base.rows[0])
+        throw new InspirationValidationError('try-on-photo-missing', 'Dein Foto ist nicht mehr verfügbar. Lade es neu hoch.');
+      await client.query(
+        `INSERT INTO try_on_photos (account_id, asset_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [input.accountId, input.baseAssetId],
+      );
+    }
+    const lookId = randomUUID();
+    await client.query(
+      `INSERT INTO looks(id,account_id,kind,character_sheet_id,parent_look_id,state,exact_item_ids,model,quality,output_size,prompt_version,base_asset_id)
+       VALUES($1,$2,$3,$4,$5,'queued',$6,$7,$8,'1024x1280',$9,$10)`,
+      [
+        lookId,
+        input.accountId,
+        input.mode,
+        sheet,
+        input.lookId,
+        combination.ids,
+        lookModel,
+        request.quality,
+        input.mode === 'try-on' ? tryOnPromptVersion : lookPromptVersion,
+        input.baseAssetId ?? null,
+      ],
+    );
+    // Linked pieces make the job plan only the scene around exactly this
+    // outfit, as for a rendered proposal. A try-on links them itself.
+    if (input.mode === 'inspiration') await insertLookItems(client, lookId, combination.ids);
+    const jobId = await enqueueJob(client, {
+      accountId: input.accountId,
+      kind: 'generate-look',
+      payload: {
+        lookId,
+        occasion: combination.occasion,
+        style: request.style,
+        completeWithWardrobe: true,
+        outputSize: lookOutputSize,
+      },
+      idempotencyKey: `look-image:${input.idempotencyKey}`,
+    });
+    await client.query('UPDATE remote_image_jobs SET look_id=$1 WHERE id=$2', [lookId, jobId]);
+    const body = { jobId, lookId };
+    await remember(client, input.accountId, input.idempotencyKey, 'create-look-image', request, body);
+    return body;
+  });
+}
+
+/** Keeps a proposal's outfit as a combination, for free. An image can follow, see createLookImage. */
+export async function keepLookProposal(database: Database, input: { accountId: string; lookId: string }) {
+  const kept = await database.query(
+    `UPDATE looks SET proposal=false,kind='combination',state='ready',finished_at=now()
+     WHERE id=$1 AND account_id=$2 AND proposal AND state='proposed' AND deleted_at IS NULL RETURNING id`,
+    [input.lookId, input.accountId],
+  );
+  if (kept.rows[0]) return { lookId: input.lookId };
+  // Keeping twice is fine; anything else is gone.
+  const already = await database.query(
+    `SELECT 1 FROM looks WHERE id=$1 AND account_id=$2 AND kind='combination' AND NOT proposal AND deleted_at IS NULL`,
+    [input.lookId, input.accountId],
+  );
+  if (!already.rows[0])
+    throw new InspirationValidationError('proposal-unavailable', 'Dieser Vorschlag ist nicht mehr verfügbar.');
+  return { lookId: input.lookId };
 }
 // Proposals of the last batch, newest first. Failed ones stay so the client can drop them.
 export async function listLookProposals(database: Database, accountId: string): Promise<Look[]> {
@@ -1059,9 +1324,11 @@ export async function renderLookProposal(
       client, input.accountId, input.idempotencyKey, 'render-look-proposal', request,
     );
     if (prior) return prior;
+    const sheet = await activeCharacterSheet(client, input.accountId);
+    if (!sheet) throw characterSheetRequired();
     const row = await client.query(
-      `UPDATE looks SET proposal=false,state='queued',quality=$3,finished_at=NULL WHERE id=$1 AND account_id=$2 AND proposal AND state='proposed' AND deleted_at IS NULL RETURNING id`,
-      [input.lookId, input.accountId, request.quality],
+      `UPDATE looks SET proposal=false,state='queued',quality=$3,character_sheet_id=$4,finished_at=NULL WHERE id=$1 AND account_id=$2 AND proposal AND state='proposed' AND deleted_at IS NULL RETURNING id`,
+      [input.lookId, input.accountId, request.quality, sheet],
     );
     if (!row.rows[0])
       throw new InspirationValidationError('proposal-unavailable', 'Dieser Vorschlag ist nicht mehr verfügbar.');

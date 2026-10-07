@@ -17,6 +17,11 @@ Map<String, dynamic> normalizeLookJson(Map<String, dynamic> json) {
     }
   }
   normalized
+    // Looks cached before kinds existed were all generated.
+    ..putIfAbsent(
+      'kind',
+      () => normalized['baseAssetId'] == null ? 'inspiration' : 'try-on',
+    )
     ..putIfAbsent('wardrobeItemIds', () => <String>[])
     ..putIfAbsent('concept', () => null)
     ..putIfAbsent('parentLookId', () => null)

@@ -294,16 +294,36 @@ export const lookReasonSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('occasion'), occasion: lookOccasionSchema }).strict(),
   z.object({ kind: z.literal('fresh') }).strict(),
 ]);
+// What a look is made of. Every look is a combination of pieces; `photo` adds a
+// real photo the user wore it in, `try-on` and `inspiration` an AI image.
+export const lookKindSchema = z.enum(['combination', 'photo', 'inspiration', 'try-on']);
+// A piece detected on a photo look, with the wardrobe piece it was added as.
+export const lookFoundPieceSchema = z
+  .object({
+    id: opaqueIdSchema,
+    name: itemNameSchema,
+    category: supportedCategorySchema,
+    colors: z.array(colorSchema).max(6),
+    boundingBox: normalizedBoundingBoxSchema,
+    wardrobeItemId: opaqueIdSchema.nullable(),
+  })
+  .strict();
 export const lookSchema = z
   .object({
     id: opaqueIdSchema,
+    kind: lookKindSchema,
     state: lookStateSchema,
     assetId: opaqueIdSchema.nullable(),
     // A smaller WebP of the asset for the feed. Null until the look is ready.
     feedAssetId: opaqueIdSchema.nullable(),
     wardrobeItemIds: z.array(opaqueIdSchema),
-    characterSheetId: opaqueIdSchema,
+    // Only inspirations are made from a character sheet.
+    characterSheetId: opaqueIdSchema.nullable(),
+    // For combinations, the AI images made of them point back here.
     parentLookId: opaqueIdSchema.nullable(),
+    // Photo looks: the uploaded photo, and its detected pieces once analysed.
+    sourcePhotoId: opaqueIdSchema.nullable(),
+    found: z.array(lookFoundPieceSchema).nullable(),
     // Set for try-on looks: the user's own photo the garments were put on.
     baseAssetId: opaqueIdSchema.nullable(),
     liked: z.boolean(),
@@ -353,6 +373,8 @@ export type ShelfImageVersion = z.infer<typeof shelfImageVersionSchema>;
 export type WardrobeItem = z.infer<typeof wardrobeItemSchema>;
 export type CharacterSheet = z.infer<typeof characterSheetSchema>;
 export type Look = z.infer<typeof lookSchema>;
+export type LookKind = z.infer<typeof lookKindSchema>;
+export type LookFoundPiece = z.infer<typeof lookFoundPieceSchema>;
 export type LookConcept = z.infer<typeof lookConceptSchema>;
 export type LookReason = z.infer<typeof lookReasonSchema>;
 export type LookOccasion = z.infer<typeof lookOccasionSchema>;

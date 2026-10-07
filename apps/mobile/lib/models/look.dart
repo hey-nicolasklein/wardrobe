@@ -12,6 +12,39 @@ const lookStates = [
 ];
 const lookOccasions = ['night-out', 'party', 'business', 'casual'];
 
+/// What a look is made of. Every look is a combination of pieces; a `photo`
+/// look adds a real photo the user wore it in, `try-on` and `inspiration` an
+/// AI image.
+const lookKinds = ['combination', 'photo', 'inspiration', 'try-on'];
+
+/// A piece detected on a photo look. [wardrobeItemId] is set once it was
+/// added to the wardrobe.
+@JsonSerializable(checked: true, includeIfNull: false)
+class LookFoundPiece {
+  const LookFoundPiece({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.colors,
+    this.wardrobeItemId,
+  });
+
+  factory LookFoundPiece.fromJson(Map<String, dynamic> json) =>
+      _$LookFoundPieceFromJson(json);
+
+  @JsonKey(required: true)
+  final String id;
+  @JsonKey(required: true)
+  final String name;
+  @JsonKey(required: true)
+  final String category;
+  @JsonKey(defaultValue: <String>[])
+  final List<String> colors;
+  final String? wardrobeItemId;
+
+  Map<String, dynamic> toJson() => _$LookFoundPieceToJson(this);
+}
+
 /// Output sizes the server has produced. Feed images moved to 768x960; older
 /// looks keep 1024x1280.
 const lookSizes = ['1024x1280', '768x960'];
@@ -120,6 +153,9 @@ class Look {
     required this.failureCategory,
     required this.createdAt,
     required this.finishedAt,
+    this.kind = 'inspiration',
+    this.sourcePhotoId,
+    this.found,
     this.baseAssetId,
     this.feedAssetId,
     this.settings,
@@ -130,6 +166,7 @@ class Look {
   factory Look.fromJson(Map<String, dynamic> json) {
     final value = _$LookFromJson(json);
     if (value.id.isEmpty ||
+        !lookKinds.contains(value.kind) ||
         !lookStates.contains(value.state) ||
         !lookSizes.contains(value.size) ||
         !['low', 'medium', 'high'].contains(value.quality)) {
@@ -140,10 +177,25 @@ class Look {
 
   @JsonKey(required: true)
   final String id;
+
+  /// One of [lookKinds]. Looks cached before kinds existed were all
+  /// generated; [Look.fromJson] callers normalise them, see
+  /// `normalizeLookJson`.
+  @JsonKey(defaultValue: 'inspiration')
+  final String kind;
   @JsonKey(required: true)
   final String state;
   @JsonKey(required: true)
   final String? assetId;
+
+  /// The photo a photo look was uploaded as.
+  @JsonKey(includeIfNull: false)
+  final String? sourcePhotoId;
+
+  /// The pieces detected on a photo look. Null while it is still analysed
+  /// and for every other kind.
+  @JsonKey(includeIfNull: false)
+  final List<LookFoundPiece>? found;
 
   /// A smaller WebP of [assetId] for cards. Missing on looks cached before
   /// the API sent it.
@@ -151,8 +203,10 @@ class Look {
   final String? feedAssetId;
   @JsonKey(required: true)
   final List<String> wardrobeItemIds;
+
+  /// Only inspirations are made from a character sheet.
   @JsonKey(required: true)
-  final String characterSheetId;
+  final String? characterSheetId;
   @JsonKey(required: true)
   final String? parentLookId;
   @JsonKey(required: true)
@@ -178,7 +232,20 @@ class Look {
   /// and for looks cached before try-ons existed.
   @JsonKey(includeIfNull: false)
   final String? baseAssetId;
-  bool get isTryOn => baseAssetId != null;
+  bool get isTryOn => kind == 'try-on' || baseAssetId != null;
+
+  /// Saved pieces without an image of its own: shown laid out flat.
+  bool get isCombination => kind == 'combination';
+  bool get isPhoto => kind == 'photo';
+
+  /// Made of the user's own pieces, so AI images can be put on top of it.
+  bool get isBase => isCombination || isPhoto;
+
+  /// Made by the image model, so it can fail, be retried or upgraded.
+  bool get isGenerated => kind == 'inspiration' || kind == 'try-on';
+
+  /// A photo look whose pieces are still being detected.
+  bool get isAnalysing => isPhoto && found == null;
 
   /// The composer choices behind this look. Null for try-ons, unknown
   /// requests, and looks cached before settings were reported.

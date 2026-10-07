@@ -65,7 +65,7 @@ class ResetSection extends StatelessWidget {
     await clearAccountState(context);
     if (!context.mounted) return;
     showFormToast(context, context.tr(LocaleKeys.settings_resetDone));
-    context.go('/feed');
+    context.go('/wardrobe');
   }
 }
 

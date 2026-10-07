@@ -26,7 +26,7 @@ class LookProposalsState {
   /// The session's proposals in planning order. Null until the first load.
   final List<Look>? proposals;
 
-  /// Proposals swiped right and sent off to render.
+  /// Proposals swiped right and kept as looks.
   final Set<String> picked;
 
   /// Proposals swiped left.
@@ -84,13 +84,13 @@ class LookProposalsState {
   );
 }
 
-/// One swipe session. Polls proposals while they are planned, renders the
-/// ones swiped right, and keeps the deck topped up: kept pieces become fixed
-/// pieces of the next proposals, excluded ones never come back.
+/// One swipe session. Polls proposals while they are planned, keeps the one
+/// swiped right as a look, for free, and keeps the deck topped up: kept
+/// pieces become fixed pieces of the next proposals, excluded ones never come
+/// back.
 class LookProposalsCubit extends Cubit<LookProposalsState> {
   LookProposalsCubit(
     this.looks, {
-    required this.quality,
     this.request,
     this.pollInterval = const Duration(seconds: 1),
     this.undoWindow = const Duration(seconds: 4),
@@ -99,17 +99,16 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
   }
 
   final LookRepository looks;
-  final String quality;
 
   /// The composer's propose body. Null when the page was opened without one,
   /// which turns off topping up and "more outfits".
   final Map<String, dynamic>? request;
   final Duration pollInterval;
 
-  /// How long a pick can be taken back before it renders and spends credits.
+  /// How long a pick can be taken back before it is saved as a look.
   final Duration undoWindow;
   Timer? _poll;
-  Timer? _pendingRender;
+  Timer? _pendingKeep;
   Completer<void>? _pendingPick;
 
   /// Bumped by every adjustment, so a poll that started before it cannot
@@ -210,35 +209,35 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
     unawaited(_topUp());
   }
 
-  /// Ends the round with the outfit and renders it once [undoWindow] passed
-  /// without [undoPick]. One pick per round. Completes after the render.
+  /// Ends the round with the outfit and keeps it as a look once [undoWindow]
+  /// passed without [undoPick]. One pick per round. Completes once kept.
   Future<void> pick(String lookId) {
     if (state.picked.isNotEmpty) return Future.value();
     emit(state.copyWith(picked: {...state.picked, lookId}));
     final done = _pendingPick = Completer<void>();
-    _pendingRender = Timer(undoWindow, () {
+    _pendingKeep = Timer(undoWindow, () {
       _pendingPick = null;
-      _pendingRender = null;
-      done.complete(_render(lookId));
+      _pendingKeep = null;
+      done.complete(_keep(lookId));
     });
     return done.future;
   }
 
   /// Takes back a pick still inside its [undoWindow]: the outfit returns to
-  /// the top of the deck and nothing renders.
+  /// the top of the deck and nothing is saved.
   void undoPick() {
-    final timer = _pendingRender;
+    final timer = _pendingKeep;
     if (timer == null || !timer.isActive) return;
     timer.cancel();
-    _pendingRender = null;
+    _pendingKeep = null;
     _pendingPick?.complete();
     _pendingPick = null;
     emit(state.copyWith(picked: const {}));
   }
 
-  Future<void> _render(String lookId) async {
+  Future<void> _keep(String lookId) async {
     try {
-      await looks.render(lookId, quality: quality);
+      await looks.keepProposal(lookId);
     } on FormApiException catch (error) {
       if (isClosed) return;
       // Back on the deck, so the user can try again.
@@ -312,9 +311,9 @@ class LookProposalsCubit extends Cubit<LookProposalsState> {
   Future<void> close() {
     _poll?.cancel();
     // Closing the sheet inside the undo window keeps the pick.
-    if (_pendingRender?.isActive ?? false) {
-      _pendingRender!.cancel();
-      _pendingPick?.complete(_render(state.picked.first));
+    if (_pendingKeep?.isActive ?? false) {
+      _pendingKeep!.cancel();
+      _pendingPick?.complete(_keep(state.picked.first));
     }
     return super.close();
   }

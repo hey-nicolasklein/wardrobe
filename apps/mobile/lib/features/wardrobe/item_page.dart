@@ -331,8 +331,7 @@ class _ItemViewState extends State<_ItemView> {
                         ).toSet();
                         final looks =
                             [
-                              for (final record
-                                  in feedState.looks ?? <CachedLook>[])
+                              for (final record in feedState.archive)
                                 if (ready.contains(record.look)) record,
                             ]..sort(
                               (a, b) =>
@@ -400,6 +399,7 @@ class _ItemViewState extends State<_ItemView> {
                                 ),
                                 child: _ItemLooks(
                                   looks: looks,
+                                  feed: feedState,
                                   online: online && !state.stale,
                                   onOpen: () => openLookStack(
                                     context,
@@ -737,11 +737,13 @@ class _ItemColorChip extends StatelessWidget {
 class _ItemLooks extends StatelessWidget {
   const _ItemLooks({
     required this.looks,
+    required this.feed,
     required this.online,
     required this.onOpen,
   });
 
   final List<CachedLook> looks;
+  final FeedState feed;
   final bool online;
   final VoidCallback onOpen;
 
@@ -759,6 +761,7 @@ class _ItemLooks extends StatelessWidget {
         children: [
           PhotoFan(
             looks: looks,
+            feed: feed,
             online: online,
             photoSize: const Size(56, 70),
             spread: spread,

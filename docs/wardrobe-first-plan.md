@@ -24,7 +24,7 @@ Today every photo becomes a draft on the intake page. The user waits for upload 
 
 Looks come in four levels. The first two always show what you really wore or own:
 
-1. **Selfie** (planned): a real photo of you, with its pieces extracted into the Schrank.
+1. **Photo**: a real photo of you wearing it. Its detected pieces are listed on the look, to link to the Schrank or add to it.
 2. **Combination**: your pieces as a flat lay, built locally from catalog images (`flat_lay_widget.dart`). Free and always correct.
 3. **Try on (Anprobe)**: your real pieces put 1:1 on a photo of you.
 4. **Inspiration**: a full AI look. Quality varies.
@@ -32,8 +32,8 @@ Looks come in four levels. The first two always show what you really wore or own
 - The combination is the base of every look. Try on and Inspiration are images added on top and never replace it. A bad AI image costs only that image, the look stays intact.
 - The link between looks and pieces gets more visible: every piece shows "worn in these looks", every look lets you tap its pieces.
 
-## Open questions
+## Decisions (built 2026-10-07)
 
-- How are detection mistakes undone once pieces land in the Schrank without a review step? Undo on a toast, or a removable "new" state on fresh tiles?
-- Does the Feed's generation flow (composer, proposals) move into the Looks tab unchanged, or is it reduced to one entry point?
-- Data model for selfie looks: a look with a real photo and linked pieces, next to generated looks.
+- Detection mistakes: fresh tiles carry a "new" badge. Holding a tile renames it or moves it to the archive, with undo on a toast. The archive keeps the paid catalog image.
+- Creating a look is one "New look" sheet in the Looks tab: combine pieces (composer), from your photos, or FORM's suggestions. Swiping right on a suggestion keeps it as a free combination.
+- Data model: `looks.kind` is `combination`, `photo`, `inspiration` or `try-on`. Photo looks keep their source photo and list its detections; pieces are linked or added by the user, nothing joins the wardrobe by itself. AI images of a combination are looks with `parent_look_id` pointing at it, shown as its layers. Only inspirations need a character sheet.

@@ -359,12 +359,16 @@ class FormTabBar extends StatelessWidget {
     required this.selectedIndex,
     required this.onSelected,
     required this.labels,
+    required this.icons,
     this.badged = const {},
     super.key,
   });
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final List<String> labels;
+
+  /// One per label, in the same order.
+  final List<FormIconName> icons;
 
   /// Tabs that show a dot because something is under way there.
   final Set<int> badged;
@@ -382,7 +386,7 @@ class FormTabBar extends StatelessWidget {
             for (var i = 0; i < labels.length; i++)
               Expanded(
                 child: _FormTab(
-                  icon: FormIconName.values[i],
+                  icon: icons[i],
                   label: labels[i],
                   selected: i == selectedIndex,
                   badged: badged.contains(i),

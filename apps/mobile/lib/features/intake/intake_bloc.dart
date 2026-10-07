@@ -43,12 +43,21 @@ class IntakeState {
     this.drafts = const [],
     this.busy = false,
     this.error,
+    this.arrived = const [],
   });
   final List<IntakeDraft> drafts;
   final bool busy;
   final String? error;
+
+  /// Pieces this session added to the wardrobe, oldest first. The Schrank
+  /// marks them as new and offers to take a wrongly detected one back.
+  final List<String> arrived;
 }
 
+/// Adds photos to the wardrobe in the background, wherever the user is in the
+/// app: each photo is uploaded, analysed, and its detected pieces are saved
+/// with their catalog images right away. Accessories stay out unless picked.
+/// Photos without detected pieces wait in the intake page for a name.
 class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
   IntakeBloc(this.repository, {this.pollInterval = const Duration(seconds: 3)})
     : super(const IntakeState()) {
@@ -61,7 +70,7 @@ class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
   final _discarding = <String>{};
   bool _online = false;
   bool _foreground = true;
-  bool _visible = false;
+  final List<String> _arrived = [];
   bool get canContinue => _online && _foreground && !isClosed;
 
   void discard(String id) {
@@ -69,12 +78,11 @@ class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
     add(IntakeEvent(IntakeAction.discard, id: id));
   }
 
-  void availability({bool? online, bool? foreground, bool? visible}) {
+  void availability({bool? online, bool? foreground}) {
     _online = online ?? _online;
     _foreground = foreground ?? _foreground;
-    _visible = visible ?? _visible;
     _timer?.cancel();
-    if (canContinue && _visible) add(const IntakeEvent(IntakeAction.advance));
+    if (canContinue) add(const IntakeEvent(IntakeAction.advance));
   }
 
   void _publish(
@@ -87,6 +95,7 @@ class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
         drafts: List.unmodifiable(_drafts.map((d) => d.snapshot())),
         busy: busy,
         error: error,
+        arrived: List.unmodifiable(_arrived),
       ),
     );
   }
@@ -205,8 +214,13 @@ class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
           }
           if (!canContinue) break;
           if (_discarding.contains(draft.id)) continue;
-          if (_visible && draft.phase == DraftPhase.detecting) {
+          if (draft.phase == DraftPhase.detecting) {
             await repository.poll(draft);
+            // Freshly detected pieces go straight into the wardrobe.
+            if (draft.phase == DraftPhase.ready &&
+                draft.choices.any((c) => c.selected)) {
+              await _beginSave(draft);
+            }
           }
           if (!canContinue) break;
           if (_discarding.contains(draft.id)) continue;
@@ -220,6 +234,10 @@ class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
           if (draft.phase == DraftPhase.finished && canContinue) {
             await repository.finish(draft);
             _drafts.remove(draft);
+            _arrived.addAll([
+              for (final choice in draft.choices)
+                if (choice.selected) ?choice.itemId,
+            ]);
           }
         } on Object catch (error) {
           draft.failure = error is FormApiException
@@ -239,7 +257,6 @@ class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
     } finally {
       if (state.busy) _publish(emit);
       if (canContinue &&
-          _visible &&
           _drafts.any(
             (d) => d.phase == DraftPhase.detecting && d.failure == null,
           )) {

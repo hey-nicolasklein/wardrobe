@@ -13,7 +13,6 @@ import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/feed/flat_lay_widget.dart';
 import 'package:form_mobile/features/feed/look_proposals_cubit.dart';
 import 'package:form_mobile/features/feed/occasion_tile.dart';
-import 'package:form_mobile/features/settings/credits_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
@@ -26,12 +25,11 @@ import 'package:go_router/go_router.dart';
 
 /// Planned outfits from the composer as a swipe deck, to style towards one
 /// outfit. Tapping a piece keeps it for, or leaves it out of, the next
-/// outfits; left shows the next variation. Right renders the outfit and ends
-/// the round, from where the user can style on with the same marks.
+/// outfits; left shows the next variation. Right keeps the outfit as a look,
+/// for free, and ends the round, from where the user can style on with the
+/// same marks.
 class LookProposalsPage extends StatelessWidget {
-  const LookProposalsPage({required this.quality, this.request, super.key});
-
-  final String quality;
+  const LookProposalsPage({this.request, super.key});
 
   /// The composer's propose body, reused for every further proposal.
   final Map<String, dynamic>? request;
@@ -40,7 +38,6 @@ class LookProposalsPage extends StatelessWidget {
   Widget build(BuildContext context) => BlocProvider(
     create: (context) => LookProposalsCubit(
       context.read<LookRepository>(),
-      quality: quality,
       request: request,
     ),
     // The sheet sits above the shell's Scaffold, so its undo toasts need a
@@ -488,7 +485,7 @@ class _SwipeDeckState extends State<_SwipeDeck>
                           top: 22,
                           left: 22,
                           child: _Stamp(
-                            label: context.tr(LocaleKeys.proposalsRender),
+                            label: context.tr(LocaleKeys.proposalsKeepStamp),
                             color: FormTokens.green,
                             angle: -0.2,
                             visible: isTop ? progress.clamp(0.0, 1.0) : 0,
@@ -890,7 +887,7 @@ class _DeckActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      // Skipping is the light action, generating the one that costs.
+      // Skipping shows the next outfit, keeping ends the round.
       TextButton.icon(
         onPressed: enabled ? onSkip : null,
         style: TextButton.styleFrom(foregroundColor: FormTokens.muted),
@@ -907,14 +904,7 @@ class _DeckActions extends StatelessWidget {
           ),
           child: FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(
-              lookCostLabel(
-                context,
-                context.tr(LocaleKeys.proposalsRender),
-                context.watch<CreditsCubit>().state,
-              ),
-              maxLines: 1,
-            ),
+            child: Text(context.tr(LocaleKeys.proposalsKeep), maxLines: 1),
           ),
         ),
       ),
@@ -1094,7 +1084,7 @@ class _FinishedActions extends StatelessWidget {
       ],
       Expanded(
         child: FilledButton(
-          onPressed: () => context.go('/feed'),
+          onPressed: () => context.pop(),
           child: Text(
             context.tr(
               picked > 0 ? LocaleKeys.proposalsDone : LocaleKeys.proposalsSkip,

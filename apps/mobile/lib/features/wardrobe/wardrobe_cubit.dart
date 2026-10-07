@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
+import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
 
@@ -152,6 +153,34 @@ class WardrobeCubit extends Cubit<WardrobeState> {
     } finally {
       _refreshing = false;
     }
+  }
+
+  /// Renames [itemId] right from the grid.
+  Future<void> rename(String itemId, String name) => _edit(
+    itemId,
+    (item) => {
+      'metadata': {...item.metadata.toJson(), 'name': name.trim()},
+    },
+  );
+
+  /// Moves [itemId] to [collection], e.g. into the archive and back.
+  Future<void> moveTo(String itemId, String collection) =>
+      _edit(itemId, (_) => {'state': collection});
+
+  /// Sends [changes] against the latest known record version, so an undo
+  /// right after an edit does not clash with it.
+  Future<void> _edit(
+    String itemId,
+    Map<String, dynamic> Function(WardrobeItem item) changes,
+  ) async {
+    final item =
+        (await repository.cachedDetail(itemId))?.wardrobeItem ??
+        state.items
+            ?.map((record) => record.item)
+            .where((item) => item.id == itemId)
+            .firstOrNull;
+    if (item == null) return;
+    await repository.execute(itemId, ItemCommand.edit(item, changes(item)));
   }
 
   @override
