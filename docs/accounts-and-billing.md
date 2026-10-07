@@ -48,6 +48,7 @@ the first months. Build what holds at that size, and keep every step replaceable
 
 1. Set `DEV_SIGN_IN=true` in `apps/api/.env.local`, then restart `npm run dev:api`.
 2. Run the app in debug and tap **Sign in without password**. The email field chooses the account, so `a@form.local` and `b@form.local` are two separate test users.
+   `npm run dev:seed [-- <email>]` gives that account three ready pieces (default `dev@form.local`). Running it again adds nothing.
 3. To set or reset a budget, e.g. to test running out of credits:
    `DATABASE_URL=… npm run accounts:credits -- <email> <balance>`. On stargate run the same
    CLI inside the API container: `docker exec form-production-api-1 node --import tsx packages/service/src/cli/set-credits.ts <email> <balance>`.
