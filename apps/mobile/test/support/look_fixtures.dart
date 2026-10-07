@@ -6,15 +6,18 @@ Map<String, dynamic> lookJson({
   List<String>? wardrobeItemIds,
   String? assetId = 'look-asset-0001',
   String quality = 'low',
+  String kind = 'inspiration',
+  String? parentLookId,
 }) {
   final ids = wardrobeItemIds ?? ['wardrobe-item-0001'];
   return {
     'id': id,
+    'kind': kind,
     'state': state,
     'assetId': assetId,
     'wardrobeItemIds': ids,
     'characterSheetId': 'character-sheet-0001',
-    'parentLookId': null,
+    'parentLookId': parentLookId,
     'liked': false,
     'concept': {
       'activity': 'Evening walk',

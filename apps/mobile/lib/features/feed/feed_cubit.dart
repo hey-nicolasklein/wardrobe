@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
@@ -25,6 +26,8 @@ class FeedState {
     this.stale = true,
     this.failure,
     this.online = true,
+    this.pendingPhotos = const [],
+    this.pendingWorn = const {},
   });
 
   final List<CachedLook>? looks;
@@ -39,6 +42,51 @@ class FeedState {
   final bool stale;
   final ApiFailure? failure;
   final bool online;
+
+  /// Local paths of photos being uploaded as looks. They show as developing
+  /// prints until the server has them.
+  final List<String> pendingPhotos;
+
+  /// Local photos being added to a combination as the photo it was worn in,
+  /// by look id. The look shows it developing until the server has it.
+  final Map<String, String> pendingWorn;
+
+  /// Looks shown on their own: combinations, photo looks and generated looks
+  /// that are not an image of one of them, see [imagesOf].
+  List<CachedLook> get archive => [
+    for (final record in looks ?? const <CachedLook>[])
+      if (!_isImageOfBase(record.look)) record,
+  ];
+
+  /// The AI images made of the combination or photo look [lookId], newest
+  /// first.
+  List<CachedLook> imagesOf(String lookId) => [
+    for (final record in looks ?? const <CachedLook>[])
+      if (record.look.parentLookId == lookId &&
+          record.look.isGenerated &&
+          _baseIds.contains(lookId))
+        record,
+  ];
+
+  /// What a look shows on its print: its own photo, or its newest finished
+  /// image. Null means the pieces laid out flat.
+  CachedLook? coverOf(CachedLook record) {
+    if (record.look.cardAssetId != null) return record;
+    for (final image in imagesOf(record.look.id)) {
+      if (image.look.isReady && image.look.cardAssetId != null) return image;
+    }
+    return null;
+  }
+
+  Set<String> get _baseIds => {
+    for (final record in looks ?? const <CachedLook>[])
+      if (record.look.isBase) record.look.id,
+  };
+
+  bool _isImageOfBase(Look look) =>
+      look.parentLookId != null &&
+      look.isGenerated &&
+      _baseIds.contains(look.parentLookId);
 
   String get failureKey => switch (failure) {
     ApiFailure.incompatible => LocaleKeys.feedInvalidResponse,
@@ -61,6 +109,8 @@ class FeedState {
     ApiFailure? failure,
     bool clearFailure = false,
     bool? online,
+    List<String>? pendingPhotos,
+    Map<String, String>? pendingWorn,
   }) => FeedState(
     looks: looks ?? this.looks,
     itemsById: itemsById ?? this.itemsById,
@@ -75,6 +125,8 @@ class FeedState {
     stale: stale ?? this.stale,
     failure: clearFailure ? null : (failure ?? this.failure),
     online: online ?? this.online,
+    pendingPhotos: pendingPhotos ?? this.pendingPhotos,
+    pendingWorn: pendingWorn ?? this.pendingWorn,
   );
 }
 
@@ -169,7 +221,12 @@ class FeedCubit extends Cubit<FeedState> {
 
   void _schedulePoll(FeedState next) {
     _poll?.cancel();
-    final running = next.looks?.any((record) => record.look.isActive) ?? false;
+    // Photo looks are polled too, until their pieces are detected.
+    final running =
+        next.looks?.any(
+          (record) => record.look.isActive || record.look.isAnalysing,
+        ) ??
+        false;
     if (_foreground && !next.stale && !next.loading && running) {
       _poll = Timer(const Duration(seconds: 3), () => unawaited(refresh()));
     }
@@ -276,6 +333,8 @@ class FeedCubit extends Cubit<FeedState> {
           revealed: state.revealed,
           hasActiveCharacterReference: activeSheet,
           stale: false,
+          pendingPhotos: state.pendingPhotos,
+          pendingWorn: state.pendingWorn,
         ),
       );
     } on FormApiException catch (error) {
@@ -303,6 +362,96 @@ class FeedCubit extends Cubit<FeedState> {
 
   Future<String> createLook(LookCommand command, List<String> selectedIds) =>
       lookRepository.create(command, selectedIds);
+
+  /// Puts an AI image on the combination [lookId], see
+  /// [LookRepository.createImage].
+  Future<String> createImage(
+    String lookId, {
+    required String mode,
+    required String idempotencyKey,
+    String? baseAssetId,
+    String quality = 'low',
+  }) => lookRepository.createImage(
+    lookId,
+    mode: mode,
+    idempotencyKey: idempotencyKey,
+    baseAssetId: baseAssetId,
+    quality: quality,
+  );
+
+  /// Uploads [paths] one after another as photo looks. Each shows as a
+  /// developing print until it is in. Returns how many failed.
+  Future<int> addPhotoLooks(
+    List<String> paths,
+    Future<Uint8List> Function(String path) prepare,
+  ) async {
+    emit(state.copyWith(pendingPhotos: [...state.pendingPhotos, ...paths]));
+    var failed = 0;
+    for (final path in paths) {
+      try {
+        await lookRepository.createPhotoLook(await prepare(path));
+      } on Object {
+        failed++;
+      } finally {
+        if (!isClosed) {
+          emit(
+            state.copyWith(
+              pendingPhotos: [...state.pendingPhotos]..remove(path),
+            ),
+          );
+        }
+      }
+    }
+    return failed;
+  }
+
+  /// Adds the photo at [path] to the combination [lookId] as the photo it
+  /// was worn in. Its pieces are found in the background, as for a photo
+  /// look.
+  Future<void> addWornPhoto(
+    String lookId,
+    String path,
+    Future<Uint8List> Function(String path) prepare,
+  ) async {
+    emit(state.copyWith(pendingWorn: {...state.pendingWorn, lookId: path}));
+    try {
+      await lookRepository.createPhotoLook(await prepare(path), lookId: lookId);
+    } finally {
+      if (!isClosed) {
+        emit(
+          state.copyWith(
+            pendingWorn: {...state.pendingWorn}..remove(lookId),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Links wardrobe pieces to a combination or photo look.
+  Future<void> setLookItems(String lookId, List<String> itemIds) =>
+      lookRepository.setItems(lookId, itemIds);
+
+  /// Adds a piece detected on a photo look to the wardrobe, orders its
+  /// catalog image and links it to the look.
+  Future<void> addFoundPiece(
+    Look look,
+    LookFoundPiece piece, {
+    required String quality,
+  }) async {
+    final itemId = await lookRepository.addFoundPiece(
+      piece,
+      quality: quality,
+    );
+    await lookRepository.setItems(
+      look.id,
+      {
+        ...look.wardrobeItemIds,
+        itemId,
+      }.toList(),
+    );
+    await wardrobeRepository.refreshAndNotify();
+    await _reloadLocal();
+  }
 
   Future<void> retryLook(String lookId) async {
     await lookRepository.execute(LookCommand.retry(lookId));

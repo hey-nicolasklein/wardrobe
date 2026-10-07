@@ -1251,9 +1251,11 @@ export async function permanentlyDeleteWardrobeItem(
       `DELETE FROM wardrobe_items WHERE id = $1 AND account_id = $2`,
       [input.wardrobeItemId, input.accountId],
     );
+    // A photo look keeps its photo, even once no piece comes from it anymore.
     const remaining = await client.query<{ count: string }>(
-      `SELECT count(*) FROM wardrobe_items
-       WHERE source_photo_id = $1 AND account_id = $2 AND deleted_at IS NULL`,
+      `SELECT (SELECT count(*) FROM wardrobe_items
+         WHERE source_photo_id = $1 AND account_id = $2 AND deleted_at IS NULL)
+       + (SELECT count(*) FROM looks WHERE source_photo_id = $1 AND account_id = $2) AS count`,
       [itemRow.source_photo_id, input.accountId],
     );
     const sourcePhotoDeleted = Number(remaining.rows[0]!.count) === 0;

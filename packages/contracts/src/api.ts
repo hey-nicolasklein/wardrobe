@@ -299,6 +299,38 @@ export const createLookRequestSchema = z
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();
+// A look made of the user's own pieces, laid out flat. Free.
+export const createCombinationLookRequestSchema = z
+  .object({
+    itemIds: z.array(opaqueIdSchema).min(1).max(12),
+    occasion: lookOccasionSchema.nullable().default(null),
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+// A look from a photo the user wore it in. Its pieces are detected for free.
+// With `lookId`, the photo is added to that combination instead.
+export const createPhotoLookRequestSchema = z
+  .object({
+    sourcePhotoId: opaqueIdSchema,
+    lookId: opaqueIdSchema.optional(),
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+// Replaces the pieces of a combination or photo look.
+export const setLookItemsRequestSchema = z
+  .object({ itemIds: z.array(opaqueIdSchema).max(12) })
+  .strict();
+// An AI image on top of a combination or photo look. A try-on dresses `baseAssetId`; an
+// inspiration needs the user's character sheet.
+export const createLookImageRequestSchema = z
+  .object({
+    mode: z.enum(['inspiration', 'try-on']),
+    baseAssetId: opaqueIdSchema.optional(),
+    style: lookStyleSchema.default('candid'),
+    quality: generationQualitySchema.default('low'),
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
 // Plans `count` outfits without rendering them; the user picks which to render.
 export const proposeLooksRequestSchema = z
   .object({

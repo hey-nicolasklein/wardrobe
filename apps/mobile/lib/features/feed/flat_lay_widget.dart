@@ -267,10 +267,12 @@ class _PressableGarmentState extends State<PressableGarment> {
   }
 
   @override
+  // Without onTap no handler is set at all, so taps reach whatever holds the
+  // board, e.g. a pile of looks.
   Widget build(BuildContext context) => GestureDetector(
     onTapDown: widget.onTap == null ? null : (_) => _setPressed(true),
-    onTapUp: (_) => _setPressed(false),
-    onTapCancel: () => _setPressed(false),
+    onTapUp: widget.onTap == null ? null : (_) => _setPressed(false),
+    onTapCancel: widget.onTap == null ? null : () => _setPressed(false),
     onTap: widget.onTap,
     child: AnimatedScale(
       scale: _pressed ? 1.12 : 1,

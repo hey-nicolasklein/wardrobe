@@ -8,6 +8,7 @@ import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_page.dart';
 import 'package:form_mobile/features/feed/look_composer_page.dart';
 import 'package:form_mobile/features/feed/look_proposals_page.dart';
+import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/intake/intake_page.dart';
 import 'package:form_mobile/features/onboarding/onboarding_page.dart';
 import 'package:form_mobile/features/settings/character/character_detail_page.dart';
@@ -22,6 +23,7 @@ import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/navigation/tab_reselect.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/widgets/form_components.dart';
+import 'package:form_mobile/widgets/form_icon.dart';
 import 'package:form_mobile/widgets/foundation_page.dart';
 import 'package:go_router/go_router.dart';
 
@@ -35,16 +37,39 @@ GoRouter createRouter({bool onboarding = false}) {
   final reselect = TabReselect();
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
-    initialLocation: onboarding ? '/onboarding' : '/feed',
+    initialLocation: onboarding ? '/onboarding' : '/wardrobe',
     overridePlatformDefaultLocation: true,
     routes: [
       StatefulShellRoute.indexedStack(
-        builder: (context, state, shell) => BlocListener<FeedCubit, FeedState>(
-          listener: (context, feed) => _announceFinishedLooks(context, shell),
-          listenWhen: (previous, next) {
-            _finished = _finishedLooks(previous, next);
-            return _finished.isNotEmpty;
-          },
+        builder: (context, state, shell) => MultiBlocListener(
+          listeners: [
+            BlocListener<FeedCubit, FeedState>(
+              listener: (context, feed) =>
+                  _announceFinishedLooks(context, shell),
+              listenWhen: (previous, next) {
+                _finished = _finishedLooks(previous, next);
+                return _finished.isNotEmpty;
+              },
+            ),
+            // Pieces added in the background are announced outside the
+            // Schrank, where their tiles would show it.
+            BlocListener<IntakeBloc, IntakeState>(
+              listenWhen: (previous, next) =>
+                  next.arrived.length > previous.arrived.length,
+              listener: (context, intake) {
+                if (shell.currentIndex == _wardrobeBranch) return;
+                showFormToast(
+                  context,
+                  context.plural(
+                    LocaleKeys.piecesArrived,
+                    intake.arrived.length,
+                  ),
+                  action: context.tr(LocaleKeys.lookView),
+                  onAction: () => shell.goBranch(_wardrobeBranch),
+                );
+              },
+            ),
+          ],
           child: Scaffold(
             // Lets content scroll under the translucent tab bar.
             extendBody: true,
@@ -55,9 +80,10 @@ GoRouter createRouter({bool onboarding = false}) {
               badged: {
                 if (context.select<FeedCubit, bool>(
                   (cubit) =>
-                      cubit.state.looks?.any((r) => r.look.isActive) ?? false,
+                      cubit.state.pendingPhotos.isNotEmpty ||
+                      (cubit.state.looks?.any((r) => r.look.isActive) ?? false),
                 ))
-                  0,
+                  _looksBranch,
               },
               onSelected: (index) {
                 if (index != shell.currentIndex) {
@@ -74,9 +100,14 @@ GoRouter createRouter({bool onboarding = false}) {
                 }
               },
               labels: [
-                context.tr(LocaleKeys.feed),
                 context.tr(LocaleKeys.visual_wardrobeTab),
+                context.tr(LocaleKeys.feed),
                 context.tr(LocaleKeys.settings_title),
+              ],
+              icons: const [
+                FormIconName.closet,
+                FormIconName.feed,
+                FormIconName.settings,
               ],
             ),
           ),
@@ -86,10 +117,41 @@ GoRouter createRouter({bool onboarding = false}) {
             navigatorKey: _branchNavigatorKeys[0],
             routes: [
               GoRoute(
-                path: '/feed',
+                path: '/wardrobe',
                 builder: (_, _) => TabScrollToTop(
                   reselect: reselect,
                   index: 0,
+                  child: const WardrobePage(),
+                ),
+                routes: [
+                  GoRoute(
+                    path: 'intake',
+                    builder: (_, _) => const IntakePage(),
+                  ),
+                  GoRoute(
+                    path: 'items/:id',
+                    parentNavigatorKey: _rootNavigatorKey,
+                    pageBuilder: (_, state) => FormSheetPage(
+                      key: state.pageKey,
+                      child: ItemPage(id: state.pathParameters['id']!),
+                    ),
+                  ),
+                  GoRoute(
+                    path: 'status',
+                    builder: (_, _) => const DataStatusPage(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            navigatorKey: _branchNavigatorKeys[1],
+            routes: [
+              GoRoute(
+                path: '/feed',
+                builder: (_, _) => TabScrollToTop(
+                  reselect: reselect,
+                  index: 1,
                   child: const FeedPage(),
                 ),
                 routes: [
@@ -117,7 +179,6 @@ GoRouter createRouter({bool onboarding = false}) {
                       key: state.pageKey,
                       maxExtent: 0.985,
                       child: LookProposalsPage(
-                        quality: state.uri.queryParameters['quality'] ?? 'low',
                         request: state.extra as Map<String, dynamic>?,
                       ),
                     ),
@@ -128,38 +189,7 @@ GoRouter createRouter({bool onboarding = false}) {
                     pageBuilder: (_, state) => FormSheetPage(
                       key: state.pageKey,
                       enableDrag: false,
-                      child: const CharacterSetupPage(fromFeed: true),
-                    ),
-                  ),
-                  GoRoute(
-                    path: 'status',
-                    builder: (_, _) => const DataStatusPage(),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            navigatorKey: _branchNavigatorKeys[1],
-            routes: [
-              GoRoute(
-                path: '/wardrobe',
-                builder: (_, _) => TabScrollToTop(
-                  reselect: reselect,
-                  index: 1,
-                  child: const WardrobePage(),
-                ),
-                routes: [
-                  GoRoute(
-                    path: 'intake',
-                    builder: (_, _) => const IntakePage(),
-                  ),
-                  GoRoute(
-                    path: 'items/:id',
-                    parentNavigatorKey: _rootNavigatorKey,
-                    pageBuilder: (_, state) => FormSheetPage(
-                      key: state.pageKey,
-                      child: ItemPage(id: state.pathParameters['id']!),
+                      child: const CharacterSetupPage(),
                     ),
                   ),
                   GoRoute(
@@ -251,17 +281,6 @@ GoRouter createRouter({bool onboarding = false}) {
             ),
           ),
         ),
-        routes: [
-          GoRoute(
-            path: 'character-setup',
-            parentNavigatorKey: _rootNavigatorKey,
-            pageBuilder: (_, state) => FormSheetPage(
-              key: state.pageKey,
-              enableDrag: false,
-              child: const CharacterSetupPage(),
-            ),
-          ),
-        ],
       ),
     ],
   );
@@ -297,6 +316,10 @@ class FormSheetPage extends Page<void> {
   );
 }
 
+/// The Schrank comes first, it is what the app opens on.
+const _wardrobeBranch = 0;
+const _looksBranch = 1;
+
 var _finished = <Look>[];
 
 /// Looks that stopped developing between [previous] and [next].
@@ -317,7 +340,7 @@ void _announceFinishedLooks(
   BuildContext context,
   StatefulNavigationShell shell,
 ) {
-  if (shell.currentIndex == 0) return;
+  if (shell.currentIndex == _looksBranch) return;
   final failed = _finished.any((look) => look.state == 'failed');
   showFormToast(
     context,
@@ -325,6 +348,6 @@ void _announceFinishedLooks(
       failed ? LocaleKeys.lookFailedNotice : LocaleKeys.lookReadyNotice,
     ),
     action: context.tr(LocaleKeys.lookView),
-    onAction: () => shell.goBranch(0),
+    onAction: () => shell.goBranch(_looksBranch),
   );
 }

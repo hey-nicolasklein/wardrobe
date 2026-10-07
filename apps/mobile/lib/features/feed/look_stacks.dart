@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/feed/feed_cubit.dart';
+import 'package:form_mobile/features/feed/feed_domain.dart';
+import 'package:form_mobile/features/feed/flat_lay_widget.dart';
 import 'package:form_mobile/features/feed/look_card.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/wardrobe.dart';
@@ -183,6 +187,10 @@ class _StackPressableState extends State<StackPressable>
 /// With [developingFace], looks that are still being made join the fan as
 /// prints that show that face under a drifting sheen, so a new look visibly
 /// lands on its stack.
+///
+/// With [feed], combinations join too: as their newest image, or their pieces
+/// laid out flat, under the sheen while an image of them develops.
+/// [pendingPhotos] are local photos still on their way to becoming looks.
 class PhotoFan extends StatelessWidget {
   const PhotoFan({
     required this.looks,
@@ -192,11 +200,15 @@ class PhotoFan extends StatelessWidget {
     this.angle = 0.11,
     this.offset = 0.36,
     this.developingFace,
+    this.feed,
+    this.pendingPhotos = const [],
     super.key,
   });
 
   final List<CachedLook> looks;
   final Widget Function(CachedLook record)? developingFace;
+  final FeedState? feed;
+  final List<String> pendingPhotos;
   final bool online;
   final Size photoSize;
   final double spread;
@@ -209,14 +221,27 @@ class PhotoFan extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final photos = looks
-        .where(
-          (r) =>
-              r.look.assetId != null ||
-              (developingFace != null && r.look.isActive),
-        )
-        .take(3)
-        .toList();
+    final feed = this.feed;
+    final photos = <_PrintFace>[
+      for (final path in pendingPhotos.reversed) _PrintFace(localPath: path),
+      for (final record in looks)
+        if (record.look.assetId != null ||
+            (developingFace != null && record.look.isActive))
+          _PrintFace(record: record)
+        else if (feed != null && record.look.isReady)
+          _PrintFace(
+            record: feed.coverOf(record) ?? record,
+            flat: feed.coverOf(record) == null
+                ? FlatLayBoard(
+                    garments: lookGarments(record.look, feed.itemsById),
+                    online: online,
+                  )
+                : null,
+            developing: feed
+                .imagesOf(record.look.id)
+                .any((image) => image.look.isActive),
+          ),
+    ].take(3).toList();
     // Back to front: right, left, then the top print.
     final layers = <(int, double)>[
       if (photos.length > 2) (2, 1),
@@ -239,7 +264,7 @@ class PhotoFan extends StatelessWidget {
               child: Transform.rotate(
                 angle: side * angle * spread,
                 child: _Print(
-                  record: index < photos.length ? photos[index] : null,
+                  face: index < photos.length ? photos[index] : null,
                   online: online,
                   size: photoSize,
                   elevated: side == 0,
@@ -253,16 +278,34 @@ class PhotoFan extends StatelessWidget {
   }
 }
 
+/// What one print in a [PhotoFan] shows: a look's photo, its pieces laid out
+/// [flat], or a local photo still being uploaded.
+class _PrintFace {
+  const _PrintFace({
+    this.record,
+    this.flat,
+    this.localPath,
+    this.developing = false,
+  });
+
+  final CachedLook? record;
+  final Widget? flat;
+  final String? localPath;
+
+  /// An image of the look is still being made.
+  final bool developing;
+}
+
 class _Print extends StatelessWidget {
   const _Print({
-    required this.record,
+    required this.face,
     required this.online,
     required this.size,
     required this.elevated,
     this.developingFace,
   });
 
-  final CachedLook? record;
+  final _PrintFace? face;
   final bool online;
   final Size size;
   final bool elevated;
@@ -270,6 +313,7 @@ class _Print extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final record = face?.record;
     final assetId = record?.look.assetId;
     const frame = 2.5;
     final radius = size.width > 120 ? 14.0 : 10.0;
@@ -296,34 +340,74 @@ class _Print extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius - frame),
         child: ColoredBox(
           color: FormTokens.flatLayPaper,
-          child: record != null && record!.look.isActive && assetId == null
-              ? Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Faded like an underexposed print until the photo is in.
-                    if (developingFace case final face?)
-                      Opacity(
-                        opacity: 0.4,
-                        child: Center(child: face(record!)),
-                      ),
-                    const DevelopingSheen(active: true),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: size.height * 0.08,
-                      child: const Center(child: _DevelopingBadge()),
+          child: switch (face) {
+            _PrintFace(:final localPath?) => Stack(
+              fit: StackFit.expand,
+              children: [
+                Opacity(
+                  opacity: 0.55,
+                  child: Image.file(
+                    File(localPath),
+                    fit: BoxFit.cover,
+                    cacheWidth: 360,
+                    errorBuilder: (_, _, _) => const SizedBox.expand(),
+                  ),
+                ),
+                const DevelopingSheen(active: true),
+                if (size.width > 100)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: size.height * 0.08,
+                    child: const Center(child: _DevelopingBadge()),
+                  ),
+              ],
+            ),
+            _PrintFace(:final flat?, :final developing) => Stack(
+              fit: StackFit.expand,
+              children: [
+                Padding(
+                  padding: EdgeInsets.all(size.width * 0.06),
+                  child: Center(child: flat),
+                ),
+                if (developing) const DevelopingSheen(active: true),
+              ],
+            ),
+            _ when record != null && record.look.isActive && assetId == null =>
+              Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Faded like an underexposed print until the photo is in.
+                  if (developingFace case final developingFace?)
+                    Opacity(
+                      opacity: 0.4,
+                      child: Center(child: developingFace(record)),
                     ),
-                  ],
-                )
-              : assetId == null
-              ? const SizedBox.expand()
-              : CachedMedia(
+                  const DevelopingSheen(active: true),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: size.height * 0.08,
+                    child: const Center(child: _DevelopingBadge()),
+                  ),
+                ],
+              ),
+            _ when assetId == null => const SizedBox.expand(),
+            _ => Stack(
+              fit: StackFit.expand,
+              children: [
+                CachedMedia(
                   identity: assetId,
                   previewPath: record!.previewPath(assetId),
                   online: online,
                   fit: BoxFit.cover,
                   entrance: MediaEntrance.fade,
                 ),
+                if (face?.developing ?? false)
+                  const DevelopingSheen(active: true),
+              ],
+            ),
+          },
         ),
       ),
     );

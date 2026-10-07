@@ -17,7 +17,7 @@ void main() {
   late AppDatabase database;
   late Directory directory;
   late LookRepository looks;
-  late List<String> rendered;
+  late List<String> kept;
   late List<Map<String, dynamic>> proposals;
   late List<Map<String, dynamic>> proposeBodies;
   late List<Map<String, dynamic>> adjustBodies;
@@ -32,7 +32,7 @@ void main() {
   setUp(() async {
     database = AppDatabase(NativeDatabase.memory());
     directory = await Directory.systemTemp.createTemp('form-proposals-test-');
-    rendered = [];
+    kept = [];
     proposeBodies = [];
     adjustBodies = [];
     proposals = [
@@ -62,11 +62,11 @@ void main() {
           if (options.path == 'v1/looks/proposals') {
             return jsonResponse(jsonEncode({'looks': proposals}));
           }
-          if (options.path.endsWith('/render')) {
+          if (options.path.endsWith('/keep')) {
             final id = options.path.split('/')[2];
-            rendered.add(id);
+            kept.add(id);
             proposals.removeWhere((look) => look['id'] == id);
-            return jsonResponse(jsonEncode({'lookId': id, 'jobId': 'j'}), 202);
+            return jsonResponse(jsonEncode({'lookId': id}));
           }
           if (options.path == 'v1/looks') {
             return jsonResponse(jsonEncode({'looks': <Object>[]}));
@@ -89,11 +89,10 @@ void main() {
   });
 
   test(
-    'swiping works through the deck and renders only picked outfits',
+    'swiping works through the deck and keeps only the picked outfit',
     () async {
       final cubit = LookProposalsCubit(
         looks,
-        quality: 'medium',
         undoWindow: Duration.zero,
       );
       addTearDown(cubit.close);
@@ -106,7 +105,7 @@ void main() {
       expect(cubit.state.deck.map((look) => look.id), ['look-b']);
       await cubit.pick('look-b');
       await cubit.refresh();
-      expect(rendered, ['look-b']);
+      expect(kept, ['look-b']);
       expect(cubit.state.picked, {'look-b'});
       expect(cubit.state.finished, isTrue);
     },
@@ -116,7 +115,6 @@ void main() {
     () async {
       final cubit = LookProposalsCubit(
         looks,
-        quality: 'low',
         request: {
           'exactItemIds': <String>[],
           'categories': <String>[],
@@ -157,7 +155,6 @@ void main() {
   test('a pick ends the round and the next round keeps the marks', () async {
     final cubit = LookProposalsCubit(
       looks,
-      quality: 'low',
       undoWindow: Duration.zero,
       request: {
         'exactItemIds': <String>[],
@@ -174,7 +171,7 @@ void main() {
     await cubit.swap('pants', onLookId: 'look-a');
     await cubit.pick('look-a');
     await cubit.pick('look-b');
-    expect(rendered, ['look-a']);
+    expect(kept, ['look-a']);
     expect(cubit.state.finished, isTrue);
     // No more outfits are planned once the round has its outfit.
     expect(proposeBodies, isEmpty);
@@ -187,10 +184,9 @@ void main() {
     expect(cubit.state.marks.keys, {'jacket', 'pants'});
     expect(cubit.state.picked, isEmpty);
   });
-  test('an undone pick returns to the deck and never renders', () async {
+  test('an undone pick returns to the deck and is never kept', () async {
     final cubit = LookProposalsCubit(
       looks,
-      quality: 'low',
       undoWindow: const Duration(milliseconds: 50),
     );
     addTearDown(cubit.close);
@@ -200,13 +196,13 @@ void main() {
     cubit.undoPick();
     await pick;
     await Future<void>.delayed(const Duration(milliseconds: 80));
-    expect(rendered, isEmpty);
+    expect(kept, isEmpty);
     expect(cubit.state.deck.first.id, 'look-a');
   });
   test(
     'tapping a piece keeps it, then leaves it out, then clears it',
     () async {
-      final cubit = LookProposalsCubit(looks, quality: 'low');
+      final cubit = LookProposalsCubit(looks);
       addTearDown(cubit.close);
       await cubit.refresh();
       await cubit.cycle('shoes', onLookId: 'look-a');

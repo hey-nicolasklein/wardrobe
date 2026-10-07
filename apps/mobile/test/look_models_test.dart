@@ -17,6 +17,7 @@ void main() {
       {'size': '512x512'},
       {'quality': 'ultra'},
       {'id': ''},
+      {'kind': 'collage'},
     ]) {
       expect(
         () => Look.fromJson({...lookJson(), ...patch}),
@@ -32,6 +33,33 @@ void main() {
       }),
       throwsFormatException,
     );
+  });
+
+  test('looks cached before kinds existed read as generated looks', () {
+    final legacy = lookJson()..remove('kind');
+    expect(Look.fromJson(normalizeLookJson(legacy)).kind, 'inspiration');
+    final tryOn = {...legacy, 'baseAssetId': 'photo-0001'};
+    expect(Look.fromJson(normalizeLookJson(tryOn)).kind, 'try-on');
+  });
+
+  test('a photo look is analysed until its found pieces arrive', () {
+    final json = lookJson(kind: 'photo')..['sourcePhotoId'] = 'source-0001';
+    expect(Look.fromJson(json).isAnalysing, isTrue);
+    final found = Look.fromJson({
+      ...json,
+      'found': [
+        {
+          'id': 'proposal-0001',
+          'name': 'Linen shirt',
+          'category': 'top',
+          'colors': ['white'],
+          'boundingBox': {'x': 1, 'y': 1, 'width': 10, 'height': 10},
+          'wardrobeItemId': null,
+        },
+      ],
+    });
+    expect(found.isAnalysing, isFalse);
+    expect(found.found!.single.name, 'Linen shirt');
   });
 
   test('character sheet validation matches contract', () {

@@ -48,10 +48,11 @@ List<LookGarment> lookGarments(
   ];
 }
 
+/// Finished looks [itemId] is part of, whether with a photo or laid flat.
 List<Look> readyLooksForItem(String itemId, Iterable<Look> looks) => [
   for (final look in looks)
     if (look.isReady &&
-        look.assetId != null &&
+        (look.assetId != null || !look.isGenerated) &&
         look.wardrobeItemIds.contains(itemId))
       look,
 ];
@@ -81,6 +82,11 @@ class OccasionStack extends LookStack {
 
 class TryOnStack extends LookStack {
   const TryOnStack();
+}
+
+/// Looks kept from photos the user wore them in.
+class PhotoStack extends LookStack {
+  const PhotoStack();
 }
 
 class SavedStack extends LookStack {
@@ -115,9 +121,14 @@ bool inLookStack(
   Map<String, List<String>> collections = const {},
 }) => switch (stack) {
   AllLooksStack() => true,
+  // Only looks made for an occasion count. Photos and combinations saved
+  // without one have no settings, which is not the surprise occasion.
   OccasionStack(:final occasion) =>
-    !look.isTryOn && look.settings?.occasion == occasion,
+    !look.isTryOn &&
+        look.settings != null &&
+        look.settings!.occasion == occasion,
   TryOnStack() => look.isTryOn,
+  PhotoStack() => look.isPhoto,
   SavedStack() => saved,
   CollectionStack(:final collectionId) =>
     collections[collectionId]?.contains(look.id) ?? false,

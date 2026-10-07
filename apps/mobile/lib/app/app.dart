@@ -22,7 +22,7 @@ import 'package:go_router/go_router.dart';
 class FormApp extends StatefulWidget {
   const FormApp({this.onboarding = false, super.key});
 
-  /// Opens onboarding instead of the Feed.
+  /// Opens onboarding instead of the Schrank.
   final bool onboarding;
 
   @override
@@ -37,9 +37,7 @@ class _FormAppState extends State<FormApp> {
   @override
   void initState() {
     super.initState();
-    _router.routeInformationProvider
-      ..addListener(_intakeVisibility)
-      ..addListener(_creditsVisibility);
+    _router.routeInformationProvider.addListener(_creditsVisibility);
     _lifecycle = AppLifecycleListener(
       onStateChange: (state) {
         context.read<WardrobeCubit>().setForeground(
@@ -58,13 +56,6 @@ class _FormAppState extends State<FormApp> {
       onResume: () => unawaited(context.read<ConnectionCubit>().check()),
     );
     unawaited(context.read<ConnectionCubit>().check());
-  }
-
-  void _intakeVisibility() {
-    context.read<IntakeBloc>().availability(
-      visible:
-          _router.routeInformationProvider.value.uri.path == '/wardrobe/intake',
-    );
   }
 
   // Generations spend credits anywhere in the app, so the balance refreshes
@@ -118,9 +109,7 @@ class _FormAppState extends State<FormApp> {
   @override
   void dispose() {
     _lifecycle.dispose();
-    _router.routeInformationProvider
-      ..removeListener(_intakeVisibility)
-      ..removeListener(_creditsVisibility);
+    _router.routeInformationProvider.removeListener(_creditsVisibility);
     _router.dispose();
     super.dispose();
   }

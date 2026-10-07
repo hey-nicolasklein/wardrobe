@@ -134,6 +134,10 @@ class ComposerState {
   /// Set once the server accepted the look. The page closes on it.
   final String? createdLookId;
 
+  /// Whether [createdLookId] is a combination saved for free, rather than a
+  /// try-on that is still being made.
+  bool get savedCombination => createdLookId != null && !tryOn;
+
   /// Set once outfits were proposed instead of a look created. The page then
   /// switches to the proposals, where the user picks what to render.
   final bool proposed;
@@ -397,26 +401,49 @@ class ComposerCubit extends Cubit<ComposerState> {
           idempotencyKey: idempotencyKey,
         );
 
-  Future<void> submit() async {
-    if (state.submitting ||
-        state.createdLookId != null ||
-        state.proposed ||
-        !state.canSubmit) {
-      return;
-    }
+  bool get _busy =>
+      state.submitting || state.createdLookId != null || state.proposed;
+
+  /// Saves the picked pieces as a look, laid out flat. Free.
+  Future<void> save() async {
+    if (_busy || state.selectedIds.isEmpty) return;
     emit(state.copyWith(submitting: true, failure: () => null));
     try {
-      // New scenes are proposed first; a try-on has nothing to choose.
+      final lookId = await looks.createCombination(
+        state.selectedIds.toList(),
+        occasion: state.occasion,
+        idempotencyKey: idempotencyKey,
+      );
+      emit(state.copyWith(submitting: false, createdLookId: lookId));
+    } on FormApiException catch (error) {
+      emit(state.copyWith(submitting: false, failure: () => error.failure));
+    }
+  }
+
+  /// Lets FORM propose outfits around the picked pieces, for free. A try-on
+  /// saves the pieces as a look and puts them on the picked photo, paid.
+  Future<void> submit() async {
+    if (_busy || !state.canSubmit) return;
+    emit(state.copyWith(submitting: true, failure: () => null));
+    try {
       if (!state.tryOn) {
         await looks.propose(command().body);
         emit(state.copyWith(submitting: false, proposed: true));
         return;
       }
-      final lookId = await looks.create(
-        command(),
+      // The combination comes first, so a failed try-on leaves the look.
+      final combinationId = await looks.createCombination(
         state.selectedIds.toList(),
+        idempotencyKey: '$idempotencyKey:pieces',
       );
-      emit(state.copyWith(submitting: false, createdLookId: lookId));
+      await looks.createImage(
+        combinationId,
+        mode: 'try-on',
+        baseAssetId: state.baseAssetId,
+        quality: state.quality,
+        idempotencyKey: idempotencyKey,
+      );
+      emit(state.copyWith(submitting: false, createdLookId: combinationId));
     } on FormApiException catch (error) {
       emit(state.copyWith(submitting: false, failure: () => error.failure));
     }

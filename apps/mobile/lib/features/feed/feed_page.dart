@@ -14,6 +14,7 @@ import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/feed/fitting_room_card.dart';
 import 'package:form_mobile/features/feed/flat_lay_widget.dart';
+import 'package:form_mobile/features/feed/look_actions.dart';
 import 'package:form_mobile/features/feed/look_card.dart';
 import 'package:form_mobile/features/feed/look_collections_cubit.dart';
 import 'package:form_mobile/features/feed/look_commands.dart';
@@ -35,8 +36,7 @@ import 'package:form_mobile/widgets/cached_media.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
-/// Opens the look composer, or character-reference setup when no active
-/// reference exists yet. [itemIds] preselects pieces; [tryOn] starts in
+/// Opens the look composer. [itemIds] preselects pieces; [tryOn] starts in
 /// try-on mode and [occasion] preselects an occasion. [from] starts with an
 /// earlier look's pieces and settings instead.
 void openLookComposer(
@@ -46,10 +46,6 @@ void openLookComposer(
   String? occasion,
   Look? from,
 }) {
-  if (context.read<FeedCubit>().state.hasActiveCharacterReference == false) {
-    unawaited(context.push('/feed/character-setup'));
-    return;
-  }
   final query = [
     ...itemIds.map((id) => 'item=${Uri.encodeComponent(id)}'),
     if (tryOn) 'mode=try-on',
@@ -75,7 +71,8 @@ class FeedPage extends StatelessWidget {
   Widget build(BuildContext context) => BlocBuilder<FeedCubit, FeedState>(
     builder: (context, state) {
       final cubit = context.read<FeedCubit>();
-      final looks = state.looks ?? [];
+      final looks = state.archive;
+      final empty = looks.isEmpty && state.pendingPhotos.isEmpty;
 
       // Before the first sync settles, no looks means "not loaded yet", not
       // an empty feed.
@@ -116,15 +113,10 @@ class FeedPage extends StatelessWidget {
                     sliver: SliverList.list(
                       children: [
                         FormWordmark(title: context.tr(LocaleKeys.appName)),
-                        // The cloud carries the create action once there are
-                        // enough pieces to fill it.
                         _LooksHeader(
-                          onCreate:
-                              looks.isEmpty ||
-                                  loading ||
-                                  _cloudItems(state).length >= _cloudMinimum
+                          onCreate: empty || loading
                               ? null
-                              : () => openLookComposer(context),
+                              : () => unawaited(showNewLookSheet(context)),
                         ),
                         if (state.stale && !state.online && state.looks != null)
                           Padding(
@@ -163,25 +155,15 @@ class FeedPage extends StatelessWidget {
                         ),
                       ),
                     )
-                  else if (looks.isEmpty)
+                  else if (empty)
                     SliverFillRemaining(
                       hasScrollBody: false,
                       child: FormEmptyState(
                         title: context.tr(LocaleKeys.feedEmptyTitle),
-                        message: context.tr(
-                          state.hasActiveCharacterReference == false
-                              ? LocaleKeys.feedEmptyWithoutSheet
-                              : LocaleKeys.feedEmptyWithSheet,
-                        ),
+                        message: context.tr(LocaleKeys.feedEmptyBody),
                         action: FilledButton(
-                          onPressed: () => openLookComposer(context),
-                          child: Text(
-                            context.tr(
-                              state.hasActiveCharacterReference == false
-                                  ? LocaleKeys.feedCharacterSetup
-                                  : LocaleKeys.feedFirstLook,
-                            ),
-                          ),
+                          onPressed: () => unawaited(showNewLookSheet(context)),
+                          child: Text(context.tr(LocaleKeys.feedFirstLook)),
                         ),
                       ),
                     )
@@ -214,27 +196,31 @@ class FeedPage extends StatelessWidget {
   /// The newest finished try-on, shown as the user's figure on the worn
   /// stage.
   static ({String identity, String previewPath})? _figure(FeedState state) {
-    for (final record in _stackLooks(state, const TryOnStack())) {
-      if (record.look.assetId case final assetId?) {
+    for (final record in state.looks ?? const <CachedLook>[]) {
+      if (record.look case Look(isTryOn: true, :final assetId?)) {
         return (identity: assetId, previewPath: record.previewPath(assetId));
       }
     }
     return null;
   }
 
+  /// [stack]'s looks as the archive shows them. A combination counts as a
+  /// try-on once one of its images is.
   static List<CachedLook> _stackLooks(
     FeedState state,
     LookStack stack, [
     List<LookCollection> collections = const [],
   ]) => [
-    for (final record in state.looks ?? const <CachedLook>[])
+    for (final record in state.archive)
       if (inLookStack(
-        stack,
-        record.look,
-        itemsById: state.itemsById,
-        saved: state.saved[record.look.id] ?? false,
-        collections: {for (final c in collections) c.id: c.lookIds},
-      ))
+            stack,
+            record.look,
+            itemsById: state.itemsById,
+            saved: state.saved[record.look.id] ?? false,
+            collections: {for (final c in collections) c.id: c.lookIds},
+          ) ||
+          (stack is TryOnStack &&
+              state.imagesOf(record.look.id).any((i) => i.look.isTryOn)))
         record,
   ];
 
@@ -242,12 +228,12 @@ class FeedPage extends StatelessWidget {
   /// Sammlungen with saved looks and try-ons, then one stack per piece and
   /// per colour.
   List<Widget> _overview(BuildContext context, FeedState state) {
-    final looks = state.looks ?? const <CachedLook>[];
+    final looks = state.archive;
     final userCollections = context.watch<LookCollectionsCubit>().state;
     final online = state.online;
     final width = MediaQuery.sizeOf(context).width;
     final collections = [
-      for (final stack in const [SavedStack(), TryOnStack()])
+      for (final stack in const [PhotoStack(), TryOnStack(), SavedStack()])
         if (_stackLooks(state, stack) case final looks when looks.isNotEmpty)
           (stack, looks),
     ];
@@ -333,6 +319,8 @@ class FeedPage extends StatelessWidget {
                       angle: away * -0.06,
                       child: PhotoFan(
                         looks: looks,
+                        feed: state,
+                        pendingPhotos: state.pendingPhotos,
                         online: online,
                         photoSize: heroPhoto,
                         spread: spread * (1 + pull * 0.9) * (1 - away * 0.75),
@@ -415,6 +403,7 @@ class FeedPage extends StatelessWidget {
                 stackLooks.length,
                 PhotoFan(
                   looks: stackLooks,
+                  feed: state,
                   online: online,
                   photoSize: const Size(80, 100),
                   spread: spread,
@@ -546,6 +535,7 @@ class FeedPage extends StatelessWidget {
               ? _EmptyCollection(emoji: collection.emoji, spread: spread)
               : PhotoFan(
                   looks: looks,
+                  feed: state,
                   online: state.online,
                   photoSize: const Size(80, 100),
                   spread: spread,
@@ -572,6 +562,7 @@ class FeedPage extends StatelessWidget {
       occasionPresets.firstWhere((p) => p.value == occasion).label,
     ),
     TryOnStack() => context.tr(LocaleKeys.stackTryOn),
+    PhotoStack() => context.tr(LocaleKeys.stackPhotos),
     SavedStack() => context.tr(LocaleKeys.stackSaved),
     CollectionStack(:final collectionId) => switch (_collection(
       context,
@@ -589,7 +580,8 @@ class FeedPage extends StatelessWidget {
   /// natural starting point, so they get none.
   static VoidCallback? _createIn(BuildContext context, LookStack stack) =>
       switch (stack) {
-        AllLooksStack() => () => openLookComposer(context),
+        AllLooksStack() => () => unawaited(showNewLookSheet(context)),
+        PhotoStack() => () => unawaited(addPhotoLooks(context)),
         OccasionStack(:final occasion) => () => openLookComposer(
           context,
           occasion: occasion,
@@ -643,7 +635,9 @@ class FeedPage extends StatelessWidget {
         state: state,
         garments: _garments(state, record.look),
         online: state.online && !state.stale,
-        onMenu: () => _openLookMenu(context, record.look),
+        onMenu: (look) => _openLookMenu(context, look),
+        onRetry: (look) =>
+            runFeedAction(context, () => cubit.retryLook(look.id)),
         onOpenStack: (stack) => _openStack(context, stack),
       );
     }
@@ -679,7 +673,8 @@ class FeedPage extends StatelessWidget {
   ) {
     final output = context.read<LookOutputService>();
     final garments = _garments(state, look);
-    final flat = state.views[look.id] == LookFeedView.flat;
+    final flat =
+        state.views[look.id] == LookFeedView.flat || look.assetId == null;
     return runFeedAction(
       context,
       () => flat
@@ -755,7 +750,30 @@ class FeedPage extends StatelessWidget {
           children: [
             _MenuGroup(
               children: [
-                if (look.isTryOn)
+                // A combination gets images on top; it never changes itself.
+                if (look.isCombination) ...[
+                  _MenuRow(
+                    label: context.tr(LocaleKeys.lookTryOn),
+                    cost: cost,
+                    disabledReason: offline,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      unawaited(addLookImage(context, look, mode: 'try-on'));
+                    },
+                  ),
+                  _MenuRow(
+                    label: context.tr(LocaleKeys.lookInspiration),
+                    cost: cost,
+                    disabledReason: offline,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      unawaited(
+                        addLookImage(context, look, mode: 'inspiration'),
+                      );
+                    },
+                  ),
+                ],
+                if (look.isGenerated && look.isTryOn)
                   _MenuRow(
                     label: context.tr(LocaleKeys.tryOnAgain),
                     cost: cost,
@@ -774,7 +792,7 @@ class FeedPage extends StatelessWidget {
                       ),
                     ),
                   ),
-                if (!look.isTryOn)
+                if (look.isGenerated && !look.isTryOn)
                   _MenuRow(
                     label: context.tr(LocaleKeys.lookVary),
                     cost: cost,
@@ -812,7 +830,7 @@ class FeedPage extends StatelessWidget {
                       ),
                     ),
                   ),
-                if (look.quality != 'high' && !look.isTryOn)
+                if (look.isGenerated && look.quality != 'high' && !look.isTryOn)
                   _MenuRow(
                     label: context.tr(LocaleKeys.lookUpgrade),
                     cost: cost,
@@ -824,7 +842,7 @@ class FeedPage extends StatelessWidget {
                   ),
                 // Try-on starts from a finished look, so the composer never
                 // has to ask which kind of look to make.
-                if (!look.isTryOn)
+                if (look.isGenerated && !look.isTryOn)
                   _MenuRow(
                     label: context.tr(LocaleKeys.lookTryOn),
                     cost: cost,
@@ -876,14 +894,15 @@ class FeedPage extends StatelessWidget {
                     unawaited(_share(context, cubit.state, look, origin));
                   },
                 ),
-                _MenuRow(
-                  label: context.tr(LocaleKeys.lookDownloadWorn),
-                  onTap: () => run(
-                    sheetContext,
-                    () => output.saveWorn(look),
-                    success: context.tr(LocaleKeys.lookSavedToPhotos),
+                if (look.assetId != null)
+                  _MenuRow(
+                    label: context.tr(LocaleKeys.lookDownloadWorn),
+                    onTap: () => run(
+                      sheetContext,
+                      () => output.saveWorn(look),
+                      success: context.tr(LocaleKeys.lookSavedToPhotos),
+                    ),
                   ),
-                ),
                 _MenuRow(
                   label: context.tr(LocaleKeys.lookDownloadFlat),
                   onTap: () => run(
@@ -949,14 +968,16 @@ class FeedPage extends StatelessWidget {
                   context.locale.toString(),
                 ).add_Hm().format(look.createdAt.toLocal()),
               ),
-              _DetailRow(
-                label: context.tr(LocaleKeys.lookModel),
-                value: '${look.model} · ${look.quality} · ${look.size}',
-              ),
-              _DetailRow(
-                label: context.tr(LocaleKeys.lookCharacterReference),
-                value: look.characterSheetId,
-              ),
+              if (look.isGenerated)
+                _DetailRow(
+                  label: context.tr(LocaleKeys.lookModel),
+                  value: '${look.model} · ${look.quality} · ${look.size}',
+                ),
+              if (look.characterSheetId case final sheet?)
+                _DetailRow(
+                  label: context.tr(LocaleKeys.lookCharacterReference),
+                  value: sheet,
+                ),
               _DetailRow(
                 label: context.tr(LocaleKeys.lookPieces),
                 value: look.wardrobeItemIds

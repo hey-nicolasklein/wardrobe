@@ -14,9 +14,10 @@ import 'package:form_mobile/repository/preferences_repository.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
-/// First-run walkthrough with bundled demo pieces: the Looks feed, scanning
-/// a photo, the Schrank, and turning a piece into a look or a try-on. Leads
-/// into the character collage and the first intake. Replayable from Settings.
+/// First-run walkthrough with bundled demo pieces: scanning a photo, the
+/// Schrank, your looks, and turning a piece into a look. Leads into the first
+/// intake. Photos of the user are asked for later, only when a feature needs
+/// them. Replayable from Settings.
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key});
 
@@ -25,7 +26,7 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _OnboardingPageState extends State<OnboardingPage> {
-  static const _count = 7;
+  static const _count = 6;
   final _pages = PageController();
   int _index = 0;
   bool _precached = false;
@@ -52,7 +53,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
     if (location == null && context.canPop()) {
       context.pop();
     } else {
-      context.go(location ?? '/feed');
+      context.go(location ?? '/wardrobe');
     }
   }
 
@@ -101,12 +102,11 @@ class _OnboardingPageState extends State<OnboardingPage> {
               },
               children: [
                 const _WelcomeStep(),
-                const OnboardingFeedStep(),
-                OnboardingScanStep(active: _index == 2),
+                OnboardingScanStep(active: _index == 1),
                 const OnboardingClosetStep(),
+                const OnboardingFeedStep(),
                 const OnboardingPieceLookStep(),
-                OnboardingCollageStep(active: _index == 5),
-                _FinaleStep(onExplore: () => unawaited(_finish('/feed'))),
+                _FinaleStep(onExplore: () => unawaited(_finish('/wardrobe'))),
               ],
             ),
           ),

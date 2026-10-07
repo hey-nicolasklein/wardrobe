@@ -2,16 +2,14 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:app_settings/app_settings.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
-import 'package:form_mobile/features/intake/intake_failure.dart';
+import 'package:form_mobile/features/intake/intake_picker.dart';
 import 'package:form_mobile/features/onboarding/scan_stage.dart';
 import 'package:form_mobile/features/wardrobe/item_edit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -20,7 +18,6 @@ import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/credits_repository.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 
 bool _analyzing(IntakeDraft draft) => switch (draft.phase) {
   DraftPhase.local ||
@@ -59,7 +56,6 @@ class IntakePage extends StatefulWidget {
 
 class _IntakePageState extends State<IntakePage> {
   bool _picking = false;
-  String? _pickerError;
   late IntakeBloc _bloc;
   final _pages = PageController();
   final _trayKeys = <String, GlobalKey>{};
@@ -70,73 +66,24 @@ class _IntakePageState extends State<IntakePage> {
   void initState() {
     super.initState();
     _bloc = context.read<IntakeBloc>();
-    _bloc.availability(visible: true);
   }
 
   @override
   void dispose() {
-    _bloc.availability(visible: false);
     _pages.dispose();
     super.dispose();
   }
 
-  Future<void> _pick({required bool camera}) async {
-    setState(() {
-      _picking = true;
-      _pickerError = null;
-    });
-    try {
-      final picker = ImagePicker();
-      final List<XFile> files;
-      if (camera) {
-        final photo = await picker.pickImage(
-          source: ImageSource.camera,
-          requestFullMetadata: false,
-        );
-        files = photo == null ? [] : [photo];
-      } else {
-        files = await picker.pickMultiImage(requestFullMetadata: false);
-      }
-      if (files.isNotEmpty) {
-        _bloc.add(
-          IntakeEvent(
-            IntakeAction.add,
-            paths: files.map((f) => f.path).toList(),
-          ),
-        );
-      }
-    } on Object catch (error) {
-      _pickerError = intakeFailureKey(
-        error,
-        fallback: LocaleKeys.intake_invalidPhoto,
-      );
-    } finally {
-      if (mounted) setState(() => _picking = false);
-    }
-  }
-
-  Future<void> _pickSource() async {
-    final camera = await showCupertinoModalPopup<bool>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(context.tr(LocaleKeys.intake_more)),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(context.tr(LocaleKeys.intake_camera)),
-          ),
-          CupertinoActionSheetAction(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(context.tr(LocaleKeys.intake_library)),
-          ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(context),
-          child: Text(context.tr(LocaleKeys.cancel)),
-        ),
-      ),
-    );
-    if (camera != null) await _pick(camera: camera);
+  /// Hands the picked photos to the background intake. Started from the
+  /// empty page, there is nothing left to do here, so it returns to the
+  /// Schrank, where the pieces arrive.
+  Future<void> _pick({bool? camera}) async {
+    setState(() => _picking = true);
+    final wasEmpty = _bloc.state.drafts.isEmpty;
+    final added = await addClothesPhotos(context, camera: camera);
+    if (!mounted) return;
+    setState(() => _picking = false);
+    if (added && wasEmpty) context.go('/wardrobe');
   }
 
   Future<void> _discard(IntakeDraft draft) async {
@@ -259,14 +206,6 @@ class _IntakePageState extends State<IntakePage> {
           FormNotice(text: context.tr(LocaleKeys.intake_offline), error: true),
         if (state.error != null)
           FormNotice(text: context.tr(state.error!), error: true),
-        if (_pickerError != null) ...[
-          FormNotice(text: context.tr(_pickerError!), error: true),
-          if (_pickerError == LocaleKeys.intake_permission)
-            TextButton(
-              onPressed: AppSettings.openAppSettings,
-              child: Text(context.tr(LocaleKeys.intake_openSettings)),
-            ),
-        ],
       ];
       return Scaffold(
         backgroundColor: FormTokens.paper,
@@ -318,7 +257,7 @@ class _IntakePageState extends State<IntakePage> {
                     keys: _trayKeys,
                     canAdd: online && !_picking,
                     onSelect: _goTo,
-                    onAdd: _pickSource,
+                    onAdd: _pick,
                   ),
                   Expanded(
                     child: PageView.builder(

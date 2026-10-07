@@ -12,7 +12,7 @@ iOS is the design and runtime authority. Android (10+/API 29) stays buildable wi
 
 People who want to know, use and grow their own wardrobe from their phone. FORM is heading for a public App Store release. Planning in `docs/accounts-and-billing.md` assumes a few hundred users in the first months and a few thousand at most. Nico is one account among them.
 
-Users meet FORM with no prior context. They sign in with Apple or Google, go through onboarding, and photograph their clothes, often several pieces in one photo, in everyday settings at home.
+Users meet FORM with no prior context. They sign in with Apple or Google, go through onboarding, and photograph their clothes, often several pieces in one photo, in everyday settings at home. Photos of themselves are asked for only when they first use Inspiration.
 
 ## Product Purpose
 
@@ -33,13 +33,12 @@ FORM is a better version of the selfie folder in Apple Photos. FORM turns photos
 
 ## Operating Context
 
-- Intake: one or several photos, each piece named and saved directly. Saving a piece also orders its catalog image. Optional detection proposes metadata and splits a photo into multiple pieces. Drafts survive interruption.
+- Intake: pick one or several photos and you are done. Upload, detection and catalog images run in the background while the user stays in the Schrank. Detected pieces arrive as new tiles; accessories stay out unless picked. Corrections happen on the tile: rename, or move a wrongly detected piece to the archive with undo. Photos without detected pieces wait for a name. Drafts survive interruption.
 - Wardrobe: grid sorted by recency, Owning/Wanting/Archived, filters for category and color, localized search, item detail with edit, image versions and restore.
 - Catalog images: part of every saved piece and paid. The first image is right in almost every case, so no review step is needed. In the rare bad case, users give feedback (proportions, color, details) to request a better version. Users can choose a quality. Older versions remain restorable.
-- Feed and looks: Worn and Flat views, a look composer, share and save to Photos. The composer has two distinct modes. Try on (Anprobe) puts the user's real pieces 1:1 on a full-body photo of them, which makes it a way to check pieces. Inspiration generates a full AI look whose quality varies.
-- Personal photo collage: one to four photos of the user, used as the reference for Inspiration looks.
+- Looks: the second tab, an archive sorted by occasion, Sammlung, piece and colour. A look is always a combination of the user's pieces, free and laid out flat. Images sit on top and never replace it: a photo the user wore it in (a photo look, whose detected pieces are listed for linking or adding), Try on (Anprobe), which puts the pieces 1:1 on a photo of the user, or Inspiration, a full AI scene whose quality varies. New looks come from the composer, from the user's photos, or from FORM's swipe suggestions, which are kept as combinations for free.
+- Personal photo collage: one to four photos of the user, used as the reference for Inspiration looks only. Asked for on the first Inspiration, not in onboarding.
 - Settings: language, account, credits and weekly costs, quality, feed weights, cache, archive.
-- Planned: upload selfies of the user wearing their clothes. FORM extracts the pieces into the wardrobe and keeps the selfie as a look linked to them. Not built yet.
 - Offline: cached grid, details and media stay readable. Changes are disabled until the connection returns.
 
 ## Capabilities and Constraints

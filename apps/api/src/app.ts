@@ -15,6 +15,10 @@ import {
   createCharacterSheetRequestSchema,
   activateCharacterSheetRequestSchema,
   createLookRequestSchema,
+  createCombinationLookRequestSchema,
+  createPhotoLookRequestSchema,
+  setLookItemsRequestSchema,
+  createLookImageRequestSchema,
   proposeLooksRequestSchema,
   adjustLookProposalsRequestSchema,
   renderLookProposalRequestSchema,
@@ -84,6 +88,11 @@ import {
   activateCharacterSheet,
   createCharacterSheet,
   createLook,
+  createCombinationLook,
+  createPhotoLook,
+  setLookItems,
+  createLookImage,
+  keepLookProposal,
   deleteLook,
   generationCosts,
   InspirationValidationError,
@@ -1105,6 +1114,135 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     } catch (error) {
       if (error instanceof InspirationValidationError)
         return context.json(errorPayload('validation', error.code, error.message), 409);
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  // Free looks of the user's own pieces: a combination, or a photo they wore it in.
+  app.post('/v1/looks/combinations', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    const parsed = createCombinationLookRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success)
+      return context.json(errorPayload('validation', 'invalid-look', 'Wähle die Stücke des Looks.'), 400);
+    try {
+      return context.json(
+        await createCombinationLook(database, { accountId: authenticated.session.id, ...parsed.data }),
+        201,
+      );
+    } catch (error) {
+      if (error instanceof InspirationValidationError)
+        return context.json(errorPayload('validation', error.code, error.message), 409);
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.post('/v1/looks/photos', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    const parsed = createPhotoLookRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success)
+      return context.json(errorPayload('validation', 'invalid-look', 'Wähle ein Foto.'), 400);
+    try {
+      return context.json(
+        await createPhotoLook(database, {
+          accountId: authenticated.session.id,
+          detectionModel,
+          ...parsed.data,
+        }),
+        201,
+      );
+    } catch (error) {
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.put('/v1/looks/:lookId/items', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    const parsed = setLookItemsRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success)
+      return context.json(errorPayload('validation', 'invalid-look-items', 'Wähle die Stücke des Looks.'), 400);
+    try {
+      return context.json(
+        await setLookItems(database, {
+          accountId: authenticated.session.id,
+          lookId: context.req.param('lookId'),
+          itemIds: parsed.data.itemIds,
+        }),
+      );
+    } catch (error) {
+      if (error instanceof InspirationValidationError)
+        return context.json(errorPayload('conflict', error.code, error.message), 409);
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.post('/v1/looks/:lookId/images', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    const parsed = createLookImageRequestSchema.safeParse(await context.req.json().catch(() => null));
+    if (!parsed.success)
+      return context.json(errorPayload('validation', 'invalid-look-image', 'Bild-Anfrage ungültig.'), 400);
+    try {
+      return context.json(
+        await createLookImage(database, {
+          accountId: authenticated.session.id,
+          lookId: context.req.param('lookId'),
+          ...parsed.data,
+        }),
+        202,
+      );
+    } catch (error) {
+      if (error instanceof InspirationValidationError)
+        return context.json(errorPayload('conflict', error.code, error.message), 409);
+      const mapped = wardrobeError(error);
+      if (mapped) return context.json(mapped.payload, mapped.status);
+      throw error;
+    }
+  });
+
+  app.post('/v1/looks/:lookId/keep', async (context) => {
+    const authenticated = await currentSession(context);
+    if (!authenticated)
+      return context.json(
+        errorPayload('authentication', 'authentication-required', 'Session required.'),
+        401,
+      );
+    try {
+      return context.json(
+        await keepLookProposal(database, {
+          accountId: authenticated.session.id,
+          lookId: context.req.param('lookId'),
+        }),
+      );
+    } catch (error) {
+      if (error instanceof InspirationValidationError)
+        return context.json(errorPayload('conflict', error.code, error.message), 409);
       const mapped = wardrobeError(error);
       if (mapped) return context.json(mapped.payload, mapped.status);
       throw error;

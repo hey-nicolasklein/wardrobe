@@ -6,6 +6,31 @@ part of 'look.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
+LookFoundPiece _$LookFoundPieceFromJson(Map<String, dynamic> json) =>
+    $checkedCreate('LookFoundPiece', json, ($checkedConvert) {
+      $checkKeys(json, requiredKeys: const ['id', 'name', 'category']);
+      final val = LookFoundPiece(
+        id: $checkedConvert('id', (v) => v as String),
+        name: $checkedConvert('name', (v) => v as String),
+        category: $checkedConvert('category', (v) => v as String),
+        colors: $checkedConvert(
+          'colors',
+          (v) => (v as List<dynamic>?)?.map((e) => e as String).toList() ?? [],
+        ),
+        wardrobeItemId: $checkedConvert('wardrobeItemId', (v) => v as String?),
+      );
+      return val;
+    });
+
+Map<String, dynamic> _$LookFoundPieceToJson(LookFoundPiece instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'name': instance.name,
+      'category': instance.category,
+      'colors': instance.colors,
+      'wardrobeItemId': ?instance.wardrobeItemId,
+    };
+
 LookReason _$LookReasonFromJson(Map<String, dynamic> json) =>
     $checkedCreate('LookReason', json, ($checkedConvert) {
       $checkKeys(json, requiredKeys: const ['kind']);
@@ -111,7 +136,7 @@ Look _$LookFromJson(Map<String, dynamic> json) => $checkedCreate('Look', json, (
       'wardrobeItemIds',
       (v) => (v as List<dynamic>).map((e) => e as String).toList(),
     ),
-    characterSheetId: $checkedConvert('characterSheetId', (v) => v as String),
+    characterSheetId: $checkedConvert('characterSheetId', (v) => v as String?),
     parentLookId: $checkedConvert('parentLookId', (v) => v as String?),
     concept: $checkedConvert(
       'concept',
@@ -134,6 +159,14 @@ Look _$LookFromJson(Map<String, dynamic> json) => $checkedCreate('Look', json, (
       'finishedAt',
       (v) => v == null ? null : DateTime.parse(v as String),
     ),
+    kind: $checkedConvert('kind', (v) => v as String? ?? 'inspiration'),
+    sourcePhotoId: $checkedConvert('sourcePhotoId', (v) => v as String?),
+    found: $checkedConvert(
+      'found',
+      (v) => (v as List<dynamic>?)
+          ?.map((e) => LookFoundPiece.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    ),
     baseAssetId: $checkedConvert('baseAssetId', (v) => v as String?),
     feedAssetId: $checkedConvert('feedAssetId', (v) => v as String?),
     settings: $checkedConvert(
@@ -154,8 +187,11 @@ Look _$LookFromJson(Map<String, dynamic> json) => $checkedCreate('Look', json, (
 
 Map<String, dynamic> _$LookToJson(Look instance) => <String, dynamic>{
   'id': instance.id,
+  'kind': instance.kind,
   'state': instance.state,
   'assetId': instance.assetId,
+  'sourcePhotoId': ?instance.sourcePhotoId,
+  'found': ?instance.found?.map((e) => e.toJson()).toList(),
   'feedAssetId': ?instance.feedAssetId,
   'wardrobeItemIds': instance.wardrobeItemIds,
   'characterSheetId': instance.characterSheetId,

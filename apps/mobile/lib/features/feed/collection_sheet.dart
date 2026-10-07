@@ -401,6 +401,7 @@ class _CollectionRow extends StatelessWidget {
                           curve: FormTokens.pop,
                           builder: (_, spread, _) => PhotoFan(
                             looks: looks,
+                            feed: context.watch<FeedCubit>().state,
                             online: online,
                             photoSize: const Size(46, 58),
                             spread: spread,
