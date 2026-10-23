@@ -307,24 +307,11 @@ export const createCombinationLookRequestSchema = z
     idempotencyKey: idempotencyKeySchema,
   })
   .strict();
-// A look from a photo the user wore it in. Its pieces are detected for free.
-// With `lookId`, the photo is added to that combination instead.
-export const createPhotoLookRequestSchema = z
-  .object({
-    sourcePhotoId: opaqueIdSchema,
-    lookId: opaqueIdSchema.optional(),
-    idempotencyKey: idempotencyKeySchema,
-  })
-  .strict();
-// Replaces the pieces of a combination or photo look.
+// Replaces the pieces of a combination.
 export const setLookItemsRequestSchema = z
   .object({ itemIds: z.array(opaqueIdSchema).max(12) })
   .strict();
-// Says which wardrobe piece a piece found on a photo look is. The piece joins the look.
-export const linkFoundPieceRequestSchema = z
-  .object({ wardrobeItemId: opaqueIdSchema })
-  .strict();
-// An AI image on top of a combination or photo look. A try-on dresses `baseAssetId`; an
+// An AI image on top of a combination. A try-on dresses `baseAssetId`; an
 // inspiration needs the user's character sheet.
 export const createLookImageRequestSchema = z
   .object({

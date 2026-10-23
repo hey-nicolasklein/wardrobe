@@ -4,6 +4,12 @@ Status: prototype built on `feat/looks-as-combinations` (all five build steps).
 Target: `apps/mobile` (iOS first), tried on the dev wardrobe (`npm run dev:seed`).
 Production deploy and TestFlight are separate requests.
 
+**Simplified 2026-10-08.** Uploading own photos is out again: no photo looks, no
+detection on look photos, no Worn or Reference, no discovery dot. Looks come only from
+Create look (Flow A). The look detail offers Try on and Inspiration, as often as the
+user wants, and every image lands as a tab on the same page. Flow B and the photo parts
+below stay as a future feature and are not built.
+
 ## Why
 
 The Looks tab currently offers five ways to start something (combine, photos,
@@ -19,15 +25,15 @@ in the background (detection, matching, cropping) instead of being the headline.
 
 ```
 Look = pieces + occasion                 free, always present
-  ├─ Worn         user's own photos (0..n)  free
-  ├─ Reference    someone else's photo      free
-  ├─ Try on       pieces on user's photo    paid
-  └─ Inspiration  AI scene                  paid
+  ├─ Try on       pieces on user's photo    paid, 0..n
+  └─ Inspiration  AI scene                  paid, 0..n
 ```
+
+Worn and Reference photos were part of the first prototype and were removed again.
 
 - A look is always a combination of the user's pieces. This is already true in the
   backend (`lookKindSchema` in `packages/contracts/src/domain.ts`: `combination`,
-  `photo`, `try-on`, `inspiration`).
+  `try-on`, `inspiration`).
 - A photo without confirmed pieces is already a look, just an incomplete one. There is
   no separate "photo" object in the UI.
 - A photo of someone else (shop screenshot, street style) becomes a look whose new
@@ -97,7 +103,7 @@ proposal or a look ("adjust myself").
 
 Everything in this flow is free. Proposals are combinations only (no images).
 
-## Flow B: Add photo
+## Flow B: Add photo (future, not built)
 
 1. Pick one or more photos. They appear in the feed immediately and the user is done.
 2. In the background: detection, matching against the wardrobe, own vs. reference

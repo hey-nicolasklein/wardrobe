@@ -201,6 +201,9 @@ class IntakeRepository {
     if (attempt?['state'] == 'failed') {
       draft.phase = DraftPhase.manual;
     } else if (attempt?['state'] == 'succeeded') {
+      if (attempt?['subjectBox'] case final Map<String, dynamic> subject) {
+        draft.subject = DetectionBox.fromJson(subject);
+      }
       final proposals = (data['detections'] as List<dynamic>)
           .map((p) => DetectionProposal.fromJson(p as Map<String, dynamic>))
           .where((p) => p.category != 'unsupported');

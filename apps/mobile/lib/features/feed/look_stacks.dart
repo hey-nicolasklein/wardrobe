@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:easy_localization/easy_localization.dart';
@@ -191,7 +190,6 @@ class _StackPressableState extends State<StackPressable>
 ///
 /// With [feed], combinations join too: as their newest image, or their pieces
 /// laid out flat, under the sheen while an image of them develops.
-/// [pendingPhotos] are local photos still on their way to becoming looks.
 class PhotoFan extends StatelessWidget {
   const PhotoFan({
     required this.looks,
@@ -202,14 +200,12 @@ class PhotoFan extends StatelessWidget {
     this.offset = 0.36,
     this.developingFace,
     this.feed,
-    this.pendingPhotos = const [],
     super.key,
   });
 
   final List<CachedLook> looks;
   final Widget Function(CachedLook record)? developingFace;
   final FeedState? feed;
-  final List<String> pendingPhotos;
   final bool online;
   final Size photoSize;
   final double spread;
@@ -224,7 +220,6 @@ class PhotoFan extends StatelessWidget {
   Widget build(BuildContext context) {
     final feed = this.feed;
     final photos = <_PrintFace>[
-      for (final path in pendingPhotos.reversed) _PrintFace(localPath: path),
       for (final record in looks)
         // With the feed, a ready look shows the same cover as its grid card.
         if (feed != null && record.look.isReady)
@@ -288,16 +283,10 @@ bool _developing(FeedState feed, CachedLook record) =>
 /// What one print in a [PhotoFan] shows: a look's photo, its pieces laid out
 /// [flat], or a local photo still being uploaded.
 class _PrintFace {
-  const _PrintFace({
-    this.record,
-    this.flat,
-    this.localPath,
-    this.developing = false,
-  });
+  const _PrintFace({this.record, this.flat, this.developing = false});
 
   final CachedLook? record;
   final Widget? flat;
-  final String? localPath;
 
   /// An image of the look is still being made.
   final bool developing;
@@ -348,28 +337,6 @@ class _Print extends StatelessWidget {
         child: ColoredBox(
           color: FormTokens.flatLayPaper,
           child: switch (face) {
-            _PrintFace(:final localPath?) => Stack(
-              fit: StackFit.expand,
-              children: [
-                Opacity(
-                  opacity: 0.55,
-                  child: Image.file(
-                    File(localPath),
-                    fit: BoxFit.cover,
-                    cacheWidth: 360,
-                    errorBuilder: (_, _, _) => const SizedBox.expand(),
-                  ),
-                ),
-                const DevelopingSheen(active: true),
-                if (size.width > 100)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: size.height * 0.08,
-                    child: const Center(child: _DevelopingBadge()),
-                  ),
-              ],
-            ),
             _PrintFace(:final flat?, :final developing) => Stack(
               fit: StackFit.expand,
               children: [
@@ -427,6 +394,7 @@ class PiecePile extends StatelessWidget {
   const PiecePile({
     required this.item,
     required this.looks,
+    required this.feed,
     required this.online,
     required this.spread,
     super.key,
@@ -434,6 +402,9 @@ class PiecePile extends StatelessWidget {
 
   final WardrobeItem item;
   final List<CachedLook> looks;
+
+  /// Lets combinations without an image join the fan as their flat lay.
+  final FeedState feed;
   final bool online;
   final double spread;
 
@@ -451,6 +422,7 @@ class PiecePile extends StatelessWidget {
           offset: Offset(0, -10 * spread),
           child: PhotoFan(
             looks: looks,
+            feed: feed,
             online: online,
             photoSize: _photo,
             spread: spread * 0.9,
@@ -496,6 +468,7 @@ class ColorPile extends StatelessWidget {
   const ColorPile({
     required this.family,
     required this.looks,
+    required this.feed,
     required this.online,
     required this.spread,
     super.key,
@@ -503,6 +476,9 @@ class ColorPile extends StatelessWidget {
 
   final String family;
   final List<CachedLook> looks;
+
+  /// Lets combinations without an image join the fan as their flat lay.
+  final FeedState feed;
   final bool online;
   final double spread;
 
@@ -516,6 +492,7 @@ class ColorPile extends StatelessWidget {
       children: [
         PhotoFan(
           looks: looks,
+          feed: feed,
           online: online,
           photoSize: const Size(64, 80),
           spread: spread,

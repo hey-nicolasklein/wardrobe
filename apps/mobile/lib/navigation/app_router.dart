@@ -81,8 +81,7 @@ GoRouter createRouter({bool onboarding = false}) {
               badged: {
                 if (context.select<FeedCubit, bool>(
                   (cubit) =>
-                      cubit.state.pendingPhotos.isNotEmpty ||
-                      (cubit.state.looks?.any((r) => r.look.isActive) ?? false),
+                      cubit.state.looks?.any((r) => r.look.isActive) ?? false,
                 ))
                   _looksBranch,
               },
@@ -127,6 +126,9 @@ GoRouter createRouter({bool onboarding = false}) {
                 routes: [
                   GoRoute(
                     path: 'intake',
+                    // Full screen without the tab bar, so the photo gets the
+                    // height.
+                    parentNavigatorKey: _rootNavigatorKey,
                     builder: (_, _) => const IntakePage(),
                   ),
                   GoRoute(

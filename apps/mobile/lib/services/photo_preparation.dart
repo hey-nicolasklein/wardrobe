@@ -33,8 +33,67 @@ PreparedPhoto? normalizePhoto(Uint8List bytes) {
   if (decoded == null) return null;
   final upright = img.bakeOrientation(decoded);
   final (width, height) = photoDimensions(upright.width, upright.height);
-  final resized = img.copyResize(upright, width: width, height: height);
-  return PreparedPhoto(img.encodeJpg(resized, quality: 92), width, height);
+  final resized = trimDarkBorders(
+    img.copyResize(upright, width: width, height: height),
+  );
+  return PreparedPhoto(
+    img.encodeJpg(resized, quality: 92),
+    resized.width,
+    resized.height,
+  );
+}
+
+/// Cuts away black bars along the edges, such as the letterbox of a video
+/// still or a screenshot. A row or column counts as a bar when nearly all of
+/// it is close to black. Leaves the photo whole when less than a fifth of
+/// either side would remain, so dark photos stay as they are.
+img.Image trimDarkBorders(img.Image image) {
+  bool dark(int x, int y) {
+    final p = image.getPixel(x, y);
+    return max(p.r, max(p.g, p.b)) <= 24;
+  }
+
+  bool darkRow(int y) {
+    var count = 0;
+    var total = 0;
+    for (var x = 0; x < image.width; x += 4, total++) {
+      if (dark(x, y)) count++;
+    }
+    return count >= total * 0.98;
+  }
+
+  bool darkColumn(int x, int top, int bottom) {
+    var count = 0;
+    var total = 0;
+    for (var y = top; y < bottom; y += 4, total++) {
+      if (dark(x, y)) count++;
+    }
+    return count >= total * 0.98;
+  }
+
+  var top = 0;
+  var bottom = image.height;
+  while (top < bottom && darkRow(top)) {
+    top++;
+  }
+  while (bottom > top && darkRow(bottom - 1)) {
+    bottom--;
+  }
+  var left = 0;
+  var right = image.width;
+  while (left < right && darkColumn(left, top, bottom)) {
+    left++;
+  }
+  while (right > left && darkColumn(right - 1, top, bottom)) {
+    right--;
+  }
+  final width = right - left;
+  final height = bottom - top;
+  final untouched = width == image.width && height == image.height;
+  if (untouched || width < image.width * 0.2 || height < image.height * 0.2) {
+    return image;
+  }
+  return img.copyCrop(image, x: left, y: top, width: width, height: height);
 }
 
 class PhotoPreparation {

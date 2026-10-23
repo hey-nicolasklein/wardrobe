@@ -43,6 +43,7 @@ test('reports durable detection progress beside proposals', () => {
       usage: null,
       costBreakdown: null,
       failureCategory: null,
+      subjectBox: null,
       createdAt: '2026-08-05T08:00:00.000Z',
       finishedAt: null,
     },

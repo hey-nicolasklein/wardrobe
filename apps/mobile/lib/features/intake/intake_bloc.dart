@@ -54,10 +54,10 @@ class IntakeState {
   final List<String> arrived;
 }
 
-/// Adds photos to the wardrobe in the background, wherever the user is in the
-/// app: each photo is uploaded, analysed, and its detected pieces are saved
-/// with their catalog images right away. Accessories stay out unless picked.
-/// Photos without detected pieces wait in the intake page for a name.
+/// Adds photos to the wardrobe: each photo is uploaded and analysed in the
+/// background, wherever the user is in the app. Its detected pieces wait on
+/// the intake page, where the user picks which to save. Accessories start
+/// unpicked. Photos without detected pieces wait there for a name.
 class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
   IntakeBloc(this.repository, {this.pollInterval = const Duration(seconds: 3)})
     : super(const IntakeState()) {
@@ -216,11 +216,6 @@ class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
           if (_discarding.contains(draft.id)) continue;
           if (draft.phase == DraftPhase.detecting) {
             await repository.poll(draft);
-            // Freshly detected pieces go straight into the wardrobe.
-            if (draft.phase == DraftPhase.ready &&
-                draft.choices.any((c) => c.selected)) {
-              await _beginSave(draft);
-            }
           }
           if (!canContinue) break;
           if (_discarding.contains(draft.id)) continue;

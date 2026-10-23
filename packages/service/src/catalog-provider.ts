@@ -5,7 +5,6 @@ import {
   type GarmentDetection,
   type GenerationQuality,
   type ItemMetadata,
-  type LookPhoto,
   type NormalizedBoundingBox,
   type LookConcept,
   type LookStyle,
@@ -38,8 +37,8 @@ export class CatalogProviderError extends Error {
 export type DetectionProviderResult = {
   requestId: string;
   detections: GarmentDetection[];
-  // The photo as a whole. Optional, so replays recorded before it stay valid.
-  photo?: LookPhoto;
+  // Broad box around the person or main subject. Fixtures may leave it out.
+  subject?: NormalizedBoundingBox | null;
   usage: DetectionUsage;
 };
 
@@ -153,8 +152,16 @@ export interface CatalogProvider {
   }): Promise<GenerationProviderResult>;
 }
 
+const detectionBoxSchema = z.object({
+  top: z.number(),
+  left: z.number(),
+  bottom: z.number(),
+  right: z.number(),
+});
+
 const detectionOutputSchema = z
   .object({
+    subject: detectionBoxSchema.nullable(),
     detections: z.array(
       z
         .object({
@@ -174,40 +181,29 @@ const detectionOutputSchema = z
             'unsupported',
           ]),
           colors: z.array(z.string()),
-          boundingBox: z.object({
-            top: z.number(),
-            left: z.number(),
-            bottom: z.number(),
-            right: z.number(),
-          }),
+          boundingBox: detectionBoxSchema,
         })
         .strict(),
     ),
-    photo: z
-      .object({
-        source: z.enum(['personal', 'reference']),
-        outfitBox: z.object({ top: z.number(), left: z.number(), bottom: z.number(), right: z.number() }),
-      })
-      .strict(),
   })
   .strict();
 
-const boxJsonSchema = {
-  type: 'object',
-  properties: {
-    top: { type: 'integer', minimum: 0, maximum: 999 },
-    left: { type: 'integer', minimum: 0, maximum: 999 },
-    bottom: { type: 'integer', minimum: 1, maximum: 1000 },
-    right: { type: 'integer', minimum: 1, maximum: 1000 },
-  },
-  required: ['top', 'left', 'bottom', 'right'],
-  additionalProperties: false,
-} as const;
-
 function detectionJsonSchema() {
+  const box = {
+    type: 'object',
+    properties: {
+      top: { type: 'integer', minimum: 0, maximum: 999 },
+      left: { type: 'integer', minimum: 0, maximum: 999 },
+      bottom: { type: 'integer', minimum: 1, maximum: 1000 },
+      right: { type: 'integer', minimum: 1, maximum: 1000 },
+    },
+    required: ['top', 'left', 'bottom', 'right'],
+    additionalProperties: false,
+  } as const;
   return {
     type: 'object',
     properties: {
+      subject: { anyOf: [box, { type: 'null' }] },
       detections: {
         type: 'array',
         items: {
@@ -237,23 +233,14 @@ function detectionJsonSchema() {
               minItems: 1,
               maxItems: 6,
             },
-            boundingBox: boxJsonSchema,
+            boundingBox: box,
           },
           required: ['name', 'category', 'colors', 'boundingBox'],
           additionalProperties: false,
         },
       },
-      photo: {
-        type: 'object',
-        properties: {
-          source: { type: 'string', enum: ['personal', 'reference'] },
-          outfitBox: boxJsonSchema,
-        },
-        required: ['source', 'outfitBox'],
-        additionalProperties: false,
-      },
     },
-    required: ['detections', 'photo'],
+    required: ['subject', 'detections'],
     additionalProperties: false,
   } as const;
 }
@@ -267,7 +254,7 @@ A pair is one item: return two matching shoes, gloves, socks or earrings as a si
 
 For every bounding box, locate the outermost visible pixels of exactly one garment. Use a tight box with at most 2% padding and exclude captions, controls, cards, background, and other garments. Return normalized integer coordinates in the standard order top, left, bottom, right, where the image spans 0 to 1000 on both axes and the origin is the top-left corner. Before responding, verify that the center of each box lies on its named garment and that the box does not group multiple pictured instances.
 
-Finally describe the photo as a whole. Set photo.source to personal for a casual photo someone took of themselves or a friend, such as a mirror selfie or a snapshot. Set it to reference for a shop or product screenshot, an editorial, a lookbook, a celebrity or street style photo, or anything with shop prices, product names or app controls. Set photo.outfitBox to one box around the person in focus from head to shoes, or around all returned garments when nobody is pictured. It must exclude captions, prices, controls and surrounding interface, in the same coordinates as the garment boxes.`;
+Also return subject: one broad box around the whole person in focus, from the top of the head to the soles of the feet, including hair and everything they wear or hold. In a screenshot, cover only the pictured photo of that person and exclude app bars, captions, controls and empty margins. For a product image without a person, cover the pictured products together. Return null only when no person or product is clearly pictured.`;
 }
 
 export const shelfImagePromptVersion = 'laid-flat-v6';
@@ -317,7 +304,7 @@ OUTPUT
 }
 
 function clampBox(
-  box: { top: number; left: number; bottom: number; right: number },
+  box: z.infer<typeof detectionBoxSchema>,
 ): NormalizedBoundingBox {
   const x = Math.max(0, Math.min(999, Math.round(box.left)));
   const y = Math.max(0, Math.min(999, Math.round(box.top)));
@@ -532,7 +519,7 @@ export class OpenAICatalogProvider implements CatalogProvider {
     return {
       requestId: raw.id ?? response.headers.get('x-request-id') ?? randomUUID(),
       detections,
-      photo: { source: parsed.photo.source, outfitBox: clampBox(parsed.photo.outfitBox) },
+      subject: parsed.subject ? clampBox(parsed.subject) : null,
       usage: {
         inputTokens: raw.usage.input_tokens,
         cachedInputTokens: raw.usage.input_tokens_details?.cached_tokens ?? 0,

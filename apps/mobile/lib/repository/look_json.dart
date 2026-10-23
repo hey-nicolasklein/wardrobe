@@ -30,6 +30,14 @@ Map<String, dynamic> normalizeLookJson(Map<String, dynamic> json) {
     ..putIfAbsent('costMicrounits', () => null)
     ..putIfAbsent('failureCategory', () => null)
     ..putIfAbsent('finishedAt', () => null);
+  // Photo looks were removed. Older ones still on the server or in the cache
+  // show as the combination of their pieces.
+  if (normalized['kind'] == 'photo') {
+    normalized
+      ..['kind'] = 'combination'
+      ..['assetId'] = null
+      ..remove('feedAssetId');
+  }
   final cost = normalized['costMicrounits'];
   if (cost is String) {
     normalized['costMicrounits'] = int.tryParse(cost);

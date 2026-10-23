@@ -111,6 +111,11 @@ IntakeDraft _$IntakeDraftFromJson(Map<String, dynamic> json) => $checkedCreate(
       failure: $checkedConvert('failure', (v) => v as String?),
       ownership: $checkedConvert('ownership', (v) => v as String? ?? 'owning'),
       quality: $checkedConvert('quality', (v) => v as String? ?? 'low'),
+      subject: $checkedConvert(
+        'subject',
+        (v) =>
+            v == null ? null : DetectionBox.fromJson(v as Map<String, dynamic>),
+      ),
       choices: $checkedConvert(
         'choices',
         (v) => (v as List<dynamic>?)
@@ -136,6 +141,7 @@ Map<String, dynamic> _$IntakeDraftToJson(IntakeDraft instance) =>
       'failure': instance.failure,
       'ownership': instance.ownership,
       'quality': instance.quality,
+      'subject': instance.subject?.toJson(),
       'choices': instance.choices.map((e) => e.toJson()).toList(),
     };
 

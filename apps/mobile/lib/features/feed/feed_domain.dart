@@ -84,16 +84,9 @@ class TryOnStack extends LookStack {
   const TryOnStack();
 }
 
-/// Looks kept from photos the user wore them in: "what have I worn".
-class PhotoStack extends LookStack {
-  const PhotoStack();
-}
-
-/// Looks that show someone other than the user: someone else's photo, a
-/// shop screenshot or street style, and AI inspirations. Try-ons show the
-/// user, so they are not references.
-class ReferenceStack extends LookStack {
-  const ReferenceStack();
+/// AI inspirations: full scenes, unlike try-ons on the user's own photo.
+class InspirationStack extends LookStack {
+  const InspirationStack();
 }
 
 class SavedStack extends LookStack {
@@ -128,15 +121,14 @@ bool inLookStack(
   Map<String, List<String>> collections = const {},
 }) => switch (stack) {
   AllLooksStack() => true,
-  // Only looks made for an occasion count. Photos and combinations saved
-  // without one have no settings, which is not the surprise occasion.
+  // Only looks made for an occasion count. Combinations saved without one
+  // have no settings, which is not the surprise occasion.
   OccasionStack(:final occasion) =>
     !look.isTryOn &&
         look.settings != null &&
         look.settings!.occasion == occasion,
   TryOnStack() => look.isTryOn,
-  PhotoStack() => look.isPhoto && !look.isReference,
-  ReferenceStack() => look.isReference || (look.isGenerated && !look.isTryOn),
+  InspirationStack() => look.isGenerated && !look.isTryOn,
   SavedStack() => saved,
   CollectionStack(:final collectionId) =>
     collections[collectionId]?.contains(look.id) ?? false,

@@ -582,9 +582,11 @@ class _ItemGallery extends StatelessWidget {
             caption: context.tr(LocaleKeys.sourcePhoto),
           ),
         ];
-    // The caption line grows with the reader's text size.
+    // The caption line grows with the reader's text size. The extra point
+    // covers the text engine rounding the line slightly taller than
+    // font size × line height.
     final captionHeight =
-        6 +
+        7 +
         MediaQuery.textScalerOf(
           context,
         ).scale(FormTokens.small.fontSize! * FormTokens.small.height!);
@@ -595,7 +597,7 @@ class _ItemGallery extends StatelessWidget {
             ? constraints.maxWidth
             : constraints.maxWidth * 0.8;
         return SizedBox(
-          height: tileWidth * 5 / 4 + captionHeight,
+          height: (tileWidth * 5 / 4 + captionHeight).ceilToDouble(),
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: tiles.length,

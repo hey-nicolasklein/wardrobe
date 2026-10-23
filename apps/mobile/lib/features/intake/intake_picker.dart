@@ -82,16 +82,18 @@ Future<List<String>> pickPhotos(
   }
 }
 
-/// Adds clothes from photos without leaving the current page: the photos go
-/// to [IntakeBloc], which detects and saves their pieces in the background.
-/// [camera] skips the source question. Returns whether photos were added.
+/// Picks photos and hands them to [IntakeBloc], which uploads and detects
+/// their pieces in the background. Used on the intake page, where the drafts
+/// appear and the user picks the pieces to save. [camera] skips the source
+/// question.
+/// Returns whether photos were added.
 Future<bool> addClothesPhotos(BuildContext context, {bool? camera}) async {
   final source =
       camera ??
       await pickPhotoSource(
         context,
         title: context.tr(LocaleKeys.intake_title),
-        // Pieces are saved without another step, so the cost is said here.
+        // Said before picking, so the cost is known before any upload.
         message: context.tr(
           LocaleKeys.intake_costShort,
           namedArgs: {'credits': '$shelfImageCreditCost'},
@@ -102,9 +104,5 @@ Future<bool> addClothesPhotos(BuildContext context, {bool? camera}) async {
   if (paths.isEmpty || !context.mounted) return false;
   unawaited(HapticFeedback.mediumImpact());
   context.read<IntakeBloc>().add(IntakeEvent(IntakeAction.add, paths: paths));
-  showFormToast(
-    context,
-    context.plural(LocaleKeys.intake_arriving, paths.length),
-  );
   return true;
 }

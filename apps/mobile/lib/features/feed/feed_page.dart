@@ -62,9 +62,8 @@ void openLookComposer(
 void openLookStack(BuildContext context, LookStack stack) =>
     const FeedPage()._openOverview(context, stack);
 
-/// The Looks tab: a collection of outfit ideas. Two ways in sit in the
-/// header, "Create look" for what's next and the photo button for what was
-/// worn or seen. Lifecycle and connection changes reach [FeedCubit] through
+/// The Looks tab: a collection of outfit ideas. "Create look" in the header
+/// is the way in. Lifecycle and connection changes reach [FeedCubit] through
 /// `FormApp`.
 class FeedPage extends StatelessWidget {
   const FeedPage({super.key});
@@ -74,7 +73,7 @@ class FeedPage extends StatelessWidget {
     builder: (context, state) {
       final cubit = context.read<FeedCubit>();
       final looks = state.archive;
-      final empty = looks.isEmpty && state.pendingPhotos.isEmpty;
+      final empty = looks.isEmpty;
 
       // Before the first sync settles, no looks means "not loaded yet", not
       // an empty feed.
@@ -111,9 +110,6 @@ class FeedPage extends StatelessWidget {
                     FormWordmark(title: context.tr(LocaleKeys.appName)),
                     _LooksHeader(
                       onCreate: loading ? null : () => openCreateLook(context),
-                      onPhoto: loading
-                          ? null
-                          : () => unawaited(addPhotoLooks(context)),
                     ),
                     if (state.stale && !state.online && state.looks != null)
                       Padding(
@@ -155,20 +151,9 @@ class FeedPage extends StatelessWidget {
                   child: FormEmptyState(
                     title: context.tr(LocaleKeys.feedEmptyTitle),
                     message: context.tr(LocaleKeys.feedEmptyBody),
-                    action: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: 6,
-                      children: [
-                        FilledButton(
-                          onPressed: () => openCreateLook(context),
-                          child: Text(context.tr(LocaleKeys.createLook)),
-                        ),
-                        TextButton.icon(
-                          onPressed: () => unawaited(addPhotoLooks(context)),
-                          icon: const Icon(Icons.add_photo_alternate_outlined),
-                          label: Text(context.tr(LocaleKeys.looksAddPhoto)),
-                        ),
-                      ],
+                    action: FilledButton(
+                      onPressed: () => openCreateLook(context),
+                      child: Text(context.tr(LocaleKeys.createLook)),
                     ),
                   ),
                 )
@@ -184,8 +169,8 @@ class FeedPage extends StatelessWidget {
   );
 
   /// [stack]'s looks as the archive shows them. A combination counts as a
-  /// try-on once one of its images is, and as a reference once one of its
-  /// images is an inspiration.
+  /// try-on once one of its images is, and as an inspiration once one of its
+  /// images is.
   static List<CachedLook> _stackLooks(
     FeedState state,
     LookStack stack, [
@@ -201,12 +186,12 @@ class FeedPage extends StatelessWidget {
           ) ||
           (stack is TryOnStack &&
               state.imagesOf(record.look.id).any((i) => i.look.isTryOn)) ||
-          (stack is ReferenceStack &&
+          (stack is InspirationStack &&
               state.imagesOf(record.look.id).any((i) => !i.look.isTryOn)))
         record,
   ];
 
-  /// [filter]'s looks within [scope], e.g. the worn looks with one piece.
+  /// [filter]'s looks within [scope], e.g. the try-ons with one piece.
   static List<CachedLook> _scopedLooks(
     FeedState state,
     LookStack scope,
@@ -312,7 +297,6 @@ class FeedPage extends StatelessWidget {
                       child: PhotoFan(
                         looks: looks,
                         feed: state,
-                        pendingPhotos: state.pendingPhotos,
                         online: online,
                         photoSize: heroPhoto,
                         spread: spread * (1 + pull * 0.9) * (1 - away * 0.75),
@@ -353,7 +337,7 @@ class FeedPage extends StatelessWidget {
       if (pieces.isNotEmpty) ...[
         _SectionTitle(context.tr(LocaleKeys.stackSectionPieces)),
         row(
-          height: 186,
+          height: 190,
           children: [
             for (final (item, stackLooks) in pieces)
               SizedBox(
@@ -368,6 +352,7 @@ class FeedPage extends StatelessWidget {
                     PiecePile(
                       item: item,
                       looks: stackLooks,
+                      feed: state,
                       online: online,
                       spread: spread,
                     ),
@@ -380,7 +365,7 @@ class FeedPage extends StatelessWidget {
       if (colors.isNotEmpty) ...[
         _SectionTitle(context.tr(LocaleKeys.stackSectionColors)),
         row(
-          height: 170,
+          height: 174,
           children: [
             for (final (family, stackLooks) in colors)
               SizedBox(
@@ -395,6 +380,7 @@ class FeedPage extends StatelessWidget {
                     ColorPile(
                       family: family,
                       looks: stackLooks,
+                      feed: state,
                       online: online,
                       spread: spread,
                     ),
@@ -479,8 +465,7 @@ class FeedPage extends StatelessWidget {
       occasionPresets.firstWhere((p) => p.value == occasion).label,
     ),
     TryOnStack() => context.tr(LocaleKeys.stackTryOn),
-    PhotoStack() => context.tr(LocaleKeys.looksFilterWorn),
-    ReferenceStack() => context.tr(LocaleKeys.looksFilterReference),
+    InspirationStack() => context.tr(LocaleKeys.looksFilterInspiration),
     SavedStack() => context.tr(LocaleKeys.stackSaved),
     CollectionStack(:final collectionId) => switch (_collection(
       context,
@@ -492,30 +477,6 @@ class FeedPage extends StatelessWidget {
     PieceStack(:final itemId) => state.itemsById[itemId]?.metadata.name ?? '',
     ColorStack(:final family) => context.tr('colorFamilies.$family'),
   };
-
-  /// What "+ New" starts inside [stack]: "Create look" with the stack's
-  /// occasion or piece, or a photo for the photo stacks. Paid images live
-  /// on a look, so try-ons get no starting point here, nor do saved looks
-  /// and colours.
-  static VoidCallback? _createIn(BuildContext context, LookStack stack) =>
-      switch (stack) {
-        AllLooksStack() => () => openCreateLook(context),
-        PhotoStack() || ReferenceStack() => () => unawaited(
-          addPhotoLooks(context),
-        ),
-        OccasionStack(:final occasion) => () => openCreateLook(
-          context,
-          occasion: occasion,
-        ),
-        PieceStack(:final itemId) => () => openCreateLook(
-          context,
-          itemIds: [itemId],
-        ),
-        TryOnStack() ||
-        SavedStack() ||
-        ColorStack() ||
-        CollectionStack() => null,
-      };
 
   void _openStack(
     BuildContext context,
@@ -534,7 +495,6 @@ class FeedPage extends StatelessWidget {
             initialIndex: initialIndex,
             looksOf: _scopedLooks,
             titleOf: _stackTitle,
-            createIn: _createIn,
             cardBuilder: _lookCard,
           ),
           transitionsBuilder: (_, animation, _, child) {
@@ -556,7 +516,12 @@ class FeedPage extends StatelessWidget {
     );
   }
 
-  Widget _lookCard(BuildContext context, FeedState state, CachedLook record) {
+  Widget _lookCard(
+    BuildContext context,
+    FeedState state,
+    CachedLook record,
+    LookStack origin,
+  ) {
     final cubit = context.read<FeedCubit>();
     if (fittingRoomApplies(record)) {
       return FittingRoomCard(
@@ -568,7 +533,7 @@ class FeedPage extends StatelessWidget {
         onMenu: (look) => _openLookMenu(context, look),
         onRetry: (look) =>
             runFeedAction(context, () => cubit.retryLook(look.id)),
-        onOpenStack: (stack) => _openOverview(context, stack),
+        origin: origin,
       );
     }
     return LookCard(
@@ -1328,9 +1293,8 @@ class _MenuRow extends StatelessWidget {
 /// The page title with the two ways in: "Create look" first, adding a
 /// photo second.
 class _LooksHeader extends StatelessWidget {
-  const _LooksHeader({required this.onCreate, required this.onPhoto});
+  const _LooksHeader({required this.onCreate});
   final VoidCallback? onCreate;
-  final VoidCallback? onPhoto;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -1346,29 +1310,13 @@ class _LooksHeader extends StatelessWidget {
             ),
           ),
         ),
-        if (onPhoto case final onPhoto?)
-          IconButton(
-            onPressed: () {
-              unawaited(HapticFeedback.lightImpact());
-              onPhoto();
-            },
-            tooltip: context.tr(LocaleKeys.looksAddPhoto),
-            style: IconButton.styleFrom(
-              backgroundColor: FormTokens.pill,
-              minimumSize: const Size(48, 48),
-            ),
-            icon: const Icon(
-              Icons.add_photo_alternate_outlined,
-              color: FormTokens.ink,
-            ),
-          ),
-        if (onCreate case final onCreate?) ...[
-          const SizedBox(width: 10),
-          FormAddButton(
+        ?switch (onCreate) {
+          final onCreate? => FormAddButton(
             label: context.tr(LocaleKeys.createLook),
             onPressed: onCreate,
           ),
-        ],
+          null => null,
+        },
       ],
     ),
   );
@@ -1404,7 +1352,6 @@ class _StackPage extends StatefulWidget {
     required this.filter,
     required this.looksOf,
     required this.titleOf,
-    required this.createIn,
     required this.cardBuilder,
     this.initialIndex = 0,
   });
@@ -1422,8 +1369,8 @@ class _StackPage extends StatefulWidget {
   )
   looksOf;
   final String Function(BuildContext, FeedState, LookStack) titleOf;
-  final VoidCallback? Function(BuildContext, LookStack) createIn;
-  final Widget Function(BuildContext, FeedState, CachedLook) cardBuilder;
+  final Widget Function(BuildContext, FeedState, CachedLook, LookStack)
+  cardBuilder;
 
   static const headerHeight = 68.0;
 
@@ -1455,13 +1402,19 @@ class _StackPageState extends State<_StackPage> {
       final named = widget.stack is AllLooksStack
           ? widget.filter
           : widget.stack;
-      final create = widget.createIn(context, named);
+      // Title and counter grow with the reader's text size, so the header
+      // grows with them.
+      final headerHeight =
+          MediaQuery.textScalerOf(
+            context,
+          ).scale(_StackPage.headerHeight - 12) +
+          12;
       return Scaffold(
         backgroundColor: FormTokens.paper,
         // The cards scroll under the frosted header.
         extendBodyBehindAppBar: true,
         appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(_StackPage.headerHeight),
+          preferredSize: Size.fromHeight(headerHeight),
           child: AnnotatedRegion(
             value: SystemUiOverlayStyle.dark,
             child: FormFrostedBar(
@@ -1476,7 +1429,7 @@ class _StackPageState extends State<_StackPage> {
                     8,
                   ),
                   child: SizedBox(
-                    height: _StackPage.headerHeight - 12,
+                    height: headerHeight - 12,
                     child: Row(
                       children: [
                         IconButton(
@@ -1526,7 +1479,6 @@ class _StackPageState extends State<_StackPage> {
                             ],
                           ),
                         ),
-                        if (create != null) _NewPill(onPressed: create),
                         if (widget.stack case CollectionStack(
                           :final collectionId,
                         ))
@@ -1568,7 +1520,7 @@ class _StackPageState extends State<_StackPage> {
                     initialPage: widget.initialIndex,
                     itemCount: looks.length,
                     itemBuilder: (context, i) =>
-                        widget.cardBuilder(context, state, looks[i]),
+                        widget.cardBuilder(context, state, looks[i], named),
                     onPage: (value) => setState(() => _index = value),
                     onDismiss: () => Navigator.of(context).pop(),
                   ),
@@ -1613,55 +1565,6 @@ Widget? _stackOrigin(LookStack stack, FeedState state) => switch (stack) {
   ),
   _ => null,
 };
-
-/// "+ New" in a stack's header, in the selected tint.
-class _NewPill extends StatelessWidget {
-  const _NewPill({required this.onPressed});
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    label: context.tr(LocaleKeys.createLook),
-    excludeSemantics: true,
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        unawaited(HapticFeedback.lightImpact());
-        onPressed();
-      },
-      child: SizedBox(
-        height: 44,
-        child: Center(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: FormTokens.selectedTint,
-              borderRadius: BorderRadius.circular(FormTokens.chipRadius),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 7, 14, 7),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                spacing: 4,
-                children: [
-                  const Icon(Icons.add, size: 18, color: FormTokens.green),
-                  Text(
-                    context.tr(LocaleKeys.stackNew),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: FormTokens.green,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-}
 
 /// [scope]'s looks as a grid under the general filter chips, one level below
 /// the stacks: every look, a piece's, a colour's or an occasion's.
@@ -1764,8 +1667,8 @@ typedef _ScopedLooks =
       List<LookCollection> collections,
     );
 
-/// [scope]'s looks under the general filters, every look, worn and
-/// references, as a grid of cards. Tapping a card opens the filtered looks
+/// [scope]'s looks under the general filters, every look, try-ons and
+/// inspirations, as a grid of cards. Tapping a card opens the filtered looks
 /// at that card.
 class _IdeaCollection extends StatefulWidget {
   const _IdeaCollection({
@@ -1789,8 +1692,8 @@ class _IdeaCollection extends StatefulWidget {
 class _IdeaCollectionState extends State<_IdeaCollection> {
   static const _filters = <(LookStack, IconData?)>[
     (AllLooksStack(), null),
-    (PhotoStack(), Icons.photo_camera_outlined),
-    (ReferenceStack(), Icons.bookmark_outline),
+    (TryOnStack(), Icons.person_outline),
+    (InspirationStack(), Icons.auto_awesome_outlined),
   ];
 
   LookStack _filter = const AllLooksStack();
@@ -1804,11 +1707,6 @@ class _IdeaCollectionState extends State<_IdeaCollection> {
 
     final filter = _filter;
     final looks = looksOf(filter);
-    final pending =
-        widget.scope is AllLooksStack &&
-            (filter is AllLooksStack || filter is PhotoStack)
-        ? state.pendingPhotos
-        : const <String>[];
     final width = MediaQuery.sizeOf(context).width;
     const spacing = 12.0;
     final tile = (width - FormTokens.gutter * 2 - spacing) / 2;
@@ -1847,7 +1745,7 @@ class _IdeaCollectionState extends State<_IdeaCollection> {
           ),
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 14)),
-        if (looks.isEmpty && pending.isEmpty)
+        if (looks.isEmpty)
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
               FormTokens.gutter + 2,
@@ -1858,8 +1756,8 @@ class _IdeaCollectionState extends State<_IdeaCollection> {
             sliver: SliverToBoxAdapter(
               child: Text(
                 context.tr(switch (filter) {
-                  PhotoStack() => LocaleKeys.looksEmptyWorn,
-                  ReferenceStack() => LocaleKeys.looksEmptyReference,
+                  TryOnStack() => LocaleKeys.looksEmptyTryOn,
+                  InspirationStack() => LocaleKeys.looksEmptyInspiration,
                   _ => LocaleKeys.looksEmptyFilter,
                 }),
                 style: FormTokens.body.copyWith(color: FormTokens.muted),
@@ -1878,22 +1776,15 @@ class _IdeaCollectionState extends State<_IdeaCollection> {
                 crossAxisSpacing: spacing,
                 mainAxisExtent: extent,
               ),
-              itemCount: pending.length + looks.length,
+              itemCount: looks.length,
               itemBuilder: (context, index) {
-                if (index < pending.length) {
-                  return PendingLookTile(
-                    key: ValueKey(pending[index]),
-                    path: pending[index],
-                  );
-                }
-                final i = index - pending.length;
-                final record = looks[i];
+                final record = looks[index];
                 return LookTile(
                   key: ValueKey(record.look.id),
                   record: record,
                   state: state,
                   index: index,
-                  onTap: () => widget.onOpen(filter, i),
+                  onTap: () => widget.onOpen(filter, index),
                 );
               },
             ),

@@ -119,6 +119,8 @@ export const detectionAttemptSchema = z
       .strict()
       .nullable(),
     failureCategory: z.string().min(1).max(80).nullable(),
+    // Broad box around the person or main subject, for framing the photo.
+    subjectBox: normalizedBoundingBoxSchema.nullable(),
     createdAt: timestampSchema,
     finishedAt: timestampSchema.nullable(),
   })
@@ -294,32 +296,9 @@ export const lookReasonSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('occasion'), occasion: lookOccasionSchema }).strict(),
   z.object({ kind: z.literal('fresh') }).strict(),
 ]);
-// What a look is made of. Every look is a combination of pieces; `photo` adds a
-// real photo the user wore it in, `try-on` and `inspiration` an AI image.
-export const lookKindSchema = z.enum(['combination', 'photo', 'inspiration', 'try-on']);
-// A piece detected on a photo look. `wardrobeItemId` is the wardrobe piece the
-// user said it is on this look; `added` when that piece was created from it.
-export const lookFoundPieceSchema = z
-  .object({
-    id: opaqueIdSchema,
-    name: itemNameSchema,
-    category: supportedCategorySchema,
-    colors: z.array(colorSchema).max(6),
-    boundingBox: normalizedBoundingBoxSchema,
-    wardrobeItemId: opaqueIdSchema.nullable(),
-    added: z.boolean(),
-  })
-  .strict();
-// What background analysis tells about a photo look's photo: whether it shows
-// the user (`personal`) or someone else, such as a shop screenshot or street
-// style (`reference`), and a rough box around the outfit as a whole, for a
-// clean crop on cards. Null until the photo was analysed.
-export const lookPhotoSchema = z
-  .object({
-    source: z.enum(['personal', 'reference']),
-    outfitBox: normalizedBoundingBoxSchema.nullable(),
-  })
-  .strict();
+// What a look is made of. Every look is a combination of pieces; `try-on` and
+// `inspiration` add an AI image.
+export const lookKindSchema = z.enum(['combination', 'inspiration', 'try-on']);
 export const lookSchema = z
   .object({
     id: opaqueIdSchema,
@@ -333,10 +312,6 @@ export const lookSchema = z
     characterSheetId: opaqueIdSchema.nullable(),
     // For combinations, the AI images made of them point back here.
     parentLookId: opaqueIdSchema.nullable(),
-    // Photo looks: the uploaded photo, and its detected pieces once analysed.
-    sourcePhotoId: opaqueIdSchema.nullable(),
-    found: z.array(lookFoundPieceSchema).nullable(),
-    photo: lookPhotoSchema.nullable(),
     // Set for try-on looks: the user's own photo the garments were put on.
     baseAssetId: opaqueIdSchema.nullable(),
     liked: z.boolean(),
@@ -387,8 +362,6 @@ export type WardrobeItem = z.infer<typeof wardrobeItemSchema>;
 export type CharacterSheet = z.infer<typeof characterSheetSchema>;
 export type Look = z.infer<typeof lookSchema>;
 export type LookKind = z.infer<typeof lookKindSchema>;
-export type LookFoundPiece = z.infer<typeof lookFoundPieceSchema>;
-export type LookPhoto = z.infer<typeof lookPhotoSchema>;
 export type LookConcept = z.infer<typeof lookConceptSchema>;
 export type LookReason = z.infer<typeof lookReasonSchema>;
 export type LookOccasion = z.infer<typeof lookOccasionSchema>;

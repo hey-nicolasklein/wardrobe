@@ -122,6 +122,7 @@ class IntakeDraft {
     this.failure,
     this.ownership = 'owning',
     this.quality = 'low',
+    this.subject,
     List<IntakeChoice>? choices,
   }) : choices = choices ?? [];
   factory IntakeDraft.fromJson(Map<String, dynamic> json) =>
@@ -138,6 +139,10 @@ class IntakeDraft {
   String? failure;
   String ownership;
   final String quality;
+
+  /// Broad box around the person or main subject, from detection. Frames
+  /// the photo where it is shown small.
+  DetectionBox? subject;
   final List<IntakeChoice> choices;
   Map<String, dynamic> toJson() => _$IntakeDraftToJson(this);
   IntakeDraft snapshot() => IntakeDraft.fromJson(toJson());

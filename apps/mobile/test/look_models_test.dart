@@ -42,24 +42,11 @@ void main() {
     expect(Look.fromJson(normalizeLookJson(tryOn)).kind, 'try-on');
   });
 
-  test('a photo look is analysed until its found pieces arrive', () {
-    final json = lookJson(kind: 'photo')..['sourcePhotoId'] = 'source-0001';
-    expect(Look.fromJson(json).isAnalysing, isTrue);
-    final found = Look.fromJson({
-      ...json,
-      'found': [
-        {
-          'id': 'proposal-0001',
-          'name': 'Linen shirt',
-          'category': 'top',
-          'colors': ['white'],
-          'boundingBox': {'x': 1, 'y': 1, 'width': 10, 'height': 10},
-          'wardrobeItemId': null,
-        },
-      ],
-    });
-    expect(found.isAnalysing, isFalse);
-    expect(found.found!.single.name, 'Linen shirt');
+  test('photo looks from before their removal read as combinations', () {
+    final json = lookJson(kind: 'photo')..['assetId'] = 'photo-0001';
+    final look = Look.fromJson(normalizeLookJson(json));
+    expect(look.kind, 'combination');
+    expect(look.assetId, isNull);
   });
 
   test('character sheet validation matches contract', () {

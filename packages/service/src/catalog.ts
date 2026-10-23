@@ -273,7 +273,7 @@ async function executeDetection(
          pricing_effective_date = $10, captured_rates = $11, provider_usage = $12,
          input_cost_microunits = $13, cached_input_cost_microunits = $14,
          cache_write_input_cost_microunits = $15, output_cost_microunits = $16,
-         cost_microunits = $17, photo_source = $18, outfit_box = $19, finished_at = now()
+         cost_microunits = $17, subject_box = $18, finished_at = now()
        WHERE id = $1 AND account_id = $2 AND state = 'processing'`,
       [
         payload.detectionAttemptId,
@@ -293,8 +293,7 @@ async function executeDetection(
         cost.cacheWriteInputMicrounits,
         cost.outputMicrounits,
         cost.totalMicrounits,
-        result.photo?.source ?? null,
-        result.photo?.outfitBox ? JSON.stringify(result.photo.outfitBox) : null,
+        result.subject ? JSON.stringify(result.subject) : null,
       ],
     );
     if (completed.rowCount !== 1) {

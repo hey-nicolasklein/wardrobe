@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/connection_cubit.dart';
@@ -44,10 +45,11 @@ List<IntakeChoice> _pieces(IntakeDraft draft) {
   ];
 }
 
-/// Adding pieces works one photo at a time: a tray of all photos on top, the
-/// current photo in the middle and its pieces as a strip below. Every region
-/// keeps its height while photos are analysed in the background, so nothing
-/// jumps. Saving a photo moves on to the next one that needs a decision.
+/// Adding pieces works one photo at a time. The current photo fills the page
+/// below the header, with a tray of all photos on top of it and its pieces
+/// and the save button over its foot. Every region keeps its height while
+/// photos are analysed in the background, so nothing jumps. Saving a photo
+/// moves on to the next one that needs a decision.
 class IntakePage extends StatefulWidget {
   const IntakePage({super.key});
   @override
@@ -62,6 +64,16 @@ class _IntakePageState extends State<IntakePage> {
   String? _currentId;
   IntakeState _previous = const IntakeState();
 
+  // The piece the photo is zoomed to, and whether the photo is zoomed in at
+  // all. Both belong to the photo on show.
+  String? _focus;
+  int _overview = 0;
+  bool _zoomed = false;
+
+  // Heights of the tray on top and the pieces below, which cover the photo.
+  double _topHeight = 0;
+  double _bottomHeight = 0;
+
   @override
   void initState() {
     super.initState();
@@ -74,16 +86,11 @@ class _IntakePageState extends State<IntakePage> {
     super.dispose();
   }
 
-  /// Hands the picked photos to the background intake. Started from the
-  /// empty page, there is nothing left to do here, so it returns to the
-  /// Schrank, where the pieces arrive.
+  /// Adds more photos. Their drafts appear here as they are analysed.
   Future<void> _pick({bool? camera}) async {
     setState(() => _picking = true);
-    final wasEmpty = _bloc.state.drafts.isEmpty;
-    final added = await addClothesPhotos(context, camera: camera);
-    if (!mounted) return;
-    setState(() => _picking = false);
-    if (added && wasEmpty) context.go('/wardrobe');
+    await addClothesPhotos(context, camera: camera);
+    if (mounted) setState(() => _picking = false);
   }
 
   Future<void> _discard(IntakeDraft draft) async {
@@ -115,7 +122,12 @@ class _IntakePageState extends State<IntakePage> {
   }
 
   void _showing(String id) {
-    setState(() => _currentId = id);
+    setState(() {
+      _currentId = id;
+      _focus = null;
+      _overview = 0;
+      _zoomed = false;
+    });
     final tray = _trayKeys[id]?.currentContext;
     if (tray != null) {
       unawaited(
@@ -236,85 +248,202 @@ class _IntakePageState extends State<IntakePage> {
               );
             }
             final enabled = online && !_picking;
-            return Padding(
-              padding: EdgeInsets.only(top: padding.top),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (notices.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        FormTokens.gutter,
-                        4,
-                        FormTokens.gutter,
-                        8,
-                      ),
-                      child: Column(spacing: 8, children: notices),
-                    ),
-                  _PhotoTray(
-                    drafts: drafts,
-                    currentId: current.id,
-                    keys: _trayKeys,
-                    canAdd: online && !_picking,
-                    onSelect: _goTo,
-                    onAdd: _pick,
+            return Stack(
+              children: [
+                // The photo runs up behind the header and the tray.
+                Positioned.fill(
+                  child: PageView.builder(
+                    controller: _pages,
+                    // Dragging moves the zoomed photo, not to the next one.
+                    physics: _zoomed
+                        ? const NeverScrollableScrollPhysics()
+                        : null,
+                    itemCount: drafts.length,
+                    onPageChanged: (index) => _showing(drafts[index].id),
+                    findChildIndexCallback: (key) {
+                      final index = drafts.indexWhere(
+                        (d) => ValueKey(d.id) == key,
+                      );
+                      return index < 0 ? null : index;
+                    },
+                    itemBuilder: (context, index) {
+                      final draft = drafts[index];
+                      final shown = draft.id == current.id;
+                      return _DraftPage(
+                        key: ValueKey(draft.id),
+                        draft: draft,
+                        enabled: enabled,
+                        focus: shown ? _focus : null,
+                        overview: shown ? _overview : 0,
+                        insets: EdgeInsets.only(
+                          top: _topHeight,
+                          bottom: _bottomHeight,
+                        ),
+                        onZoomed: (zoomed) {
+                          if (shown && zoomed != _zoomed) {
+                            setState(() => _zoomed = zoomed);
+                          }
+                        },
+                        onUnfocus: () {
+                          if (shown && _focus != null) {
+                            setState(() => _focus = null);
+                          }
+                        },
+                      );
+                    },
                   ),
-                  Expanded(
-                    child: PageView.builder(
-                      controller: _pages,
-                      itemCount: drafts.length,
-                      onPageChanged: (index) => _showing(drafts[index].id),
-                      findChildIndexCallback: (key) {
-                        final index = drafts.indexWhere(
-                          (d) => ValueKey(d.id) == key,
-                        );
-                        return index < 0 ? null : index;
-                      },
-                      itemBuilder: (context, index) {
-                        final draft = drafts[index];
-                        return _DraftPage(
-                          key: ValueKey(draft.id),
-                          draft: draft,
-                          enabled: enabled,
-                          onDiscard: () => _discard(draft),
-                          onToggle: (choice) => _bloc.add(
-                            IntakeEvent(
-                              IntakeAction.select,
-                              id: draft.id,
-                              choiceKey: choice.itemKey,
-                              value: !choice.selected,
+                ),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: _ReportSize(
+                    onSize: (size) {
+                      if (mounted && size.height != _topHeight) {
+                        setState(() => _topHeight = size.height);
+                      }
+                    },
+                    // Header and tray share one frosted pane over the photo.
+                    child: FormFrostedBar(
+                      opacity: 0.82,
+                      border: const Border(
+                        bottom: BorderSide(color: FormTokens.line),
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.only(top: padding.top, bottom: 2),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (notices.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  FormTokens.gutter,
+                                  4,
+                                  FormTokens.gutter,
+                                  8,
+                                ),
+                                child: Column(spacing: 8, children: notices),
+                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _PhotoTray(
+                                    drafts: drafts,
+                                    currentId: current.id,
+                                    keys: _trayKeys,
+                                    canAdd: online && !_picking,
+                                    onSelect: _goTo,
+                                    onAdd: _pick,
+                                  ),
+                                ),
+                                // Beside the photos it acts on, so it reads
+                                // as removing one, not closing the page.
+                                if (!_leaving(current))
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      right: FormTokens.gutter - 8,
+                                      bottom: 6,
+                                    ),
+                                    child: IconButton(
+                                      tooltip: context.tr(
+                                        LocaleKeys.intake_removePhoto,
+                                      ),
+                                      onPressed: () => _discard(current),
+                                      icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: FormTokens.ink,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
-                          ),
-                          onOwnership: (owning) => _bloc.add(
-                            IntakeEvent(
-                              IntakeAction.ownership,
-                              id: draft.id,
-                              value: owning,
-                            ),
-                          ),
-                        );
-                      },
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                  if (current.phase != DraftPhase.manual)
-                    _ActionBar(
-                      draft: current,
-                      enabled: enabled,
-                      bottom: padding.bottom,
-                      nextReady: _ready(current)
-                          ? null
-                          : drafts
-                                .where((d) => d.id != current.id)
-                                .where(_ready)
-                                .firstOrNull,
-                      onSave: () => _save(current),
-                      onRetry: () => _bloc.add(
-                        IntakeEvent(IntakeAction.retry, id: current.id),
+                ),
+                if (current.phase != DraftPhase.manual)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _ReportSize(
+                      onSize: (size) {
+                        if (mounted && size.height != _bottomHeight) {
+                          setState(() => _bottomHeight = size.height);
+                        }
+                      },
+                      // Frosted like the header, a touch denser so the
+                      // pieces stand out from the photo.
+                      child: FormFrostedBar(
+                        opacity: 0.86,
+                        border: const Border(
+                          top: BorderSide(color: FormTokens.line),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _PiecesPanel(
+                                draft: current,
+                                enabled: enabled,
+                                onToggle: (choice) {
+                                  _bloc.add(
+                                    IntakeEvent(
+                                      IntakeAction.select,
+                                      id: current.id,
+                                      choiceKey: choice.itemKey,
+                                      value: !choice.selected,
+                                    ),
+                                  );
+                                  // A piece being picked is zoomed to. Leaving
+                                  // one out steps back to the whole person.
+                                  setState(() {
+                                    if (choice.selected) {
+                                      _focus = null;
+                                      _overview++;
+                                    } else {
+                                      _focus = choice.itemKey;
+                                    }
+                                  });
+                                },
+                                onOwnership: (owning) => _bloc.add(
+                                  IntakeEvent(
+                                    IntakeAction.ownership,
+                                    id: current.id,
+                                    value: owning,
+                                  ),
+                                ),
+                              ),
+                              _ActionBar(
+                                draft: current,
+                                enabled: enabled,
+                                bottom: padding.bottom,
+                                nextReady: _ready(current)
+                                    ? null
+                                    : drafts
+                                          .where((d) => d.id != current.id)
+                                          .where(_ready)
+                                          .firstOrNull,
+                                onSave: () => _save(current),
+                                onRetry: () => _bloc.add(
+                                  IntakeEvent(
+                                    IntakeAction.retry,
+                                    id: current.id,
+                                  ),
+                                ),
+                                onNext: _goTo,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                      onNext: _goTo,
                     ),
-                ],
-              ),
+                  ),
+              ],
             );
           },
         ),
@@ -649,11 +778,14 @@ class _ThumbScanState extends State<_ThumbScan>
     animation: _sweep,
     builder: (context, _) {
       final t = Curves.easeInOut.transform(_sweep.value);
+      // The diagonal band starts fully left of the corner and ends fully
+      // past the opposite one, so the loop restarts out of sight.
+      final x = -5 + 8 * t;
       return DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment(-1 + 3 * t - 1, -1),
-            end: Alignment(1 + 3 * t - 1, 1),
+            begin: Alignment(x, -1),
+            end: Alignment(x + 2, 1),
             colors: const [
               Color(0x00FFFFFF),
               Color(0x59FFFFFF),
@@ -731,56 +863,235 @@ class _AddThumb extends StatelessWidget {
   );
 }
 
-/// One photo: the picture fills the free space, the strip of pieces below
-/// keeps a fixed height whether the photo is still analysed or ready.
+/// One photo, filling the page below the header and shown whole: a 9:16
+/// photo takes the full height, wider ones sit in the middle. Pinch and drag
+/// to look closer, double-tap to see it whole again. A [focus]ed piece flies
+/// into view within the part of the page that [insets] leaves uncovered.
+/// While zoomed in, [onZoomed] reports it so the pager stops swiping.
 class _DraftPage extends StatefulWidget {
   const _DraftPage({
     required this.draft,
     required this.enabled,
-    required this.onDiscard,
-    required this.onToggle,
-    required this.onOwnership,
+    required this.focus,
+    required this.overview,
+    required this.insets,
+    required this.onZoomed,
+    required this.onUnfocus,
     super.key,
   });
 
   final IntakeDraft draft;
   final bool enabled;
-  final VoidCallback onDiscard;
-  final ValueChanged<IntakeChoice> onToggle;
-  final ValueChanged<bool> onOwnership;
+  final String? focus;
+
+  /// Counts requests to step back to the whole person, such as leaving out
+  /// a piece. Each increase flies there.
+  final int overview;
+  final EdgeInsets insets;
+  final ValueChanged<bool> onZoomed;
+  final VoidCallback onUnfocus;
 
   @override
   State<_DraftPage> createState() => _DraftPageState();
 }
 
-class _DraftPageState extends State<_DraftPage> {
-  String? _focus;
-  Timer? _unfocus;
+class _DraftPageState extends State<_DraftPage>
+    with SingleTickerProviderStateMixin {
+  final _view = TransformationController();
+  late final _motion = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 520),
+  );
+  Animation<Matrix4>? _flight;
+  Size _size = Size.zero;
+  bool _zoomed = false;
+
+  // Whether the user has moved the photo or zoomed to a piece. Until then
+  // it keeps to the overview.
+  bool _touched = false;
 
   @override
-  void dispose() {
-    _unfocus?.cancel();
-    super.dispose();
-  }
-
-  // Highlights the tapped piece on the photo for a moment, so the photo
-  // stays calm otherwise.
-  void _toggle(IntakeChoice choice) {
-    widget.onToggle(choice);
-    _unfocus?.cancel();
-    setState(() => _focus = choice.itemKey);
-    _unfocus = Timer(const Duration(milliseconds: 1600), () {
-      if (mounted) setState(() => _focus = null);
+  void initState() {
+    super.initState();
+    _motion.addListener(() {
+      if (_flight case final flight?) _view.value = flight.value;
+    });
+    _view.addListener(() {
+      // Flights land on views of their own; everything else stays on the
+      // photo.
+      if (!_motion.isAnimating) {
+        final kept = _keepOnPhoto(_view.value);
+        if (kept != _view.value) {
+          _view.value = kept;
+          return;
+        }
+      }
+      final zoomed = _view.value.entry(0, 0) > 1.01;
+      if (zoomed == _zoomed) return;
+      _zoomed = zoomed;
+      widget.onZoomed(zoomed);
     });
   }
 
   @override
+  void didUpdateWidget(_DraftPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focus != null && widget.focus != oldWidget.focus) {
+      _touched = true;
+      _flyTo(_pieceView());
+    } else if (widget.overview != oldWidget.overview) {
+      _flyTo(_overview());
+    }
+  }
+
+  @override
+  void dispose() {
+    _motion.dispose();
+    _view.dispose();
+    super.dispose();
+  }
+
+  void _flyTo(Matrix4 end) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _view.value = end;
+      return;
+    }
+    _flight = Matrix4Tween(begin: _view.value.clone(), end: end).animate(
+      CurvedAnimation(parent: _motion, curve: Curves.easeInOutCubic),
+    );
+    unawaited(_motion.forward(from: 0));
+  }
+
+  /// Where the whole photo sits on the page: as large as the page allows,
+  /// centred in the part the tray and the pieces leave free, and moved only
+  /// as far as the page's edges permit. A tall photo fills the height, a
+  /// wide one sits between the controls.
+  Rect _photoRect(Size page) {
+    final source = Size(
+      widget.draft.width.toDouble(),
+      widget.draft.height.toDouble(),
+    );
+    final scale = math.min(
+      page.width / source.width,
+      page.height / source.height,
+    );
+    final size = source * scale;
+    final visible = widget.insets.deflateRect(Offset.zero & page);
+    final top = (visible.center.dy - size.height / 2).clamp(
+      0.0,
+      page.height - size.height,
+    );
+    return Offset((page.width - size.width) / 2, top) & size;
+  }
+
+  /// The view that centres the focused piece, with plenty of air, in the
+  /// uncovered part of the page.
+  Matrix4 _pieceView() {
+    final box = widget.draft.choices
+        .where((c) => c.itemKey == widget.focus)
+        .firstOrNull
+        ?.proposal
+        ?.boundingBox;
+    if (box == null) return _view.value;
+    // Generous air keeps the piece in its context on the photo.
+    return _viewOf(box, air: 0.45, least: 1);
+  }
+
+  /// The zoomed-out view every photo starts with and returns to: the whole
+  /// person, or the whole photo when detection found no subject, fitted
+  /// into the uncovered part of the page. Never enlarges.
+  Matrix4 _overview() {
+    final subject = widget.draft.subject;
+    return _viewOf(
+      subject ?? DetectionBox(x: 0, y: 0, width: 1000, height: 1000),
+      air: subject == null ? 0 : 0.04,
+      least: _minScale,
+      most: 1,
+    );
+  }
+
+  static const _minScale = 0.6;
+
+  /// Centres [box] with [air] around it in the uncovered part of the page,
+  /// at least [least] and at most [most] times enlarged, and kept on the
+  /// photo like any other view.
+  Matrix4 _viewOf(
+    DetectionBox box, {
+    required double air,
+    required double least,
+    double most = 2.2,
+  }) {
+    if (_size.isEmpty) return _view.value;
+    final photo = _photoRect(_size);
+    final target = box.pixels(photo.size).shift(photo.topLeft);
+    final framed = target.inflate(target.longestSide * air);
+    final visible = widget.insets.deflateRect(Offset.zero & _size);
+    final scale = math
+        .min(visible.width / framed.width, visible.height / framed.height)
+        .clamp(least, most);
+    final shift = visible.center - framed.center * scale;
+    return _keepOnPhoto(
+      Matrix4.identity()
+        ..translateByDouble(shift.dx, shift.dy, 0, 1)
+        ..scaleByDouble(scale, scale, scale, 1),
+    );
+  }
+
+  /// [view] moved only as far as the photo reaches: a photo smaller than
+  /// the uncovered part stays centred in it, a larger one always fills it.
+  Matrix4 _keepOnPhoto(Matrix4 view) {
+    if (_size.isEmpty) return view;
+    // The x axis, since the largest scale over all axes never drops below
+    // the untouched depth's 1 when the photo is shown smaller.
+    final scale = view.entry(0, 0);
+    final shift = view.getTranslation();
+    final photo = _photoRect(_size);
+    final visible = widget.insets.deflateRect(Offset.zero & _size);
+    double axis(
+      double at,
+      double start,
+      double length,
+      double from,
+      double to,
+    ) {
+      final size = length * scale;
+      if (size <= to - from) {
+        return (from + to) / 2 - (start + length / 2) * scale;
+      }
+      return at.clamp(to - (start + length) * scale, from - start * scale);
+    }
+
+    final dx = axis(
+      shift.x,
+      photo.left,
+      photo.width,
+      visible.left,
+      visible.right,
+    );
+    final dy = axis(
+      shift.y,
+      photo.top,
+      photo.height,
+      visible.top,
+      visible.bottom,
+    );
+    if ((dx - shift.x).abs() < 0.01 && (dy - shift.y).abs() < 0.01) return view;
+    return view.clone()..setTranslationRaw(dx, dy, 0);
+  }
+
+  void _whole() {
+    widget.onUnfocus();
+    _flyTo(_overview());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (widget.draft.phase == DraftPhase.manual) {
+    final draft = widget.draft;
+    if (draft.phase == DraftPhase.manual) {
       return SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           FormTokens.gutter,
-          4,
+          widget.insets.top,
           FormTokens.gutter,
           MediaQuery.paddingOf(context).bottom + 24,
         ),
@@ -789,226 +1100,222 @@ class _DraftPageState extends State<_DraftPage> {
           children: [
             SizedBox(
               height: 220,
-              child: _PhotoStage(
-                draft: widget.draft,
-                focus: _focus,
-                onDiscard: widget.onDiscard,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(FormTokens.panelRadius),
+                child: DraftPhoto(draft: draft),
               ),
             ),
             ManualIntakeForm(
-              key: ValueKey(widget.draft.id),
-              draft: widget.draft,
+              key: ValueKey(draft.id),
+              draft: draft,
               enabled: widget.enabled,
             ),
           ],
         ),
       );
     }
-    final pieces = _pieces(widget.draft);
-    final selected = pieces.where((c) => c.selected).length;
-    final ready = widget.draft.phase == DraftPhase.ready;
-    final interactive = widget.enabled && ready && widget.draft.failure == null;
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: FormTokens.gutter,
-              ),
-              child: _PhotoStage(
-                draft: widget.draft,
-                focus: _focus,
-                onDiscard: widget.onDiscard,
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: FormTokens.gutter),
-            child: SizedBox(
-              height: 32,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: AnimatedSwitcher(
-                      duration: FormTokens.quick,
-                      layoutBuilder: (current, _) => Align(
-                        alignment: Alignment.centerLeft,
-                        child: current,
-                      ),
-                      child: Text(
-                        pieces.isEmpty
-                            ? context.tr(
-                                'intake.phases.${widget.draft.phase.name}',
-                              )
-                            : context.tr(
-                                LocaleKeys.intake_selectedCount,
-                                namedArgs: {
-                                  'selected': '$selected',
-                                  'total': '${pieces.length}',
-                                },
-                              ),
-                        key: ValueKey(
-                          pieces.isEmpty ? widget.draft.phase : selected,
-                        ),
-                        style: FormTokens.small.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: FormTokens.ink,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (pieces.isNotEmpty)
-                    _OwnershipSwitch(
-                      owning: widget.draft.ownership == 'owning',
-                      onChanged: interactive ? widget.onOwnership : null,
-                    ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: _PieceTile.height,
-            child: widget.draft.failure != null
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: FormTokens.gutter,
-                    ),
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: FormNotice(
-                        text: context.tr(widget.draft.failure!),
-                        error: true,
-                      ),
-                    ),
-                  )
-                : pieces.isEmpty
-                ? const _SkeletonStrip()
-                : _EdgeFade(
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: FormTokens.gutter,
-                      ),
-                      itemCount: pieces.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 10),
-                      itemBuilder: (context, index) => FormReveal(
-                        key: ValueKey(pieces[index].itemKey),
-                        delay: Duration(milliseconds: 160 + 70 * index),
-                        child: _PieceTile(
-                          draft: widget.draft,
-                          choice: pieces[index],
-                          onTap: interactive && !pieces[index].locked
-                              ? () => _toggle(pieces[index])
-                              : null,
-                        ),
-                      ),
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The photo fitted into the free space. It stays clean; tapping a piece in
-/// the strip spotlights it here for a moment.
-class _PhotoStage extends StatelessWidget {
-  const _PhotoStage({
-    required this.draft,
-    required this.onDiscard,
-    this.focus,
-  });
-
-  final IntakeDraft draft;
-  final String? focus;
-  final VoidCallback onDiscard;
-
-  @override
-  Widget build(BuildContext context) {
     final analyzing = _analyzing(draft) && draft.failure == null;
     final leaving = _leaving(draft);
-    return Center(
-      child: AspectRatio(
-        aspectRatio: draft.width / draft.height,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(FormTokens.panelRadius),
-          child: ColoredBox(
-            color: FormTokens.field,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _size = constraints.biggest;
+        // Until the user moves the photo, it settles on the overview as the
+        // controls on top are measured.
+        if (!_touched) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _touched || _motion.isAnimating) return;
+            final overview = _overview();
+            if (overview != _view.value) _view.value = overview;
+          });
+        }
+        return GestureDetector(
+          onDoubleTap: _whole,
+          child: InteractiveViewer(
+            transformationController: _view,
+            minScale: _minScale,
+            maxScale: 5,
+            // The photo's own bounds apply instead, see _keepOnPhoto.
+            boundaryMargin: const EdgeInsets.all(double.infinity),
+            onInteractionStart: (_) {
+              _touched = true;
+              _motion.stop();
+              if (widget.focus != null) widget.onUnfocus();
+            },
             child: Stack(
-              fit: StackFit.expand,
               children: [
-                DraftPhoto(draft: draft, focus: focus),
-                AnimatedSwitcher(
-                  duration: FormTokens.sheetDuration,
-                  child: analyzing
-                      ? _ScanOverlay(
-                          key: const ValueKey('scan'),
-                          message: context.tr(
-                            draft.phase == DraftPhase.detecting
-                                ? LocaleKeys.intake_phases_detecting
-                                : LocaleKeys.intake_phases_uploading,
-                          ),
-                        )
-                      : leaving
-                      ? _ScanOverlay(
-                          key: const ValueKey('saving'),
-                          sweep: false,
-                          message: context.tr(
-                            'intake.phases.${draft.phase.name}',
-                          ),
-                        )
-                      : const SizedBox.expand(),
-                ),
-                if (!leaving)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: _DiscardButton(onPressed: onDiscard),
+                // Settles once the controls on top have been measured.
+                AnimatedPositioned.fromRect(
+                  duration: FormTokens.quick,
+                  curve: FormTokens.easeOut,
+                  rect: _photoRect(_size),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      DraftPhoto(draft: draft, focus: widget.focus),
+                      AnimatedSwitcher(
+                        duration: FormTokens.sheetDuration,
+                        child: analyzing
+                            ? _ScanOverlay(
+                                key: const ValueKey('scan'),
+                                message: context.tr(
+                                  draft.phase == DraftPhase.detecting
+                                      ? LocaleKeys.intake_phases_detecting
+                                      : LocaleKeys.intake_phases_uploading,
+                                ),
+                              )
+                            : leaving
+                            ? _ScanOverlay(
+                                key: const ValueKey('saving'),
+                                sweep: false,
+                                message: context.tr(
+                                  'intake.phases.${draft.phase.name}',
+                                ),
+                              )
+                            : const SizedBox.expand(),
+                      ),
+                    ],
                   ),
+                ),
               ],
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
-class _DiscardButton extends StatelessWidget {
-  const _DiscardButton({required this.onPressed});
+/// The current photo's pieces over the foot of the photo: the count beside
+/// Owning/Wanting, then the strip.
+class _PiecesPanel extends StatelessWidget {
+  const _PiecesPanel({
+    required this.draft,
+    required this.enabled,
+    required this.onToggle,
+    required this.onOwnership,
+  });
 
-  final VoidCallback onPressed;
+  final IntakeDraft draft;
+  final bool enabled;
+  final ValueChanged<IntakeChoice> onToggle;
+  final ValueChanged<bool> onOwnership;
 
   @override
   Widget build(BuildContext context) {
-    final label = context.tr(LocaleKeys.intake_discard);
-    return Semantics(
-      label: label,
-      button: true,
-      child: Material(
-        color: const Color(0xCCFFFFFF),
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onPressed,
-          child: SizedBox.square(
-            dimension: 36,
-            child: Icon(
-              Icons.close,
-              size: 18,
-              color: FormTokens.ink,
-              semanticLabel: label,
+    final pieces = _pieces(draft);
+    final ready = draft.phase == DraftPhase.ready;
+    final interactive = enabled && ready && draft.failure == null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: FormTokens.gutter),
+          // The progress while the photo is analysed, then where the pieces
+          // go. The ticks on the tiles and the button say how many.
+          child: SizedBox(
+            height: 32,
+            child: AnimatedSwitcher(
+              duration: FormTokens.quick,
+              layoutBuilder: (current, _) => Align(
+                alignment: Alignment.centerLeft,
+                child: current,
+              ),
+              child: pieces.isEmpty
+                  ? Text(
+                      context.tr('intake.phases.${draft.phase.name}'),
+                      key: ValueKey(draft.phase),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: FormTokens.small.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: FormTokens.ink,
+                      ),
+                    )
+                  : _OwnershipSwitch(
+                      key: const ValueKey('ownership'),
+                      owning: draft.ownership == 'owning',
+                      onChanged: interactive ? onOwnership : null,
+                    ),
             ),
           ),
         ),
-      ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: _PieceTile.height(context),
+          child: draft.failure != null
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: FormTokens.gutter,
+                  ),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: FormNotice(
+                      text: context.tr(draft.failure!),
+                      error: true,
+                    ),
+                  ),
+                )
+              : pieces.isEmpty
+              ? const _SkeletonStrip()
+              : _EdgeFade(
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: FormTokens.gutter,
+                    ),
+                    itemCount: pieces.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
+                    itemBuilder: (context, index) => FormReveal(
+                      key: ValueKey(pieces[index].itemKey),
+                      delay: Duration(milliseconds: 160 + 70 * index),
+                      child: _PieceTile(
+                        draft: draft,
+                        choice: pieces[index],
+                        onTap: interactive && !pieces[index].locked
+                            ? () => onToggle(pieces[index])
+                            : null,
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+      ],
     );
+  }
+}
+
+/// Reports its child's laid-out size after each change, so the photo can
+/// keep a focused piece clear of the controls on top of it.
+class _ReportSize extends SingleChildRenderObjectWidget {
+  const _ReportSize({required this.onSize, super.child});
+
+  final ValueChanged<Size> onSize;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderReportSize(onSize);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderReportSize renderObject,
+  ) => renderObject.onSize = onSize;
+}
+
+class _RenderReportSize extends RenderProxyBox {
+  _RenderReportSize(this.onSize);
+
+  ValueChanged<Size> onSize;
+  Size? _reported;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    if (size == _reported) return;
+    _reported = size;
+    final reported = size;
+    WidgetsBinding.instance.addPostFrameCallback((_) => onSize(reported));
   }
 }
 
@@ -1128,17 +1435,21 @@ class _ScanOverlayState extends State<_ScanOverlay>
                             ),
                           ),
                         ),
-                        AnimatedSwitcher(
-                          duration: FormTokens.quick,
-                          layoutBuilder: (current, _) =>
-                              current ?? const SizedBox(),
-                          child: Text(
-                            widget.message,
-                            key: ValueKey(widget.message),
-                            style: FormTokens.body.copyWith(
-                              fontSize: 13,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
+                        // Wraps on narrow photos or at large text sizes.
+                        Flexible(
+                          child: AnimatedSwitcher(
+                            duration: FormTokens.quick,
+                            layoutBuilder: (current, _) =>
+                                current ?? const SizedBox(),
+                            child: Text(
+                              widget.message,
+                              key: ValueKey(widget.message),
+                              style: FormTokens.body.copyWith(
+                                fontSize: 13,
+                                height: 1.3,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ),
@@ -1158,7 +1469,11 @@ class _ScanOverlayState extends State<_ScanOverlay>
 /// Owning or Wanting for every piece of one photo, small enough to share a
 /// row with the selection count.
 class _OwnershipSwitch extends StatelessWidget {
-  const _OwnershipSwitch({required this.owning, required this.onChanged});
+  const _OwnershipSwitch({
+    required this.owning,
+    required this.onChanged,
+    super.key,
+  });
 
   final bool owning;
   final ValueChanged<bool>? onChanged;
@@ -1238,8 +1553,11 @@ class _PieceTile extends StatelessWidget {
   final IntakeChoice choice;
   final VoidCallback? onTap;
 
-  static const size = 92.0;
-  static const double height = size + 26;
+  static const size = 108.0;
+
+  /// Tile plus room for a two-line name at the reader's text size.
+  static double height(BuildContext context) =>
+      size + 8 + MediaQuery.textScalerOf(context).scale(12 * 1.3) * 2;
 
   @override
   Widget build(BuildContext context) {
@@ -1322,12 +1640,12 @@ class _PieceTile extends StatelessWidget {
                 const SizedBox(height: 6),
                 Text(
                   proposal.name,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   style: FormTokens.small.copyWith(
-                    fontSize: 11.5,
-                    height: 1.4,
+                    fontSize: 12,
+                    height: 1.3,
                     color: selected ? FormTokens.ink : FormTokens.muted,
                   ),
                 ),
@@ -1482,7 +1800,6 @@ class _ActionBar extends StatelessWidget {
       );
       note = '';
     } else if (draft.phase == DraftPhase.ready) {
-      final credits = count * shelfImageCreditCost;
       button = FilledButton(
         onPressed: enabled && count > 0 ? onSave : null,
         child: Text(
@@ -1496,14 +1813,10 @@ class _ActionBar extends StatelessWidget {
                 ),
         ),
       );
+      // The price per piece. The button already says how many.
       note = count == 0
           ? ''
-          : context.tr(
-              count == 1
-                  ? LocaleKeys.intake_costOne
-                  : LocaleKeys.intake_costMany,
-              namedArgs: {'count': '$count', 'credits': '$credits'},
-            );
+          : context.plural(LocaleKeys.intake_costEach, shelfImageCreditCost);
     } else if (_leaving(draft)) {
       button = FilledButton.icon(
         onPressed: null,
@@ -1527,11 +1840,13 @@ class _ActionBar extends StatelessWidget {
       note = context.tr(LocaleKeys.intake_detectionFree);
     }
     return Padding(
+      // Keeps the note clear of the home indicator without the full safe
+      // area below it.
       padding: EdgeInsets.fromLTRB(
         FormTokens.gutter,
         14,
         FormTokens.gutter,
-        bottom + 10,
+        math.max(bottom - 4, 8),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1553,7 +1868,7 @@ class _ActionBar extends StatelessWidget {
             ),
           ),
           SizedBox(
-            height: 24,
+            height: 20,
             child: Center(
               child: Text(
                 note,
@@ -1663,18 +1978,22 @@ String _detectionTheme(String category) {
 /// Both preview crops and the spotlight use the prepared photo's pixel
 /// geometry. The whole draft photo with an optional spotlight, or with [crop]
 /// a single detection. A crop covers its box so the parent's rounded clip
-/// shapes every corner, or with [contain] shows the whole piece.
+/// shapes every corner, or with [contain] shows the whole piece. With
+/// [frame], the crop is widened with the photo around it to the box's
+/// proportions, so the whole crop stays in view without empty bars.
 class DraftPhoto extends StatelessWidget {
   const DraftPhoto({
     required this.draft,
     this.crop,
     this.contain = false,
+    this.frame = false,
     this.focus,
     super.key,
   });
   final IntakeDraft draft;
   final DetectionBox? crop;
   final bool contain;
+  final bool frame;
 
   /// Item key of the piece to highlight on the whole photo.
   final String? focus;
@@ -1687,10 +2006,17 @@ class DraftPhoto extends StatelessWidget {
       errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined),
     );
     if (crop != null) {
-      final region = crop!.pixels(source);
       return LayoutBuilder(
         builder: (context, constraints) {
           final box = constraints.biggest;
+          final piece = crop!.pixels(source);
+          final region = frame
+              ? _widen(
+                  piece.inflate(piece.longestSide * 0.04),
+                  box.aspectRatio,
+                  source,
+                )
+              : piece;
           final fit = contain ? math.min : math.max;
           final scale = fit(
             box.width / region.width,
@@ -1740,6 +2066,26 @@ class DraftPhoto extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Widens [region] to [aspect] around its centre, staying inside [source].
+Rect _widen(Rect region, double aspect, Size source) {
+  var width = math.max(region.width, region.height * aspect);
+  var height = width / aspect;
+  if (height > source.height) {
+    height = source.height;
+    width = height * aspect;
+  }
+  if (width > source.width) {
+    width = source.width;
+    height = width / aspect;
+  }
+  return Rect.fromLTWH(
+    (region.center.dx - width / 2).clamp(0, source.width - width),
+    (region.center.dy - height / 2).clamp(0, source.height - height),
+    width,
+    height,
+  );
 }
 
 /// Dims the photo around one piece. Moves between pieces and fades out

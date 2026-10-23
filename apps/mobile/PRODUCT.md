@@ -33,10 +33,10 @@ FORM is a better version of the selfie folder in Apple Photos. FORM turns photos
 
 ## Operating Context
 
-- Intake: pick one or several photos and you are done. Upload, detection and catalog images run in the background while the user stays in the Schrank. Detected pieces arrive as new tiles; accessories stay out unless picked. Corrections happen on the tile: rename, or move a wrongly detected piece to the archive with undo. Photos without detected pieces wait for a name. Drafts survive interruption.
+- Intake: pick one or several photos. Upload and detection run in the background, and the intake page lists the detected pieces per photo for the user to pick before saving; accessories start unpicked. Saving orders the catalog image. Saved pieces arrive as new tiles, and corrections happen on the tile: rename, or move a piece to the archive with undo. Photos without detected pieces wait for a name. Drafts survive interruption.
 - Wardrobe: grid sorted by recency, Owning/Wanting/Archived, filters for category and color, localized search, item detail with edit, image versions and restore.
 - Catalog images: part of every saved piece and paid. The first image is right in almost every case, so no review step is needed. In the rare bad case, users give feedback (proportions, color, details) to request a better version. Users can choose a quality. Older versions remain restorable.
-- Looks: the second tab, an archive sorted by occasion, Sammlung, piece and colour. A look is always a combination of the user's pieces, free and laid out flat. Images sit on top and never replace it: a photo the user wore it in (a photo look, whose detected pieces are listed for linking or adding), Try on (Anprobe), which puts the pieces 1:1 on a photo of the user, or Inspiration, a full AI scene whose quality varies. New looks come from the composer, from the user's photos, or from FORM's swipe suggestions, which are kept as combinations for free.
+- Looks: the second tab, an archive sorted by occasion, Sammlung, piece and colour. A look is always a combination of the user's pieces, free and laid out flat. New looks come from "Create look", a swipe deck of FORM's suggestions that are kept as combinations for free. AI images sit on top and never replace the combination: Try on (Anprobe), which puts the pieces 1:1 on a photo of the user, or Inspiration, a full AI scene whose quality varies. Both are started on the look's page, can be made several times, and show there as tabs. Uploading own photos as looks is not offered for now.
 - Personal photo collage: one to four photos of the user, used as the reference for Inspiration looks only. Asked for on the first Inspiration, not in onboarding.
 - Settings: language, account, credits and weekly costs, quality, feed weights, cache, archive.
 - Offline: cached grid, details and media stay readable. Changes are disabled until the connection returns.
@@ -56,7 +56,7 @@ FORM is a better version of the selfie folder in Apple Photos. FORM turns photos
 
 - Name: FORM, written in capitals.
 - Voice: short, warm and direct. Second person ("your wardrobe"). Honest about limits. Onboarding says openly what FORM cannot do: hidden pieces, size and fit, getting every detail right the first time, and working for free.
-- Terminology: Wardrobe, Feed, Look, Owning/Wanting/Archived, catalog image, collage, Worn/Flat, Try on (Anprobe), Inspiration.
+- Terminology: Wardrobe, Feed, Look, Owning/Wanting/Archived, catalog image, collage, Flat, Try on (Anprobe), Inspiration.
 - Visual identity is defined by the existing PWA and `docs/flutter-native/visual-guide.md` and is recorded separately in DESIGN.md.
 
 ## Evidence on Hand

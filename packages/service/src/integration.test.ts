@@ -11,14 +11,10 @@ import {
   createPrivateObjectStorage,
   createLook,
   createCombinationLook,
-  createPhotoLook,
   createLookImage,
   keepLookProposal,
   setLookItems,
-  linkFoundPiece,
-  unlinkFoundPiece,
   deleteLook,
-  recordDetectionProposals,
   createCharacterSheet,
   executeInspirationJob,
   generationCosts,
@@ -165,7 +161,7 @@ test('proposals are planned for free and only the picked one is rendered and cha
   }
 });
 
-test('looks are combinations first: free without a reference, with photos and AI images on top', { skip: !enabled }, async () => {
+test('looks are combinations first: free without a reference, with AI images on top', { skip: !enabled }, async () => {
   const database = createDatabase(readDatabaseConfig());
   const storage = createPrivateObjectStorage(readObjectStorageConfig());
   try {
@@ -226,48 +222,6 @@ test('looks are combinations first: free without a reference, with photos and AI
     looks = await listLooks(database, accountId);
     assert.ok(!looks.some((look) => look.id === combination.lookId || look.parentLookId === combination.lookId));
 
-    // A photo look lists what was detected on it once analysed, nothing joins the wardrobe by itself.
-    const photo = await createPhotoLook(database, { accountId, sourcePhotoId: fixtureIds.sourcePhoto, detectionModel: 'fixture', idempotencyKey: randomUUID() });
-    let photoLook = (await listLooks(database, accountId)).find((look) => look.id === photo.lookId)!;
-    assert.equal(photoLook.kind, 'photo');
-    assert.equal(photoLook.assetId, fixtureIds.sourceAsset);
-    assert.equal(photoLook.found, null);
-    const detectionId = randomUUID();
-    await recordDetectionProposals(database, {
-      accountId, sourcePhotoId: fixtureIds.sourcePhoto,
-      detections: [{ id: detectionId, name: 'Linen shirt', category: 'top', colors: ['white'], boundingBox: { x: 10, y: 10, width: 400, height: 400 } }],
-    });
-    await database.query("UPDATE detection_attempts SET state='succeeded', finished_at=now() WHERE source_photo_id=$1", [fixtureIds.sourcePhoto]);
-    photoLook = (await listLooks(database, accountId)).find((look) => look.id === photo.lookId)!;
-    assert.ok(photoLook.found?.some((piece) => piece.id === detectionId && piece.wardrobeItemId === null));
-    // "Yes, that's mine" links the found piece and adds it to the look; taking it back removes both.
-    await linkFoundPiece(database, { accountId, lookId: photo.lookId, foundId: detectionId, wardrobeItemId: fixtureIds.readyItem });
-    photoLook = (await listLooks(database, accountId)).find((look) => look.id === photo.lookId)!;
-    assert.deepEqual(photoLook.wardrobeItemIds, [fixtureIds.readyItem]);
-    assert.equal(photoLook.found?.find((piece) => piece.id === detectionId)?.wardrobeItemId, fixtureIds.readyItem);
-    assert.deepEqual(await unlinkFoundPiece(database, { accountId, lookId: photo.lookId, foundId: detectionId }), { wardrobeItemIds: [] });
-    photoLook = (await listLooks(database, accountId)).find((look) => look.id === photo.lookId)!;
-    assert.equal(photoLook.found?.find((piece) => piece.id === detectionId)?.wardrobeItemId, null);
-    await assert.rejects(
-      linkFoundPiece(database, { accountId: fixtureIds.emptyAccount, lookId: photo.lookId, foundId: detectionId, wardrobeItemId: fixtureIds.readyItem }),
-    );
-    await setLookItems(database, { accountId, lookId: photo.lookId, itemIds: [fixtureIds.readyItem] });
-    photoLook = (await listLooks(database, accountId)).find((look) => look.id === photo.lookId)!;
-    assert.deepEqual(photoLook.wardrobeItemIds, [fixtureIds.readyItem]);
-
-    // A worn photo can join a combination later. It keeps its pieces and can still get images.
-    const later = await createCombinationLook(database, { accountId, itemIds: [fixtureIds.readyItem], idempotencyKey: randomUUID() });
-    await createPhotoLook(database, { accountId, sourcePhotoId: fixtureIds.sourcePhoto, lookId: later.lookId, detectionModel: 'fixture', idempotencyKey: randomUUID() });
-    const worn = (await listLooks(database, accountId)).find((look) => look.id === later.lookId)!;
-    assert.equal(worn.kind, 'photo');
-    assert.equal(worn.assetId, fixtureIds.sourceAsset);
-    assert.deepEqual(worn.wardrobeItemIds, [fixtureIds.readyItem]);
-    const wornTryOn = await createLookImage(database, {
-      accountId, lookId: later.lookId, mode: 'try-on', baseAssetId: fixtureIds.sourceAsset, idempotencyKey: randomUUID(),
-    });
-    assert.equal((await listLooks(database, accountId)).find((look) => look.id === wornTryOn.lookId)!.parentLookId, later.lookId);
-    // Only combinations take a photo; another account's look is not found.
-    await assert.rejects(createPhotoLook(database, { accountId, sourcePhotoId: fixtureIds.sourcePhoto, lookId: later.lookId, detectionModel: 'fixture', idempotencyKey: randomUUID() }));
   } finally {
     storage.client.destroy();
     await database.end();

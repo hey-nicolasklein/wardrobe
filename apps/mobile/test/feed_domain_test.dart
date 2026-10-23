@@ -105,7 +105,7 @@ void main() {
     expect(higherQualities('high'), isEmpty);
   });
 
-  test('a card shows the worn photo, then an AI image, then the flat lay', () {
+  test('a card shows an AI image, try-ons first, else the flat lay', () {
     CachedLook record(Map<String, dynamic> json) =>
         CachedLook(Look.fromJson(json));
     String? cover(CachedLook look, List<CachedLook> looks) =>
@@ -125,10 +125,6 @@ void main() {
     expect(cover(combination, [combination]), isNull);
     expect(cover(combination, [inspiration, combination]), 'inspiration');
     expect(cover(combination, [inspiration, tryOn, combination]), 'try-on');
-
-    final worn = record(lookJson(id: 'worn', kind: 'photo'));
-    final image = record(lookJson(id: 'image', parentLookId: 'worn'));
-    expect(cover(worn, [image, worn]), 'worn');
   });
 
   group('look stacks', () {
@@ -172,10 +168,9 @@ void main() {
       final tryOn = look(baseAssetId: 'asset-1');
       expect(inStack(const OccasionStack(null), tryOn), isFalse);
       expect(inStack(const TryOnStack(), tryOn), isTrue);
-      // A photo look has no settings and is not a surprise look.
-      final photo = Look.fromJson({...lookJson(kind: 'photo')});
-      expect(inStack(const OccasionStack(null), photo), isFalse);
-      expect(inStack(const PhotoStack(), photo), isTrue);
+      // A combination without an occasion is not a surprise look.
+      final combination = Look.fromJson(lookJson(kind: 'combination'));
+      expect(inStack(const OccasionStack(null), combination), isFalse);
       expect(
         inStack(const OccasionStack('party'), look(occasion: 'night-out')),
         isFalse,
@@ -183,15 +178,14 @@ void main() {
       expect(inStack(const SavedStack(), look(), saved: true), isTrue);
     });
 
-    test('references are every look that does not show the user', () {
-      // An AI inspiration shows a model, a try-on shows the user.
-      expect(inStack(const ReferenceStack(), look()), isTrue);
+    test('inspirations are AI scenes, not try-ons', () {
+      expect(inStack(const InspirationStack(), look()), isTrue);
       expect(
-        inStack(const ReferenceStack(), look(baseAssetId: 'asset-1')),
+        inStack(const InspirationStack(), look(baseAssetId: 'asset-1')),
         isFalse,
       );
-      final photo = Look.fromJson(lookJson(kind: 'photo'));
-      expect(inStack(const ReferenceStack(), photo), isFalse);
+      final combination = Look.fromJson(lookJson(kind: 'combination'));
+      expect(inStack(const InspirationStack(), combination), isFalse);
     });
 
     test('pieces and colours gather the looks they appear in', () {

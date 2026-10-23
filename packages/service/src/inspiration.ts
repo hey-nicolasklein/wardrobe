@@ -7,8 +7,6 @@ import {
   type Look,
   type LookCompletion,
   type LookConcept,
-  type LookFoundPiece,
-  type LookPhoto,
   type LookKind,
   type LookOccasion,
   type LookReason,
@@ -20,7 +18,6 @@ import {
   calculateCostMicrounits,
   type CatalogExecutionConfig,
   CatalogJobError,
-  enqueueSourcePhotoDetection,
 } from './catalog.js';
 import { CatalogProviderError, type CatalogProvider, type ItemTraits, type Warmth } from './catalog-provider.js';
 import type { Database, DatabaseClient } from './database.js';
@@ -77,9 +74,6 @@ type LookRow = {
   character_sheet_id: string | null;
   parent_look_id: string | null;
   base_asset_id: string | null;
-  source_photo_id: string | null;
-  found: LookFoundPiece[] | null;
-  photo: LookPhoto | null;
   occasion: LookOccasion | null;
   liked: boolean;
   planned_concept: LookConcept | null;
@@ -100,20 +94,8 @@ type LookRow = {
 
 const characterColumns = `id, state, reference_asset_ids, note, asset_id, active, model, quality,
   output_size, provider_request_id, cost_microunits, failure_category, created_at, finished_at`;
-// A photo look lists its detected pieces once the latest analysis finished,
-// each with the wardrobe piece the user linked it to on this look.
-const foundColumn = `CASE WHEN l.source_photo_id IS NULL THEN NULL
-  WHEN COALESCE((SELECT da.state FROM detection_attempts da WHERE da.source_photo_id=l.source_photo_id ORDER BY da.created_at DESC, da.id DESC LIMIT 1),'queued') NOT IN ('succeeded','failed') THEN NULL
-  ELSE COALESCE((SELECT json_agg(json_build_object('id',dp.id,'name',dp.name,'category',dp.category,'colors',dp.colors,'boundingBox',dp.bounding_box,
-    'wardrobeItemId',(SELECT lf.wardrobe_item_id FROM look_found_links lf JOIN wardrobe_items wi ON wi.id=lf.wardrobe_item_id AND wi.deleted_at IS NULL WHERE lf.look_id=l.id AND lf.detection_proposal_id=dp.id),
-    'added',EXISTS(SELECT 1 FROM wardrobe_items wi WHERE wi.detection_proposal_id=dp.id AND wi.deleted_at IS NULL)) ORDER BY dp.created_at, dp.id)
-    FROM detection_proposals dp WHERE dp.source_photo_id=l.source_photo_id AND dp.category<>'unsupported'),'[]'::json) END AS found`;
-// What the latest finished analysis says about the photo as a whole.
-const photoColumn = `(SELECT json_build_object('source',da.photo_source,'outfitBox',da.outfit_box)
-  FROM detection_attempts da WHERE da.source_photo_id=l.source_photo_id AND da.state='succeeded' AND da.photo_source IS NOT NULL
-  ORDER BY da.created_at DESC, da.id DESC LIMIT 1) AS photo`;
 const lookColumns = `l.id, l.kind, l.state, l.asset_id, l.feed_asset_id, l.character_sheet_id, l.parent_look_id,
-  l.base_asset_id, l.source_photo_id, l.occasion, ${foundColumn}, ${photoColumn},
+  l.base_asset_id, l.occasion,
   l.liked_at IS NOT NULL AS liked, l.planned_concept, l.category_constraints, l.proposal, l.proposal_reasons,
   (SELECT payload FROM remote_image_jobs rj WHERE rj.look_id=l.id ORDER BY rj.created_at DESC LIMIT 1) AS job_payload,
   l.model, l.quality,
@@ -150,9 +132,6 @@ const mapLook = (row: LookRow): Look => ({
   characterSheetId: row.character_sheet_id,
   parentLookId: row.parent_look_id,
   baseAssetId: row.base_asset_id,
-  sourcePhotoId: row.source_photo_id,
-  found: row.found,
-  photo: row.photo,
   liked: row.liked,
   concept: row.planned_concept,
   settings: lookSettings(row),
@@ -855,8 +834,8 @@ export async function deleteLook(database: Database, input: { accountId: string;
     [input.lookId, input.accountId],
   );
   if (!result.rows[0]) throw new OwnedResourceNotFoundError();
-  // The images of a combination or photo look go with it. Other looks' variations stay, they are looks of their own.
-  if (result.rows[0].kind === 'combination' || result.rows[0].kind === 'photo')
+  // The images of a combination go with it. Other looks' variations stay, they are looks of their own.
+  if (result.rows[0].kind === 'combination')
     await database.query(
       `UPDATE looks SET deleted_at=now() WHERE parent_look_id=$1 AND account_id=$2 AND deleted_at IS NULL`,
       [input.lookId, input.accountId],
@@ -876,7 +855,7 @@ async function activeCharacterSheet(client: DatabaseClient, accountId: string): 
   return active.rows[0]?.id ?? null;
 }
 
-// Combination and photo looks are not rendered, so they carry no model or prompt.
+// Combinations are not rendered, so they carry no model or prompt.
 const unrenderedColumns = `model,quality,output_size,prompt_version`;
 const unrenderedValues = `'none','low','1024x1280','none'`;
 
@@ -918,56 +897,7 @@ export async function createCombinationLook(
   });
 }
 
-/**
- * Keeps an uploaded photo the user wore as a look. Its pieces are detected in
- * the background, for free, and listed on the look; none are added to the
- * wardrobe until the user picks them. With `lookId`, the photo is added to
- * that combination instead, which keeps its pieces and images.
- */
-export async function createPhotoLook(
-  database: Database,
-  input: { accountId: string; sourcePhotoId: string; lookId?: string; detectionModel: string; idempotencyKey: string },
-) {
-  const request = { sourcePhotoId: input.sourcePhotoId, ...(input.lookId ? { lookId: input.lookId } : {}) };
-  const created = await withTransaction(database, async (client) => {
-    const prior = await replay<{ lookId: string }>(client, input.accountId, input.idempotencyKey, 'create-photo-look', request);
-    if (prior) return prior;
-    const source = await client.query<{ asset_id: string }>(
-      `SELECT sp.asset_id FROM source_photos sp JOIN private_assets pa ON pa.id=sp.asset_id
-       WHERE sp.id=$1 AND sp.account_id=$2 AND pa.state='ready' AND pa.deleted_at IS NULL`,
-      [input.sourcePhotoId, input.accountId],
-    );
-    if (!source.rows[0]) throw new OwnedResourceNotFoundError();
-    const lookId = input.lookId ?? randomUUID();
-    if (input.lookId) {
-      const worn = await client.query(
-        `UPDATE looks SET kind='photo',asset_id=$3,source_photo_id=$4
-         WHERE id=$1 AND account_id=$2 AND kind='combination' AND NOT proposal AND deleted_at IS NULL RETURNING id`,
-        [lookId, input.accountId, source.rows[0].asset_id, input.sourcePhotoId],
-      );
-      if (!worn.rows[0]) throw new OwnedResourceNotFoundError();
-    } else {
-      await client.query(
-        `INSERT INTO looks(id,account_id,kind,state,asset_id,source_photo_id,finished_at,${unrenderedColumns})
-         VALUES($1,$2,'photo','ready',$3,$4,now(),${unrenderedValues})`,
-        [lookId, input.accountId, source.rows[0].asset_id, input.sourcePhotoId],
-      );
-    }
-    const body = { lookId };
-    await remember(client, input.accountId, input.idempotencyKey, 'create-photo-look', request, body);
-    return body;
-  });
-  // Its own idempotency key, so a replayed request never detects twice.
-  await enqueueSourcePhotoDetection(database, {
-    accountId: input.accountId,
-    sourcePhotoId: input.sourcePhotoId,
-    model: input.detectionModel,
-    idempotencyKey: `${input.idempotencyKey}:detect`,
-  });
-  return created;
-}
-
-/** Replaces the pieces of a combination or photo look. Generated looks keep the pieces they were made of. */
+/** Replaces the pieces of a combination. Generated looks keep the pieces they were made of. */
 export async function setLookItems(
   database: Database,
   input: { accountId: string; lookId: string; itemIds: string[] },
@@ -979,115 +909,22 @@ export async function setLookItems(
       [input.lookId, input.accountId],
     );
     if (!look.rows[0]) throw new OwnedResourceNotFoundError();
-    if (look.rows[0].kind !== 'combination' && look.rows[0].kind !== 'photo')
+    if (look.rows[0].kind !== 'combination')
       throw new InspirationValidationError('look-items-fixed', 'Die Stücke dieses Looks stehen fest.');
-    if (look.rows[0].kind === 'combination' && !itemIds.length)
+    if (!itemIds.length)
       throw new InspirationValidationError('item-required', 'Ein Look braucht mindestens ein Stück.');
     await assertOwnedItems(client, input.accountId, itemIds);
     await client.query('DELETE FROM look_items WHERE look_id=$1', [input.lookId]);
     await insertLookItems(client, input.lookId, itemIds);
     await client.query('UPDATE looks SET exact_item_ids=$3 WHERE id=$1 AND account_id=$2', [input.lookId, input.accountId, itemIds]);
-    // A piece taken off the look no longer stands for anything found on its photo.
-    await client.query('DELETE FROM look_found_links WHERE look_id=$1 AND NOT (wardrobe_item_id = ANY($2::uuid[]))', [
-      input.lookId,
-      itemIds,
-    ]);
-    return { wardrobeItemIds: itemIds };
-  });
-}
-
-async function photoLookForUpdate(client: DatabaseClient, accountId: string, lookId: string, foundId: string) {
-  const look = await client.query<{ id: string }>(
-    `SELECT l.id FROM looks l JOIN detection_proposals dp ON dp.source_photo_id=l.source_photo_id AND dp.id=$3
-     WHERE l.id=$1 AND l.account_id=$2 AND l.kind='photo' AND l.deleted_at IS NULL AND NOT l.proposal FOR UPDATE OF l`,
-    [lookId, accountId, foundId],
-  );
-  if (!look.rows[0]) throw new OwnedResourceNotFoundError();
-}
-
-async function lookItemIds(client: DatabaseClient, lookId: string): Promise<string[]> {
-  const rows = await client.query<{ wardrobe_item_id: string }>(
-    'SELECT wardrobe_item_id FROM look_items WHERE look_id=$1 ORDER BY ordinal',
-    [lookId],
-  );
-  return rows.rows.map((row) => row.wardrobe_item_id);
-}
-
-/**
- * Says that the piece `foundId`, found on a photo look, is the wardrobe piece
- * `wardrobeItemId`. The piece joins the look's combination. Linking again
- * replaces the earlier answer.
- */
-export async function linkFoundPiece(
-  database: Database,
-  input: { accountId: string; lookId: string; foundId: string; wardrobeItemId: string },
-) {
-  return withTransaction(database, async (client) => {
-    await photoLookForUpdate(client, input.accountId, input.lookId, input.foundId);
-    await assertOwnedItems(client, input.accountId, [input.wardrobeItemId]);
-    const previous = await client.query<{ wardrobe_item_id: string }>(
-      'SELECT wardrobe_item_id FROM look_found_links WHERE look_id=$1 AND detection_proposal_id=$2',
-      [input.lookId, input.foundId],
-    );
-    await client.query(
-      `INSERT INTO look_found_links (look_id, detection_proposal_id, wardrobe_item_id, account_id)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (look_id, detection_proposal_id) DO UPDATE SET wardrobe_item_id = EXCLUDED.wardrobe_item_id`,
-      [input.lookId, input.foundId, input.wardrobeItemId, input.accountId],
-    );
-    let itemIds = await lookItemIds(client, input.lookId);
-    const replaced = previous.rows[0]?.wardrobe_item_id;
-    if (replaced && replaced !== input.wardrobeItemId) itemIds = await dropUnlinked(client, input.lookId, replaced, itemIds);
-    if (!itemIds.includes(input.wardrobeItemId)) {
-      itemIds = [...itemIds, input.wardrobeItemId];
-      await writeLookItems(client, input.lookId, itemIds);
-    }
     return { wardrobeItemIds: itemIds };
   });
 }
 
 /**
- * Takes back what `linkFoundPiece` said. The wardrobe piece leaves the look
- * unless another found piece still stands for it.
- */
-export async function unlinkFoundPiece(
-  database: Database,
-  input: { accountId: string; lookId: string; foundId: string },
-) {
-  return withTransaction(database, async (client) => {
-    await photoLookForUpdate(client, input.accountId, input.lookId, input.foundId);
-    const removed = await client.query<{ wardrobe_item_id: string }>(
-      'DELETE FROM look_found_links WHERE look_id=$1 AND detection_proposal_id=$2 RETURNING wardrobe_item_id',
-      [input.lookId, input.foundId],
-    );
-    let itemIds = await lookItemIds(client, input.lookId);
-    if (removed.rows[0]) itemIds = await dropUnlinked(client, input.lookId, removed.rows[0].wardrobe_item_id, itemIds);
-    return { wardrobeItemIds: itemIds };
-  });
-}
-
-/** Removes `itemId` from the look unless a found piece still links to it. */
-async function dropUnlinked(client: DatabaseClient, lookId: string, itemId: string, itemIds: string[]) {
-  const still = await client.query('SELECT 1 FROM look_found_links WHERE look_id=$1 AND wardrobe_item_id=$2', [
-    lookId,
-    itemId,
-  ]);
-  if (still.rows[0] || !itemIds.includes(itemId)) return itemIds;
-  const next = itemIds.filter((id) => id !== itemId);
-  await writeLookItems(client, lookId, next);
-  return next;
-}
-
-async function writeLookItems(client: DatabaseClient, lookId: string, itemIds: string[]) {
-  await client.query('DELETE FROM look_items WHERE look_id=$1', [lookId]);
-  await insertLookItems(client, lookId, itemIds);
-  await client.query('UPDATE looks SET exact_item_ids=$2 WHERE id=$1', [lookId, itemIds]);
-}
-
-/**
- * Puts an AI image on top of a combination or photo look: a try-on on the
- * user's photo, or an inspiration scene. The image is a look of its own whose
- * parent is the look, so a failed or bad image never touches its pieces.
+ * Puts an AI image on top of a combination: a try-on on the user's photo, or
+ * an inspiration scene. The image is a look of its own whose parent is the
+ * look, so a failed or bad image never touches its pieces.
  */
 export async function createLookImage(
   database: Database,
@@ -1114,7 +951,7 @@ export async function createLookImage(
     const parent = await client.query<{ ids: string[]; occasion: LookOccasion | null }>(
       `SELECT COALESCE(array_agg(li.wardrobe_item_id ORDER BY li.ordinal) FILTER (WHERE li.wardrobe_item_id IS NOT NULL),'{}') ids, l.occasion
        FROM looks l LEFT JOIN look_items li ON li.look_id=l.id
-       WHERE l.id=$1 AND l.account_id=$2 AND l.kind IN ('combination','photo') AND l.deleted_at IS NULL AND NOT l.proposal GROUP BY l.id`,
+       WHERE l.id=$1 AND l.account_id=$2 AND l.kind='combination' AND l.deleted_at IS NULL AND NOT l.proposal GROUP BY l.id`,
       [input.lookId, input.accountId],
     );
     const combination = parent.rows[0];

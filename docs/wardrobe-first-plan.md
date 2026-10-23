@@ -34,6 +34,7 @@ Looks come in four levels. The first two always show what you really wore or own
 
 ## Decisions (built 2026-10-07)
 
+- Picking is back (2026-10-23): detected pieces wait on the intake page until the user picks and saves them. Saving every detection straight away felt worse in use.
 - Detection mistakes: fresh tiles carry a "new" badge. Holding a tile renames it or moves it to the archive, with undo on a toast. The archive keeps the paid catalog image.
 - Creating a look is one "New look" sheet in the Looks tab: combine pieces (composer), from your photos, or FORM's suggestions. Swiping right on a suggestion keeps it as a free combination.
 - Data model: `looks.kind` is `combination`, `photo`, `inspiration` or `try-on`. Photo looks keep their source photo and list its detections; pieces are linked or added by the user, nothing joins the wardrobe by itself. AI images of a combination are looks with `parent_look_id` pointing at it, shown as its layers. Only inspirations need a character sheet.

@@ -43,6 +43,7 @@ test('uses strict Responses output and clamps detection boxes', async () => {
             {
               type: 'output_text',
               text: JSON.stringify({
+                subject: { top: 0, left: 200, bottom: 1000, right: 800 },
                 detections: [
                   {
                     name: 'Red overshirt',
@@ -51,7 +52,6 @@ test('uses strict Responses output and clamps detection boxes', async () => {
                     boundingBox: { top: 10, left: 900, bottom: 410, right: 1000 },
                   },
                 ],
-                photo: { source: 'reference', outfitBox: { top: 0, left: 850, bottom: 1000, right: 1000 } },
               }),
             },
           ],
@@ -76,10 +76,7 @@ test('uses strict Responses output and clamps detection boxes', async () => {
       width: 100,
       height: 400,
     });
-    assert.deepEqual(result.photo, {
-      source: 'reference',
-      outfitBox: { x: 850, y: 0, width: 150, height: 1000 },
-    });
+    assert.deepEqual(result.subject, { x: 200, y: 0, width: 600, height: 1000 });
     assert.deepEqual(result.usage, {
       inputTokens: 2_500,
       cachedInputTokens: 100,
@@ -113,6 +110,7 @@ test('uses strict Responses output and clamps detection boxes', async () => {
     assert.match(prompt ?? '', /Nike Air Force 1/);
     assert.match(prompt ?? '', /A pair is one item/);
     assert.match(prompt ?? '', /normalized integer coordinates/);
+    assert.match(prompt ?? '', /broad box around the whole person in focus/);
     const imageInput = (
       requestBody?.input as Array<{
         content: Array<{ type: string; image_url?: string }>;

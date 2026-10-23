@@ -138,6 +138,54 @@ void main() {
     expect(decoded.exif.imageIfd.orientation, isNull);
     expect(result.bytes.take(2), [255, 216]);
   });
+  test('photo preparation trims black bars but keeps dark photos', () {
+    final letterboxed = img.Image(width: 100, height: 200);
+    img.fill(letterboxed, color: img.ColorRgb8(255, 255, 255));
+    img.fillRect(
+      letterboxed,
+      x1: 0,
+      y1: 0,
+      x2: 99,
+      y2: 29,
+      color: img.ColorRgb8(0, 0, 0),
+    );
+    img.fillRect(
+      letterboxed,
+      x1: 0,
+      y1: 170,
+      x2: 99,
+      y2: 199,
+      color: img.ColorRgb8(0, 0, 0),
+    );
+    final trimmed = trimDarkBorders(letterboxed);
+    expect((trimmed.width, trimmed.height), (100, 140));
+
+    // A phone screenshot of a landscape video: mostly bars.
+    final video = img.Image(width: 100, height: 200);
+    img.fillRect(
+      video,
+      x1: 0,
+      y1: 55,
+      x2: 99,
+      y2: 146,
+      color: img.ColorRgb8(200, 180, 160),
+    );
+    final framed = trimDarkBorders(video);
+    expect((framed.width, framed.height), (100, 92));
+
+    final night = img.Image(width: 100, height: 200);
+    img.fill(night, color: img.ColorRgb8(8, 8, 8));
+    img.fillRect(
+      night,
+      x1: 40,
+      y1: 90,
+      x2: 60,
+      y2: 110,
+      color: img.ColorRgb8(255, 255, 255),
+    );
+    final kept = trimDarkBorders(night);
+    expect((kept.width, kept.height), (100, 200));
+  });
   test('normalized boxes map to exactly the same source crop', () {
     final box = proposal().boundingBox;
     expect(
@@ -352,10 +400,12 @@ void main() {
         bloc.state.drafts.firstWhere((d) => d.id == first.id).failure,
         'unavailable',
       );
-      // The second photo's pieces went straight into the wardrobe.
-      expect(bloc.state.drafts.map((d) => d.id), isNot(contains(second.id)));
-      expect(bloc.state.drafts.map((d) => d.id), [first.id]);
-      expect(bloc.state.arrived, isNotEmpty);
+      // The second photo's pieces wait for the user to pick them.
+      expect(
+        bloc.state.drafts.firstWhere((d) => d.id == second.id).phase,
+        DraftPhase.ready,
+      );
+      expect(api.calls.where((c) => c.$1 == 'v1/wardrobe-items'), isEmpty);
       expect(api.uploads, 2);
       final paths = api.calls.map((c) => c.$1).toList();
       expect(
@@ -364,7 +414,10 @@ void main() {
       );
       fail = false;
       await send(bloc, IntakeEvent(IntakeAction.retry, id: first.id));
-      expect(bloc.state.drafts, isEmpty);
+      expect(bloc.state.drafts.map((d) => d.phase), [
+        DraftPhase.ready,
+        DraftPhase.ready,
+      ]);
       expect(api.uploads, 2);
       expect(
         api.calls
@@ -543,13 +596,16 @@ void main() {
   });
 
   test(
-    'detected pieces land in the wardrobe on their own, accessories stay out',
+    'detected pieces wait for the user to pick them, accessories unpicked',
     () async {
       await draft(phase: DraftPhase.detecting);
       api.respond = (path, body) async =>
           path.endsWith('/detections') && body == null
           ? {
-              'attempt': {'state': 'succeeded'},
+              'attempt': {
+                'state': 'succeeded',
+                'subjectBox': {'x': 200, 'y': 0, 'width': 600, 'height': 1000},
+              },
               'detections': [
                 proposal().toJson(),
                 {...proposal('accessory').toJson(), 'category': 'accessory'},
@@ -559,14 +615,12 @@ void main() {
       final bloc = IntakeBloc(repository);
       await send(bloc, const IntakeEvent(IntakeAction.restore));
       await goOnline(bloc);
-      final created = api.calls
-          .where((c) => c.$1 == 'v1/wardrobe-items')
-          .map((c) => c.$2!['detectionProposalId'])
-          .toList();
-      expect(created, [proposal().id]);
-      expect(api.calls.where((c) => c.$1 == 'v1/generations'), hasLength(1));
-      expect(bloc.state.drafts, isEmpty);
-      expect(bloc.state.arrived, hasLength(1));
+      expect(api.calls.where((c) => c.$1 == 'v1/wardrobe-items'), isEmpty);
+      final waiting = bloc.state.drafts.single;
+      expect(waiting.phase, DraftPhase.ready);
+      expect(waiting.choices.map((c) => c.selected), [true, false]);
+      expect(waiting.subject?.width, 600);
+      expect(bloc.state.arrived, isEmpty);
       await bloc.close();
     },
   );

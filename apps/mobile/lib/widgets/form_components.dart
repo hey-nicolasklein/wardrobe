@@ -408,9 +408,18 @@ class FormTabBar extends StatelessWidget {
 /// Frosted paper behind bars that float over content: mostly opaque, with a
 /// hint of the blurred content showing through.
 class FormFrostedBar extends StatelessWidget {
-  const FormFrostedBar({required this.border, required this.child, super.key});
+  const FormFrostedBar({
+    required this.border,
+    required this.child,
+    this.opacity = 0.85,
+    super.key,
+  });
   final Border border;
   final Widget child;
+
+  /// How much paper covers the blurred content. Raise it where busy photos
+  /// would pull focus from controls on top.
+  final double opacity;
 
   @override
   Widget build(BuildContext context) => ClipRect(
@@ -418,7 +427,7 @@ class FormFrostedBar extends StatelessWidget {
       filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: FormTokens.paper.withValues(alpha: 0.85),
+          color: FormTokens.paper.withValues(alpha: opacity),
           border: border,
         ),
         child: child,

@@ -16,9 +16,7 @@ import {
   activateCharacterSheetRequestSchema,
   createLookRequestSchema,
   createCombinationLookRequestSchema,
-  createPhotoLookRequestSchema,
   setLookItemsRequestSchema,
-  linkFoundPieceRequestSchema,
   createLookImageRequestSchema,
   proposeLooksRequestSchema,
   adjustLookProposalsRequestSchema,
@@ -90,10 +88,7 @@ import {
   createCharacterSheet,
   createLook,
   createCombinationLook,
-  createPhotoLook,
   setLookItems,
-  linkFoundPiece,
-  unlinkFoundPiece,
   createLookImage,
   keepLookProposal,
   deleteLook,
@@ -1123,7 +1118,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     }
   });
 
-  // Free looks of the user's own pieces: a combination, or a photo they wore it in.
+  // A free look of the user's own pieces.
   app.post('/v1/looks/combinations', async (context) => {
     const authenticated = await currentSession(context);
     if (!authenticated)
@@ -1142,32 +1137,6 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     } catch (error) {
       if (error instanceof InspirationValidationError)
         return context.json(errorPayload('validation', error.code, error.message), 409);
-      const mapped = wardrobeError(error);
-      if (mapped) return context.json(mapped.payload, mapped.status);
-      throw error;
-    }
-  });
-
-  app.post('/v1/looks/photos', async (context) => {
-    const authenticated = await currentSession(context);
-    if (!authenticated)
-      return context.json(
-        errorPayload('authentication', 'authentication-required', 'Session required.'),
-        401,
-      );
-    const parsed = createPhotoLookRequestSchema.safeParse(await context.req.json().catch(() => null));
-    if (!parsed.success)
-      return context.json(errorPayload('validation', 'invalid-look', 'Wähle ein Foto.'), 400);
-    try {
-      return context.json(
-        await createPhotoLook(database, {
-          accountId: authenticated.session.id,
-          detectionModel,
-          ...parsed.data,
-        }),
-        201,
-      );
-    } catch (error) {
       const mapped = wardrobeError(error);
       if (mapped) return context.json(mapped.payload, mapped.status);
       throw error;
@@ -1195,54 +1164,6 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     } catch (error) {
       if (error instanceof InspirationValidationError)
         return context.json(errorPayload('conflict', error.code, error.message), 409);
-      const mapped = wardrobeError(error);
-      if (mapped) return context.json(mapped.payload, mapped.status);
-      throw error;
-    }
-  });
-
-  app.put('/v1/looks/:lookId/found/:foundId', async (context) => {
-    const authenticated = await currentSession(context);
-    if (!authenticated)
-      return context.json(
-        errorPayload('authentication', 'authentication-required', 'Session required.'),
-        401,
-      );
-    const parsed = linkFoundPieceRequestSchema.safeParse(await context.req.json().catch(() => null));
-    if (!parsed.success)
-      return context.json(errorPayload('validation', 'invalid-found-link', 'Wähle ein Stück.'), 400);
-    try {
-      return context.json(
-        await linkFoundPiece(database, {
-          accountId: authenticated.session.id,
-          lookId: context.req.param('lookId'),
-          foundId: context.req.param('foundId'),
-          wardrobeItemId: parsed.data.wardrobeItemId,
-        }),
-      );
-    } catch (error) {
-      const mapped = wardrobeError(error);
-      if (mapped) return context.json(mapped.payload, mapped.status);
-      throw error;
-    }
-  });
-
-  app.delete('/v1/looks/:lookId/found/:foundId', async (context) => {
-    const authenticated = await currentSession(context);
-    if (!authenticated)
-      return context.json(
-        errorPayload('authentication', 'authentication-required', 'Session required.'),
-        401,
-      );
-    try {
-      return context.json(
-        await unlinkFoundPiece(database, {
-          accountId: authenticated.session.id,
-          lookId: context.req.param('lookId'),
-          foundId: context.req.param('foundId'),
-        }),
-      );
-    } catch (error) {
       const mapped = wardrobeError(error);
       if (mapped) return context.json(mapped.payload, mapped.status);
       throw error;

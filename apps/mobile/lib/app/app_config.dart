@@ -38,8 +38,9 @@ class AppConfig {
   final bool appleSignIn;
 
   /// Adds a one-tap sign-in with [devEmail] and [devPassword] to the sign-in
-  /// page. The credentials are compiled into the app, so only set them in
-  /// ignored local env files.
+  /// page, and the password-free developer sign-in to release builds. The
+  /// credentials are compiled into the app, so only set them in ignored
+  /// local env files.
   final bool devMode;
   final String devEmail;
   final String devPassword;

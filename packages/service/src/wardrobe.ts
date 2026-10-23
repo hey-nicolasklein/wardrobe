@@ -9,6 +9,7 @@ import type {
   GenerationQuality,
   ItemMetadata,
   ItemState,
+  NormalizedBoundingBox,
   ShelfImageVersion,
   SourcePhoto,
   WardrobeItem,
@@ -368,6 +369,7 @@ export async function getLatestDetectionAttempt(
     output_cost_microunits: string | null;
     cost_microunits: string | null;
     failure_category: string | null;
+    subject_box: NormalizedBoundingBox | null;
     created_at: Date;
     finished_at: Date | null;
   }>(
@@ -376,7 +378,7 @@ export async function getLatestDetectionAttempt(
        service_tier, pricing_effective_date::text AS pricing_effective_date,
        input_cost_microunits, cached_input_cost_microunits,
        cache_write_input_cost_microunits, output_cost_microunits, cost_microunits,
-       failure_category, created_at, finished_at
+       failure_category, subject_box, created_at, finished_at
      FROM detection_attempts
      WHERE source_photo_id = $1 AND account_id = $2
      ORDER BY created_at DESC, id DESC LIMIT 1`,
@@ -424,6 +426,7 @@ export async function getLatestDetectionAttempt(
                 pricingEffectiveDate: row.pricing_effective_date,
               },
         failureCategory: row.failure_category,
+        subjectBox: row.subject_box,
         createdAt: row.created_at.toISOString(),
         finishedAt: row.finished_at?.toISOString() ?? null,
       }
@@ -1251,11 +1254,9 @@ export async function permanentlyDeleteWardrobeItem(
       `DELETE FROM wardrobe_items WHERE id = $1 AND account_id = $2`,
       [input.wardrobeItemId, input.accountId],
     );
-    // A photo look keeps its photo, even once no piece comes from it anymore.
     const remaining = await client.query<{ count: string }>(
-      `SELECT (SELECT count(*) FROM wardrobe_items
-         WHERE source_photo_id = $1 AND account_id = $2 AND deleted_at IS NULL)
-       + (SELECT count(*) FROM looks WHERE source_photo_id = $1 AND account_id = $2) AS count`,
+      `SELECT count(*) FROM wardrobe_items
+       WHERE source_photo_id = $1 AND account_id = $2 AND deleted_at IS NULL`,
       [itemRow.source_photo_id, input.accountId],
     );
     const sourcePhotoDeleted = Number(remaining.rows[0]!.count) === 0;

@@ -8,8 +8,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:form_mobile/app/form_tokens.dart';
+import 'package:form_mobile/features/feed/look_actions.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
-import 'package:form_mobile/features/intake/intake_picker.dart';
+import 'package:form_mobile/features/intake/intake_page.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
@@ -19,6 +20,7 @@ import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
+import 'package:super_context_menu/super_context_menu.dart';
 
 class WardrobePage extends StatefulWidget {
   const WardrobePage({this.archived = false, super.key});
@@ -146,56 +148,110 @@ class _WardrobePageState extends State<WardrobePage> {
     );
   }
 
-  /// Quick fixes for a piece without opening it: a wrongly detected piece is
-  /// renamed or moved to the archive, with a way back.
-  Future<void> _quickActions(WardrobeItem item) async {
-    unawaited(HapticFeedback.mediumImpact());
-    final action = await showFormSheet<String>(
-      context: context,
-      builder: (sheetContext) => FormSheet(
-        title: item.metadata.name,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 10,
+  /// The native context menu a piece opens on long press: quick fixes and
+  /// next steps without opening it. Archived pieces get none.
+  Widget _pieceMenu(
+    WardrobeItem item, {
+    required bool enabled,
+    required Widget child,
+  }) {
+    if (!enabled) return child;
+    final wanting = item.state == 'wanting';
+    return ContextMenuWidget(
+      menuProvider: (_) => Menu(
+        children: [
+          MenuAction(
+            title: context.tr(LocaleKeys.pieceRename),
+            image: _menuImage('pencil', Icons.edit_outlined),
+            callback: () => unawaited(_renamePiece(item)),
+          ),
+          MenuAction(
+            title: context.tr(
+              wanting ? LocaleKeys.pieceToOwning : LocaleKeys.pieceToWanting,
+            ),
+            image: wanting
+                ? _menuImage('cabinet', Icons.checkroom_outlined)
+                : _menuImage('heart', Icons.favorite_border),
+            callback: () => unawaited(
+              _run(
+                () => context.read<WardrobeCubit>().moveTo(
+                  item.id,
+                  wanting ? 'owning' : 'wanting',
+                ),
+              ),
+            ),
+          ),
+          MenuAction(
+            title: context.tr(LocaleKeys.pieceCreateLook),
+            image: _menuImage('sparkles', Icons.auto_awesome_outlined),
+            callback: () => openCreateLook(context, itemIds: [item.id]),
+          ),
+          MenuSeparator(),
+          MenuAction(
+            title: context.tr(LocaleKeys.pieceRemove),
+            image: _menuImage('archivebox', Icons.inventory_2_outlined),
+            callback: () => unawaited(_archivePiece(item)),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  /// The context menu of a photo still waiting in the intake: pick its
+  /// pieces, or let it go.
+  Widget _draftMenu(IntakeDraft draft, {required Widget child}) =>
+      ContextMenuWidget(
+        menuProvider: (_) => Menu(
           children: [
-            OutlinedButton.icon(
-              onPressed: () => Navigator.pop(sheetContext, 'rename'),
-              icon: const Icon(Icons.edit_outlined, size: 20),
-              label: Text(context.tr(LocaleKeys.pieceRename)),
+            MenuAction(
+              title: context.tr(LocaleKeys.intake_choosePieces),
+              image: _menuImage('checklist', Icons.checklist_rounded),
+              callback: () => unawaited(context.push('/wardrobe/intake')),
             ),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.pop(sheetContext, 'remove'),
-              icon: const Icon(Icons.inventory_2_outlined, size: 20),
-              label: Text(context.tr(LocaleKeys.pieceRemove)),
-            ),
-            Text(
-              context.tr(LocaleKeys.pieceRemoveHint),
-              style: FormTokens.small,
+            MenuSeparator(),
+            MenuAction(
+              title: context.tr(LocaleKeys.intake_tileDiscard),
+              image: _menuImage('trash', Icons.delete_outline_rounded),
+              attributes: const MenuActionAttributes(destructive: true),
+              callback: () => _discardDraft(draft),
             ),
           ],
         ),
-      ),
-    );
-    if (!mounted) return;
-    final cubit = context.read<WardrobeCubit>();
-    if (action == 'rename') {
-      final name = await _askName(item.metadata.name);
-      if (name == null || name == item.metadata.name || !mounted) return;
-      await _run(() => cubit.rename(item.id, name));
-    } else if (action == 'remove') {
-      final previous = item.state;
-      final removed = await _run(() => cubit.moveTo(item.id, 'archived'));
-      if (!removed || !mounted) return;
-      showFormToast(
-        context,
-        context.tr(
-          LocaleKeys.pieceRemoved,
-          namedArgs: {'name': item.metadata.name},
-        ),
-        action: context.tr(LocaleKeys.proposalsUndo),
-        onAction: () => unawaited(cubit.moveTo(item.id, previous)),
+        child: child,
       );
-    }
+
+  /// An SF Symbol in the native iOS menu, a Material icon in the Flutter
+  /// menu on other platforms.
+  static MenuImage _menuImage(String symbol, IconData icon) =>
+      Platform.isIOS ? MenuImage.system(symbol) : MenuImage.icon(icon);
+
+  Future<void> _renamePiece(WardrobeItem item) async {
+    final name = await _askName(item.metadata.name);
+    if (name == null || name == item.metadata.name || !mounted) return;
+    await _run(() => context.read<WardrobeCubit>().rename(item.id, name));
+  }
+
+  /// Moves a piece to the archive, with undo on the toast.
+  Future<void> _archivePiece(WardrobeItem item) async {
+    final cubit = context.read<WardrobeCubit>();
+    final previous = item.state;
+    final removed = await _run(() => cubit.moveTo(item.id, 'archived'));
+    if (!removed || !mounted) return;
+    showFormToast(
+      context,
+      context.tr(
+        LocaleKeys.pieceRemoved,
+        namedArgs: {'name': item.metadata.name},
+      ),
+      action: context.tr(LocaleKeys.proposalsUndo),
+      onAction: () => unawaited(cubit.moveTo(item.id, previous)),
+    );
+  }
+
+  void _discardDraft(IntakeDraft draft) {
+    context.read<IntakeBloc>().discard(draft.id);
+    showFormToast(context, context.tr(LocaleKeys.intake_discarded));
   }
 
   /// Runs a wardrobe command and reports a failure. Returns whether it worked.
@@ -209,38 +265,10 @@ class _WardrobePageState extends State<WardrobePage> {
     }
   }
 
-  Future<String?> _askName(String current) {
-    final controller = TextEditingController(text: current);
-    return showFormSheet<String>(
-      context: context,
-      builder: (sheetContext) => FormSheet(
-        title: context.tr(LocaleKeys.pieceRename),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 14,
-          children: [
-            TextField(
-              controller: controller,
-              autofocus: true,
-              maxLength: 80,
-              textCapitalization: TextCapitalization.sentences,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (value) => value.trim().isEmpty
-                  ? null
-                  : Navigator.pop(sheetContext, value.trim()),
-            ),
-            FilledButton(
-              onPressed: () {
-                final value = controller.text.trim();
-                if (value.isNotEmpty) Navigator.pop(sheetContext, value);
-              },
-              child: Text(context.tr(LocaleKeys.save)),
-            ),
-          ],
-        ),
-      ),
-    ).whenComplete(controller.dispose);
-  }
+  Future<String?> _askName(String current) => showFormSheet<String>(
+    context: context,
+    builder: (_) => _RenameSheet(current: current),
+  );
 
   /// Keeps the find bar just above whichever is taller, the tab bar or the
   /// keyboard. The shell lifts the body's bottom edge to the keyboard frame
@@ -325,9 +353,7 @@ class _WardrobePageState extends State<WardrobePage> {
                           _WardrobeHero(
                             archived: archived,
                             totalCount: count,
-                            onAdd: archived
-                                ? null
-                                : () => unawaited(addClothesPhotos(context)),
+                            onAdd: archived ? null : () => _addPieces(context),
                           ),
                           if (!archived)
                             _CollectionTabs(
@@ -466,8 +492,7 @@ class _WardrobePageState extends State<WardrobePage> {
                                 !archived &&
                                 !state.loading
                             ? FilledButton(
-                                onPressed: () =>
-                                    unawaited(addClothesPhotos(context)),
+                                onPressed: () => _addPieces(context),
                                 child: Text(
                                   context.tr(LocaleKeys.intake_title),
                                 ),
@@ -500,6 +525,9 @@ class _WardrobePageState extends State<WardrobePage> {
                               child: _DraftTile(
                                 draft: draft,
                                 onTap: () => context.push('/wardrobe/intake'),
+                                onDiscard: () => _discardDraft(draft),
+                                menu: (picture) =>
+                                    _draftMenu(draft, child: picture),
                               ),
                             );
                           }
@@ -527,9 +555,6 @@ class _WardrobePageState extends State<WardrobePage> {
                                       ),
                                     );
                                   },
-                                  onLongPress: archived
-                                      ? null
-                                      : () => unawaited(_quickActions(item)),
                                   borderRadius: BorderRadius.circular(
                                     FormTokens.cardRadius,
                                   ),
@@ -545,24 +570,30 @@ class _WardrobePageState extends State<WardrobePage> {
                                               constraints.maxHeight,
                                               width * 4 / 3,
                                             );
+                                            // Only the picture lifts into
+                                            // the context menu, as in Photos.
                                             return Align(
                                               alignment: Alignment.topCenter,
-                                              child: SizedBox(
-                                                width: width,
-                                                height: height,
-                                                child: ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                        FormTokens.cardRadius,
+                                              child: _pieceMenu(
+                                                item,
+                                                enabled: !archived,
+                                                child: SizedBox(
+                                                  width: width,
+                                                  height: height,
+                                                  child: ClipRRect(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          FormTokens.cardRadius,
+                                                        ),
+                                                    child: _TileMedia(
+                                                      record: record,
+                                                      tint: FormTokens.tileTint(
+                                                        item.id,
+                                                        item.metadata.colors,
                                                       ),
-                                                  child: _TileMedia(
-                                                    record: record,
-                                                    tint: FormTokens.tileTint(
-                                                      item.id,
-                                                      item.metadata.colors,
+                                                      online: !state.stale,
+                                                      fresh: fresh,
                                                     ),
-                                                    online: !state.stale,
-                                                    fresh: fresh,
                                                   ),
                                                 ),
                                               ),
@@ -589,7 +620,8 @@ class _WardrobePageState extends State<WardrobePage> {
                                           color: FormTokens.noteInk,
                                         ),
                                       ),
-                                      // Generating and failed show on the tile.
+                                      // Generating and failed show on
+                                      // the tile.
                                       if (!const {
                                         'ready',
                                         'queued',
@@ -804,21 +836,25 @@ class _CollectionTabs extends StatelessWidget {
     final style = FormTokens.body.copyWith(fontSize: 15);
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),
-      child: Row(
-        children: [
-          for (final entry in options.entries)
-            Semantics(
-              button: true,
-              selected: entry.key == selected,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  if (entry.key == selected) return;
-                  unawaited(HapticFeedback.selectionClick());
-                  onSelected(entry.key);
-                },
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 22),
+      // Scrolls instead of overflowing when long labels or large text don't
+      // fit the width.
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        child: Row(
+          spacing: 22,
+          children: [
+            for (final entry in options.entries)
+              Semantics(
+                button: true,
+                selected: entry.key == selected,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (entry.key == selected) return;
+                    unawaited(HapticFeedback.selectionClick());
+                    onSelected(entry.key);
+                  },
                   child: SizedBox(
                     height: 44,
                     child: Column(
@@ -887,8 +923,8 @@ class _CollectionTabs extends StatelessWidget {
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -941,19 +977,21 @@ class _FindBar extends StatelessWidget {
                     focusNode: focusNode,
                     onChanged: onChanged,
                     textInputAction: TextInputAction.search,
-                    style: FormTokens.body.copyWith(fontSize: 16),
+                    style: FormTokens.body.copyWith(fontSize: 16, height: 1.2),
+                    textAlignVertical: TextAlignVertical.center,
                     cursorColor: FormTokens.green,
                     decoration: InputDecoration(
                       hintText: hint,
                       hintStyle: FormTokens.body.copyWith(
                         fontSize: 16,
+                        height: 1.2,
                         color: FormTokens.noteInk,
                       ),
                       filled: false,
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                      contentPadding: EdgeInsets.zero,
                       prefixIcon: const Icon(
                         Icons.search,
                         size: 20,
@@ -1576,11 +1614,23 @@ class _Arrival extends StatelessWidget {
 /// A photo on its way into the wardrobe: the photo itself while FORM looks
 /// for pieces on it, with a light sweeping over it. Detected pieces replace it
 /// as tiles of their own. Photos that need the user say so.
+/// A photo still waiting in the intake, shown ahead of the pieces. Marked
+/// as not in the Schrank yet, and discarded with one tap on its corner
+/// unless its pieces are already being saved.
 class _DraftTile extends StatelessWidget {
-  const _DraftTile({required this.draft, required this.onTap});
+  const _DraftTile({
+    required this.draft,
+    required this.onTap,
+    required this.onDiscard,
+    required this.menu,
+  });
 
   final IntakeDraft draft;
   final VoidCallback onTap;
+  final VoidCallback onDiscard;
+
+  /// Wraps the picture in the context menu, so only it lifts.
+  final Widget Function(Widget picture) menu;
 
   @override
   Widget build(BuildContext context) {
@@ -1588,12 +1638,26 @@ class _DraftTile extends StatelessWidget {
         draft.failure != null ||
         draft.phase == DraftPhase.manual ||
         draft.phase == DraftPhase.ready;
-    final label = context.tr(switch (draft.phase) {
-      _ when draft.failure != null => LocaleKeys.intake_tileFailed,
-      DraftPhase.manual || DraftPhase.ready => LocaleKeys.intake_tileAttention,
-      DraftPhase.saving || DraftPhase.finished => LocaleKeys.intake_tileSaving,
-      _ => LocaleKeys.intake_tileFinding,
-    });
+    final saving =
+        draft.phase == DraftPhase.saving || draft.phase == DraftPhase.finished;
+    // Says what happened and what a tap does, without alarm.
+    final label = switch (draft.phase) {
+      _ when draft.failure != null => context.tr(LocaleKeys.intake_tileFailed),
+      DraftPhase.ready => context.plural(
+        LocaleKeys.intake_tileFound,
+        draft.choices.length,
+      ),
+      DraftPhase.manual => context.tr(LocaleKeys.intake_tileNone),
+      DraftPhase.saving ||
+      DraftPhase.finished => context.tr(LocaleKeys.intake_tileSaving),
+      _ => context.tr(LocaleKeys.intake_tileFinding),
+    };
+    final hint = switch (draft.phase) {
+      _ when draft.failure != null => LocaleKeys.intake_tileOpen,
+      DraftPhase.ready => LocaleKeys.intake_tilePick,
+      DraftPhase.manual => LocaleKeys.intake_tileName,
+      _ => LocaleKeys.intake_tileBackground,
+    };
     return Semantics(
       button: true,
       label: label,
@@ -1606,44 +1670,62 @@ class _DraftTile extends StatelessWidget {
               child: LayoutBuilder(
                 builder: (context, constraints) => Align(
                   alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    width: constraints.maxWidth,
-                    height: math.min(
-                      constraints.maxHeight,
-                      constraints.maxWidth * 4 / 3,
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(
-                        FormTokens.cardRadius,
+                  child: menu(
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      height: math.min(
+                        constraints.maxHeight,
+                        constraints.maxWidth * 4 / 3,
                       ),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.file(
-                            File(draft.filePath),
-                            fit: BoxFit.cover,
-                            cacheWidth: 400,
-                            errorBuilder: (_, _, _) =>
-                                const ColoredBox(color: FormTokens.field),
-                          ),
-                          ColoredBox(
-                            color: Colors.white.withValues(
-                              alpha: attention ? 0.15 : 0.35,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                          FormTokens.cardRadius,
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // Framed on the person once detection found one.
+                            if (draft.subject case final subject?)
+                              DraftPhoto(
+                                draft: draft,
+                                crop: subject,
+                                frame: true,
+                              )
+                            else
+                              Image.file(
+                                File(draft.filePath),
+                                fit: BoxFit.cover,
+                                cacheWidth: 400,
+                                errorBuilder: (_, _, _) =>
+                                    const ColoredBox(color: FormTokens.field),
+                              ),
+                            ColoredBox(
+                              color: Colors.white.withValues(
+                                alpha: attention ? 0.15 : 0.35,
+                              ),
                             ),
-                          ),
-                          if (!attention) const _Sweep(),
-                          if (attention)
-                            const Center(
-                              child: CircleAvatar(
-                                radius: 22,
-                                backgroundColor: Colors.white,
-                                child: Icon(
-                                  Icons.edit_outlined,
-                                  color: FormTokens.green,
+                            if (!attention) const _Sweep(),
+                            Positioned(
+                              top: 8,
+                              left: 8,
+                              right: 48,
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: _DraftPill(
+                                  label: context.tr(
+                                    LocaleKeys.intake_tileDraft,
+                                  ),
                                 ),
                               ),
                             ),
-                        ],
+                            if (!saving)
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: _DiscardCorner(onTap: onDiscard),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -1658,21 +1740,138 @@ class _DraftTile extends StatelessWidget {
               style: FormTokens.body.copyWith(
                 fontWeight: FontWeight.w600,
                 height: 1.35,
-                color: attention ? FormTokens.green : FormTokens.ink,
+                color: FormTokens.ink,
               ),
             ),
             const SizedBox(height: 2),
             Text(
-              context.tr(
-                attention
-                    ? LocaleKeys.intake_tileOpen
-                    : LocaleKeys.intake_tileBackground,
-              ),
+              context.tr(hint),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: FormTokens.small.copyWith(color: FormTokens.noteInk),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Asks for a new name. Owns its text controller, so the field outlives the
+/// returned name while the sheet animates away.
+class _RenameSheet extends StatefulWidget {
+  const _RenameSheet({required this.current});
+
+  final String current;
+
+  @override
+  State<_RenameSheet> createState() => _RenameSheetState();
+}
+
+class _RenameSheetState extends State<_RenameSheet> {
+  late final _controller = TextEditingController(text: widget.current);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _controller.text.trim();
+    if (value.isNotEmpty) Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) => FormSheet(
+    title: context.tr(LocaleKeys.pieceRename),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 14,
+      children: [
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLength: 80,
+          textCapitalization: TextCapitalization.sentences,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _submit(),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(context.tr(LocaleKeys.save)),
+        ),
+      ],
+    ),
+  );
+}
+
+/// "Draft" on frosted paper over a waiting photo, so it does not read as a
+/// piece already in the Schrank.
+class _DraftPill extends StatelessWidget {
+  const _DraftPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(FormTokens.chipRadius),
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+      child: ColoredBox(
+        color: FormTokens.paper.withValues(alpha: 0.8),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(9, 4, 10, 5),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: FormTokens.small.copyWith(
+              fontSize: 11,
+              height: 1.3,
+              fontWeight: FontWeight.w600,
+              color: FormTokens.ink,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// A small × in a tile's corner with a full-size touch target.
+class _DiscardCorner extends StatelessWidget {
+  const _DiscardCorner({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = context.tr(LocaleKeys.intake_tileDiscard);
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          unawaited(HapticFeedback.lightImpact());
+          onTap();
+        },
+        child: const SizedBox.square(
+          dimension: 44,
+          child: Center(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color(0xCCFFFFFF),
+                shape: BoxShape.circle,
+              ),
+              child: SizedBox.square(
+                dimension: 26,
+                child: Icon(Icons.close, size: 15, color: FormTokens.ink),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1739,3 +1938,8 @@ class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
     },
   );
 }
+
+/// Opens the intake page: its introduction with library and camera, or the
+/// photos already waiting there.
+void _addPieces(BuildContext context) =>
+    unawaited(context.push('/wardrobe/intake'));

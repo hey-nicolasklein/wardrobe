@@ -15,9 +15,10 @@ import 'package:form_mobile/widgets/form_components.dart';
 
 /// Shown by the connection gate when the server wants a session. The first
 /// screen offers Apple and Google. `DEV_MODE` adds a one-tap sign-in with the
-/// configured dev account, and debug builds add a password-free developer
-/// sign-in so simulators skip Apple and Google. Email with password lives on
-/// its own page behind a link.
+/// configured dev account, and debug builds or `DEV_MODE` builds add a
+/// password-free developer sign-in so simulators and test phones skip Apple
+/// and Google. Only a server with `DEV_SIGN_IN` accepts it. Email with
+/// password lives on its own page behind a link.
 ///
 /// The gate sits above the router's Navigator, so this page brings its own.
 class SignInPage extends StatefulWidget {
@@ -152,7 +153,7 @@ class _ProviderSignInState extends State<_ProviderSignIn>
                   child: Text(context.tr(LocaleKeys.auth_devAccountAction)),
                 ),
               ],
-              if (kDebugMode) ...[
+              if (kDebugMode || config.devMode) ...[
                 const SizedBox(height: 12),
                 OutlinedButton(
                   onPressed: busy

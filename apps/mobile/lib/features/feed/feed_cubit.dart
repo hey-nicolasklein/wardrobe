@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
@@ -26,9 +25,6 @@ class FeedState {
     this.stale = true,
     this.failure,
     this.online = true,
-    this.pendingPhotos = const [],
-    this.pendingWorn = const {},
-    this.dismissedFound = const {},
   });
 
   final List<CachedLook>? looks;
@@ -44,27 +40,14 @@ class FeedState {
   final ApiFailure? failure;
   final bool online;
 
-  /// Local paths of photos being uploaded as looks. They show as developing
-  /// prints until the server has them.
-  final List<String> pendingPhotos;
-
-  /// Local photos being added to a combination as the photo it was worn in,
-  /// by look id. The look shows it developing until the server has it.
-  final Map<String, String> pendingWorn;
-
-  /// Pieces found on photos that the user waved off ("not mine, skip"), so
-  /// they no longer light a look's discovery dot. Kept for the session.
-  final Set<String> dismissedFound;
-
-  /// Looks shown on their own: combinations, photo looks and generated looks
-  /// that are not an image of one of them, see [imagesOf].
+  /// Looks shown on their own: combinations and generated looks that are not
+  /// an image of one of them, see [imagesOf].
   List<CachedLook> get archive => [
     for (final record in looks ?? const <CachedLook>[])
       if (!_isImageOfBase(record.look)) record,
   ];
 
-  /// The AI images made of the combination or photo look [lookId], newest
-  /// first.
+  /// The AI images made of the combination [lookId], newest first.
   List<CachedLook> imagesOf(String lookId) => [
     for (final record in looks ?? const <CachedLook>[])
       if (record.look.parentLookId == lookId &&
@@ -73,7 +56,7 @@ class FeedState {
         record,
   ];
 
-  /// What a look shows on its print: its own photo, or its newest finished
+  /// What a look shows on its print: its own image, or its newest finished
   /// image. Null means the pieces laid out flat.
   CachedLook? coverOf(CachedLook record) {
     if (record.look.cardAssetId != null) return record;
@@ -85,7 +68,7 @@ class FeedState {
 
   Set<String> get _baseIds => {
     for (final record in looks ?? const <CachedLook>[])
-      if (record.look.isBase) record.look.id,
+      if (record.look.isCombination) record.look.id,
   };
 
   bool _isImageOfBase(Look look) =>
@@ -114,9 +97,6 @@ class FeedState {
     ApiFailure? failure,
     bool clearFailure = false,
     bool? online,
-    List<String>? pendingPhotos,
-    Map<String, String>? pendingWorn,
-    Set<String>? dismissedFound,
   }) => FeedState(
     looks: looks ?? this.looks,
     itemsById: itemsById ?? this.itemsById,
@@ -131,9 +111,6 @@ class FeedState {
     stale: stale ?? this.stale,
     failure: clearFailure ? null : (failure ?? this.failure),
     online: online ?? this.online,
-    pendingPhotos: pendingPhotos ?? this.pendingPhotos,
-    pendingWorn: pendingWorn ?? this.pendingWorn,
-    dismissedFound: dismissedFound ?? this.dismissedFound,
   );
 }
 
@@ -234,12 +211,7 @@ class FeedCubit extends Cubit<FeedState> {
 
   void _schedulePoll(FeedState next) {
     _poll?.cancel();
-    // Photo looks are polled too, until their pieces are detected.
-    final running =
-        next.looks?.any(
-          (record) => record.look.isActive || record.look.isAnalysing,
-        ) ??
-        false;
+    final running = next.looks?.any((record) => record.look.isActive) ?? false;
     if (_foreground && !next.stale && !next.loading && running) {
       _poll = Timer(const Duration(seconds: 3), () => unawaited(refresh()));
     }
@@ -365,9 +337,6 @@ class FeedCubit extends Cubit<FeedState> {
           revealed: state.revealed,
           hasActiveCharacterReference: activeSheet,
           stale: false,
-          pendingPhotos: state.pendingPhotos,
-          pendingWorn: state.pendingWorn,
-          dismissedFound: state.dismissedFound,
         ),
       );
     } on FormApiException catch (error) {
@@ -412,105 +381,9 @@ class FeedCubit extends Cubit<FeedState> {
     quality: quality,
   );
 
-  /// Uploads [paths] one after another as photo looks. Each shows as a
-  /// developing print until it is in. Returns how many failed.
-  Future<int> addPhotoLooks(
-    List<String> paths,
-    Future<Uint8List> Function(String path) prepare,
-  ) async {
-    emit(state.copyWith(pendingPhotos: [...state.pendingPhotos, ...paths]));
-    var failed = 0;
-    for (final path in paths) {
-      try {
-        await lookRepository.createPhotoLook(await prepare(path));
-      } on Object {
-        failed++;
-      } finally {
-        if (!isClosed) {
-          emit(
-            state.copyWith(
-              pendingPhotos: [...state.pendingPhotos]..remove(path),
-            ),
-          );
-        }
-      }
-    }
-    return failed;
-  }
-
-  /// Adds the photo at [path] to the combination [lookId] as the photo it
-  /// was worn in. Its pieces are found in the background, as for a photo
-  /// look.
-  Future<void> addWornPhoto(
-    String lookId,
-    String path,
-    Future<Uint8List> Function(String path) prepare,
-  ) async {
-    emit(state.copyWith(pendingWorn: {...state.pendingWorn, lookId: path}));
-    try {
-      await lookRepository.createPhotoLook(await prepare(path), lookId: lookId);
-    } finally {
-      if (!isClosed) {
-        emit(
-          state.copyWith(
-            pendingWorn: {...state.pendingWorn}..remove(lookId),
-          ),
-        );
-      }
-    }
-  }
-
-  /// Links wardrobe pieces to a combination or photo look.
+  /// Replaces the pieces of the combination [lookId].
   Future<void> setLookItems(String lookId, List<String> itemIds) =>
       lookRepository.setItems(lookId, itemIds);
-
-  /// "Yes, that's mine": the piece found on [look]'s photo is [itemId].
-  Future<void> linkFound(Look look, LookFoundPiece piece, String itemId) =>
-      lookRepository.linkFound(look.id, piece.id, itemId);
-
-  /// Takes back a confirmation: the piece is open again on the photo.
-  Future<void> unlinkFound(Look look, LookFoundPiece piece) =>
-      lookRepository.unlinkFound(look.id, piece.id);
-
-  /// Takes a piece that was added from [look]'s photo out of the wardrobe
-  /// again, after unlinking it.
-  Future<void> removeFoundPiece(Look look, LookFoundPiece piece) async {
-    final item = state.itemsById[piece.wardrobeItemId];
-    await lookRepository.unlinkFound(look.id, piece.id);
-    if (item != null) {
-      await wardrobeRepository.execute(item.id, ItemCommand.delete(item));
-    }
-    await _reloadLocal();
-  }
-
-  /// Adds a piece detected on a photo look to the wardrobe, orders its
-  /// catalog image and links it to the look.
-  Future<void> addFoundPiece(
-    Look look,
-    LookFoundPiece piece, {
-    required String quality,
-    bool wanting = false,
-  }) async {
-    final itemId = await lookRepository.addFoundPiece(
-      piece,
-      quality: quality,
-      wanting: wanting,
-    );
-    await lookRepository.linkFound(look.id, piece.id, itemId);
-    await wardrobeRepository.refreshAndNotify();
-    await _reloadLocal();
-  }
-
-  /// Waves off a piece found on a photo: it stays listed, but no longer
-  /// asks for attention.
-  void dismissFound(String pieceId) => emit(
-    state.copyWith(dismissedFound: {...state.dismissedFound, pieceId}),
-  );
-
-  /// Brings a skipped piece back up for a decision.
-  void restoreFound(String pieceId) => emit(
-    state.copyWith(dismissedFound: {...state.dismissedFound}..remove(pieceId)),
-  );
 
   Future<void> retryLook(String lookId) async {
     await lookRepository.execute(LookCommand.retry(lookId));

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -11,24 +10,14 @@ import 'package:form_mobile/features/feed/feed_cubit.dart';
 import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/feed_presentation.dart';
 import 'package:form_mobile/features/feed/flat_lay_widget.dart';
-import 'package:form_mobile/features/feed/found_pieces.dart';
 import 'package:form_mobile/features/feed/look_actions.dart';
 import 'package:form_mobile/features/feed/look_card.dart';
 import 'package:form_mobile/features/feed/look_collections_cubit.dart';
-import 'package:form_mobile/features/feed/look_positions.dart';
-import 'package:form_mobile/features/feed/look_stacks.dart';
-import 'package:form_mobile/features/feed/look_tile.dart';
-import 'package:form_mobile/features/intake/intake_picker.dart';
-import 'package:form_mobile/features/settings/credits_cubit.dart';
-import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
+import 'package:form_mobile/features/wardrobe/inspire_button.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
-import 'package:form_mobile/models/wardrobe.dart';
-import 'package:form_mobile/repository/credits_repository.dart';
-import 'package:form_mobile/repository/look_collection_repository.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
-import 'package:form_mobile/services/photo_preparation.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
 import 'package:form_mobile/widgets/form_icon.dart';
 import 'package:go_router/go_router.dart';
@@ -40,11 +29,10 @@ bool fittingRoomApplies(CachedLook record) =>
     record.look.isReady &&
     (record.look.assetId != null || !record.look.isGenerated);
 
-/// One way to see a look on its card: its pieces laid out flat, or one of
-/// its photos.
-class _Layer {
-  const _Layer.flat() : record = null;
-  const _Layer.photo(CachedLook this.record);
+/// One image of a look: an AI image made of it, or its pieces laid out flat.
+class _Slide {
+  const _Slide.flat() : record = null;
+  const _Slide.image(CachedLook this.record);
 
   /// Null for the flat lay.
   final CachedLook? record;
@@ -52,12 +40,9 @@ class _Layer {
   String get id => record?.look.id ?? 'flat';
 }
 
-/// A ready look as a fitting room: a photo of it, or its pieces laid out
-/// flat, with a strip of its pieces. Picking a piece marks where it sits.
-/// A combination also shows the images made of it, and offers new ones; a
-/// photo look lists the pieces found on the photo. Below, everything is
-/// derived from the wardrobe: which pieces you own, the look's colours and
-/// the Sammlungen it is filed in.
+/// A ready look: its images, tapped through like stories, its pieces as a
+/// grid, and the two AI images it can get. A look is a combination of
+/// pieces; try-ons and inspirations hang under it and never replace it.
 class FittingRoomCard extends StatefulWidget {
   const FittingRoomCard({
     required this.record,
@@ -65,7 +50,7 @@ class FittingRoomCard extends StatefulWidget {
     required this.garments,
     required this.online,
     required this.onMenu,
-    required this.onOpenStack,
+    this.origin,
     this.onRetry,
     super.key,
   });
@@ -75,9 +60,12 @@ class FittingRoomCard extends StatefulWidget {
   final List<LookGarment> garments;
   final bool online;
 
+  /// The filter the look was opened from. A try-on or inspiration filter
+  /// opens the look on that kind of image, as its tile showed it.
+  final LookStack? origin;
+
   /// Opens a look's actions: the image on show, or the look itself.
   final ValueChanged<Look> onMenu;
-  final ValueChanged<LookStack> onOpenStack;
 
   /// Retries a failed image of a combination.
   final ValueChanged<Look>? onRetry;
@@ -87,997 +75,442 @@ class FittingRoomCard extends StatefulWidget {
 }
 
 class _FittingRoomCardState extends State<FittingRoomCard> {
-  String? _selectedId;
+  /// The slide the user tapped to. Null starts where [_startIndex] says.
+  String? _slideId;
 
-  /// The layer the user picked. Null follows the newest image.
-  String? _layerId;
+  /// Set after asking for a new image: the kind, and since when. The first
+  /// image of that kind made after it comes to the front.
+  (bool tryOn, DateTime since)? _awaiting;
 
-  /// The layers in pill order: the combination laid flat, which every look
-  /// has, then what is attached to it: its photo, then images newest first.
-  List<_Layer> _layers() {
+  /// Try-ons, then inspirations, newest first within each, then the flat
+  /// lay. A generated look without a base only has its own image.
+  List<_Slide> _slides() {
     final look = widget.record.look;
+    final images = look.isCombination
+        ? widget.state.imagesOf(look.id)
+        : <CachedLook>[];
     return [
-      const _Layer.flat(),
-      if (look.assetId != null) _Layer.photo(widget.record),
-      if (look.isBase)
-        for (final image in widget.state.imagesOf(look.id)) _Layer.photo(image),
+      if (look.isGenerated) _Slide.image(widget.record),
+      for (final image in images)
+        if (image.look.isTryOn) _Slide.image(image),
+      for (final image in images)
+        if (!image.look.isTryOn) _Slide.image(image),
+      if (widget.garments.isNotEmpty || !look.isGenerated) const _Slide.flat(),
     ];
   }
 
-  /// Set after a tap on the photo that hit no piece. Shows where the pieces
-  /// can be tapped until it runs out.
-  Timer? _hints;
-
-  @override
-  void dispose() {
-    _hints?.cancel();
-    super.dispose();
+  int _startIndex(List<_Slide> slides) {
+    bool kind(_Slide slide, {required bool tryOn}) =>
+        switch (slide.record?.look) {
+          final look? => look.isGenerated && look.isTryOn == tryOn,
+          null => false,
+        };
+    final preferred = switch (widget.origin) {
+      TryOnStack() => slides.indexWhere((s) => kind(s, tryOn: true)),
+      InspirationStack() => slides.indexWhere((s) => kind(s, tryOn: false)),
+      _ => -1,
+    };
+    return preferred < 0 ? 0 : preferred;
   }
 
-  void _showHints() {
-    _hints?.cancel();
-    _hints = Timer(const Duration(milliseconds: 3200), () {
-      if (mounted) setState(() => _hints = null);
-    });
+  void _step(int delta, int count, int index) {
+    final next = (index + delta).clamp(0, count - 1);
+    if (next == index) return;
+    unawaited(HapticFeedback.selectionClick());
+    setState(() => _slideId = _slides()[next].id);
   }
 
-  /// The confirmed piece whose found box holds [point] (percent of [frame]),
-  /// the smallest when boxes overlap, e.g. a necklace on a jacket.
-  String? _garmentInBox(
-    Offset point,
-    Size frame,
-    Size image,
-    Map<String, LookBox> boxes,
-  ) {
-    final tap = Offset(
-      point.dx / 100 * frame.width,
-      point.dy / 100 * frame.height,
+  Future<void> _addImage({required bool tryOn}) async {
+    _awaiting = (tryOn, DateTime.now());
+    await addLookImage(
+      context,
+      widget.record.look,
+      mode: tryOn ? 'try-on' : 'inspiration',
     );
-    String? hit;
-    var smallest = double.infinity;
-    for (final MapEntry(key: id, value: box) in boxes.entries) {
-      final rect = boxInFrame(box, frame, image).inflate(12);
-      final area = rect.width * rect.height;
-      if (rect.contains(tap) && area < smallest) {
-        hit = id;
-        smallest = area;
-      }
-    }
-    return hit;
-  }
-
-  /// A marker around [rect], a found piece in frame pixels.
-  static LookItemPosition _boxPosition(Rect rect, Size frame) =>
-      LookItemPosition(
-        x: 0,
-        y: 0,
-        // The marker's ring is 1.35 × size, in percent of the frame width.
-        size: math.max(rect.width, rect.height) / frame.width * 100 / 1.35,
-        originX: rect.center.dx / frame.width * 100,
-        originY: rect.center.dy / frame.height * 100,
-        originScale: 1,
-        order: 0,
-        count: 1,
-      );
-
-  /// The piece whose body region centre is closest to [point], given in
-  /// percent of the photo, if the tap landed roughly on it.
-  String? _garmentNear(Offset point, List<LookItemPosition> positions) {
-    String? nearest;
-    var best = 22.0;
-    for (var i = 0; i < positions.length; i++) {
-      final garment = widget.garments[i];
-      if (garment.item == null) continue;
-      final distance =
-          (point - Offset(positions[i].originX, positions[i].originY)).distance;
-      if (distance < best) {
-        best = distance;
-        nearest = garment.id;
-      }
-    }
-    return nearest;
   }
 
   @override
   Widget build(BuildContext context) {
     final look = widget.record.look;
-    final garments = widget.garments;
-    final layers = _layers();
-    // The combination leads. A look's own photo is where its pieces are
-    // marked, so photo looks open on the photo instead.
-    final layer =
-        layers.where((l) => l.id == _layerId).firstOrNull ??
-        ((look.isPhoto || garments.isEmpty) && layers.length > 1
-            ? layers[1]
-            : layers.first);
-    // Where each confirmed piece sits on the look's own photo, from the boxes
-    // found when the photo was analysed.
-    final boxes = <String, LookBox>{
-      for (final piece in look.found ?? const <LookFoundPiece>[])
-        if ((piece.wardrobeItemId, piece.boundingBox) case (
-          final id?,
-          final box?,
-        ))
-          id: box,
-    };
-    final shown = layer.record;
-    final items = [
-      for (final garment in garments) ?garment.item,
-    ];
-    final filedIn = collectionsOf(
+    final slides = _slides();
+    if (_awaiting case (final tryOn, final since)) {
+      final made = slides.where(
+        (s) => switch (s.record?.look) {
+          final image? =>
+            image.id != look.id &&
+                image.isTryOn == tryOn &&
+                !image.createdAt.isBefore(since),
+          null => false,
+        },
+      );
+      if (made.firstOrNull case final slide?) {
+        _slideId = slide.id;
+        _awaiting = null;
+      }
+    }
+    final picked = slides.indexWhere((s) => s.id == _slideId);
+    final index = picked < 0 ? _startIndex(slides) : picked;
+    final slide = slides[index];
+    final images = look.isCombination
+        ? widget.state.imagesOf(look.id)
+        : <CachedLook>[];
+    bool making({required bool tryOn}) =>
+        images.any((i) => i.look.isActive && i.look.isTryOn == tryOn);
+    final filed = collectionsOf(
       context.watch<LookCollectionsCubit>().state,
       look.id,
-    );
-    final positions = lookItemPositions(
-      garments.map((g) => g.item?.metadata.category ?? 'top').toList(),
-    );
-    final selectedIndex = garments.indexWhere((g) => g.id == _selectedId);
-    final selected = selectedIndex < 0 ? null : garments[selectedIndex];
-    final meta = [
-      ?_occasionLabel(context, look.settings?.occasion),
-      lookDateText(context, look.createdAt),
-    ].join(' · ');
-    final families = {
-      for (final item in items)
-        for (final color in item.metadata.colors) ...colorFamilies(color),
-    }..remove('other');
+    ).isNotEmpty;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Stack(
-            children: [
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 380),
-                switchInCurve: FormTokens.easeOut,
-                switchOutCurve: Curves.easeIn,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: ScaleTransition(
-                    scale: Tween<double>(
-                      begin: 0.97,
-                      end: 1,
-                    ).animate(animation),
-                    child: child,
+          Semantics(
+            label: _caption(context, slide).join(', '),
+            value: '${index + 1} / ${slides.length}',
+            onIncrease: index < slides.length - 1
+                ? () => _step(1, slides.length, index)
+                : null,
+            onDecrease: index > 0
+                ? () => _step(-1, slides.length, index)
+                : null,
+            child: LayoutBuilder(
+              builder: (context, constraints) => GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                // Like stories: the left third goes back, the rest forward.
+                // Horizontal swipes stay with the pager between looks.
+                onTapUp: slides.length < 2
+                    ? null
+                    : (details) => _step(
+                        details.localPosition.dx < constraints.maxWidth / 3
+                            ? -1
+                            : 1,
+                        slides.length,
+                        index,
+                      ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(FormTokens.cardRadius),
+                  child: AspectRatio(
+                    aspectRatio: 2 / 3,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      switchInCurve: FormTokens.easeOut,
+                      child: KeyedSubtree(
+                        key: ValueKey(slide.id),
+                        child: _stage(slide),
+                      ),
+                    ),
                   ),
-                ),
-                child: KeyedSubtree(
-                  key: ValueKey(layer.id),
-                  child: shown == null
-                      ? _FlatStage(
-                          garments: garments,
-                          online: widget.online,
-                          selectedId: _selectedId,
-                          onGarmentTap: (id) => setState(
-                            () => _selectedId = id == _selectedId ? null : id,
-                          ),
-                        )
-                      : !shown.look.isReady
-                      ? _ImageInProgress(
-                          look: shown.look,
-                          garments: garments,
-                          online: widget.online,
-                          onRetry: widget.onRetry == null
-                              ? null
-                              : () => widget.onRetry!(shown.look),
-                        )
-                      : _LookPhoto(
-                          record: shown,
-                          online: widget.online,
-                          onTapAt: (point, frame, image) {
-                            final ownPhoto =
-                                shown.look.id == look.id && image != null;
-                            final id = ownPhoto
-                                ? _garmentInBox(point, frame, image, boxes)
-                                : _garmentNear(point, positions);
-                            setState(() {
-                              _selectedId = id == _selectedId ? null : id;
-                              if (id == null) {
-                                _showHints();
-                              } else {
-                                _hints?.cancel();
-                                _hints = null;
-                              }
-                            });
-                          },
-                          overlay: (size, image) {
-                            // On its own photo a piece sits where it was
-                            // found; elsewhere, where its category usually
-                            // sits on a body.
-                            final ownPhoto =
-                                shown.look.id == look.id && image != null;
-                            final onPhoto = [
-                              for (var i = 0; i < garments.length; i++)
-                                ownPhoto
-                                    ? switch (boxes[garments[i].id]) {
-                                        final box? => _boxPosition(
-                                          boxInFrame(box, size, image),
-                                          size,
-                                        ),
-                                        null => null,
-                                      }
-                                    : positions.elementAtOrNull(i),
-                            ];
-                            return Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                _TapAreaHints(
-                                  visible: _hints != null,
-                                  points: [
-                                    for (var i = 0; i < onPhoto.length; i++)
-                                      if (garments[i].item != null)
-                                        if (onPhoto[i] case final position?)
-                                          Offset(
-                                            position.originX,
-                                            position.originY,
-                                          ),
-                                  ],
-                                  size: size,
-                                ),
-                                _PieceMarker(
-                                  garment: selected,
-                                  position: selectedIndex < 0
-                                      ? null
-                                      : onPhoto[selectedIndex],
-                                  size: size,
-                                ),
-                              ],
-                            );
-                          },
-                        ),
                 ),
               ),
-              Positioned(
-                top: 10,
-                right: 10,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    onPressed: () => widget.onMenu(shown?.look ?? look),
-                    tooltip: context.tr(LocaleKeys.lookActions),
-                    icon: const FormIcon(FormIconName.more, size: 21),
-                  ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _Dots(count: slides.length, index: index),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _caption(context, slide).first,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: FormTokens.small.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: FormTokens.noteInk,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _caption(context, slide).last,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: FormTokens.small.copyWith(fontSize: 12.5),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: widget.online
+                    ? () => showCollectionSheet(context, lookId: look.id)
+                    : null,
+                tooltip: context.tr(LocaleKeys.collectionAdd),
+                icon: FormIcon(
+                  filed ? FormIconName.bookmarkFilled : FormIconName.bookmark,
+                  size: 22,
+                  color: filed ? FormTokens.green : FormTokens.ink,
+                ),
+              ),
+              IconButton(
+                onPressed: () => widget.onMenu(slide.record?.look ?? look),
+                tooltip: context.tr(LocaleKeys.lookActions),
+                icon: const FormIcon(FormIconName.more, size: 21),
               ),
             ],
           ),
-          if (layers.length > 1) ...[
+          if (widget.garments.isNotEmpty) ...[
             const SizedBox(height: 10),
-            _LayerPills(
-              layers: layers,
-              selectedId: layer.id,
-              ownPhoto: look.isPhoto,
-              reference: look.isReference,
-              onSelected: (id) {
-                unawaited(HapticFeedback.selectionClick());
-                setState(() {
-                  _layerId = id;
-                  _selectedId = null;
-                });
-              },
-            ),
+            _PieceGrid(garments: widget.garments, online: widget.online),
           ],
-          // A photo look lists its pieces with what was found on the photo
-          // below, so the strip would only repeat them.
-          if (!look.isPhoto) ...[
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              clipBehavior: Clip.none,
+          if (look.isCombination) ...[
+            const SizedBox(height: 24),
+            IntrinsicHeight(
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 10,
                 children: [
-                  for (final garment in garments)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _PieceTile(
-                        garment: garment,
-                        online: widget.online,
-                        selected: garment.id == _selectedId,
-                        onTap: garment.item == null
-                            ? null
-                            : () {
-                                unawaited(HapticFeedback.selectionClick());
-                                setState(
-                                  () => _selectedId = garment.id == _selectedId
-                                      ? null
-                                      : garment.id,
-                                );
-                              },
-                      ),
+                  Expanded(
+                    child: InspireButton(
+                      icon: const Icon(Icons.person_outline_rounded),
+                      title: context.tr(LocaleKeys.lookTryOn),
+                      subtitle: context.tr(LocaleKeys.lookTryOnHint),
+                      onPressed: widget.online && !making(tryOn: true)
+                          ? () => unawaited(_addImage(tryOn: true))
+                          : null,
                     ),
+                  ),
+                  Expanded(
+                    child: InspireButton(
+                      primary: false,
+                      icon: const Icon(Icons.auto_awesome_outlined),
+                      title: context.tr(LocaleKeys.lookInspiration),
+                      subtitle: context.tr(LocaleKeys.lookInspirationHint),
+                      onPressed: widget.online && !making(tryOn: false)
+                          ? () => unawaited(_addImage(tryOn: false))
+                          : null,
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-            // A photo look starts without linked pieces, so there is nothing
-            // to tap yet.
-            if (garments.isNotEmpty)
-              AnimatedSwitcher(
-                duration: FormTokens.quick,
-                child: Text(
-                  selected?.item?.metadata.name ??
-                      context.tr(
-                        shown == null
-                            ? LocaleKeys.lookFlatHint
-                            : LocaleKeys.lookFittingHint,
-                      ),
-                  key: ValueKey(selected?.id),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: FormTokens.small.copyWith(
-                    color: selected == null ? FormTokens.muted : FormTokens.ink,
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _stage(_Slide slide) {
+    final record = slide.record;
+    if (record == null) {
+      return _FlatStage(garments: widget.garments, online: widget.online);
+    }
+    if (!record.look.isReady) {
+      return _ImageInProgress(
+        look: record.look,
+        garments: widget.garments,
+        online: widget.online,
+        onRetry: widget.onRetry == null
+            ? null
+            : () => widget.onRetry!(record.look),
+      );
+    }
+    final assetId = record.look.cardAssetId!;
+    return ColoredBox(
+      color: FormTokens.lookStage,
+      child: CachedMedia(
+        identity: assetId,
+        previewPath: record.previewPath(assetId),
+        online: widget.online,
+        // Fills the 2:3 stage. AI images are 4:5, so only their sides are
+        // trimmed and the outfit in the middle stays whole.
+        fit: BoxFit.cover,
+        entrance: MediaEntrance.fade,
+      ),
+    );
+  }
+
+  /// What the slide shows, and a detail: who made it and when, or its state.
+  List<String> _caption(BuildContext context, _Slide slide) {
+    final look = slide.record?.look;
+    if (look == null) {
+      return [
+        context.tr(LocaleKeys.lookLayerFlat),
+        context.tr(LocaleKeys.lookFlatCaption),
+      ];
+    }
+    final kind = context.tr(
+      look.isTryOn
+          ? LocaleKeys.lookLayerTryOn
+          : LocaleKeys.lookLayerInspiration,
+    );
+    final detail = look.state == 'failed'
+        ? context.tr(LocaleKeys.lookImageFailedShort)
+        : !look.isReady
+        ? context.tr(LocaleKeys.lookImageMaking)
+        : context.tr(
+            LocaleKeys.lookImageByAi,
+            namedArgs: {'date': lookDateText(context, look.createdAt)},
+          );
+    return [kind, detail];
+  }
+}
+
+/// Story-style dots: at most five, the one on show in forest. When more
+/// images lie beyond the window, the dots at its edge shrink.
+class _Dots extends StatelessWidget {
+  const _Dots({required this.count, required this.index});
+
+  final int count;
+  final int index;
+
+  static const _window = 5;
+
+  @override
+  Widget build(BuildContext context) {
+    if (count < 2) return const SizedBox(height: 6);
+    final size = count < _window ? count : _window;
+    final start = (index - 2).clamp(0, count - size);
+    return ExcludeSemantics(
+      child: SizedBox(
+        height: 6,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          spacing: 4,
+          children: [
+            for (var i = start; i < start + size; i++)
+              AnimatedScale(
+                duration: const Duration(milliseconds: 250),
+                curve: FormTokens.easeOut,
+                scale:
+                    (i == start && start > 0) ||
+                        (i == start + size - 1 && start + size < count)
+                    ? 0.62
+                    : 1,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: i == index
+                        ? FormTokens.green
+                        : const Color(0xFFC9CCC2),
                   ),
                 ),
               ),
           ],
-          if (look.isPhoto) ...[
-            const SizedBox(height: 22),
-            FoundPieces(
-              look: look,
-              state: widget.state,
-              online: widget.online,
-              selectedId: _selectedId,
-              onSelect: (id) => setState(() {
-                _selectedId = id;
-                // The marker shows on the photo, so bring it up.
-                if (id != null && boxes.containsKey(id)) _layerId = look.id;
-              }),
-            ),
-          ],
-          if (look.isBase) ...[
-            const SizedBox(height: 22),
-            _AddImage(
-              look: look,
-              online: widget.online,
-              attaching: widget.state.pendingWorn.containsKey(look.id),
-            ),
-          ],
-          const SizedBox(height: 24),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (items.isNotEmpty)
-                  Text(
-                    _headline(context, items),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: FormTokens.heading.copyWith(
-                      fontSize: 24,
-                      height: 1.25,
-                    ),
-                  ),
-                const SizedBox(height: 6),
-                Text(meta, style: FormTokens.small),
-                if (items.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  Text(
-                    _ownership(context, items, garments.length),
-                    style: FormTokens.body,
-                  ),
-                ],
-                if (families.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final family in families)
-                        ColorChip(
-                          label: context.tr('colorFamilies.$family'),
-                          swatch: colorFamilySwatches[family],
-                          onTap: () => widget.onOpenStack(ColorStack(family)),
-                        ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 22),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: _CollectButton(
-              filedIn: filedIn,
-              onTap: widget.online
-                  ? () => showCollectionSheet(context, lookId: look.id)
-                  : null,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-const _headlineOrder = [
-  'coat',
-  'jacket',
-  'dress',
-  'top',
-  'pants',
-  'skirt',
-  'shoes',
-  'bag',
-  'hat',
-  'scarf',
-  'accessory',
-];
+/// The look's pieces, four to a row, as in the wardrobe. Tapping opens one.
+class _PieceGrid extends StatelessWidget {
+  const _PieceGrid({required this.garments, required this.online});
 
-/// Names the look after its two most defining pieces, outerwear and dresses
-/// first, e.g. "Teddyjacke & Tanktop".
-String _headline(BuildContext context, List<WardrobeItem> items) {
-  int rank(WardrobeItem item) {
-    final index = _headlineOrder.indexOf(item.metadata.category);
-    return index < 0 ? _headlineOrder.length : index;
-  }
+  final List<LookGarment> garments;
+  final bool online;
 
-  final names = ([...items]..sort((a, b) => rank(a) - rank(b)))
-      .take(2)
-      .map((item) => item.metadata.name)
-      .toList();
-  return names.join(' & ');
-}
-
-/// How many of the look's pieces are in the closet, and which ones are still
-/// on the wish list.
-String _ownership(BuildContext context, List<WardrobeItem> items, int total) {
-  final owned = items.where((item) => item.state == 'owning').length;
-  final wanting = [
-    for (final item in items)
-      if (item.state == 'wanting') item.metadata.name,
-  ];
-  final count = owned == total
-      ? context.tr(LocaleKeys.lookOwnedAll)
-      : owned == 0
-      ? context.tr(LocaleKeys.lookOwnedNone)
-      : context.tr(
-          LocaleKeys.lookOwnedSome,
-          namedArgs: {'owned': '$owned', 'total': '$total'},
-        );
-  if (wanting.isEmpty) return count;
-  final names = wanting.length == 1
-      ? wanting.single
-      : '${wanting.sublist(0, wanting.length - 1).join(', ')} '
-            '${context.tr(LocaleKeys.listAnd)} ${wanting.last}';
-  final wish = context.tr(
-    wanting.length == 1
-        ? LocaleKeys.lookWantingOne
-        : LocaleKeys.lookWantingMany,
-    namedArgs: {'names': names},
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      const columns = 4;
+      const gap = 8.0;
+      final width = (constraints.maxWidth - gap * (columns - 1)) / columns;
+      return Wrap(
+        spacing: gap,
+        runSpacing: 14,
+        children: [
+          for (final garment in garments)
+            SizedBox(
+              width: width,
+              child: _PieceTile(garment: garment, online: online),
+            ),
+        ],
+      );
+    },
   );
-  return '$count $wish';
 }
 
-/// A piece in the fitting room strip. The selected piece lifts and takes a
-/// green outline.
 class _PieceTile extends StatelessWidget {
-  const _PieceTile({
-    required this.garment,
-    required this.online,
-    required this.selected,
-    required this.onTap,
-  });
+  const _PieceTile({required this.garment, required this.online});
 
   final LookGarment garment;
   final bool online;
-  final bool selected;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final item = garment.item;
     return Semantics(
-      button: true,
-      selected: selected,
+      button: item != null,
       label: item?.metadata.name,
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedSlide(
-          offset: Offset(0, selected ? -0.04 : 0),
-          duration: const Duration(milliseconds: 240),
-          curve: FormTokens.easeOut,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 240),
-            curve: FormTokens.easeOut,
-            width: 66,
-            height: 82,
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: item == null
-                  ? FormTokens.field
-                  : FormTokens.tileTint(item.id, item.metadata.colors),
-              borderRadius: BorderRadius.circular(FormTokens.inputRadius),
-              border: Border.all(
-                color: selected ? FormTokens.green : Colors.transparent,
-                width: 1.5,
-              ),
-              boxShadow: [
-                if (selected)
-                  const BoxShadow(
-                    color: Color(0x141D281C),
-                    offset: Offset(0, 6),
-                    blurRadius: 18,
-                  ),
-              ],
-            ),
-            child: item == null
-                ? null
-                : CachedMedia(
-                    identity: item.previewIdentity,
-                    previewPath: item.previewPath,
-                    online: online,
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Marks where the selected piece sits on the worn photo, with its name in a
-/// label that opens the piece.
-/// Pulsing dots on the photo where each piece can be tapped. [points] are in
-/// percent of the photo's width and height.
-class _TapAreaHints extends StatefulWidget {
-  const _TapAreaHints({
-    required this.visible,
-    required this.points,
-    required this.size,
-  });
-
-  final bool visible;
-  final List<Offset> points;
-  final Size size;
-
-  @override
-  State<_TapAreaHints> createState() => _TapAreaHintsState();
-}
-
-class _TapAreaHintsState extends State<_TapAreaHints>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 2200),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    _sync();
-  }
-
-  @override
-  void didUpdateWidget(_TapAreaHints oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.visible != oldWidget.visible) _sync();
-  }
-
-  void _sync() {
-    if (widget.visible && !MediaQuery.disableAnimationsOf(context)) {
-      unawaited(_pulse.repeat());
-    } else {
-      _pulse.stop();
-    }
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const dot = 14.0;
-    const ring = 52.0;
-    return IgnorePointer(
-      child: AnimatedOpacity(
-        opacity: widget.visible ? 1 : 0,
-        duration: const Duration(milliseconds: 320),
-        curve: FormTokens.easeOut,
-        child: AnimatedBuilder(
-          animation: _pulse,
-          builder: (context, _) => Stack(
-            children: [
-              for (var i = 0; i < widget.points.length; i++)
-                Positioned(
-                  left:
-                      widget.points[i].dx / 100 * widget.size.width - ring / 2,
-                  top:
-                      widget.points[i].dy / 100 * widget.size.height - ring / 2,
-                  width: ring,
-                  height: ring,
-                  // Each dot pops in a beat after the previous one and
-                  // breathes slightly out of step, so they feel alive
-                  // rather than blinking in unison.
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(end: widget.visible ? 1 : 0),
-                    duration: Duration(milliseconds: 650 + i * 90),
-                    curve: widget.visible ? Curves.elasticOut : Curves.easeIn,
-                    builder: (context, pop, child) =>
-                        Transform.scale(scale: pop, child: child),
-                    child: _dot((_pulse.value + i * 0.17) % 1, dot, ring),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// One dot at [phase] of its breath: a soft halo swells and fades while
-  /// the dot itself gently grows and settles.
-  Widget _dot(double phase, double dot, double ring) {
-    final halo = Curves.easeOutCubic.transform(phase);
-    final breath = 1 + 0.14 * math.sin(phase * math.pi * 2);
-    final fade = 1 - phase;
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Container(
-          width: dot + (ring - dot) * halo,
-          height: dot + (ring - dot) * halo,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.5 * fade * fade),
-          ),
-        ),
-        Transform.scale(
-          scale: breath,
-          child: Container(
-            width: dot,
-            height: dot,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Color(0x401D281C),
-                  blurRadius: 8,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PieceMarker extends StatelessWidget {
-  const _PieceMarker({
-    required this.garment,
-    required this.position,
-    required this.size,
-  });
-
-  final LookGarment? garment;
-  final LookItemPosition? position;
-  final Size size;
-
-  @override
-  Widget build(BuildContext context) {
-    final position = this.position;
-    final garment = this.garment;
-    final visible = position != null && garment?.item != null;
-    // The body regions are estimates by category, so the ring stays generous.
-    final diameter = position == null
-        ? 0.0
-        : (position.size * 1.35 / 100 * size.width).clamp(64.0, 150.0);
-    final cx = position == null
-        ? size.width / 2
-        : position.originX / 100 * size.width;
-    final cy = position == null
-        ? size.height / 2
-        : position.originY / 100 * size.height;
-    final labelBelow = cy < size.height * 0.62;
-    const duration = Duration(milliseconds: 280);
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: IgnorePointer(
-            child: AnimatedOpacity(
-              opacity: visible ? 1 : 0,
-              duration: duration,
-              curve: FormTokens.easeOut,
-              child: const ColoredBox(color: Color(0x261D281C)),
-            ),
-          ),
-        ),
-        AnimatedPositioned(
-          duration: duration,
-          curve: FormTokens.easeOut,
-          left: cx - diameter / 2,
-          top: cy - diameter / 2,
-          width: diameter,
-          height: diameter,
-          child: IgnorePointer(
-            child: AnimatedOpacity(
-              opacity: visible ? 1 : 0,
-              duration: duration,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x331D281C),
-                      offset: Offset(0, 4),
-                      blurRadius: 14,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        AnimatedPositioned(
-          duration: duration,
-          curve: FormTokens.easeOut,
-          left: 0,
-          right: 0,
-          top: labelBelow ? cy + diameter / 2 + 10 : null,
-          bottom: labelBelow ? null : size.height - cy + diameter / 2 + 10,
-          child: Center(
-            child: AnimatedOpacity(
-              opacity: visible ? 1 : 0,
-              duration: duration,
-              child: IgnorePointer(
-                ignoring: !visible,
-                child: GestureDetector(
-                  onTap: garment == null
-                      ? null
-                      : () => context.push('/wardrobe/items/${garment.id}'),
-                  child: Container(
-                    constraints: BoxConstraints(maxWidth: size.width - 40),
-                    padding: const EdgeInsets.fromLTRB(14, 9, 10, 9),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.94),
-                      borderRadius: BorderRadius.circular(
-                        FormTokens.chipRadius,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            garment?.item?.metadata.name ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: FormTokens.ink,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          context.tr(LocaleKeys.lookOpenPiece),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: FormTokens.green,
-                          ),
-                        ),
-                        const Icon(
-                          Icons.chevron_right_rounded,
-                          size: 18,
-                          color: FormTokens.green,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Files the look into Sammlungen. Empty, it invites with a heart. Once
-/// filed, it shows where the look lives, and tapping changes that.
-class _CollectButton extends StatelessWidget {
-  const _CollectButton({required this.filedIn, required this.onTap});
-
-  final List<LookCollection> filedIn;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final filed = filedIn.isNotEmpty;
-    final label = filed
-        ? filedIn.map((c) => '${c.emoji} ${c.name}').join('  ·  ')
-        : context.tr(LocaleKeys.collectionAdd);
-    return Semantics(
-      button: true,
-      label: label,
       excludeSemantics: true,
       child: GestureDetector(
-        onTap: onTap == null
+        onTap: item == null
             ? null
             : () {
-                unawaited(HapticFeedback.lightImpact());
-                onTap!();
+                unawaited(HapticFeedback.selectionClick());
+                unawaited(context.push('/wardrobe/items/${item.id}'));
               },
-        child: Opacity(
-          opacity: onTap == null ? 0.45 : 1,
-          child: AnimatedContainer(
-            duration: FormTokens.quick,
-            height: 50,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: filed ? FormTokens.selectedTint : FormTokens.field,
-              borderRadius: BorderRadius.circular(FormTokens.cardRadius),
-            ),
-            child: Row(
-              children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 320),
-                  transitionBuilder: (child, animation) => ScaleTransition(
-                    scale: CurvedAnimation(
-                      parent: animation,
-                      curve: FormTokens.pop,
-                    ),
-                    child: child,
-                  ),
-                  child: FormIcon(
-                    filed ? FormIconName.heartFilled : FormIconName.heart,
-                    key: ValueKey(filed),
-                    size: 18,
-                    color: filed ? FormTokens.green : FormTokens.ink,
-                  ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 3 / 4,
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: item == null
+                      ? FormTokens.field
+                      : FormTokens.tileTint(item.id, item.metadata.colors),
+                  borderRadius: BorderRadius.circular(FormTokens.inputRadius),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: filed ? FormTokens.green : FormTokens.ink,
-                    ),
-                  ),
-                ),
-                Icon(
-                  filed ? Icons.edit_outlined : Icons.add,
-                  size: 18,
-                  color: filed ? FormTokens.green : FormTokens.muted,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The worn photo at 4:5 in a card-radius frame, cropped like a cover.
-/// [overlay] draws on top at the frame's size and gets the photo's pixel
-/// size once decoded, so found boxes can be placed exactly.
-class _LookPhoto extends StatelessWidget {
-  const _LookPhoto({
-    required this.record,
-    required this.online,
-    this.onTapAt,
-    this.overlay,
-  });
-
-  final CachedLook record;
-  final bool online;
-
-  /// Receives the tap position in percent of the frame, the frame and the
-  /// photo's pixel size.
-  final void Function(Offset point, Size frame, Size? image)? onTapAt;
-  final Widget Function(Size frame, Size? image)? overlay;
-
-  @override
-  Widget build(BuildContext context) {
-    final assetId = record.look.cardAssetId!;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(FormTokens.panelRadius),
-      child: AspectRatio(
-        aspectRatio: 4 / 5,
-        child: ColoredBox(
-          color: FormTokens.lookStage,
-          child: LayoutBuilder(
-            builder: (context, constraints) => LoadedPhoto(
-              identity: assetId,
-              previewPath: record.previewPath(assetId),
-              online: online,
-              builder: (context, file, image) => Stack(
-                fit: StackFit.expand,
-                children: [
-                  GestureDetector(
-                    onTapUp: onTapAt == null
-                        ? null
-                        : (details) => onTapAt!(
-                            Offset(
-                              details.localPosition.dx /
-                                  constraints.maxWidth *
-                                  100,
-                              details.localPosition.dy /
-                                  constraints.maxHeight *
-                                  100,
-                            ),
-                            constraints.biggest,
-                            image,
-                          ),
-                    child: Image.file(file, fit: BoxFit.cover),
-                  ),
-                  ?overlay?.call(constraints.biggest, image),
-                ],
+                child: item == null
+                    ? null
+                    : CachedMedia(
+                        identity: item.previewIdentity,
+                        previewPath: item.previewPath,
+                        online: online,
+                      ),
               ),
             ),
-          ),
+            if (item != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                item.metadata.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: FormTokens.small.copyWith(
+                  fontSize: 11.5,
+                  height: 1.3,
+                  color: FormTokens.noteInk,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
 }
 
-String? _occasionLabel(BuildContext context, String? occasion) =>
-    switch (occasion) {
-      'night-out' => context.tr(LocaleKeys.composerOccasionNightOut),
-      'party' => context.tr(LocaleKeys.composerOccasionParty),
-      'casual' => context.tr(LocaleKeys.composerOccasionCasual),
-      _ => null,
-    };
-
-/// The look's pieces laid out flat at the photo's 4:5, on paper. Tapping a
-/// piece highlights it, as tapping it on a photo does.
+/// The look's pieces laid out flat, on paper.
 class _FlatStage extends StatelessWidget {
-  const _FlatStage({
-    required this.garments,
-    required this.online,
-    required this.selectedId,
-    required this.onGarmentTap,
-  });
+  const _FlatStage({required this.garments, required this.online});
 
   final List<LookGarment> garments;
   final bool online;
-  final String? selectedId;
-  final ValueChanged<String> onGarmentTap;
 
   @override
-  Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(FormTokens.panelRadius),
-    child: AspectRatio(
-      aspectRatio: 4 / 5,
-      child: ColoredBox(
-        color: FormTokens.flatLayPaper,
-        child: Padding(
-          padding: const EdgeInsets.all(22),
-          child: Center(
-            child: _FlatEntrance(
-              builder: (entrance) => FlatLayBoard(
-                garments: garments,
-                online: online,
-                entrance: entrance,
-                selectedId: selectedId,
-                onGarmentTap: (id) {
-                  unawaited(HapticFeedback.selectionClick());
-                  onGarmentTap(id);
-                },
-              ),
-              count: garments.length,
-            ),
+  Widget build(BuildContext context) => ColoredBox(
+    color: FormTokens.flatLayPaper,
+    child: Padding(
+      padding: const EdgeInsets.all(22),
+      child: Center(
+        child: _FlatEntrance(
+          builder: (entrance) => FlatLayBoard(
+            garments: garments,
+            online: online,
+            entrance: entrance,
           ),
+          count: garments.length,
         ),
       ),
     ),
@@ -1140,297 +573,55 @@ class _ImageInProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final failed = look.state == 'failed';
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(FormTokens.panelRadius),
-      child: AspectRatio(
-        aspectRatio: 4 / 5,
-        child: ColoredBox(
-          color: FormTokens.lookStage,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Opacity(
-                opacity: failed ? 0.25 : 0.45,
-                child: Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: Center(
-                    child: FlatLayBoard(
-                      garments: garments,
-                      online: online,
-                      arrive: true,
-                    ),
-                  ),
-                ),
-              ),
-              if (!failed) const DevelopingSheen(active: true),
-              Align(
-                alignment: const Alignment(0, 0.78),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 10,
-                    children: [
-                      Text(
-                        context.tr(
-                          failed
-                              ? LocaleKeys.lookImageFailed
-                              : LocaleKeys.lookImageDeveloping,
-                        ),
-                        textAlign: TextAlign.center,
-                        style: FormTokens.body.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (failed && onRetry != null)
-                        FilledButton(
-                          onPressed: online ? onRetry : null,
-                          child: Text(context.tr(LocaleKeys.retry)),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Switches between a look's photo, its images and its flat lay. The
-/// selected pill slides under the label as a green tint.
-class _LayerPills extends StatelessWidget {
-  const _LayerPills({
-    required this.layers,
-    required this.selectedId,
-    required this.ownPhoto,
-    required this.reference,
-    required this.onSelected,
-  });
-
-  final List<_Layer> layers;
-  final String selectedId;
-
-  /// The look is a photo the user wore it in, so its photo is "Worn".
-  final bool ownPhoto;
-
-  /// The photo shows someone else, so it is a "Reference".
-  final bool reference;
-  final ValueChanged<String> onSelected;
-
-  String _label(BuildContext context, _Layer layer) {
-    final look = layer.record?.look;
-    return context.tr(switch (look) {
-      null => LocaleKeys.lookLayerFlat,
-      _ when reference && look.isPhoto => LocaleKeys.looksReference,
-      _ when ownPhoto && look.isPhoto => LocaleKeys.lookLayerWorn,
-      _ when look.isTryOn => LocaleKeys.lookLayerTryOn,
-      _ => LocaleKeys.lookLayerInspiration,
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    clipBehavior: Clip.none,
-    child: Row(
-      spacing: 6,
-      children: [
-        for (final layer in layers)
-          Semantics(
-            button: true,
-            selected: layer.id == selectedId,
-            child: GestureDetector(
-              onTap: () => onSelected(layer.id),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 260),
-                curve: FormTokens.easeOut,
-                height: 36,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: layer.id == selectedId
-                      ? FormTokens.selectedTint
-                      : FormTokens.pill,
-                  borderRadius: BorderRadius.circular(FormTokens.chipRadius),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: 6,
-                  children: [
-                    if (layer.record?.look case final look? when look.isActive)
-                      const SizedBox.square(
-                        dimension: 10,
-                        child: CircularProgressIndicator(strokeWidth: 1.5),
-                      )
-                    else if (layer.record?.look.state == 'failed')
-                      const Icon(
-                        Icons.error_outline,
-                        size: 14,
-                        color: FormTokens.danger,
-                      ),
-                    Text(
-                      _label(context, layer),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: layer.id == selectedId
-                            ? FormTokens.green
-                            : FormTokens.ink,
-                      ),
-                    ),
-                  ],
+    return ColoredBox(
+      color: FormTokens.lookStage,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Opacity(
+            opacity: failed ? 0.25 : 0.45,
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Center(
+                child: FlatLayBoard(
+                  garments: garments,
+                  online: online,
+                  arrive: true,
                 ),
               ),
             ),
           ),
-      ],
-    ),
-  );
-}
-
-/// What can be attached to a look, each with its price: a photo the user
-/// wore it in (free, combinations only), a try-on and an inspiration (paid).
-/// The combination itself stays as it is.
-class _AddImage extends StatelessWidget {
-  const _AddImage({
-    required this.look,
-    required this.online,
-    required this.attaching,
-  });
-
-  final Look look;
-  final bool online;
-
-  /// A photo is on its way to this look.
-  final bool attaching;
-
-  Future<void> _attachPhoto(BuildContext context) async {
-    final paths = await pickPhotos(context, camera: false);
-    if (paths.isEmpty || !context.mounted) return;
-    unawaited(HapticFeedback.mediumImpact());
-    final feed = context.read<FeedCubit>();
-    await runFeedAction(
-      context,
-      () => feed.addWornPhoto(
-        look.id,
-        paths.first,
-        (path) async => (await PhotoPreparation().prepare(path)).bytes,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final credits = context.watch<CreditsCubit>().state;
-    final cost = credits?.metered == false
-        ? null
-        : context.tr(
-            LocaleKeys.lookCostBadge,
-            namedArgs: {'cost': '$lookCreditCost'},
-          );
-    Widget option(
-      IconData icon,
-      String label,
-      String? price, {
-      required VoidCallback? onTap,
-      bool free = false,
-      bool busy = false,
-    }) => Expanded(
-      child: Material(
-        color: FormTokens.field,
-        borderRadius: BorderRadius.circular(FormTokens.cardRadius),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: online && onTap != null
-              ? () {
-                  unawaited(HapticFeedback.lightImpact());
-                  onTap();
-                }
-              : null,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Opacity(
-              opacity: online ? 1 : 0.45,
+          if (!failed) const DevelopingSheen(active: true),
+          Align(
+            alignment: const Alignment(0, 0.78),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 6,
+                mainAxisSize: MainAxisSize.min,
+                spacing: 10,
                 children: [
-                  if (busy)
-                    const SizedBox.square(
-                      dimension: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    Icon(icon, size: 22, color: FormTokens.green),
                   Text(
-                    label,
-                    maxLines: 2,
+                    context.tr(
+                      failed
+                          ? LocaleKeys.lookImageFailed
+                          : LocaleKeys.lookImageDeveloping,
+                    ),
+                    textAlign: TextAlign.center,
                     style: FormTokens.body.copyWith(
                       fontWeight: FontWeight.w600,
-                      height: 1.2,
                     ),
                   ),
-                  if (price != null)
-                    Text(
-                      price,
-                      style: FormTokens.small.copyWith(
-                        color: free ? FormTokens.green : FormTokens.coinInk,
-                        fontWeight: FontWeight.w600,
-                      ),
+                  if (failed && onRetry != null)
+                    FilledButton(
+                      onPressed: online ? onRetry : null,
+                      child: Text(context.tr(LocaleKeys.retry)),
                     ),
                 ],
               ),
             ),
           ),
-        ),
+        ],
       ),
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 10),
-          child: Text(
-            context.tr(LocaleKeys.lookAddImage),
-            style: FormTokens.small,
-          ),
-        ),
-        IntrinsicHeight(
-          child: Row(
-            spacing: 8,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (look.isCombination)
-                option(
-                  Icons.add_photo_alternate_outlined,
-                  context.tr(LocaleKeys.lookAttachPhoto),
-                  context.tr(LocaleKeys.lookFree),
-                  free: true,
-                  busy: attaching,
-                  onTap: attaching
-                      ? null
-                      : () => unawaited(_attachPhoto(context)),
-                ),
-              option(
-                Icons.person_outline,
-                context.tr(LocaleKeys.lookTryOn),
-                cost,
-                onTap: () =>
-                    unawaited(addLookImage(context, look, mode: 'try-on')),
-              ),
-              option(
-                Icons.auto_awesome_outlined,
-                context.tr(LocaleKeys.lookInspiration),
-                cost,
-                onTap: () =>
-                    unawaited(addLookImage(context, look, mode: 'inspiration')),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

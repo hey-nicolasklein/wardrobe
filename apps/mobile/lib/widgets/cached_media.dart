@@ -23,6 +23,7 @@ class CachedMedia extends StatefulWidget {
     this.fit = BoxFit.contain,
     this.entrance = MediaEntrance.none,
     this.placeholder = true,
+    this.borderRadius,
     super.key,
   });
   final String identity;
@@ -34,6 +35,10 @@ class CachedMedia extends StatefulWidget {
   /// Whether a field-coloured box stands in while the image loads. Off where
   /// a box would look broken, such as the floating pieces of a cloud.
   final bool placeholder;
+
+  /// Rounds the corners of the image itself, where it lands inside the box
+  /// after [fit]. Only meaningful with [BoxFit.contain].
+  final BorderRadius? borderRadius;
   @override
   State<CachedMedia> createState() => _CachedMediaState();
 }
@@ -139,7 +144,8 @@ class _CachedMediaState extends State<CachedMedia>
     future: _file,
     builder: (context, snapshot) {
       if (snapshot.data == null) return _placeholder();
-      return Image.file(
+      final radius = widget.borderRadius;
+      final image = Image.file(
         snapshot.data!,
         fit: widget.fit,
         gaplessPlayback: true,
@@ -153,8 +159,76 @@ class _CachedMediaState extends State<CachedMedia>
         errorBuilder: (_, _, _) =>
             const Icon(Icons.image_not_supported_outlined),
       );
+      if (radius == null) return image;
+      return _RoundedContain(
+        file: snapshot.data!,
+        radius: radius,
+        child: image,
+      );
     },
   );
+}
+
+/// Shrinks the box to the image's own proportions and clips its corners, so
+/// a contained image gets rounded edges instead of the box around it.
+class _RoundedContain extends StatefulWidget {
+  const _RoundedContain({
+    required this.file,
+    required this.radius,
+    required this.child,
+  });
+
+  final File file;
+  final BorderRadius radius;
+  final Widget child;
+
+  @override
+  State<_RoundedContain> createState() => _RoundedContainState();
+}
+
+class _RoundedContainState extends State<_RoundedContain> {
+  ImageStream? _stream;
+  late final _listener = ImageStreamListener((info, _) {
+    final ratio = info.image.width / info.image.height;
+    if (mounted && ratio != _ratio) setState(() => _ratio = ratio);
+  });
+  double? _ratio;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(_RoundedContain oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.file.path != widget.file.path) _resolve();
+  }
+
+  @override
+  void dispose() {
+    _stream?.removeListener(_listener);
+    super.dispose();
+  }
+
+  void _resolve() {
+    _stream?.removeListener(_listener);
+    _stream = FileImage(widget.file).resolve(ImageConfiguration.empty)
+      ..addListener(_listener);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = _ratio;
+    if (ratio == null) return widget.child;
+    return Center(
+      child: AspectRatio(
+        aspectRatio: ratio,
+        child: ClipRRect(borderRadius: widget.radius, child: widget.child),
+      ),
+    );
+  }
 }
 
 /// The field-coloured stand-in for an image that is still loading. It

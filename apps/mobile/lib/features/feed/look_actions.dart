@@ -39,27 +39,6 @@ void openCreateLook(
   );
 }
 
-/// Keeps photos from the library as looks. They land on the Looks pile right
-/// away and their pieces are found in the background.
-Future<void> addPhotoLooks(BuildContext context) async {
-  final paths = await pickPhotos(context, camera: false);
-  if (paths.isEmpty || !context.mounted) return;
-  unawaited(HapticFeedback.mediumImpact());
-  final feed = context.read<FeedCubit>();
-  context.go('/feed');
-  showFormToast(
-    context,
-    context.plural(LocaleKeys.photoLooksAdding, paths.length),
-  );
-  final failed = await feed.addPhotoLooks(
-    paths,
-    (path) async => (await PhotoPreparation().prepare(path)).bytes,
-  );
-  if (failed > 0 && context.mounted) {
-    showFormToast(context, context.plural(LocaleKeys.photoLooksFailed, failed));
-  }
-}
-
 /// Inspirations put the user into an AI photo, so they need photos of the
 /// user first. Asked for here, the first time, instead of during onboarding.
 /// Returns whether a reference is ready.
