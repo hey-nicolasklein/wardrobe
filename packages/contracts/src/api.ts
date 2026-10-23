@@ -62,14 +62,17 @@ export const accountCredentialsSchema = z
   })
   .strict();
 
+// Sessions are bearer tokens only. Shipped app builds still send `transport: 'token'`.
+const transportSchema = z.literal('token').optional();
+
 export const signInRequestSchema = accountCredentialsSchema
-  .extend({ transport: z.enum(['cookie', 'token']) })
+  .extend({ transport: transportSchema })
   .strict();
 
 export const identitySignInRequestSchema = z
   .object({
     idToken: z.string().min(1).max(8192),
-    transport: z.enum(['cookie', 'token']),
+    transport: transportSchema,
   })
   .strict();
 
@@ -77,7 +80,7 @@ export const identitySignInRequestSchema = z
 export const devSignInRequestSchema = z
   .object({
     email: z.email(),
-    transport: z.enum(['cookie', 'token']),
+    transport: transportSchema,
   })
   .strict();
 

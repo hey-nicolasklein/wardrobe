@@ -32,8 +32,8 @@ the first months. Build what holds at that size, and keep every step replaceable
 - Costs are `jobCreditCost`: detection 0, shelf image 1, look 2, character sheet 2.
 
 **API** (`apps/api/src/app.ts`)
-- `POST /v1/auth/apple`, `POST /v1/auth/google` with `{ idToken, transport }`.
-- `POST /v1/auth/dev` with `{ email, transport }`, only when `DEV_SIGN_IN=true`.
+- `POST /v1/auth/apple`, `POST /v1/auth/google` with `{ idToken }`. Sessions are bearer tokens; `transport: 'token'` is still accepted from older builds.
+- `POST /v1/auth/dev` with `{ email }`, only when `DEV_SIGN_IN=true`.
 - `GET /v1/credits` returns `{ metered, balance }`.
 - `DELETE /v1/account` deletes all records and S3 objects. Returns 403 in personal mode, 409 while a job is running.
 - Errors: `402 insufficient-credits`, `429 too-many-active-jobs`, `429 rate-limited` (10 auth POSTs per IP and minute).

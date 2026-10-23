@@ -1,10 +1,9 @@
 #!/usr/bin/env sh
 # Rolls the production stack on stargate and stamps a fresh version.
 #
-# The stamp is the whole point: an open PWA polls /version.json and reloads
-# itself when the string changes. Building without FORM_VERSION bakes the
-# literal "dev" every time, so clients never notice a deploy and keep running
-# whatever app.js they started with.
+# The stamp proves the release went live: the script waits until nginx serves
+# it from /version.json. Building without FORM_VERSION bakes the literal "dev"
+# every time, so a deploy can't be told apart from the previous one.
 #
 #   deploy/ship.sh              # web + api + worker
 #   deploy/ship.sh api worker   # those, plus web for the version stamp
@@ -13,8 +12,8 @@ set -eu
 cd "$(dirname "$0")/.."
 
 services="${*:-web api worker}"
-# web carries version.json, so it always rebuilds — otherwise a deploy of just
-# the API would leave every open client on the previous front end.
+# web carries version.json, so it always rebuilds — otherwise the stamp check
+# below would never see the new version.
 case " $services " in
   *" web "*) ;;
   *) services="web $services" ;;

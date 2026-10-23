@@ -111,8 +111,6 @@ import {
   setLookLiked,
   shotWeights,
 } from '@form/service';
-import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import { cors } from 'hono/cors';
 import { Hono, type Context } from 'hono';
 
 import { RateLimiter } from './rate-limit.js';
@@ -126,8 +124,7 @@ export type AppDependencies = {
   storage?: PrivateObjectStorage;
   sessionSecret?: string;
   sessionLifetimeSeconds?: number;
-  secureCookies?: boolean;
-  webOrigin?: string;
+  // Origin for upload and download URLs handed to clients. Defaults to the request URL.
   publicOrigin?: string;
   detectionModel?: string;
   outfitRanker?: OutfitRanker;
@@ -137,7 +134,6 @@ export type AppDependencies = {
   devSignIn?: boolean;
 };
 
-const sessionCookie = 'form_session';
 const mediaTokenLifetimeSeconds = 300;
 
 function mediaToken(secret: string, accountId: string, assetId: string, expiresAt: number): string {
@@ -240,17 +236,6 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     typeof dependencies === 'function' ? { checkReadiness: dependencies } : dependencies;
   const app = new Hono();
 
-  if (resolved.webOrigin) {
-    app.use(
-      '/v1/*',
-      cors({
-        origin: resolved.webOrigin,
-        credentials: true,
-        allowHeaders: ['Content-Type', 'Authorization'],
-      }),
-    );
-  }
-
   app.get('/', (context) =>
     context.json({ service: 'form-api', status: 'ready', contractVersion }),
   );
@@ -272,7 +257,6 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
   const storage = resolved.storage;
   const secret = resolved.sessionSecret;
   const lifetimeSeconds = resolved.sessionLifetimeSeconds ?? 60 * 60 * 24 * 30;
-  const secureCookies = resolved.secureCookies ?? true;
   const publicOrigin = resolved.publicOrigin;
   const detectionModel = resolved.detectionModel ?? 'gpt-5.6-luna';
 
@@ -292,17 +276,6 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
         errorPayload('conflict', 'reset-in-progress', 'Der Kleiderschrank wird gerade geleert.'),
         409,
       );
-    const origin = context.req.header('Origin');
-    if (
-      !['GET', 'HEAD', 'OPTIONS'].includes(context.req.method) &&
-      ((origin && resolved.webOrigin && origin !== resolved.webOrigin) ||
-        context.req.header('Sec-Fetch-Site') === 'cross-site')
-    ) {
-      return context.json(
-        errorPayload('authorization', 'origin-not-allowed', 'Request origin not allowed.'),
-        403,
-      );
-    }
     const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(context.req.method);
     const isReset = context.req.path === '/v1/personal/reset';
     if (isReset && activeWrites > 0)
@@ -343,33 +316,22 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
     context: Context,
     account: AuthenticatedAccount,
     created: Awaited<ReturnType<typeof createSession>>,
-    transport: 'cookie' | 'token',
   ) {
-    if (transport === 'cookie') {
-      setCookie(context, sessionCookie, created.token, {
-        httpOnly: true,
-        secure: secureCookies,
-        sameSite: 'Strict',
-        path: '/',
-        maxAge: lifetimeSeconds,
-      });
-    }
     return context.json({
       session: {
         accountId: account.id,
         email: account.email,
         expiresAt: created.session.expiresAt.toISOString(),
-        nativeToken: transport === 'token' ? created.token : null,
+        nativeToken: created.token,
       },
     });
   }
 
-  async function currentSession(context: Parameters<typeof getCookie>[0]): Promise<{
+  async function currentSession(context: Context): Promise<{
     session: SessionRecord;
     token: string;
   } | null> {
-    const token =
-      bearerToken(context.req.header('Authorization')) ?? getCookie(context, sessionCookie) ?? null;
+    const token = bearerToken(context.req.header('Authorization'));
     if (!token) return null;
     const session = await authenticateSession(database, token, secret);
     return session ? { session, token } : null;
@@ -503,7 +465,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       );
     }
     const created = await createSession(database, account, secret, lifetimeSeconds);
-    return issueSession(context, account, created, parsed.data.transport);
+    return issueSession(context, account, created);
   });
 
   for (const provider of ['apple', 'google'] as const) {
@@ -524,7 +486,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
           401,
         );
       const created = await createSession(database, account, secret, lifetimeSeconds);
-      return issueSession(context, account, created, parsed.data.transport);
+      return issueSession(context, account, created);
     });
   }
 
@@ -548,7 +510,7 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
           401,
         );
       const created = await createSession(database, account, secret, lifetimeSeconds);
-      return issueSession(context, account, created, parsed.data.transport);
+      return issueSession(context, account, created);
     });
   }
 
@@ -622,7 +584,6 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
       if (mapped) return context.json(mapped.payload, mapped.status);
       throw error;
     }
-    deleteCookie(context, sessionCookie, { path: '/', secure: secureCookies });
     return context.body(null, 204);
   });
 
@@ -647,7 +608,6 @@ export function createApp(dependencies: AppDependencies | ReadinessCheck): Hono 
   app.post('/v1/auth/sign-out', async (context) => {
     const authenticated = await currentSession(context);
     if (authenticated) await revokeSession(database, authenticated.token, secret);
-    deleteCookie(context, sessionCookie, { path: '/', secure: secureCookies });
     return context.body(null, 204);
   });
 

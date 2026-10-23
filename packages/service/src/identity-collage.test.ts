@@ -25,22 +25,7 @@ test('every collage pixel belongs to its selected photo for one to four crops', 
   }
 });
 
-test('browser crop frames match assembly, and zoom and pan never expose empty pixels', async () => {
-  const browser = await import(new URL('../../../apps/web/public/identity-collage.js', import.meta.url).href);
-  for (let count = 1; count <= 4; count++) {
-    assert.deepEqual(browser.collageLayout(count), collageLayout(count));
-    for (const tile of collageLayout(count)) {
-      for (const [width, height] of [[4032, 3024], [800, 1600], [64, 32]]) {
-        for (const zoom of [1, 2, 6]) for (const x of [0, 0.5, 1]) for (const y of [0, 0.5, 1]) {
-          const crop = browser.cropBounds(width, height, tile, { zoom, x, y });
-          assert.ok(crop.x >= 0 && crop.y >= 0);
-          assert.ok(crop.x + crop.width <= width! + 1e-8);
-          assert.ok(crop.y + crop.height <= height! + 1e-8);
-          assert.ok(Math.abs(crop.width / crop.height - tile.width / tile.height) < 1e-8);
-        }
-      }
-    }
-  }
+test('collage assembly rejects zero or more than four photos', async () => {
   await assert.rejects(createIdentityCollage([]));
   await assert.rejects(createIdentityCollage(Array(5).fill(Buffer.alloc(0))));
 });

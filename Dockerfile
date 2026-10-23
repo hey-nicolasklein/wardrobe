@@ -10,7 +10,8 @@ RUN npm ci
 FROM nginx:1.29-alpine AS web
 ARG FORM_VERSION=dev
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
-COPY apps/web/public /usr/share/nginx/html
+RUN rm -rf /usr/share/nginx/html/*
+COPY deploy/public /usr/share/nginx/html
 RUN printf '{"version":"%s"}' "$FORM_VERSION" > /usr/share/nginx/html/version.json
 
 FROM dependencies AS api

@@ -24,14 +24,14 @@ deploy/ship.sh api worker   # those, plus web — it always carries the version 
 Always use `ship.sh` rather than calling Compose by hand. It stamps a fresh `FORM_VERSION`,
 rebuilds, and blocks until `/version.json` reports that stamp. A bare
 `docker compose --env-file .env.production -f compose.production.yaml up -d --build` leaves
-`FORM_VERSION` unset, which bakes the literal `dev` into `version.json`; open clients then never
-see the version change, never reload, and keep running the old `app.js`.
+`FORM_VERSION` unset, which bakes the literal `dev` into `version.json`, and the deploy can no
+longer be confirmed.
 
 Rebuild only what carries the change:
 
 | Changed path | Service |
 | --- | --- |
-| `apps/web/public` | `web` |
+| `deploy/public`, `deploy/nginx.conf` | `web` |
 | `apps/api`, `packages/contracts` | `api` |
 | `apps/worker`, `packages/service` (prompts, image processing) | `worker` |
 
@@ -55,14 +55,15 @@ Report the deployed state: the stamp that went live and which services were rebu
 - A long-lived `form-production` Compose project from `compose.production.yaml`
   (`web`, `api`, `worker`, `postgres`, `object-storage`), all `restart: unless-stopped`.
 - Tailscale Funnel terminates HTTPS on `:8443` and proxies to `127.0.0.1:${FORM_WEB_PORT}`
-  (default `18081`) — the `web` container, which proxies `/v1/` to the API.
+  (default `18081`) — the `web` container. It is nginx: it proxies `/v1/` to the API and media
+  to MinIO, and serves only the privacy policy that the app and App Store Connect link to.
   `tailscale funnel status` shows the mapping and whether it is public.
-- Runtime config lives in the git-ignored `.env.production` (`PUBLIC_WEB_ORIGIN`, `WEB_ORIGIN`,
+- Runtime config lives in the git-ignored `.env.production` (`PUBLIC_WEB_ORIGIN`,
   `S3_PUBLIC_ENDPOINT`, `APPLE_CLIENT_IDS`). Clients sign in with a normal account.
-- Web and API assets are baked into their images (`build.target`), so shipping needs a rebuild
+- The privacy page and API code are baked into their images (`build.target`), so shipping needs a rebuild
   and recreate, not just a restart.
 - `npm run services:migrate` runs only when the schema actually changed.
-- `deploy/verify.sh` is a fuller post-deploy check (health, CORS, sign-in) for when a deploy
+- `deploy/verify.sh` is a fuller post-deploy check (health, sign-in, storage) for when a deploy
   looks wrong.
 
 ## Never without an explicit request

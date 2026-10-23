@@ -8,11 +8,11 @@ export const apiConfigSchema = z.object({
   API_PORT: z.coerce.number().int().min(1).max(65535).default(4143),
   SESSION_SECRET: z.string().min(32),
   SESSION_LIFETIME_SECONDS: z.coerce.number().int().min(300).default(2_592_000),
-  SESSION_COOKIE_SECURE: z.stringbool().default(true),
   OPENAI_DETECTION_MODEL: z.string().min(1).default('gpt-5.6-luna'),
   // Ranks proposed outfits with Jev. Without it, proposals keep the closet order.
   TYPESAFE_API_KEY: z.string().min(1).optional(),
-  WEB_ORIGIN: z.url().optional(),
+  // Public HTTPS origin for upload and download URLs. Defaults to the request URL.
+  PUBLIC_ORIGIN: z.url().optional(),
   // Comma-separated client IDs accepted as ID token audiences.
   APPLE_CLIENT_IDS: z.string().default(''),
   GOOGLE_CLIENT_IDS: z.string().default(''),

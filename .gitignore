@@ -16,8 +16,6 @@ test-results/
 # Die Zahlen und Beobachtungen stehen im README daneben.
 docs/model-comparison/*/
 
-# Opt-in local gallery of garment collages sent to look generation.
-apps/web/public/debug/
 
 # Account snapshots (records + images) from account-snapshot export. Personal data.
 snapshots/

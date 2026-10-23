@@ -6,7 +6,7 @@
 
 ios
 
-iOS is the design and runtime authority. Android (10+/API 29) stays buildable with the same FORM design and gets its own QA and polish after the iOS release. iOS 16+, phones in portrait only. The PWA in `apps/web` stays a supported client for browser use.
+iOS is the design and runtime authority. Android (10+/API 29) stays buildable with the same FORM design and gets its own QA and polish after the iOS release. iOS 16+, phones in portrait only.
 
 ## Users
 
@@ -45,7 +45,7 @@ FORM is a better version of the selfie folder in Apple Photos. FORM turns photos
 
 - Flutter with Bloc, go_router, easy_localization and drift. One widget tree for both platforms. Material is only the implementation base, and FORM components replace its default visual language.
 - German and English. The app follows the device language on first launch, falls back to German, and persists an override.
-- Accounts use Sign in with Apple and Google. Email and password remain for CLI/admin accounts and the PWA. Users can delete their account and all records.
+- Accounts use Sign in with Apple and Google. Email and password remain for CLI/admin accounts. Users can delete their account and all records.
 - Credits come from an append-only ledger. New accounts get 40. Detection costs 0, a catalog image 1, a look 2, a character sheet 2. Failed jobs are refunded. Errors such as running out of credits and too many active jobs must be surfaced.
 - AI work runs on OpenAI and costs money. Every paid generation requires an explicit user action. Saving pieces is that action for catalog images, and the cost is stated before saving. Browsing, search and editing make no AI requests.
 - No analytics, tracking or remote crash reporting. Logs exclude wardrobe metadata, images, request bodies and credentials.
@@ -57,7 +57,7 @@ FORM is a better version of the selfie folder in Apple Photos. FORM turns photos
 - Name: FORM, written in capitals.
 - Voice: short, warm and direct. Second person ("your wardrobe"). Honest about limits. Onboarding says openly what FORM cannot do: hidden pieces, size and fit, getting every detail right the first time, and working for free.
 - Terminology: Wardrobe, Feed, Look, Owning/Wanting/Archived, catalog image, collage, Flat, Try on (Anprobe), Inspiration.
-- Visual identity is defined by the existing PWA and `docs/flutter-native/visual-guide.md` and is recorded separately in DESIGN.md.
+- Visual identity is defined by `docs/flutter-native/visual-guide.md` and is recorded separately in DESIGN.md.
 
 ## Evidence on Hand
 
