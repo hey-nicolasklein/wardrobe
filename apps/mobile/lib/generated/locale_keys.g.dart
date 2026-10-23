@@ -446,6 +446,7 @@ abstract class LocaleKeys {
   static const settings_groupPreferences = 'settings.groupPreferences';
   static const settings_groupData = 'settings.groupData';
   static const settings_groupAbout = 'settings.groupAbout';
+  static const settings_privacy = 'settings.privacy';
   static const settings_archive = 'settings.archive';
   static const settings_storage = 'settings.storage';
   static const settings_storageBody = 'settings.storageBody';

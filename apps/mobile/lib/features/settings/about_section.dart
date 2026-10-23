@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -7,9 +9,16 @@ import 'package:form_mobile/app/connection_cubit.dart';
 import 'package:form_mobile/features/settings/setting_row.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-/// App version and the connection state. Server, environment and contract
-/// details live one tap deeper on the server page.
+/// The public privacy policy, served by the web app on the production host.
+/// The same URL is entered in App Store Connect.
+final Uri privacyPolicyUrl = Uri.parse(
+  'https://stargate.stork-platy.ts.net:8443/privacy.html',
+);
+
+/// App version, the connection state and the privacy policy. Server,
+/// environment and contract details live one tap deeper on the server page.
 class AboutSection extends StatelessWidget {
   const AboutSection({super.key});
 
@@ -33,6 +42,12 @@ class AboutSection extends StatelessWidget {
           _ => LocaleKeys.unavailable,
         }),
         onTap: () => context.push('/settings/server'),
+      ),
+      SettingRow(
+        label: context.tr(LocaleKeys.settings_privacy),
+        onTap: () => unawaited(
+          launchUrl(privacyPolicyUrl, mode: LaunchMode.inAppBrowserView),
+        ),
       ),
     ]);
   }
