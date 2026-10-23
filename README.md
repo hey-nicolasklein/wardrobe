@@ -92,5 +92,6 @@ npm run test:integration         # against form_fixtures
 | --- | --- | --- |
 | Backend on stargate | `deploy/ship.sh` (all) or `deploy/ship.sh api worker` | [`docs/public-access.md`](docs/public-access.md) |
 | iOS TestFlight | `npm run release:testflight -- --build-number N` | [`docs/testflight.md`](docs/testflight.md) |
+| Production backups | nightly via cron on stargate, `deploy/backup-nightly.sh` | [`docs/backups.md`](docs/backups.md) |
 
 `ship.sh` stamps `FORM_VERSION` and waits until `/version.json` reports it. Calling Compose directly bakes `dev` into the image, and the deploy can't be confirmed.

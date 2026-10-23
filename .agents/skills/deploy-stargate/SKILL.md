@@ -63,6 +63,8 @@ Report the deployed state: the stamp that went live and which services were rebu
 - The privacy page and API code are baked into their images (`build.target`), so shipping needs a rebuild
   and recreate, not just a restart.
 - `npm run services:migrate` runs only when the schema actually changed.
+- Backups run nightly through cron (`deploy/backup-nightly.sh`, newest three kept); see
+  `docs/backups.md` for the log, the cron entry and restoring.
 - `deploy/verify.sh` is a fuller post-deploy check (health, sign-in, storage) for when a deploy
   looks wrong.
 
