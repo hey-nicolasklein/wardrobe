@@ -1,44 +1,96 @@
-# FORM wardrobe studio
+<p align="center">
+  <img src="apps/mobile/assets/brand/icon.svg" width="112" alt="FORM app icon">
+</p>
 
-FORM is a private mobile website for using your own wardrobe. Open it in Safari or Chrome and add it to the iPhone Home Screen. The PWA client lives in `apps/web`.
+<h1 align="center">FORM</h1>
 
-Every client signs in with a real account: Apple or Google in the app, email and password in the app and the PWA. See `docs/accounts-and-billing.md`.
+<p align="center">
+  Your wardrobe, clean and on your phone.<br>
+  Photograph your clothes, get a tidy catalog, and build looks from what you already own.
+</p>
 
-## Everyday workflow
+<p align="center">
+  <img src="docs/readme/wardrobe.jpg" width="250" alt="Wardrobe with catalog images">
+  &nbsp;
+  <img src="docs/readme/intake.jpg" width="250" alt="Adding pieces from one photo">
+  &nbsp;
+  <img src="docs/readme/looks.jpg" width="250" alt="Looks grouped by occasion">
+</p>
 
-Upload one or several photos, name each piece, and save it directly. Photo-only intake, browsing, search, editing, wishlist, and archive make no AI requests. Optional detection proposes metadata and can split a photo into multiple pieces. Optional low-quality catalog generation remains available with keep, reject, and restore history. Settings can clear the account's wardrobe after a typed confirmation. Active uploads and image jobs block that reset.
+## What it does
 
-The PWA caches only its static shell. Wardrobe browsing and changes require a connection to the server. Photos and personal records are not stored in the service worker cache. Unfinished photo draft metadata is saved in the browser; uploaded originals stay on the server.
+- **Wardrobe.** Every piece gets a clean catalog image, a name, a category and its colors. Owned, wishlist and archive live side by side and are searchable.
+- **Intake.** One photo can hold several pieces. FORM detects them, proposes metadata and you confirm. Detection is free, a catalog image costs one credit per piece.
+- **Looks.** Combinations of your own pieces, grouped by occasion and by piece. AI images are an optional extra. Nothing in the wardrobe depends on them.
 
-## Deployment
+The clean catalog is the core of the product. See [`apps/mobile/PRODUCT.md`](apps/mobile/PRODUCT.md) for the product direction and [`CONTEXT.md`](CONTEXT.md) for the domain language.
 
-Use Node.js 24 and `npm ci` for development. Persistent PostgreSQL and MinIO data remain outside the repository. To rebuild the dedicated application services:
+## Repository
+
+| Path | What |
+| --- | --- |
+| `apps/mobile` | Flutter app for iOS, shipped via TestFlight. Bloc, go_router, easy_localization |
+| `apps/api` | Hono API |
+| `apps/worker` | Background worker for detection and image generation |
+| `packages/service` | Domain logic, Postgres migrations, CLIs |
+| `packages/contracts` | Shared API contracts |
+| `deploy` | Ship, backup and restore scripts, nginx config, and the public privacy policy |
+
+Accounts sign in with Apple, Google or email and password. Usage is metered in credits. Details in [`docs/accounts-and-billing.md`](docs/accounts-and-billing.md).
+
+## Local development
+
+Node.js 24, Docker, and `fvm` for Flutter.
 
 ```sh
-deploy/ship.sh              # web, api and worker
-deploy/ship.sh api worker   # those plus web, which carries the version stamp
+npm ci
+cp .env.services.example .env.services.local
+cp apps/api/.env.example apps/api/.env.local
+npm run services:up              # Postgres (:55432) and MinIO
+npm run services:migrate
+npm run dev:production           # api and worker together
+npm run dev:seed                 # optional: a dev account with ready pieces
 ```
 
-The script stamps `FORM_VERSION` and waits until `/version.json` reports it.
-Calling Compose directly leaves that variable unset, bakes the literal `dev`
-into the web image, and open clients then never notice the release.
-
-The web image contains static HTML, CSS and JavaScript served by nginx. It proxies the existing Hono API and uses same-origin requests. No Expo export or app-store build is involved. Keep the loopback web port behind the existing private HTTPS proxy. Read `docs/mobile-web.md` for the pivot, cost findings and verification.
-
-## Verification
+The mobile app runs against that API:
 
 ```sh
-npm run verify --workspace=@form/api
-npm run verify --workspace=@form/service
-npm run verify --workspace=@form/contracts
-npm run verify --workspace=@form/web
+cd apps/mobile
+fvm flutter pub get
+cp .env.example .env.development.json   # set FORM_API_BASE_URL
+fvm flutter run --flavor development --dart-define-from-file=.env.development.json
 ```
 
-Database integration and browser tests run against the disposable `form_fixtures` database and `form-fixture-media` bucket, configured in `.env.services.local`. Local development uses a separate `form` database (`apps/api/.env.local`) that fixture resets must never touch — `resetFixtures` truncates every table and refuses any database whose name does not end in `_fixtures`. Never run fixture reset against the personal deployment.
+More in [`apps/mobile/README.md`](apps/mobile/README.md).
 
-A fresh checkout needs the fixture database created once:
+### Two databases
+
+| Database | Used by | Safe to reset |
+| --- | --- | --- |
+| `form` | `npm run dev:*` via `apps/api/.env.local` | No, this is your dev wardrobe |
+| `form_fixtures` | integration tests and `fixtures:reset` via `.env.services.local` | Yes |
+
+`resetFixtures` truncates every table and refuses any database whose name does not end in `_fixtures`. A fresh checkout creates the fixture database once:
 
 ```sh
-npm run services:up
-docker compose exec postgres createdb -U form form_fixtures   # once; ignore "already exists"
+docker compose exec postgres createdb -U form form_fixtures
 ```
+
+## Checks
+
+```sh
+npm run verify                   # unit and contract checks for all workspaces
+npm run verify:mobile            # flutter analyze and flutter test
+npm run test:integration         # against form_fixtures
+```
+
+[`AGENTS.md`](AGENTS.md) says which check fits which change.
+
+## Releases
+
+| Target | How | Docs |
+| --- | --- | --- |
+| Backend on stargate | `deploy/ship.sh` (all) or `deploy/ship.sh api worker` | [`docs/public-access.md`](docs/public-access.md) |
+| iOS TestFlight | `npm run release:testflight -- --build-number N` | [`docs/testflight.md`](docs/testflight.md) |
+
+`ship.sh` stamps `FORM_VERSION` and waits until `/version.json` reports it. Calling Compose directly bakes `dev` into the image, and the deploy can't be confirmed.
