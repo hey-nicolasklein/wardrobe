@@ -1,8 +1,8 @@
 # Working in this repo
 
-FORM is a private single-user wardrobe PWA. Static HTML/CSS/JS in `apps/web/public`
-(`app.js` is the whole client, hash-routed), a Hono API in `apps/api`, a background
-worker in `apps/worker`, shared code in `packages/`.
+FORM is a wardrobe app. The Flutter client lives in `apps/mobile`, a Hono API in
+`apps/api`, a background worker in `apps/worker`, shared code in `packages/`. The
+old PWA is retired. nginx still serves the privacy policy from `deploy/public`.
 
 ## What "done" means
 
@@ -11,16 +11,11 @@ actually covers it. Match the check to the change — do not escalate past it:
 
 | Change | Check |
 | --- | --- |
-| Copy, styling, a small `app.js` branch | Read the diff. Reload the dev server if it is running. |
+| Copy, styling, a small widget branch | Read the diff. Hot reload if the app is running. |
+| Mobile logic, blocs, repositories | `npm run verify:mobile` |
 | API handler, service logic, contracts | `npm run verify --workspace=@form/<pkg>` |
 | Schema, storage, cross-package behaviour | `npm run test:integration` |
-| A user path you genuinely can't reason about | the `verify-form` skill (browser) |
-
-Browser e2e is the most expensive check here: Docker services, a fixture server, a
-real Chromium. It is for proving a multi-step user flow works, not for confirming a
-label changed. Reach for it when the change spans upload → detect → save → review, or
-when something is visibly broken and you cannot tell why. Not otherwise, and not
-unprompted on a one-line edit.
+| A user path you genuinely can't reason about | Run the app in a simulator against local services |
 
 Stopping after the matching check and saying what you checked is a complete answer.
 
@@ -47,8 +42,7 @@ Two separate databases on the same local Postgres (`:55432`):
 - **`form`** — your dev wardrobe. `npm run dev:*` uses it via `apps/api/.env.local`.
   Real state you may care about. Nothing automated may truncate it.
 - **`form_fixtures`** — disposable, with its own `form-fixture-media` bucket.
-  Everything under `.env.services.local` uses it: integration tests, `fixtures:reset`,
-  and the browser fixture server, which re-seeds it on every boot.
+  Everything under `.env.services.local` uses it: integration tests and `fixtures:reset`.
 
 `resetFixtures` TRUNCATEs every table and refuses any database whose name does not end
 in `_fixtures` (`assertFixtureTarget` in `packages/service/src/fixtures.ts`). Do not
@@ -56,8 +50,8 @@ route around that guard; if a fixture run wants the dev database, the env file i
 
 ## Serving the dev app to a phone
 
-Only when asked to reach the app from a device. Resolve the machine's current Tailscale
-IPv4 rather than assuming a fixed address, point the client's public API URL and the
-API's `WEB_ORIGIN` at that same host, restart the affected dev processes, and check
-sign-in/CORS through the Tailscale address. Tailscale-specific values belong in ignored
+Only when asked to reach the local API from a physical phone. Resolve the machine's
+current Tailscale IPv4 rather than assuming a fixed address, point the app's
+`FORM_API_BASE_URL` in `apps/mobile/.env.tailscale.json` at it, restart the API, and
+check sign-in through the Tailscale address. Tailscale-specific values belong in ignored
 local env files, never in tracked ones.

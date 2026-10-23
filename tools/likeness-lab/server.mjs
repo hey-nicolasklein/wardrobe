@@ -59,11 +59,7 @@ createServer(async (req, res) => {
     const files = await listPhotos();
     if (req.method === 'GET' && url.pathname === '/') return send(200, await readFile(new URL('./index.html', import.meta.url)), 'text/html');
     if (req.method === 'GET' && url.pathname === '/prepare.js') {
-      const source = await readFile(new URL('../../apps/web/public/app.js', import.meta.url), 'utf8');
-      const start = source.indexOf('async function preparePhoto(file) {');
-      const end = source.indexOf('\nasync function uploadPhoto', start);
-      if (start < 0 || end < 0) throw Error('Cannot locate production photo preparation.');
-      return send(200, source.slice(start, end), 'text/javascript');
+      return send(200, await readFile(new URL('./prepare.js', import.meta.url)), 'text/javascript');
     }
     if (req.method === 'GET' && url.pathname === '/api/state') return send(200, { files, wardrobe, runs: [...runs.values()].reverse(), busy, configured: Boolean(process.env.OPENAI_API_KEY), model: imageModel, version: characterSheetPromptVersion });
     if (req.method === 'POST' && url.pathname === '/api/board') {

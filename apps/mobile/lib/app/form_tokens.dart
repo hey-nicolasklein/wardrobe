@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
 
-/// Values from apps/web/public/style.css. Keep screen-specific values there aligned.
+/// FORM design tokens shared across screens.
 abstract final class FormTokens {
   static const referenceActiveTint = Color(0xFFEDF1EA);
   static const referenceActiveBadge = Color(0xFFDCE6D7);

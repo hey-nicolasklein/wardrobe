@@ -1,7 +1,6 @@
 import sharp from 'sharp';
 
-// Keep in sync with the crop frames in apps/web/public/identity-collage.js.
-// These dimensions also match the existing character_sheets output_size contract.
+// These dimensions match the existing character_sheets output_size contract.
 export const collageWidth = 864;
 export const collageHeight = 1536;
 export const collageModel = 'photo-collage-v1';

@@ -11,7 +11,7 @@ import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// The public privacy policy, served by the web app on the production host.
+/// The public privacy policy, served by nginx on the production host.
 /// The same URL is entered in App Store Connect.
 final Uri privacyPolicyUrl = Uri.parse(
   'https://stargate.stork-platy.ts.net:8443/privacy.html',

@@ -5,7 +5,7 @@ import sharp from 'sharp';
 // iOS applies its own corner mask and scales the single 1024px source down.
 // Dark and tinted variants are recoloured explicitly: letting iOS derive them
 // from the light icon turns the forest F into grey on grey.
-const sourceUrl = new URL('../../web/public/icon.svg', import.meta.url);
+const sourceUrl = new URL('../assets/brand/icon.svg', import.meta.url);
 const catalogUrl = new URL('../ios/Runner/Assets.xcassets/AppIcon.appiconset/', import.meta.url);
 const source = (await readFile(sourceUrl, 'utf8')).replace(/\s+rx="[^"]*"/, '');
 
@@ -52,4 +52,4 @@ await writeFile(
   `${JSON.stringify({ images, info: { author: 'xcode', version: 1 } }, null, 2)}\n`,
 );
 
-console.log(`Generated light, dark and tinted iOS icons from apps/web/public/icon.svg.`);
+console.log(`Generated light, dark and tinted iOS icons from apps/mobile/assets/brand/icon.svg.`);

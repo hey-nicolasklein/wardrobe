@@ -1,6 +1,6 @@
 # `@form/contracts`
 
-This package is the runtime-validation boundary shared by native, web, API, and worker code.
+This package is the runtime-validation boundary shared by the mobile app, API, and worker code.
 
 - Parse untrusted values with the exported Zod schemas before treating them as contract types.
 - Import inferred TypeScript types from the same schema source; do not maintain parallel interfaces.
