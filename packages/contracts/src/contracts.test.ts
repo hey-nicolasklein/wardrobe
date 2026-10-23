@@ -113,22 +113,11 @@ test('keeps error categories actionable and payloads strict', () => {
   assert.equal(result.success, false);
 });
 
-test('makes the browser cookie and native token transports explicit', () => {
-  assert.equal(
-    signInRequestSchema.safeParse({
-      email: 'owner@example.test',
-      password: 'secret',
-      transport: 'cookie',
-    }).success,
-    true,
-  );
-  assert.equal(
-    signInRequestSchema.safeParse({
-      email: 'owner@example.test',
-      password: 'secret',
-    }).success,
-    false,
-  );
+test('accepts token sign-ins with or without the legacy transport and rejects cookies', () => {
+  const credentials = { email: 'owner@example.test', password: 'secret' };
+  assert.equal(signInRequestSchema.safeParse(credentials).success, true);
+  assert.equal(signInRequestSchema.safeParse({ ...credentials, transport: 'token' }).success, true);
+  assert.equal(signInRequestSchema.safeParse({ ...credentials, transport: 'cookie' }).success, false);
 });
 
 test('shares administrator and sign-in credential limits', () => {

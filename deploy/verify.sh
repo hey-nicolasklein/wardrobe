@@ -31,26 +31,9 @@ curl "${curl_args[@]}" "$verify_origin/health/ready" \
   | grep --quiet '"status":"ready"'
 curl "${curl_args[@]}" --head "$verify_origin" >/dev/null
 
-if [[ "${WEB_ORIGIN:?WEB_ORIGIN must be set}" != "${PUBLIC_WEB_ORIGIN:?PUBLIC_WEB_ORIGIN must be set}" ]]; then
-  printf 'WEB_ORIGIN and PUBLIC_WEB_ORIGIN must match for browser CORS.\n' >&2
-  exit 1
-fi
-cors_headers="$(mktemp)"
-sign_in_headers="$(mktemp)"
 sign_in_body="$(mktemp)"
 session_body="$(mktemp)"
-cookie_jar="$(mktemp)"
-trap 'rm -f "$cors_headers" "$sign_in_headers" "$sign_in_body" "$session_body" "$cookie_jar"' EXIT
-curl "${curl_args[@]}" --request OPTIONS --dump-header "$cors_headers" --output /dev/null \
-  --header "Origin: $PUBLIC_WEB_ORIGIN" \
-  --header 'Access-Control-Request-Method: POST' \
-  --header 'Access-Control-Request-Headers: content-type' \
-  "$verify_origin/v1/auth/sign-in"
-if ! grep --fixed-strings --ignore-case --quiet "access-control-allow-origin: $PUBLIC_WEB_ORIGIN" "$cors_headers" \
-  || ! grep --fixed-strings --ignore-case --quiet 'access-control-allow-credentials: true' "$cors_headers"; then
-  printf 'Browser credential CORS is not configured for %s.\n' "$PUBLIC_WEB_ORIGIN" >&2
-  exit 1
-fi
+trap 'rm -f "$sign_in_body" "$session_body"' EXIT
 
 verify_email="${FORM_VERIFY_EMAIL:?Set FORM_VERIFY_EMAIL for the administrator login check}"
 verify_password="${FORM_VERIFY_PASSWORD:?Set FORM_VERIFY_PASSWORD for the administrator login check}"
@@ -59,24 +42,24 @@ verify_email_normalized="$(
     'process.stdout.write(process.argv[1].trim().toLowerCase())' "$verify_email"
 )"
 sign_in_request="$("${compose[@]}" exec -T api node -e '
-  process.stdout.write(JSON.stringify({ email: process.argv[1], password: process.argv[2], transport: "cookie" }))
+  process.stdout.write(JSON.stringify({ email: process.argv[1], password: process.argv[2] }))
 ' "$verify_email_normalized" "$verify_password")"
-curl "${curl_args[@]}" --dump-header "$sign_in_headers" --output "$sign_in_body" \
-  --cookie-jar "$cookie_jar" \
-  --header "Origin: $PUBLIC_WEB_ORIGIN" \
+curl "${curl_args[@]}" --output "$sign_in_body" \
   --header 'Content-Type: application/json' \
   --data "$sign_in_request" \
   "$verify_origin/v1/auth/sign-in"
-if ! grep --fixed-strings --ignore-case --quiet 'set-cookie: form_session=' "$sign_in_headers"; then
-  printf 'Administrator sign-in did not create a browser session.\n' >&2
+session_token="$("${compose[@]}" exec -T api node -e '
+  process.stdout.write(JSON.parse(require("fs").readFileSync(0, "utf8")).session.nativeToken ?? "")
+' < "$sign_in_body")"
+if [[ -z "$session_token" ]]; then
+  printf 'Administrator sign-in did not return a session token.\n' >&2
   exit 1
 fi
 curl "${curl_args[@]}" --output "$session_body" \
-  --cookie "$cookie_jar" \
-  --header "Origin: $PUBLIC_WEB_ORIGIN" \
+  --header "Authorization: Bearer $session_token" \
   "$verify_origin/v1/auth/session"
 if ! grep --fixed-strings --quiet "\"email\":\"$verify_email_normalized\"" "$session_body"; then
-  printf 'The restored browser session does not match %s.\n' "$verify_email" >&2
+  printf 'The restored session does not match %s.\n' "$verify_email" >&2
   exit 1
 fi
 

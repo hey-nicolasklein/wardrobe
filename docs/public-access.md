@@ -13,7 +13,7 @@ iPhone ──HTTPS──▶ Tailscale Funnel relay ──▶ tailscaled on starg
 ```
 
 - The public URL is the existing one: `https://stargate.stork-platy.ts.net:8443`. Tailnet
-  devices reach the same URL directly, so `PUBLIC_WEB_ORIGIN`, `WEB_ORIGIN` and
+  devices reach the same URL directly, so `PUBLIC_WEB_ORIGIN` and
   `S3_PUBLIC_ENDPOINT` stay unchanged.
 - Funnel works per port. `:443` and `:8444` stay tailnet only.
 - No router port forwarding, and the home IP stays hidden behind Tailscale's relays.
@@ -86,7 +86,7 @@ When FORM moves to a VPS, give it a stable custom domain instead of a `ts.net` n
   `real_ip_header` to `CF-Connecting-IP`.
 - Leave Bot Fight Mode off and don't use Cloudflare Access. Both break the native app. Add one
   rate-limit rule on `/v1/auth/` and a cache bypass for `/v1/*` and `/form-private-media/*`.
-- Switch `PUBLIC_WEB_ORIGIN`, `WEB_ORIGIN` and `S3_PUBLIC_ENDPOINT` to the new host.
+- Switch `PUBLIC_WEB_ORIGIN` and `S3_PUBLIC_ENDPOINT` to the new host.
 
 ## Sources
 

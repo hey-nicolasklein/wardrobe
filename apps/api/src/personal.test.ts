@@ -30,7 +30,6 @@ test(
         database,
         storage,
         sessionSecret: 'personal-test-secret-at-least-32-characters',
-        webOrigin: 'https://wardrobe.test',
         checkReadiness: async () => ({
           status: 'ready',
           database: 'up',
@@ -46,14 +45,10 @@ test(
       const { session } = (await signIn.json()) as { session: { nativeToken: string } };
       const authorization = `Bearer ${session.nativeToken}`;
       const get = (path: string) => app.request(path, { headers: { Authorization: authorization } });
-      const post = (
-        path: string,
-        body: unknown,
-        origin = 'https://wardrobe.test',
-      ) =>
+      const post = (path: string, body: unknown) =>
         app.request(path, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Origin: origin, Authorization: authorization },
+          headers: { 'Content-Type': 'application/json', Authorization: authorization },
           body: JSON.stringify(body),
         });
       assert.equal((await get('/v1/auth/session')).status, 200);
@@ -90,16 +85,6 @@ test(
       assert.equal(preview.status, 200);
       assert.equal(preview.headers.get('Content-Type'), 'image/webp');
       assert.ok((await preview.arrayBuffer()).byteLength > 100);
-      assert.equal(
-        (
-          await post(
-            '/v1/wardrobe-items/from-photo',
-            { ...body, idempotencyKey: randomUUID() },
-            'https://unrelated.test',
-          )
-        ).status,
-        403,
-      );
       // Personal mode no longer caps generation quality; detail fidelity is
       // worth the higher per-image cost.
       assert.equal(

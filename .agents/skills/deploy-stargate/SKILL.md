@@ -58,12 +58,12 @@ Report the deployed state: the stamp that went live and which services were rebu
   (default `18081`) — the `web` container. It is nginx: it proxies `/v1/` to the API and media
   to MinIO, and serves only the privacy policy that the app and App Store Connect link to.
   `tailscale funnel status` shows the mapping and whether it is public.
-- Runtime config lives in the git-ignored `.env.production` (`PUBLIC_WEB_ORIGIN`, `WEB_ORIGIN`,
+- Runtime config lives in the git-ignored `.env.production` (`PUBLIC_WEB_ORIGIN`,
   `S3_PUBLIC_ENDPOINT`, `APPLE_CLIENT_IDS`). Clients sign in with a normal account.
 - The privacy page and API code are baked into their images (`build.target`), so shipping needs a rebuild
   and recreate, not just a restart.
 - `npm run services:migrate` runs only when the schema actually changed.
-- `deploy/verify.sh` is a fuller post-deploy check (health, CORS, sign-in) for when a deploy
+- `deploy/verify.sh` is a fuller post-deploy check (health, sign-in, storage) for when a deploy
   looks wrong.
 
 ## Never without an explicit request

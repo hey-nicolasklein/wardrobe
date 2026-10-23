@@ -47,7 +47,7 @@ services:
       S3_PUBLIC_ENDPOINT: ${PUBLIC_WEB_ORIGIN:?Set PUBLIC_WEB_ORIGIN in .env.production}
       API_HOST: 0.0.0.0
       API_PORT: 4143
-      SESSION_COOKIE_SECURE: "true"
+      PUBLIC_ORIGIN: ${PUBLIC_WEB_ORIGIN}
     depends_on:
       postgres:
         condition: service_healthy

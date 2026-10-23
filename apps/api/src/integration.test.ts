@@ -43,7 +43,6 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       database,
       storage,
       sessionSecret,
-      secureCookies: false,
       detectionModel: 'fixture-vision-model',
     });
 
@@ -588,22 +587,21 @@ test('sessions and private media deny cross-account access', { skip: !enabled },
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...fixtureCredentials.populated, transport: 'cookie' }),
     });
-    assert.equal(cookieSignIn.status, 200);
-    const cookieBody = (await cookieSignIn.json()) as { session: { nativeToken: null } };
-    assert.equal(cookieBody.session.nativeToken, null);
-    const setCookie = cookieSignIn.headers.get('set-cookie');
-    assert.match(setCookie ?? '', /HttpOnly/i);
-    assert.match(setCookie ?? '', /SameSite=Strict/i);
-    const cookie = setCookie?.split(';')[0];
-    const restored = await app.request('/v1/auth/session', { headers: { Cookie: cookie ?? '' } });
-    assert.equal(restored.status, 200);
-    const signedOut = await app.request('/v1/auth/sign-out', {
+    assert.equal(cookieSignIn.status, 400);
+
+    const tokenSignIn = await app.request('/v1/auth/sign-in', {
       method: 'POST',
-      headers: { Cookie: cookie ?? '' },
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fixtureCredentials.populated),
     });
+    assert.equal(tokenSignIn.status, 200);
+    assert.equal(tokenSignIn.headers.get('set-cookie'), null);
+    const { session } = (await tokenSignIn.json()) as { session: { nativeToken: string } };
+    const bearer = { Authorization: `Bearer ${session.nativeToken}` };
+    assert.equal((await app.request('/v1/auth/session', { headers: bearer })).status, 200);
+    const signedOut = await app.request('/v1/auth/sign-out', { method: 'POST', headers: bearer });
     assert.equal(signedOut.status, 204);
-    const revoked = await app.request('/v1/auth/session', { headers: { Cookie: cookie ?? '' } });
-    assert.equal(revoked.status, 401);
+    assert.equal((await app.request('/v1/auth/session', { headers: bearer })).status, 401);
   } finally {
     storage.client.destroy();
     await database.end();

@@ -32,9 +32,7 @@ const app = createApp({
   storage,
   sessionSecret: config.SESSION_SECRET,
   sessionLifetimeSeconds: config.SESSION_LIFETIME_SECONDS,
-  secureCookies: config.SESSION_COOKIE_SECURE,
-  webOrigin: config.WEB_ORIGIN,
-  publicOrigin: config.WEB_ORIGIN,
+  publicOrigin: config.PUBLIC_ORIGIN,
   detectionModel: config.OPENAI_DETECTION_MODEL,
   ...(config.TYPESAFE_API_KEY
     ? { outfitRanker: tracedOutfitRanker(createJevOutfitRanker(config.TYPESAFE_API_KEY)) }
