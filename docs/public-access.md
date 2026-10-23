@@ -53,7 +53,10 @@ can't pick its own rate-limit key.
 
 Before inviting external testers:
 - `DEV_SIGN_IN` stays unset in `.env.production`.
-- `deploy/backup.sh` runs regularly. The data now belongs to more people than Nico.
+- Backups run nightly at 03:30 through cron on stargate (`deploy/backup-nightly.sh`). It keeps
+  the newest three full backups in `~/backups/form-production/nightly`, skips the run below
+  20 GB free space, and logs to `~/backups/form-production/nightly.log`. The data now belongs
+  to more people than Nico.
 
 ## App + TestFlight
 
