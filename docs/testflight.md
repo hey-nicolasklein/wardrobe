@@ -200,7 +200,7 @@ Released **0.1.0 (5)** to **Internal** from `main` at `d7b80de`. It adds the
 
 ## Release on 2026-10-23, build 6
 
-Released **0.1.0 (6)** to **Internal** from `main` at `8757cad`. It brings the
+Released **0.1.0 (6)** to **Internal** from `main` at `c8d5396` (tag `v0.1.0+6`). It brings the
 reworked empty states for new accounts: inviting garment scenes in the wardrobe,
 wishlist, archive and Looks, a wishlist intake that saves pieces as wanting, and
 a Create Look flow that explains missing pieces instead of failing.
