@@ -129,7 +129,9 @@ GoRouter createRouter({bool onboarding = false}) {
                     // Full screen without the tab bar, so the photo gets the
                     // height.
                     parentNavigatorKey: _rootNavigatorKey,
-                    builder: (_, _) => const IntakePage(),
+                    builder: (_, state) => IntakePage(
+                      ownership: state.uri.queryParameters['state'],
+                    ),
                   ),
                   GoRoute(
                     path: 'items/:id',

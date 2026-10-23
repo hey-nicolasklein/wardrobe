@@ -22,6 +22,7 @@ import 'package:form_mobile/features/feed/look_stacks.dart';
 import 'package:form_mobile/features/feed/look_tile.dart';
 import 'package:form_mobile/features/feed/occasion_tile.dart';
 import 'package:form_mobile/features/settings/credits_cubit.dart';
+import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/repository/credits_repository.dart';
@@ -32,6 +33,7 @@ import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/services/look_output_service.dart';
 import 'package:form_mobile/utils/idempotency_key.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
+import 'package:form_mobile/widgets/catalog_images_preparation.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
@@ -74,11 +76,23 @@ class FeedPage extends StatelessWidget {
       final cubit = context.read<FeedCubit>();
       final looks = state.archive;
       final empty = looks.isEmpty;
+      final wardrobe = context.watch<WardrobeCubit>().state;
+      final hasPieces = (wardrobe.items ?? []).any(
+        (record) => record.item.state != 'archived',
+      );
+      final hasReadyPieces = eligibleComposerItems(
+        wardrobe.items ?? [],
+      ).isNotEmpty;
 
       // Before the first sync settles, no looks means "not loaded yet", not
       // an empty feed.
       final loading =
-          state.looks == null && state.online && state.failure == null;
+          state.online &&
+          state.failure == null &&
+          (state.looks == null ||
+              (empty && wardrobe.items == null && wardrobe.failure == null));
+      final unavailable =
+          !loading && empty && (state.looks == null || wardrobe.items == null);
       final bottomInset = MediaQuery.paddingOf(context).bottom;
       return Scaffold(
         backgroundColor: FormTokens.paper,
@@ -96,7 +110,15 @@ class FeedPage extends StatelessWidget {
                 left: false,
                 right: false,
                 bottom: false,
-                sliver: CupertinoSliverRefreshControl(onRefresh: cubit.refresh),
+                sliver: CupertinoSliverRefreshControl(
+                  onRefresh: () async {
+                    await Future.wait([
+                      cubit.refresh(),
+                      if (context.read<WardrobeCubit>().state.items == null)
+                        context.read<WardrobeCubit>().refresh(),
+                    ]);
+                  },
+                ),
               ),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(
@@ -109,7 +131,9 @@ class FeedPage extends StatelessWidget {
                   children: [
                     FormWordmark(title: context.tr(LocaleKeys.appName)),
                     _LooksHeader(
-                      onCreate: loading ? null : () => openCreateLook(context),
+                      onCreate: loading || empty
+                          ? null
+                          : () => openCreateLook(context),
                     ),
                     if (state.stale && !state.online && state.looks != null)
                       Padding(
@@ -118,7 +142,7 @@ class FeedPage extends StatelessWidget {
                           text: context.tr(LocaleKeys.feedStale),
                         ),
                       ),
-                    if (state.failure != null)
+                    if (state.failure != null && !unavailable)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: FormNotice(
@@ -145,17 +169,45 @@ class FeedPage extends StatelessWidget {
                     ),
                   ),
                 )
-              else if (empty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: FormEmptyState(
-                    title: context.tr(LocaleKeys.feedEmptyTitle),
-                    message: context.tr(LocaleKeys.feedEmptyBody),
-                    action: FilledButton(
-                      onPressed: () => openCreateLook(context),
-                      child: Text(context.tr(LocaleKeys.createLook)),
+              else if (unavailable)
+                FormEmptySliver(
+                  child: FormNotice(
+                    text: context.tr(
+                      state.looks == null
+                          ? state.failureKey
+                          : wardrobe.failureKey,
                     ),
                   ),
+                )
+              else if (empty)
+                FormEmptySliver(
+                  child: hasPieces && !hasReadyPieces
+                      ? const CatalogImagesPreparation()
+                      : FormEmptyState(
+                          scene: FormEmptyScene.looks,
+                          title: context.tr(
+                            hasPieces
+                                ? LocaleKeys.feedEmptyTitle
+                                : LocaleKeys.looksFirstTitle,
+                          ),
+                          message: context.tr(
+                            hasPieces
+                                ? LocaleKeys.feedEmptyBody
+                                : LocaleKeys.looksFirstBody,
+                          ),
+                          action: FilledButton(
+                            onPressed: () => hasPieces
+                                ? openCreateLook(context)
+                                : unawaited(context.push('/wardrobe/intake')),
+                            child: Text(
+                              context.tr(
+                                hasPieces
+                                    ? LocaleKeys.createLook
+                                    : LocaleKeys.wardrobeFirstAdd,
+                              ),
+                            ),
+                          ),
+                        ),
                 )
               else
                 ..._overview(context, state),

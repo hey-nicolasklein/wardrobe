@@ -377,6 +377,44 @@ void main() {
   );
 
   test(
+    'wishlist photos keep draft and detected choice ownership on restore',
+    () async {
+      final original = File('${directory.path}/wishlist.png');
+      await original.writeAsBytes(
+        img.encodePng(img.Image(width: 20, height: 30)),
+      );
+      final existing = await repository.add(original.path);
+      final bloc = IntakeBloc(repository);
+      addTearDown(bloc.close);
+      await send(bloc, const IntakeEvent(IntakeAction.restore));
+      await send(
+        bloc,
+        IntakeEvent(
+          IntakeAction.add,
+          paths: [original.path],
+          ownership: 'wanting',
+        ),
+      );
+      final restored = await repository.load();
+      expect(
+        restored.firstWhere((d) => d.id == existing.id).ownership,
+        'owning',
+      );
+      final wishlist = restored.firstWhere((d) => d.id != existing.id);
+      expect(wishlist.ownership, 'wanting');
+      wishlist
+        ..sourceId = 'source-000000000001'
+        ..phase = DraftPhase.detecting;
+      await repository.poll(wishlist);
+      expect(wishlist.choices.single.ownership, 'wanting');
+      expect(
+        (await repository.add(original.path, ownership: 'archived')).ownership,
+        'owning',
+      );
+    },
+  );
+
+  test(
     'sequential uploads preserve siblings and retry detection keys',
     () async {
       final first = await draft();

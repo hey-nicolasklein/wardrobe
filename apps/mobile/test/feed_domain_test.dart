@@ -10,6 +10,9 @@ import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'support/look_fixtures.dart';
 import 'support/wardrobe_fixtures.dart';
 
+bool hasUnselectedProposalCore(List<CachedItem> records) =>
+    proposalBlockKey(records) == null;
+
 void main() {
   test('lookGarments prefers server ids and falls back to pending starts', () {
     final look = Look.fromJson(
@@ -60,6 +63,104 @@ void main() {
       ready.id,
     );
   });
+
+  test(
+    'unselected proposals require an owned core with active catalog images',
+    () {
+      CachedItem piece(
+        String category, {
+        String state = 'owning',
+        bool ready = true,
+      }) {
+        final json = itemJson(state: state);
+        (json['metadata'] as Map<String, dynamic>)['category'] = category;
+        if (!ready) json['currentShelfImageVersionId'] = null;
+        return CachedItem(WardrobeItem.fromJson(json), null);
+      }
+
+      expect(hasUnselectedProposalCore([]), isFalse);
+      expect(hasUnselectedProposalCore([piece('top')]), isFalse);
+      expect(hasUnselectedProposalCore([piece('dress')]), isTrue);
+      for (final bottom in ['pants', 'skirt']) {
+        expect(
+          hasUnselectedProposalCore([piece('top'), piece(bottom)]),
+          isTrue,
+        );
+        expect(
+          hasUnselectedProposalCore([
+            piece('top'),
+            piece(bottom, ready: false),
+          ]),
+          isFalse,
+        );
+        expect(
+          hasUnselectedProposalCore([
+            piece('top'),
+            piece(bottom, state: 'wanting'),
+          ]),
+          isFalse,
+        );
+      }
+      expect(
+        hasUnselectedProposalCore([piece('dress', state: 'wanting')]),
+        isFalse,
+      );
+      expect(
+        hasUnselectedProposalCore([piece('dress', state: 'archived')]),
+        isFalse,
+      );
+      expect(
+        hasUnselectedProposalCore([piece('dress', ready: false)]),
+        isFalse,
+      );
+    },
+  );
+
+  test(
+    'explicit proposals validate every piece and category, including wishlist',
+    () {
+      final top = CachedItem(WardrobeItem.fromJson(itemJson(id: 'top')), null);
+      final wishlist = CachedItem(
+        WardrobeItem.fromJson(itemJson(id: 'wish', state: 'wanting')),
+        null,
+      );
+      final pending = CachedItem(
+        WardrobeItem.fromJson(
+          itemJson(id: 'pending')..['currentShelfImageVersionId'] = null,
+        ),
+        null,
+      );
+      final archived = CachedItem(
+        WardrobeItem.fromJson(itemJson(id: 'archived', state: 'archived')),
+        null,
+      );
+      final records = [top, wishlist, pending, archived];
+      expect(proposalBlockKey(records, selectedIds: ['wish']), isNull);
+      expect(proposalBlockKey([wishlist], categories: ['top']), isNull);
+      for (final id in ['pending', 'archived', 'deleted']) {
+        expect(proposalBlockKey(records, selectedIds: ['top', id]), isNotNull);
+      }
+      expect(
+        proposalBlockKey(records, selectedIds: ['top'], categories: ['dress']),
+        isNotNull,
+      );
+      expect(
+        proposalBlockKey(records, categories: ['top', 'dress']),
+        isNotNull,
+      );
+      final pendingDressJson = itemJson(id: 'dress')
+        ..['currentShelfImageVersionId'] = null;
+      (pendingDressJson['metadata'] as Map<String, dynamic>)['category'] =
+          'dress';
+      expect(
+        proposalBlockKey(
+          [CachedItem(WardrobeItem.fromJson(pendingDressJson), null)],
+          categories: ['dress'],
+        ),
+        isNotNull,
+      );
+    },
+  );
 
   test('images of a combination stay with it, other looks stand alone', () {
     CachedLook record(Map<String, dynamic> json) =>

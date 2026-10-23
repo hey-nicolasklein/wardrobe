@@ -12,6 +12,7 @@ import 'package:form_mobile/features/feed/look_actions.dart';
 import 'package:form_mobile/features/intake/intake_bloc.dart';
 import 'package:form_mobile/features/intake/intake_page.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_cubit.dart';
+import 'package:form_mobile/features/wardrobe/wardrobe_empty_state.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/intake.dart';
@@ -71,54 +72,93 @@ class _WardrobePageState extends State<WardrobePage> {
         builder: (context, state) {
           final filter = state.filter;
           final cubit = context.read<WardrobeCubit>();
-          final records = state.items ?? [];
+          final records = (state.items ?? [])
+              .where(
+                (record) =>
+                    (record.item.state == 'archived') == archived &&
+                    (archived ||
+                        filter.state == 'all' ||
+                        record.item.state == filter.state),
+              )
+              .toList();
+          final traits = records.map((r) => r.item.traits).nonNulls;
+          final hasSeasons = traits.isNotEmpty || filter.seasons.isNotEmpty;
+          final hasBrands =
+              traits.any((t) => t.brand != null) || filter.brands.isNotEmpty;
+          final hasCategories =
+              _availableOptions(
+                records,
+                filter.copyWith(colors: {}),
+                'category',
+                archived: archived,
+              ).isNotEmpty ||
+              filter.categories.isNotEmpty;
+          final hasColors =
+              _availableOptions(
+                records,
+                filter.copyWith(categories: {}),
+                'color',
+                archived: archived,
+              ).isNotEmpty ||
+              filter.colors.isNotEmpty;
           return FormSheet(
             title: context.tr(LocaleKeys.filters),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(context.tr(LocaleKeys.season), style: FormTokens.small),
-                const SizedBox(height: 8),
-                _TraitOptions(
-                  records: records,
-                  archived: archived,
-                  options: (traits) => [traits.warmth],
-                  order: warmths,
-                  selected: filter.seasons,
-                  label: (warmth) => context.tr('seasons.$warmth'),
-                  onChanged: (seasons) =>
-                      cubit.filter(filter.copyWith(seasons: seasons)),
-                ),
-                Text(context.tr(LocaleKeys.category), style: FormTokens.small),
-                const SizedBox(height: 8),
-                _CategoryOptions(
-                  records: records,
-                  filter: filter,
-                  archived: archived,
-                  onChanged: cubit.filter,
-                ),
-                Text(
-                  context.tr(LocaleKeys.visual_colorFilter),
-                  style: FormTokens.small,
-                ),
-                const SizedBox(height: 8),
-                _ColorOptions(
-                  records: records,
-                  filter: filter,
-                  archived: archived,
-                  onChanged: cubit.filter,
-                ),
-                Text(context.tr(LocaleKeys.brand), style: FormTokens.small),
-                const SizedBox(height: 8),
-                _TraitOptions(
-                  records: records,
-                  archived: archived,
-                  options: (traits) => [?traits.brand],
-                  selected: filter.brands,
-                  label: (brand) => brand,
-                  onChanged: (brands) =>
-                      cubit.filter(filter.copyWith(brands: brands)),
-                ),
+                if (hasSeasons) ...[
+                  Text(context.tr(LocaleKeys.season), style: FormTokens.small),
+                  const SizedBox(height: 8),
+                  _TraitOptions(
+                    records: records,
+                    archived: archived,
+                    options: (traits) => [traits.warmth],
+                    order: warmths,
+                    selected: filter.seasons,
+                    label: (warmth) => context.tr('seasons.$warmth'),
+                    onChanged: (seasons) =>
+                        cubit.filter(filter.copyWith(seasons: seasons)),
+                  ),
+                ],
+                if (hasCategories) ...[
+                  Text(
+                    context.tr(LocaleKeys.category),
+                    style: FormTokens.small,
+                  ),
+                  const SizedBox(height: 8),
+                  _CategoryOptions(
+                    records: records,
+                    filter: filter,
+                    archived: archived,
+                    onChanged: cubit.filter,
+                  ),
+                ],
+                if (hasColors) ...[
+                  Text(
+                    context.tr(LocaleKeys.visual_colorFilter),
+                    style: FormTokens.small,
+                  ),
+                  const SizedBox(height: 8),
+                  _ColorOptions(
+                    records: records,
+                    filter: filter,
+                    archived: archived,
+                    onChanged: cubit.filter,
+                  ),
+                ],
+                if (hasBrands) ...[
+                  Text(context.tr(LocaleKeys.brand), style: FormTokens.small),
+                  const SizedBox(height: 8),
+                  _TraitOptions(
+                    records: records,
+                    archived: archived,
+                    options: (traits) => [?traits.brand],
+                    selected: filter.brands,
+                    label: (brand) => brand,
+                    onChanged: (brands) =>
+                        cubit.filter(filter.copyWith(brands: brands)),
+                  ),
+                ],
                 // Always laid out, only disabled, so the sheet keeps its
                 // height when the first filter is picked.
                 TextButton(
@@ -304,18 +344,31 @@ class _WardrobePageState extends State<WardrobePage> {
       final count = (state.items ?? [])
           .where((r) => (r.item.state == 'archived') == archived)
           .length;
+      final scopeCount = (state.items ?? [])
+          .where(
+            (record) =>
+                (record.item.state == 'archived') == archived &&
+                (archived ||
+                    filter.state == 'all' ||
+                    record.item.state == filter.state),
+          )
+          .length;
+      final initialLoading =
+          state.items == null && (state.loading || state.failure == null);
       final intake = context.watch<IntakeBloc>().state;
       // Photos still being turned into pieces lead the grid, until their
       // pieces arrive as tiles of their own.
-      final drafts = archived || filter.isFiltered || filter.query.isNotEmpty
+      final drafts = archived || filter.state != 'all' || filter.isFiltered
           ? const <IntakeDraft>[]
           : intake.drafts;
       final arrived = intake.arrived.toSet().difference(_seen);
 
       return Scaffold(
         backgroundColor: FormTokens.paper,
-        extendBodyBehindAppBar: true,
-        appBar: const FormScrollEdge(),
+        extendBodyBehindAppBar: !archived,
+        appBar: archived
+            ? FormPageHeader(title: context.tr(LocaleKeys.archive))
+            : const FormScrollEdge(),
         body: Stack(
           children: [
             RefreshIndicator(
@@ -330,6 +383,7 @@ class _WardrobePageState extends State<WardrobePage> {
                     left: false,
                     right: false,
                     bottom: false,
+                    top: !archived,
                     sliver: SliverPadding(
                       padding: const EdgeInsets.fromLTRB(
                         FormTokens.gutter,
@@ -339,9 +393,8 @@ class _WardrobePageState extends State<WardrobePage> {
                       ),
                       sliver: SliverList.list(
                         children: [
-                          FormWordmark(
-                            title: context.tr(LocaleKeys.appName),
-                          ),
+                          if (!archived)
+                            FormWordmark(title: context.tr(LocaleKeys.appName)),
                           if (state.noticeKey case final notice?)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 12),
@@ -350,11 +403,23 @@ class _WardrobePageState extends State<WardrobePage> {
                                 error: state.failure != null,
                               ),
                             ),
-                          _WardrobeHero(
-                            archived: archived,
-                            totalCount: count,
-                            onAdd: archived ? null : () => _addPieces(context),
-                          ),
+                          if (!archived)
+                            _WardrobeHero(
+                              onAdd: scopeCount == 0
+                                  ? null
+                                  : () => _addPieces(context),
+                            )
+                          else if (count > 0)
+                            Text(
+                              context.tr(
+                                LocaleKeys.itemCount,
+                                namedArgs: {
+                                  'shown': '${items.length}',
+                                  'total': '$count',
+                                },
+                              ),
+                              style: FormTokens.small,
+                            ),
                           if (!archived)
                             _CollectionTabs(
                               selected: filter.state,
@@ -434,7 +499,7 @@ class _WardrobePageState extends State<WardrobePage> {
                                   if (filter.isFiltered)
                                     TextButton(
                                       onPressed: () => cubit.filter(
-                                        const WardrobeFilter(),
+                                        WardrobeFilter(state: filter.state),
                                       ),
                                       style: TextButton.styleFrom(
                                         foregroundColor: FormTokens.green,
@@ -449,7 +514,8 @@ class _WardrobePageState extends State<WardrobePage> {
                             ),
                           // The hero already states the total, so the count
                           // only appears once a filter narrows the grid.
-                          if (state.items != null &&
+                          if (!archived &&
+                              state.items != null &&
                               items.isNotEmpty &&
                               (filter.query.isNotEmpty || filter.chipCount > 0))
                             Padding(
@@ -473,32 +539,23 @@ class _WardrobePageState extends State<WardrobePage> {
                       ),
                     ),
                   ),
-                  if (items.isEmpty && drafts.isEmpty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: FormEmptyState(
-                        title: context.tr(
-                          state.items == null
-                              ? (state.loading
-                                    ? LocaleKeys.checking
-                                    : state.failureKey)
-                              : filter.isFiltered
-                              ? LocaleKeys.filteredEmpty
-                              : LocaleKeys.wardrobeEmpty,
-                        ),
-                        action:
-                            state.items != null &&
-                                !filter.isFiltered &&
-                                !archived &&
-                                !state.loading
-                            ? FilledButton(
-                                onPressed: () => _addPieces(context),
-                                child: Text(
-                                  context.tr(LocaleKeys.intake_title),
-                                ),
-                              )
-                            : null,
-                      ),
+                  if (initialLoading)
+                    const SliverToBoxAdapter(child: FormPieceSkeletons())
+                  else if (items.isEmpty && drafts.isEmpty)
+                    FormEmptySliver(
+                      headerExtent: archived
+                          ? 76 + MediaQuery.paddingOf(context).top
+                          : 0,
+                      child: state.items == null
+                          ? FormEmptyState(title: context.tr(state.failureKey))
+                          : WardrobeEmptyState(
+                              filter: filter,
+                              archived: archived,
+                              onAdd: () => _addPieces(context),
+                              onReset: () => cubit.filter(
+                                WardrobeFilter(state: filter.state),
+                              ),
+                            ),
                     )
                   else
                     SliverPadding(
@@ -653,7 +710,7 @@ class _WardrobePageState extends State<WardrobePage> {
                     child: SizedBox(
                       height:
                           MediaQuery.paddingOf(context).bottom +
-                          _FindBar.height,
+                          (scopeCount > 0 ? _FindBar.height : 0),
                     ),
                   ),
                 ],
@@ -668,15 +725,17 @@ class _WardrobePageState extends State<WardrobePage> {
                   onTap: _searchFocus.unfocus,
                 ),
               ),
-            _FindBar(
-              controller: _search,
-              focusNode: _searchFocus,
-              bottom: _findBarBottom(context),
-              hint: context.tr(LocaleKeys.visual_searchHint),
-              activeFilters: filter.chipCount,
-              onChanged: (value) => cubit.filter(filter.copyWith(query: value)),
-              onFilters: _openFilterSheet,
-            ),
+            if (scopeCount > 0)
+              _FindBar(
+                controller: _search,
+                focusNode: _searchFocus,
+                bottom: _findBarBottom(context),
+                hint: context.tr(LocaleKeys.visual_searchHint),
+                activeFilters: filter.chipCount,
+                onChanged: (value) =>
+                    cubit.filter(filter.copyWith(query: value)),
+                onFilters: _openFilterSheet,
+              ),
           ],
         ),
       );
@@ -757,48 +816,20 @@ class _FilterButton extends StatelessWidget {
   );
 }
 
-/// Serif headline with the tagline beneath it and the add button aligned to
-/// its baseline. The archive shows its item count in place of the tagline.
 class _WardrobeHero extends StatelessWidget {
-  const _WardrobeHero({
-    required this.archived,
-    required this.totalCount,
-    this.onAdd,
-  });
+  const _WardrobeHero({this.onAdd});
 
-  final bool archived;
-  final int totalCount;
   final VoidCallback? onAdd;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(top: 4, bottom: archived ? 22 : 10),
+    padding: const EdgeInsets.only(top: 4, bottom: 10),
     child: Row(
       children: [
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                archived
-                    ? context.tr(LocaleKeys.archive)
-                    : context.tr(LocaleKeys.visual_wardrobeHeading),
-                style: FormTokens.display.copyWith(fontSize: 36),
-              ),
-              if (archived) ...[
-                const SizedBox(height: 4),
-                Text(
-                  context.tr(
-                    LocaleKeys.itemCount,
-                    namedArgs: {
-                      'shown': '$totalCount',
-                      'total': '$totalCount',
-                    },
-                  ),
-                  style: FormTokens.body.copyWith(color: FormTokens.noteInk),
-                ),
-              ],
-            ],
+          child: Text(
+            context.tr(LocaleKeys.visual_wardrobeHeading),
+            style: FormTokens.display.copyWith(fontSize: 36),
           ),
         ),
         if (onAdd != null) ...[
@@ -1941,5 +1972,10 @@ class _SweepState extends State<_Sweep> with SingleTickerProviderStateMixin {
 
 /// Opens the intake page: its introduction with library and camera, or the
 /// photos already waiting there.
-void _addPieces(BuildContext context) =>
-    unawaited(context.push('/wardrobe/intake'));
+void _addPieces(BuildContext context) => unawaited(
+  context.push(
+    context.read<WardrobeCubit>().state.filter.state == 'wanting'
+        ? '/wardrobe/intake?state=wanting'
+        : '/wardrobe/intake',
+  ),
+);

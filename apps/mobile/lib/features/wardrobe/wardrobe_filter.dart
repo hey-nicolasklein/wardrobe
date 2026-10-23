@@ -46,7 +46,7 @@ class WardrobeFilter {
   final Set<String> brands;
   int get chipCount =>
       categories.length + colors.length + seasons.length + brands.length;
-  bool get isFiltered => state != 'all' || query.isNotEmpty || chipCount > 0;
+  bool get isFiltered => query.isNotEmpty || chipCount > 0;
   WardrobeFilter copyWith({
     String? state,
     String? query,

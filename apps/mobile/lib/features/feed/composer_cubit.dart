@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:bloc/bloc.dart';
+import 'package:form_mobile/features/feed/feed_domain.dart';
 import 'package:form_mobile/features/feed/look_commands.dart';
 import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
 import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/look_repository.dart';
+import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/utils/idempotency_key.dart';
 
@@ -422,8 +424,19 @@ class ComposerCubit extends Cubit<ComposerState> {
 
   /// Lets FORM propose outfits around the picked pieces, for free. A try-on
   /// saves the pieces as a look and puts them on the picked photo, paid.
-  Future<void> submit() async {
+  Future<void> submit({required List<CachedItem> items}) async {
     if (_busy || !state.canSubmit) return;
+    if (!state.tryOn &&
+        proposalBlockKey(
+              items,
+              selectedIds: state.selectedIds,
+              categories: state.completeWithWardrobe
+                  ? state.categories
+                  : const [],
+            ) !=
+            null) {
+      return;
+    }
     emit(state.copyWith(submitting: true, failure: () => null));
     try {
       if (!state.tryOn) {

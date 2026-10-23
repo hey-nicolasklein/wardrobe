@@ -350,6 +350,8 @@ abstract class LocaleKeys {
   static const costs_photoMany = 'costs.photoMany';
   static const costs_noShare = 'costs.noShare';
   static const costs_share = 'costs.share';
+  static const costs_emptyTitle = 'costs.emptyTitle';
+  static const costs_emptyBody = 'costs.emptyBody';
   static const costs = 'costs';
   static const character_title = 'character.title';
   static const character_reference = 'character.reference';
@@ -774,4 +776,23 @@ abstract class LocaleKeys {
   static const proposalsSavedCount = 'proposalsSavedCount';
   static const proposalsDiscard = 'proposalsDiscard';
   static const proposalsSave = 'proposalsSave';
+  static const wardrobeEmptyBody = 'wardrobeEmptyBody';
+  static const wardrobeOwningEmpty = 'wardrobeOwningEmpty';
+  static const wardrobeOwningEmptyBody = 'wardrobeOwningEmptyBody';
+  static const wardrobeWantingEmpty = 'wardrobeWantingEmpty';
+  static const wardrobeWantingEmptyBody = 'wardrobeWantingEmptyBody';
+  static const wardrobeFirstAdd = 'wardrobeFirstAdd';
+  static const wardrobeWantingAdd = 'wardrobeWantingAdd';
+  static const archiveEmptyTitle = 'archiveEmptyTitle';
+  static const archiveEmptyBody = 'archiveEmptyBody';
+  static const looksFirstTitle = 'looksFirstTitle';
+  static const looksFirstBody = 'looksFirstBody';
+  static const emptyPieceHint = 'emptyPieceHint';
+  static const looksViewWardrobe = 'looksViewWardrobe';
+  static const looksAddPiece = 'looksAddPiece';
+  static const createNeedsBottom = 'createNeedsBottom';
+  static const createNeedsTop = 'createNeedsTop';
+  static const createNeedsCore = 'createNeedsCore';
+  static const createSelectionUnavailable = 'createSelectionUnavailable';
+  static const createCategoryUnavailable = 'createCategoryUnavailable';
 }

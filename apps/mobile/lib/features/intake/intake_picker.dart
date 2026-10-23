@@ -87,7 +87,11 @@ Future<List<String>> pickPhotos(
 /// appear and the user picks the pieces to save. [camera] skips the source
 /// question.
 /// Returns whether photos were added.
-Future<bool> addClothesPhotos(BuildContext context, {bool? camera}) async {
+Future<bool> addClothesPhotos(
+  BuildContext context, {
+  bool? camera,
+  String ownership = 'owning',
+}) async {
   final source =
       camera ??
       await pickPhotoSource(
@@ -103,6 +107,8 @@ Future<bool> addClothesPhotos(BuildContext context, {bool? camera}) async {
   final paths = await pickPhotos(context, camera: source);
   if (paths.isEmpty || !context.mounted) return false;
   unawaited(HapticFeedback.mediumImpact());
-  context.read<IntakeBloc>().add(IntakeEvent(IntakeAction.add, paths: paths));
+  context.read<IntakeBloc>().add(
+    IntakeEvent(IntakeAction.add, paths: paths, ownership: ownership),
+  );
   return true;
 }

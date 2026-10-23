@@ -1,4 +1,5 @@
 import 'package:form_mobile/features/wardrobe/wardrobe_filter.dart';
+import 'package:form_mobile/generated/locale_keys.g.dart';
 import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/look_repository.dart';
@@ -63,6 +64,42 @@ List<WardrobeItem> eligibleComposerItems(List<CachedItem> records) => [
         record.item.currentShelfImageVersionId != null)
       record.item,
 ];
+
+/// Mirrors proposal candidate validation in the service. Explicit selections
+/// may use wishlist pieces; automatic proposals need an owned core outfit.
+String? proposalBlockKey(
+  List<CachedItem> records, {
+  Iterable<String> selectedIds = const [],
+  Iterable<String> categories = const [],
+}) {
+  final eligible = eligibleComposerItems(records);
+  final ids = eligible.map((item) => item.id).toSet();
+  if (selectedIds.any((id) => !ids.contains(id))) {
+    return LocaleKeys.createSelectionUnavailable;
+  }
+  final availableCategories = eligible
+      .map((item) => item.metadata.category)
+      .toSet();
+  if (categories.any((category) => !availableCategories.contains(category))) {
+    return LocaleKeys.createCategoryUnavailable;
+  }
+  if (selectedIds.isNotEmpty || categories.isNotEmpty) return null;
+  final ownedCategories = eligible
+      .where((item) => item.state == 'owning')
+      .map((item) => item.metadata.category)
+      .toSet();
+  if (ownedCategories.contains('dress') ||
+      (ownedCategories.contains('top') &&
+          (ownedCategories.contains('pants') ||
+              ownedCategories.contains('skirt')))) {
+    return null;
+  }
+  return ownedCategories.contains('top')
+      ? LocaleKeys.createNeedsBottom
+      : ownedCategories.contains('pants') || ownedCategories.contains('skirt')
+      ? LocaleKeys.createNeedsTop
+      : LocaleKeys.createNeedsCore;
+}
 
 /// A stack on the Looks screen: a set of looks gathered by one mission.
 sealed class LookStack {

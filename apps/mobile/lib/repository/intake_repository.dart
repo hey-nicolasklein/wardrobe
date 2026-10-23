@@ -75,7 +75,7 @@ class IntakeRepository {
     }
   }
 
-  Future<IntakeDraft> add(String path) async {
+  Future<IntakeDraft> add(String path, {String ownership = 'owning'}) async {
     final photo = await prepare.prepare(path);
     final id = intakeKey();
     await directory.create(recursive: true);
@@ -85,6 +85,7 @@ class IntakeRepository {
     final draft = IntakeDraft(
       id: id,
       filePath: file.path,
+      ownership: ownership == 'wanting' ? 'wanting' : 'owning',
       width: photo.width,
       height: photo.height,
       completionKey: intakeKey(),

@@ -9,6 +9,7 @@ import 'package:form_mobile/models/look.dart';
 import 'package:form_mobile/models/wardrobe.dart';
 import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/media_repository.dart';
+import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/services/app_database.dart';
 import 'package:form_mobile/services/form_api.dart';
 
@@ -232,14 +233,48 @@ void main() {
     expect(tried.command().body['baseAssetId'], 'asset-base-photo');
   });
 
+  test(
+    'proposal submission rejects incomplete cores and unavailable selections',
+    () async {
+      final cubit = ComposerCubit(looks);
+      addTearDown(cubit.close);
+      final items = [CachedItem(shirt, null)];
+      await cubit.submit(items: items);
+      cubit.toggleCategory('dress');
+      await cubit.submit(items: items);
+      cubit.toggleItem(shirt.id);
+      await cubit.submit(items: items);
+      cubit
+        ..toggleCategory('dress')
+        ..toggleItem('deleted');
+      await cubit.submit(items: items);
+      expect(createBodies, isEmpty);
+      expect(cubit.state.failure, isNull);
+      expect(cubit.state.submitting, isFalse);
+    },
+  );
+
+  test(
+    'explicit wishlist categories permit proposals without an owned core',
+    () async {
+      final cubit = ComposerCubit(looks)..toggleCategory('top');
+      addTearDown(cubit.close);
+      final wishlist = WardrobeItem.fromJson(itemJson(state: 'wanting'));
+      await cubit.submit(items: [CachedItem(wishlist, null)]);
+      expect(cubit.state.proposed, isTrue);
+      expect(createBodies.single['exactItemIds'], isEmpty);
+      expect(createBodies.single['categories'], ['top']);
+    },
+  );
+
   test('a failed proposal retries with the same idempotency key', () async {
     failNextCreate = true;
     final cubit = ComposerCubit(looks, preselectedIds: [shirt.id]);
     addTearDown(cubit.close);
-    await cubit.submit();
+    await cubit.submit(items: [CachedItem(shirt, null)]);
     expect(cubit.state.failure, ApiFailure.unavailable);
     expect(cubit.state.proposed, isFalse);
-    await cubit.submit();
+    await cubit.submit(items: [CachedItem(shirt, null)]);
     expect(cubit.state.proposed, isTrue);
     expect(cubit.state.createdLookId, isNull);
     expect(createBodies, hasLength(2));

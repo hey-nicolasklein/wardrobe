@@ -16,6 +16,8 @@ import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/services/form_api.dart';
 import 'package:form_mobile/utils/idempotency_key.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
+import 'package:form_mobile/widgets/catalog_images_preparation.dart';
+import 'package:form_mobile/widgets/first_pieces_invitation.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:go_router/go_router.dart';
 
@@ -87,6 +89,13 @@ class _CreateLookPageState extends State<CreateLookPage> {
   }
 
   Future<void> _start() async {
+    final records = context.read<WardrobeCubit>().state.items;
+    if (records == null) return;
+    final eligibleIds = eligibleComposerItems(
+      records,
+    ).map((item) => item.id).toSet();
+    _mustHaves.retainWhere(eligibleIds.contains);
+    if (proposalBlockKey(records, selectedIds: _mustHaves) != null) return;
     final looks = context.read<LookRepository>();
     final note = _note.text.trim();
     final body = <String, dynamic>{
@@ -116,124 +125,169 @@ class _CreateLookPageState extends State<CreateLookPage> {
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: _step == 0,
-    onPopInvokedWithResult: (didPop, _) {
-      if (!didPop) setState(() => _step = 0);
-    },
-    child: FormSheet(
-      title: context.tr(LocaleKeys.createLook),
-      scrollable: false,
-      leading: _step == 1
-          ? IconButton(
-              onPressed: () => setState(() => _step = 0),
-              tooltip: context.tr(LocaleKeys.composerBack),
-              style: IconButton.styleFrom(backgroundColor: FormTokens.field),
-              icon: const Icon(Icons.arrow_back),
-            )
-          : null,
-      footer: _step == 0
-          ? Row(
-              spacing: 12,
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      _occasion = null;
-                      _occasionPicked = false;
-                      _note.clear();
-                      _toPieces();
-                    },
-                    child: Text(context.tr(LocaleKeys.createSkip)),
+  Widget build(BuildContext context) {
+    final wardrobe = context.watch<WardrobeCubit>().state;
+    if (wardrobe.items == null) {
+      return FormSheet(
+        title: context.tr(LocaleKeys.createLook),
+        child: wardrobe.failure != null
+            ? FormNotice(text: context.tr(wardrobe.failureKey))
+            : const FormPieceSkeletons(),
+      );
+    }
+    final eligibleIds = eligibleComposerItems(
+      wardrobe.items!,
+    ).map((item) => item.id).toSet();
+    _mustHaves.retainWhere(eligibleIds.contains);
+    final preparingPreselection = wardrobe.items!.any(
+      (record) =>
+          widget.itemIds.contains(record.item.id) &&
+          record.item.state != 'archived' &&
+          !eligibleIds.contains(record.item.id),
+    );
+    if (preparingPreselection) {
+      return FormSheet(
+        title: context.tr(LocaleKeys.createLook),
+        child: const CatalogImagesPreparation(),
+      );
+    }
+    if (eligibleIds.isEmpty) {
+      return FormSheet(
+        title: context.tr(LocaleKeys.createLook),
+        child: wardrobe.items!.any((record) => record.item.state != 'archived')
+            ? const CatalogImagesPreparation()
+            : const FirstPiecesInvitation(),
+      );
+    }
+    final blocked = proposalBlockKey(wardrobe.items!, selectedIds: _mustHaves);
+    return PopScope(
+      canPop: _step == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _step = 0);
+      },
+      child: FormSheet(
+        title: context.tr(LocaleKeys.createLook),
+        scrollable: false,
+        leading: _step == 1
+            ? IconButton(
+                onPressed: () => setState(() => _step = 0),
+                tooltip: context.tr(LocaleKeys.composerBack),
+                style: IconButton.styleFrom(backgroundColor: FormTokens.field),
+                icon: const Icon(Icons.arrow_back),
+              )
+            : null,
+        footer: _step == 0
+            ? Row(
+                spacing: 12,
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        _occasion = null;
+                        _occasionPicked = false;
+                        _note.clear();
+                        _toPieces();
+                      },
+                      child: Text(context.tr(LocaleKeys.createSkip)),
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _toPieces,
-                    child: Text(context.tr(LocaleKeys.createNext)),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _toPieces,
+                      child: Text(context.tr(LocaleKeys.createNext)),
+                    ),
                   ),
-                ),
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: 10,
-              children: [
-                if (_failure != null)
-                  FormNotice(
-                    text: apiFailureText(context, _failure!),
-                    error: true,
-                  ),
-                FilledButton(
-                  onPressed: _starting ? null : () => unawaited(_start()),
-                  child: _starting
-                      ? const SizedBox.square(
-                          dimension: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 10,
+                children: [
+                  if (blocked != null) ...[
+                    FormNotice(text: context.tr(blocked)),
+                    OutlinedButton(
+                      onPressed: () => context.push('/wardrobe/intake'),
+                      child: Text(context.tr(LocaleKeys.looksAddPiece)),
+                    ),
+                  ],
+                  if (_failure != null)
+                    FormNotice(
+                      text: apiFailureText(context, _failure!),
+                      error: true,
+                    ),
+                  FilledButton(
+                    onPressed: _starting || blocked != null
+                        ? null
+                        : () => unawaited(_start()),
+                    child: _starting
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            context.tr(
+                              _mustHaves.isEmpty
+                                  ? LocaleKeys.createShowAll
+                                  : LocaleKeys.createShowAround,
+                            ),
                           ),
-                        )
-                      : Text(
-                          context.tr(
-                            _mustHaves.isEmpty
-                                ? LocaleKeys.createShowAll
-                                : LocaleKeys.createShowAround,
-                          ),
-                        ),
-                ),
-                Text(
-                  context.tr(LocaleKeys.createFree),
-                  textAlign: TextAlign.center,
-                  style: FormTokens.small,
-                ),
-              ],
-            ),
-      // Full height from the start, like the deck it hands over to, so the
-      // sheet does not jump between the steps.
-      child: LayoutBuilder(
-        builder: (context, constraints) => SizedBox(
-          height: constraints.maxHeight,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 320),
-            switchInCurve: FormTokens.easeOut,
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween(
-                  begin: const Offset(0.06, 0),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
+                  ),
+                  Text(
+                    context.tr(LocaleKeys.createFree),
+                    textAlign: TextAlign.center,
+                    style: FormTokens.small,
+                  ),
+                ],
               ),
+        // Full height from the start, like the deck it hands over to, so the
+        // sheet does not jump between the steps.
+        child: LayoutBuilder(
+          builder: (context, constraints) => SizedBox(
+            height: constraints.maxHeight,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 320),
+              switchInCurve: FormTokens.easeOut,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween(
+                    begin: const Offset(0.06, 0),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+              layoutBuilder: (current, previous) => Stack(
+                alignment: Alignment.topCenter,
+                children: [...previous, ?current],
+              ),
+              child: _step == 0
+                  ? _OccasionStep(
+                      key: const ValueKey('occasion'),
+                      occasion: _occasion,
+                      picked: _occasionPicked,
+                      note: _note,
+                      onOccasion: (value) => setState(() {
+                        final again = _occasionPicked && _occasion == value;
+                        _occasion = again ? null : value;
+                        _occasionPicked = !again;
+                      }),
+                      onSubmitted: _toPieces,
+                    )
+                  : _MustHaveStep(
+                      key: const ValueKey('pieces'),
+                      selected: _mustHaves,
+                      onToggle: _toggle,
+                    ),
             ),
-            layoutBuilder: (current, previous) => Stack(
-              alignment: Alignment.topCenter,
-              children: [...previous, ?current],
-            ),
-            child: _step == 0
-                ? _OccasionStep(
-                    key: const ValueKey('occasion'),
-                    occasion: _occasion,
-                    picked: _occasionPicked,
-                    note: _note,
-                    onOccasion: (value) => setState(() {
-                      final again = _occasionPicked && _occasion == value;
-                      _occasion = again ? null : value;
-                      _occasionPicked = !again;
-                    }),
-                    onSubmitted: _toPieces,
-                  )
-                : _MustHaveStep(
-                    key: const ValueKey('pieces'),
-                    selected: _mustHaves,
-                    onToggle: _toggle,
-                  ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _OccasionStep extends StatelessWidget {
@@ -324,10 +378,8 @@ class _MustHaveStep extends StatelessWidget {
       return index < 0 ? _categoryOrder.length : index;
     }
 
-    final items = [
-      for (final item in eligibleComposerItems(wardrobe.items ?? []))
-        if (item.state == 'owning') item,
-    ]..sort((a, b) => rank(a) - rank(b));
+    final items = eligibleComposerItems(wardrobe.items ?? [])
+      ..sort((a, b) => rank(a) - rank(b));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

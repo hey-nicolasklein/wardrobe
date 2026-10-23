@@ -25,6 +25,8 @@ import 'package:form_mobile/repository/look_repository.dart';
 import 'package:form_mobile/repository/wardrobe_repository.dart';
 import 'package:form_mobile/services/photo_preparation.dart';
 import 'package:form_mobile/widgets/cached_media.dart';
+import 'package:form_mobile/widgets/catalog_images_preparation.dart';
+import 'package:form_mobile/widgets/first_pieces_invitation.dart';
 import 'package:form_mobile/widgets/form_components.dart';
 import 'package:form_mobile/widgets/form_icon.dart';
 import 'package:go_router/go_router.dart';
@@ -111,6 +113,22 @@ class _ComposerViewState extends State<_ComposerView> {
     final connected =
         context.watch<ConnectionCubit>().state == ConnectionStatus.ready;
     final eligible = eligibleComposerItems(wardrobe.items ?? []);
+    if (wardrobe.items == null) {
+      return FormSheet(
+        title: context.tr(LocaleKeys.createLook),
+        child: wardrobe.failure == null
+            ? const FormPieceSkeletons()
+            : FormNotice(text: context.tr(wardrobe.failureKey)),
+      );
+    }
+    if (eligible.isEmpty) {
+      return FormSheet(
+        title: context.tr(LocaleKeys.createLook),
+        child: wardrobe.items!.any((record) => record.item.state != 'archived')
+            ? const CatalogImagesPreparation()
+            : const FirstPiecesInvitation(),
+      );
+    }
     return BlocConsumer<ComposerCubit, ComposerState>(
       listenWhen: (previous, next) =>
           previous.query != next.query ||
@@ -333,7 +351,7 @@ class _ComposerPicker extends StatelessWidget {
         const SliverToBoxAdapter(child: SizedBox(height: 14)),
         if (visible.isEmpty)
           SliverToBoxAdapter(
-            child: _PickerEmpty(state: state, noEligible: eligible.isEmpty),
+            child: _PickerEmpty(state: state),
           )
         else
           SliverGrid.builder(
@@ -368,39 +386,34 @@ class _ComposerPicker extends StatelessWidget {
 /// Why the picker grid is empty, with a way back to all pieces when a
 /// search, category or the selection filter hides them.
 class _PickerEmpty extends StatelessWidget {
-  const _PickerEmpty({required this.state, required this.noEligible});
+  const _PickerEmpty({required this.state});
 
   final ComposerState state;
-  final bool noEligible;
 
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<ComposerCubit>();
     final nothingSelected = state.selectedOnly && state.selectedIds.isEmpty;
-    final (title, message) = noEligible
-        ? (LocaleKeys.composerNoEligible, LocaleKeys.composerNoEligibleBody)
-        : nothingSelected
+    final (title, message) = nothingSelected
         ? (LocaleKeys.composerNothingSelected, null)
         : (LocaleKeys.composerEmpty, LocaleKeys.composerEmptyBody);
     return FormEmptyState(
       title: context.tr(title),
       message: message == null ? null : context.tr(message),
-      icon: noEligible ? Icons.checkroom_outlined : Icons.search_off_rounded,
-      action: noEligible
-          ? null
-          : OutlinedButton(
-              // Also leaves the selection filter.
-              onPressed: () => cubit
-                ..setQuery('')
-                ..setItemCategory(null),
-              child: Text(
-                context.tr(
-                  nothingSelected
-                      ? LocaleKeys.composerShowAll
-                      : LocaleKeys.resetFilters,
-                ),
-              ),
-            ),
+      icon: Icons.search_off_rounded,
+      action: OutlinedButton(
+        // Also leaves the selection filter.
+        onPressed: () => cubit
+          ..setQuery('')
+          ..setItemCategory(null),
+        child: Text(
+          context.tr(
+            nothingSelected
+                ? LocaleKeys.composerShowAll
+                : LocaleKeys.resetFilters,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1182,6 +1195,18 @@ class _ComposerFooter extends StatelessWidget {
       selected.map((item) => item.metadata.category),
     );
     final credits = context.watch<CreditsCubit>().state;
+    final proposalBlocked = state.tryOn
+        ? null
+        : proposalBlockKey(
+            context.watch<WardrobeCubit>().state.items ?? [],
+            selectedIds: state.selectedIds,
+            categories: state.completeWithWardrobe
+                ? state.categories
+                : const [],
+          );
+    Future<void> propose() => cubit.submit(
+      items: context.read<WardrobeCubit>().state.items ?? [],
+    );
     // Why the action is disabled, so a grey button never goes unexplained.
     // Saving and proposing are free; only a try-on spends credits.
     final blocked = !connected
@@ -1211,6 +1236,20 @@ class _ComposerFooter extends StatelessWidget {
           ),
           const SizedBox(height: 10),
         ],
+        if (proposalBlocked != null) ...[
+          FormNotice(text: context.tr(proposalBlocked)),
+          const SizedBox(height: 10),
+          if (proposalBlocked == LocaleKeys.createSelectionUnavailable)
+            TextButton(
+              onPressed: cubit.reset,
+              child: Text(context.tr(LocaleKeys.composerReset)),
+            ),
+          OutlinedButton(
+            onPressed: () => context.push('/wardrobe/intake'),
+            child: Text(context.tr(LocaleKeys.looksAddPiece)),
+          ),
+          const SizedBox(height: 10),
+        ],
         // Toasts would land behind the sheet, so problems show inline here.
         if (state.failure != null || state.limitReached) ...[
           FormNotice(
@@ -1221,22 +1260,23 @@ class _ComposerFooter extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        if (saves && blocked == null)
+        if (saves && blocked == null && proposalBlocked == null)
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: state.submitting
-                    ? null
-                    : () => unawaited(cubit.submit()),
+                onPressed: state.submitting ? null : () => unawaited(propose()),
                 icon: const Icon(Icons.auto_awesome_outlined, size: 18),
                 label: Text(context.tr(LocaleKeys.composerCompleteAction)),
               ),
             ),
           ),
         // With nothing picked, the line says what FORM will do instead.
-        if (selected.isEmpty && !state.previewExpanded && blocked == null)
+        if (selected.isEmpty &&
+            !state.previewExpanded &&
+            blocked == null &&
+            proposalBlocked == null)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Text(
@@ -1260,9 +1300,13 @@ class _ComposerFooter extends StatelessWidget {
             ),
             Expanded(
               child: FilledButton(
-                onPressed: state.submitting || blocked != null
+                onPressed:
+                    state.submitting ||
+                        blocked != null ||
+                        (proposalBlocked != null && !saves) ||
+                        proposalBlocked == LocaleKeys.createSelectionUnavailable
                     ? null
-                    : () => unawaited(saves ? cubit.save() : cubit.submit()),
+                    : () => unawaited(saves ? cubit.save() : propose()),
                 child: state.submitting
                     ? const SizedBox.square(
                         dimension: 18,

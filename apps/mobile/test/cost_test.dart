@@ -105,6 +105,26 @@ void main() {
       );
     },
   );
+  test('week navigation continues past an entirely unused week', () async {
+    final api = CostApi();
+    final cubit = CostCubit(
+      GenerationCostRepository(api),
+      now: () => DateTime(2026, 10, 23),
+    );
+    addTearDown(cubit.close);
+    await cubit.refresh();
+    api.respond = () async => {
+      'costs': {for (final key in fixture().keys) key: 0},
+    };
+    await cubit.previousWeek();
+    final requests = api.paths.length;
+    await cubit.previousWeek();
+    expect(api.paths.length, requests + 1);
+    expect(cubit.state.week.value, '2026-W41');
+    expect(cubit.state.canGoNext, isTrue);
+    api.respond = () async => {'costs': fixture()};
+    await cubit.nextWeek();
+  });
   test('repository sends selected week and maps invalid responses', () async {
     final api = CostApi();
     final repository = GenerationCostRepository(api);

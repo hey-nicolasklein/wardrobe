@@ -36,6 +36,15 @@ class GenerationCosts {
     );
   }
 
+  bool get hasUsage =>
+      lookTotalMicrounits > 0 ||
+      successfulLookCount > 0 ||
+      characterSheetTotalMicrounits > 0 ||
+      wardrobeTotalMicrounits > 0 ||
+      wardrobeRequestCount > 0 ||
+      detectionTotalMicrounits > 0 ||
+      detectionRequestCount > 0;
+
   final int lookTotalMicrounits;
   final int successfulLookCount;
   final int averageSuccessfulLookMicrounits;

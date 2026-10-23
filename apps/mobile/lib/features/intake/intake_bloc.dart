@@ -27,6 +27,7 @@ class IntakeEvent {
     this.id,
     this.choiceKey,
     this.paths = const [],
+    this.ownership = 'owning',
     this.value,
     this.edit,
   });
@@ -34,6 +35,7 @@ class IntakeEvent {
   final String? id;
   final String? choiceKey;
   final List<String> paths;
+  final String ownership;
   final bool? value;
   final ItemEdit? edit;
 }
@@ -113,7 +115,7 @@ class IntakeBloc extends Bloc<IntakeEvent, IntakeState> {
         String? failure;
         for (final path in event.paths) {
           try {
-            _drafts.add(await repository.add(path));
+            _drafts.add(await repository.add(path, ownership: event.ownership));
             _publish(emit, busy: true);
           } on Object catch (error) {
             failure = intakeFailureKey(

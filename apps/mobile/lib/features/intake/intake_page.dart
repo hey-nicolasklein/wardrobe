@@ -51,7 +51,10 @@ List<IntakeChoice> _pieces(IntakeDraft draft) {
 /// photos are analysed in the background, so nothing jumps. Saving a photo
 /// moves on to the next one that needs a decision.
 class IntakePage extends StatefulWidget {
-  const IntakePage({super.key});
+  const IntakePage({String? ownership, super.key})
+    : ownership = ownership == 'wanting' ? 'wanting' : 'owning';
+
+  final String ownership;
   @override
   State<IntakePage> createState() => _IntakePageState();
 }
@@ -89,7 +92,11 @@ class _IntakePageState extends State<IntakePage> {
   /// Adds more photos. Their drafts appear here as they are analysed.
   Future<void> _pick({bool? camera}) async {
     setState(() => _picking = true);
-    await addClothesPhotos(context, camera: camera);
+    await addClothesPhotos(
+      context,
+      camera: camera,
+      ownership: widget.ownership,
+    );
     if (mounted) setState(() => _picking = false);
   }
 
@@ -2239,7 +2246,7 @@ class _ManualIntakeFormState extends State<ManualIntakeForm> {
   String _colors = '';
   String _notes = '';
   String _category = 'top';
-  String _ownership = 'owning';
+  late String _ownership = widget.draft.ownership;
   @override
   Widget build(BuildContext context) => Form(
     key: _form,

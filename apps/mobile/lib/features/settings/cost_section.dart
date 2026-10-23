@@ -121,7 +121,15 @@ class _CostSectionBody extends StatelessWidget {
                 onPressed: cubit.refresh,
                 child: Text(context.tr(LocaleKeys.costs_retry)),
               ),
-            ] else if (state.costs != null)
+            ] else if (state.costs != null &&
+                !state.costs!.hasUsage &&
+                !state.loading)
+              FormEmptyState(
+                scene: FormEmptyScene.costs,
+                title: context.tr(LocaleKeys.costs_emptyTitle),
+                message: context.tr(LocaleKeys.costs_emptyBody),
+              )
+            else if (state.costs != null)
               Opacity(
                 opacity: state.loading ? 0.55 : 1,
                 child: _CostFigures(

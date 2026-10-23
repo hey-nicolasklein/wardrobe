@@ -7,9 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:form_mobile/app/form_tokens.dart';
 import 'package:form_mobile/generated/locale_keys.g.dart';
+import 'package:form_mobile/widgets/form_empty_scene.dart';
 import 'package:form_mobile/widgets/form_icon.dart';
+
 import 'package:go_router/go_router.dart';
 import 'package:inspire_blur/inspire_blur.dart';
+
+export 'package:form_mobile/widgets/form_empty_scene.dart' show FormEmptyScene;
 
 class FormPageHeader extends StatelessWidget implements PreferredSizeWidget {
   const FormPageHeader({
@@ -630,19 +634,24 @@ class FormEmptyState extends StatelessWidget {
     this.message,
     this.icon = Icons.checkroom_outlined,
     this.action,
+    this.scene,
     super.key,
   });
   final String title;
   final String? message;
   final IconData icon;
+  final FormEmptyScene? scene;
   final Widget? action;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 12),
+    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 22),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 45, color: FormTokens.emptyIcon),
+        if (scene case final scene?)
+          FormEmptyGarments(scene: scene)
+        else
+          Icon(icon, size: 45, color: FormTokens.emptyIcon),
         const SizedBox(height: 20),
         Text(title, style: FormTokens.heading, textAlign: TextAlign.center),
         if (message != null) ...[
@@ -654,6 +663,58 @@ class FormEmptyState extends StatelessWidget {
           ),
         ],
         if (action != null) ...[const SizedBox(height: 24), action!],
+      ],
+    ),
+  );
+}
+
+class FormEmptySliver extends StatelessWidget {
+  const FormEmptySliver({
+    required this.child,
+    this.headerExtent = 0,
+    super.key,
+  });
+
+  final Widget child;
+  final double headerExtent;
+
+  @override
+  Widget build(BuildContext context) => SliverLayoutBuilder(
+    builder: (context, constraints) => SliverToBoxAdapter(
+      child: Padding(
+        padding: EdgeInsets.only(
+          top: (250 - headerExtent - constraints.precedingScrollExtent).clamp(
+            0,
+            250,
+          ),
+        ),
+        child: child,
+      ),
+    ),
+  );
+}
+
+class FormPieceSkeletons extends StatelessWidget {
+  const FormPieceSkeletons({super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(FormTokens.gutter),
+    child: Row(
+      spacing: 13,
+      children: [
+        for (var i = 0; i < 2; i++)
+          Expanded(
+            child: AspectRatio(
+              aspectRatio: 0.75,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: FormTokens.field,
+                  borderRadius: BorderRadius.circular(FormTokens.cardRadius),
+                ),
+              ),
+            ),
+          ),
       ],
     ),
   );
