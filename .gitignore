@@ -24,3 +24,6 @@ snapshots/
 
 # Example outfit photos pulled from stargate for simulator testing. Personal data.
 .example-photos/
+
+# Local credentials such as the App Store Connect API key. Never commit.
+.secrets/

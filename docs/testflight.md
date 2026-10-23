@@ -18,6 +18,12 @@ Apple Accounts must be signed in to the paid team, with an Apple Distribution
 certificate and permission to manage provisioning profiles. Native Apple sign-in
 uses the `com.apple.developer.applesignin` entitlement.
 
+When the Xcode account fails ("Failed to Use Accounts"), upload and build lookups
+use the App Store Connect team API key `C78A959336` at
+`.secrets/AuthKey_C78A959336.p8` in the repository root, together with the team's
+issuer ID. `.secrets/` is git-ignored, so the key never enters a commit. It is
+Nicolas's private key for private projects such as FORM, never for Ergosign apps.
+
 ## Repeatable release flow
 
 Use the repo's [release-testflight skill](../.agents/skills/release-testflight/SKILL.md)
@@ -160,3 +166,22 @@ team; no rebuild or duplicate upload was needed.
 The isolated checkout and archive are preserved at
 `/tmp/form-icon-release-20261006`. Release scope and icon hashes are recorded in
 `/tmp/form-icon-release-build-3-scope.json`.
+
+## Release on 2026-10-23
+
+Released **0.1.0 (4)** to the internal group, now named **Internal**, from `main`
+at `0da8e90`. The backend went to stargate first as `0da8e90.182953`, with
+migrations `029_look_kinds` and `030_detection_subject`.
+
+- App Store Connect listed builds 1 to 3 before the upload, so 4 was unused.
+- The build reached `VALID` about three minutes after upload and reports
+  `IN_BETA_TESTING` for internal testers. German **What to Test** notes cover the
+  full-screen intake, piece picking, black-bar trimming, drafts in the Schrank,
+  the native context menu and looks as combinations.
+- Nicolas's internal tester account is the group's only tester. Installation of
+  build 4 on the physical phone has not been observed.
+
+The entitlement check now asks `codesign` for `--xml`; without it this macOS
+prints a human-readable dictionary that `plistlib` rejects. The Xcode account
+upload failed with "Failed to Use Accounts", so the archive went up with the
+team API key. The pipeline now uses that key whenever `.secrets/` holds it.

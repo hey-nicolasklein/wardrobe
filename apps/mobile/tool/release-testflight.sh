@@ -73,7 +73,7 @@ for key, value in expected.items():
         raise SystemExit(f'Archive {key} does not match this release.')
 app = archive / 'Products' / info['ApplicationPath']
 subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
-result = subprocess.run(['codesign', '-d', '--entitlements', '-', str(app)],
+result = subprocess.run(['codesign', '-d', '--entitlements', '-', '--xml', str(app)],
                         capture_output=True, check=True)
 entitlements = plistlib.loads(result.stdout)
 if entitlements.get('com.apple.developer.applesignin') != ['Default']:
@@ -95,10 +95,20 @@ Path(sys.argv[1]).write_bytes(plistlib.dumps({
     'uploadSymbols': True, 'manageAppVersionAndBuildNumber': False,
 }))
 PY
+# The team API key in the ignored .secrets/ folder authenticates the upload
+# when present; otherwise Xcode's signed-in account does.
+api_key=../../.secrets/AuthKey_C78A959336.p8
+auth=()
+if [[ -f "$api_key" ]]; then
+  auth=(-authenticationKeyPath "$(cd "$(dirname "$api_key")" && pwd)/$(basename "$api_key")"
+    -authenticationKeyID C78A959336
+    -authenticationKeyIssuerID f51d3e8d-bcab-4e1c-adf9-dd0c72a8cd14)
+fi
 xcodebuild -exportArchive \
   -archivePath build/ios/archive/Runner.xcarchive \
   -exportOptionsPlist "$export_options" \
-  -allowProvisioningUpdates
+  -allowProvisioningUpdates \
+  ${auth[@]+"${auth[@]}"}
 
 echo "Uploaded ${release_version} (${build_number})."
 echo 'Wait for Apple processing, set What to Test, and confirm the build and your account in FORM Internal.'
