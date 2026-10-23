@@ -197,3 +197,18 @@ Released **0.1.0 (5)** to **Internal** from `main` at `d7b80de`. It adds the
 - The build reached `VALID` about four minutes after upload and reports
   `IN_BETA_TESTING` for internal testers, with German **What to Test** notes.
 - Installation on the physical phone has not been observed.
+
+## Release on 2026-10-23, build 6
+
+Released **0.1.0 (6)** to **Internal** from `main` at `8757cad`. It brings the
+reworked empty states for new accounts: inviting garment scenes in the wardrobe,
+wishlist, archive and Looks, a wishlist intake that saves pieces as wanting, and
+a Create Look flow that explains missing pieces instead of failing.
+
+- App Store Connect listed builds 1 to 5 before the upload, so 6 was unused.
+- No backend deployment was needed. The app changes since build 5 are client
+  only, and sign-in still sends `transport: 'token'`.
+- The pipeline ran unattended and uploaded with the team API key from `.secrets/`.
+- The build reached `VALID` about three minutes after upload and reports
+  `IN_BETA_TESTING` for internal testers, with German **What to Test** notes.
+- Installation of build 6 on the physical phone has not been observed.
