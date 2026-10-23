@@ -124,7 +124,7 @@ explicit paid team succeeded.
 
 ## App icon
 
-The icon source is `apps/web/public/icon.svg`. Run
+The icon source is `apps/mobile/assets/brand/icon.svg`. Run
 `node apps/mobile/tool/generate-ios-icons.mjs` from the repo root after changing
 it; this updates every PNG in the iOS `AppIcon.appiconset`, including the
 1024px artwork Apple uses for TestFlight. The TestFlight build script also runs
@@ -185,3 +185,15 @@ The entitlement check now asks `codesign` for `--xml`; without it this macOS
 prints a human-readable dictionary that `plistlib` rejects. The Xcode account
 upload failed with "Failed to Use Accounts", so the archive went up with the
 team API key. The pipeline now uses that key whenever `.secrets/` holds it.
+
+## Release on 2026-10-23, build 5
+
+Released **0.1.0 (5)** to **Internal** from `main` at `d7b80de`. It adds the
+"Datenschutz" entry under Settings → About, which opens
+`https://stargate.stork-platy.ts.net:8443/privacy.html` in an in-app browser.
+
+- App Store Connect listed builds 1 to 4 before the upload, so 5 was unused.
+- The pipeline ran unattended and uploaded with the team API key from `.secrets/`.
+- The build reached `VALID` about four minutes after upload and reports
+  `IN_BETA_TESTING` for internal testers, with German **What to Test** notes.
+- Installation on the physical phone has not been observed.
