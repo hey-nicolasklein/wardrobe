@@ -25,3 +25,6 @@ snapshots/
 
 # Local credentials such as the App Store Connect API key. Never commit.
 .secrets/
+
+# Verification runs: pids, logs and evidence from the verify-form skill. Holds personal photos.
+.verify/
